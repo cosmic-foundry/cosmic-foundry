@@ -18,6 +18,16 @@ ADR wins.
 - Create topic branches from `origin/main` (the fork's main), not
   from `upstream/main` directly. Syncing `origin/main` to
   `upstream/main` is an explicit separate step.
+- **Open pull requests against `upstream/main`**, not against the
+  fork. Push the topic branch to `origin`, then open the PR so it
+  merges into the upstream repository's `main`. Do not rely on
+  `gh`'s default-repo inference — state it explicitly:
+  ```
+  gh pr create \
+    --repo cosmic-foundry/cosmic-foundry \
+    --base main \
+    --head <fork-owner>:<topic-branch>
+  ```
 - CI's `pre-commit` job is a required status check on
   `upstream/main`; PRs cannot merge red.
 

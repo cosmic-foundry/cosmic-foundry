@@ -50,6 +50,14 @@ Closed / collaboration-only codes (KEPLER, CHIMERA, FORNAX,
 WhiskyTHC, private Arepo/GIZMO modules) contribute only through
 their publications.
 
+**Stretch ambition — end-to-end stellar lifecycle.** The architecture
+should make it plausible to eventually self-consistently simulate the
+full lifecycle of a star — molecular-cloud collapse, protostellar
+accretion, main-sequence and post-main-sequence evolution, through
+core-collapse supernova — by composing the subsystems delivered across
+Epochs 4–9 and the stretch Epoch 12, without hard-coded seams between
+regimes.
+
 ---
 
 ## 2. Technology baseline
