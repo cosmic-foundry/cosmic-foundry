@@ -4,38 +4,47 @@
   Detonations in White Dwarf Simulations*, arXiv:1903.00132.
 - **Target code:** CASTRO. Pin a specific released version in
   `golden/manifest.yaml` before we generate fixtures.
-- **Scope of this target:** the 1-D detonation test problem
-  introduced in the paper, inspired by white-dwarf collision
-  conditions, used to argue that converged thermonuclear
-  ignition requires spatial resolution far below 1 km in the
-  burning region.
+- **Scope of this target:** the 1-D test problem introduced in
+  the paper, inspired by white-dwarf collision conditions, used
+  to argue that the **time and location of initial thermonuclear
+  ignition** are converged only when spatial resolution is far
+  below 1 km in the burning region. Coarser resolution yields
+  ignition times or ignition positions that are numerical
+  artifacts rather than physical predictions.
 
 ## What we replicate
 
-A 1-D planar thermonuclear detonation: hot, dense, carbon-rich
-upstream conditions; a computational domain long enough to
-resolve the reaction zone; operator-split coupling of hydro and
-a reaction network (e.g. aprox13) via a degenerate EOS
-(Helmholtz-family). The headline finding is a resolution study:
-converged detonation speed and post-shock structure emerge only
-below ~1 km cell size in the burning region.
+A 1-D planar setup: hot, dense, carbon-rich upstream conditions
+approximating a colliding-WD regime; a domain long enough to
+contain the pre-ignition evolution; operator-split coupling of
+hydro and a reaction network (e.g. aprox13) via a degenerate EOS
+(Helmholtz-family). The test evolves the initial state forward
+and records the first self-sustained thermonuclear ignition
+event — its time and spatial location.
+
+The headline finding is a resolution study: the measured
+ignition time and location converge only below ~1 km cell size;
+above that threshold they are sensitive to resolution in a way
+that indicates numerical rather than physical ignition.
 
 We reproduce the **scientific conclusion** — the resolution
-threshold at which detonation speed and structure stabilize to
+threshold at which ignition time and location stabilize to
 within a stated tolerance — not CASTRO's bitstream. Our burner
 and EOS need not be bit-identical to CASTRO's; they must show
-the same convergence behavior on the same ICs.
+the same ignition-convergence behavior on the same ICs.
 
 ## Success criterion
 
-- Detonation speed and post-shock thermodynamic state converge
+- Ignition time t_ign and ignition location x_ign converge
   monotonically as resolution is refined through the grid
   sequence specified in the paper.
-- The resolution at which relative change in detonation speed
-  drops below tolerance [TBD] matches the paper's finding
-  within a factor of [TBD].
+- The resolution at which relative changes in t_ign and x_ign
+  drop below tolerance [TBD] matches the paper's sub-1 km
+  finding within a factor of [TBD].
 - Energy and species-abundance conservation invariants hold to
-  within stated tolerances at every resolution.
+  within stated tolerances at every resolution, so that an
+  "ignition" flagged at coarse resolution is not masking a
+  conservation failure.
 
 ## Capability checklist
 
@@ -51,6 +60,12 @@ Each item becomes a spec under `specs/` as it is tackled:
    network from paper) with an implicit integrator.
 4. Strang-split hydro–burn coupling, including the reactive
    source treatment used by the target.
+5. Ignition-event diagnostic: detect and time-stamp the onset
+   of self-sustained thermonuclear burning, and record its
+   spatial location. The detection criterion itself (local
+   energy generation rate vs. loss, species threshold, or a
+   combination) is load-bearing for this target's success
+   criterion and must be pinned from the paper.
 
 Capability 1 is expected to be shared with the KH target
 (`replication/castro-wd-merger/`). Under the current per-target
@@ -69,9 +84,11 @@ target at present.
   equivalent). The paper's choice is the pinned target; our
   implementation may differ in algorithmic detail so long as
   convergence behavior reproduces.
-- Tolerance on "converged detonation speed" — likely a small
-  percentage of Chapman–Jouguet velocity at the stated
-  reference resolution.
+- Tolerance on "converged ignition" — relative change in t_ign
+  and x_ign under a resolution halving, below which we call
+  convergence. Pin from the paper's reported grid sequence.
+- Exact ignition-detection criterion used in the paper. Without
+  pinning this, the "same test" claim is brittle.
 - Whether the engine-level EOS and network choices motivate a
   follow-on ADR (likely yes; no ADR presently covers
   microphysics).
