@@ -107,8 +107,8 @@ and enter the schedule only once the baseline sequence is stable.
 | 3 | [epoch-03-visualization.md](epoch-03-visualization.md) | Unit-aware plotting, in-engine JAX renderer, WebGPU viewer, visual-regression harness, public gallery. |
 | 4 | [epoch-04-newtonian-hydro.md](epoch-04-newtonian-hydro.md) | Finite-volume Godunov, Riemann solvers, hydro test battery, first physics explainer. |
 | 5 | [epoch-05-gravity-nbody.md](epoch-05-gravity-nbody.md) | Multigrid Poisson, particle infrastructure, tree gravity, FMM prototype. |
-| 6 | [epoch-06-mhd.md](epoch-06-mhd.md) | Ideal and non-ideal MHD, super-time-stepping, anisotropic transport. |
-| 7 | [epoch-07-microphysics.md](epoch-07-microphysics.md) | EOS interface, reaction networks, cooling tables, opacities. |
+| 6 | [epoch-06-microphysics.md](epoch-06-microphysics.md) | EOS interface, reaction networks, cooling tables, opacities. |
+| 7 | [epoch-07-mhd.md](epoch-07-mhd.md) | Ideal and non-ideal MHD, super-time-stepping, anisotropic transport. |
 | 8 | [epoch-08-radiation.md](epoch-08-radiation.md) | Gray / multigroup FLD, two-moment M1, short characteristics. |
 | 9 | [epoch-09-relativistic.md](epoch-09-relativistic.md) | SR, GR, GRMHD, dynamical-spacetime NR; BBH inspiral cinematic. |
 | 10 | [epoch-10-particle-cosmology.md](epoch-10-particle-cosmology.md) | SPH / meshless methods, cosmology, halo finders, light-cones. |
@@ -179,7 +179,7 @@ named epoch, via an ADR:
   Decide before Epoch 5.
 - **Symbolic vs hand-written microphysics** — how much of the EOS
   and reaction-network machinery is SymPy-derived. Decide before
-  Epoch 7.
+  Epoch 6.
 - **NR discretization** — whether dynamical-spacetime evolution in
   Epoch 9 stays on block AMR or adopts a DG / spectral
   discretization. Decide before Epoch 9.
@@ -206,8 +206,8 @@ RESEARCH.md §6:
 | 3 | §6.11 (visualization and science communication), §6.10 (web streaming) |
 | 4 | §6.2 (Newtonian hydro) |
 | 5 | §6.4 (gravity and N-body) |
-| 6 | §6.2 (MHD, non-ideal) |
-| 7 | §6.5 (EOS and microphysics), §6.3 (cooling) |
+| 6 | §6.5 (EOS and microphysics), §6.3 (cooling) |
+| 7 | §6.2 (MHD, non-ideal) |
 | 8 | §6.3 (radiation transport) |
 | 9 | §6.2 (SR / GR / NR), §6.8 (primitive recovery) |
 | 10 | §6.1 (SPH / meshless), §6.4 (cosmology) |

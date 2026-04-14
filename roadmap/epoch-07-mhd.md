@@ -1,4 +1,4 @@
-# Epoch 6 — Magnetohydrodynamics and non-ideal transport
+# Epoch 7 — Magnetohydrodynamics and non-ideal transport
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 
