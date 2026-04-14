@@ -94,8 +94,4 @@ source "${MINIFORGE_DIR}/etc/profile.d/conda.sh"
 echo "Creating cosmic_foundry environment..."
 conda env create -f "$ENV_FILE" --yes
 
-# Configure git hooks
-echo "Configuring git hooks..."
-git config core.hooksPath .githooks
-
 echo "Miniforge setup complete"
