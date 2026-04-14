@@ -43,14 +43,26 @@ source.
 
 ### Commit size and scope
 
-- **~100 LOC per code commit.** A commit that touches project code
-  should be on the order of 100 lines of diff or smaller. This is
-  a guideline, not a hard limit; small overshoots are acceptable
-  when a clean split would fragment a single logical change.
-- **Documentation diffs may exceed the guideline.** Docs-only
-  commits (ADRs, research notes, roadmap edits, README / AI.md /
-  similar) are not bound by the ~100-LOC guideline. This supersedes
-  §0.6's preliminary "single-file documentation-commit exception"
+- **Target ~150 LOC per code commit.** A commit that touches
+  project code should aim for ~150 lines of diff or smaller. The
+  target is a proxy for reviewer cognitive load, not the rule
+  itself — one logical change per commit is the rule, and the LOC
+  number is how that usually shows up.
+- **Soft ceiling ~400 LOC.** Code commits past ~400 LOC should
+  either be split or carry a one-line justification in the PR
+  description (e.g. "mechanical rename across N files," "generated
+  from spec," "pure deletion of removed module"). ~400 is the
+  point at which industry review-effectiveness data shows
+  defect-detection degrading sharply; past it, reviewer judgement
+  is worth less per line.
+- **Exclusions from the LOC count.** Generated files, lock files,
+  test fixtures and golden data, and pure-deletion diffs do not
+  count toward the target or ceiling. Count what a reviewer has
+  to read and reason about.
+- **Documentation diffs are exempt.** Docs-only commits (ADRs,
+  research notes, roadmap edits, README / AI.md / similar) are
+  not bound by the LOC guideline. This supersedes §0.6's
+  preliminary "single-file documentation-commit exception"
   phrasing — the exception is by content, not file count.
 - **One decision per ADR.** Architectural Decision Records are
   one-decision-per-file and each lands in its own PR (or in a
