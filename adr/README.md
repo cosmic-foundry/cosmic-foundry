@@ -2,9 +2,15 @@
 
 Each ADR captures one architectural decision: the context that
 forced it, the choice made, the consequences, and the
-alternatives considered. ADRs are append-only — a decision is
-revised by superseding it with a new ADR, not by editing the
-old one.
+alternatives considered. Accepted ADRs may be amended in place
+when the change is consistent with the existing decision —
+clarifications, rewordings, narrowing of scope, and corrections
+are all fair game, provided each amendment is logged in a
+trailing *Amendments* section on the ADR. Reversing a decision
+still requires superseding the ADR with a new one, not editing
+it. See
+[ADR-0005 §Decision → ADR amendment policy](ADR-0005-branch-pr-attribution-discipline.md#adr-amendment-policy)
+for the authoritative rule.
 
 ## How to use this index
 
