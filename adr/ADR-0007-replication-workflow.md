@@ -28,13 +28,19 @@ workflow that also pins what each increment must prove.
 Adopt a **bounded-increment, verification-first** workflow
 for all engine work that makes a numerical claim. Concretely:
 
-- **Spec before code.** Each capability gets a short spec doc
-  capturing the target code's algorithm, references
-  (paper section, source file:line), inputs and units,
-  expected numerical signature (convergence order,
-  conservation invariants, known target-side failure modes
-  we should replicate rather than "fix"), and a verification
-  plan (fixtures, convergence tests, integration anchor).
+- **Spec before code.** Engine capabilities (a solver, a
+  reaction network, a tracer advector) get canonical specs in
+  `replication/capabilities/`; test problems from target codes
+  (a KH setup, a 1D detonation) get specs under
+  `replication/targets/<target>/problems/` that reference their
+  capabilities by ID. Capability specs describe the engine
+  feature in isolation: algorithm, inputs and units, expected
+  numerical signature (convergence order, conservation
+  invariants, interface contract). Problem specs describe the
+  target-code setup, references (paper section, source
+  file:line), known target-side failure modes to replicate
+  rather than "fix", and the verification plan (fixtures,
+  convergence tests, target-specific diagnostics).
 - **Golden-data harness.** Reference outputs are produced by
   scripted, version-pinned generators, recorded in a
   manifest with content hashes, and consumed via a single
@@ -52,10 +58,13 @@ for all engine work that makes a numerical claim. Concretely:
   regression sentinels run alongside fixture comparisons.
   Point checks alone do not catch drift.
 - **A living plan per replication target.** A checklist doc
-  (`replication/<target>/plan.md`) decomposes the target
-  into ordered capability specs; spec status fields
-  (Proposed → Implementing → Verified → Drifted) update as
-  work progresses.
+  (`replication/targets/<target>/plan.md`) orders the target's
+  problems and names the capabilities each consumes; spec
+  status fields (Proposed → Implementing → Verified →
+  Drifted) update as work progresses. A capability's status
+  reflects the union of its dependents — Verified once any
+  dependent passes, Drifted if any dependent starts failing —
+  so cross-target regressions surface without bookkeeping.
 
 Named exceptions (emergent integration-only drift,
 calibration passes, reference-code archaeology, trivial
