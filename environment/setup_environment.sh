@@ -94,9 +94,25 @@ source "${MINIFORGE_DIR}/etc/profile.d/conda.sh"
 echo "Creating cosmic_foundry environment..."
 conda env create -f "$ENV_FILE" --yes
 
-# Install pre-commit git hook so local commits run the same checks as CI
+# Install pre-commit git hook so local commits run the same checks as CI.
+# pre-commit refuses to install while core.hooksPath is set. Clear any
+# stale local override (e.g. inherited from a git init template) so the
+# hook can land in the default .git/hooks/ location. If a global or
+# system value is still in effect, surface it instead of silently
+# overriding the user's dotfiles.
 echo "Installing pre-commit hooks..."
 conda activate cosmic_foundry
+if [ -n "$(git -C "$REPO_ROOT" config --local --get core.hooksPath 2>/dev/null)" ]; then
+  echo "  Clearing stale local core.hooksPath override"
+  git -C "$REPO_ROOT" config --local --unset-all core.hooksPath
+fi
+remaining_hooks_path=$(git -C "$REPO_ROOT" config --get core.hooksPath 2>/dev/null || true)
+if [ -n "$remaining_hooks_path" ]; then
+  echo "Error: core.hooksPath is set to '$remaining_hooks_path' outside this repo's local config." >&2
+  echo "       pre-commit refuses to install while it is set. Unset it (for example," >&2
+  echo "       'git config --global --unset core.hooksPath') and re-run this script." >&2
+  exit 1
+fi
 pre-commit install
 conda deactivate
 
