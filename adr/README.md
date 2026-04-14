@@ -19,9 +19,21 @@ old one.
 
 ## Index
 
-- **ADR-0001 — ADR-0005:** Reserved for the Epoch-0 seed ADRs
-  enumerated in `roadmap/epoch-00-bootstrap.md` §0.6. Not yet
-  written.
+- [**ADR-0001**](ADR-0001-python-with-runtime-codegen.md) —
+  Python-only engine with runtime code generation: Python ≥3.11 as
+  the single source language; no compiled extensions shipped from
+  this repository; native code produced at runtime by codegen
+  backends.
+- [**ADR-0002**](ADR-0002-jax-primary-kernel-backend.md) — JAX + XLA
+  as the primary kernel backend. Numba, Taichi, NVIDIA Warp, and
+  Triton accommodated as optional extras behind a `@kernel`
+  descriptor layer but not exercised in Epoch 0–1.
+- [**ADR-0003**](ADR-0003-mpi-baseline.md) — MPI in the parallelism
+  baseline from Epoch 1: `mpi4py` between nodes, composed with JAX
+  `pjit` / `shard_map` within the node; parallel HDF5 for I/O.
+- **ADR-0004 — ADR-0005:** Reserved for the remaining Epoch-0 seed
+  ADRs enumerated in `roadmap/epoch-00-bootstrap.md` §0.6
+  (documentation stack; branch and PR discipline). Not yet written.
 - [**ADR-0006**](ADR-0006-visualization-stack.md) — Visualization
   and science-communication stack: Zarr v3 alongside HDF5;
   WebGPU-first browser target with WebGL2 fallback; perceptual
