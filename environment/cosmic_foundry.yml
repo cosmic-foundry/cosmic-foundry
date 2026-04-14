@@ -1,0 +1,26 @@
+name: cosmic_foundry
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - jax
+  - sympy
+  - pytest
+  - pyyaml
+  - jsonschema
+  - sphinx
+  - furo
+  - myst-nb
+  - sphinx-design
+  - sphinx-copybutton
+  - matplotlib
+  - plotly
+  - ipykernel
+  - nbformat
+  - gcc
+  - gxx
+  - gfortran
+  - openmpi
+  - make
+  - git
