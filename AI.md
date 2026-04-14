@@ -104,6 +104,14 @@ When making a new architectural decision, copy
 `adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md`, mark it
 Proposed, and add a line to `adr/README.md` in the same PR.
 
+Accepted ADRs may be amended in place when a conversation implies
+a change consistent with the existing decision — propose the edit
+directly rather than routing clarifications through AI.md. Each
+amendment appends a dated bullet to the ADR's *Amendments*
+section. Reversing a decision still goes via supersession (a new
+ADR). See
+[ADR-0005 §Decision → ADR amendment policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-amendment-policy).
+
 ## Code Quality
 
 - Write code that is:

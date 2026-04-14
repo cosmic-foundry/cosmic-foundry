@@ -67,8 +67,9 @@ source.
 - **One decision per ADR.** Architectural Decision Records are
   one-decision-per-file and each lands in its own PR (or in a
   tight group when ADRs reference each other, as with ADRs 0001
-  – 0003 and 0004 – 0005). Mutating an accepted ADR is prohibited;
-  future decisions supersede old ones via a new ADR.
+  – 0003 and 0004 – 0005). Amendment and supersession rules for
+  accepted ADRs are codified separately in *ADR amendment policy*
+  below.
 
 ### History and force-push
 
@@ -115,6 +116,30 @@ source.
   repository-relative paths, not URLs to specific upstream or
   origin branches that may move.
 
+### ADR amendment policy
+
+Applies to every ADR in this repository.
+
+- **Amend by forward commit.** Any accepted ADR may be amended in
+  place when the change is discussed and agreed in-session.
+  Clarifications, rewordings, narrowing of scope, and corrections
+  consistent with the existing decision do not require a new ADR.
+- **Record each amendment.** Every amendment appends a dated
+  one-line bullet to a trailing *Amendments* section on the ADR,
+  naming what changed and why. Prior prose is updated in place —
+  the Amendments log, not stale text, is what preserves the audit
+  trail.
+- **Reversals still require supersession.** Changing the decision
+  itself (reversing direction, replacing the technology choice,
+  withdrawing the rule) lands as a new ADR marked
+  *Supersedes ADR-NNNN*, with the old ADR's status updated to
+  *Superseded by ADR-MMMM*. This keeps decision history
+  discoverable from the index.
+- **Agents propose amendments proactively.** When a conversation
+  implies an ADR should change, the agent should propose the edit
+  directly rather than routing the clarification through AI.md or
+  deferring to a new ADR.
+
 ## Consequences
 
 - **Positive.** A reviewer can land any PR confident that the
@@ -131,8 +156,8 @@ source.
   is the rampdown path.
 - **Neutral.** AI.md's informal summary is kept in sync with this
   ADR. When the two disagree, this ADR is authoritative. AI.md may
-  be edited to track rewordings in this ADR without a new ADR; the
-  ADR is edited only by supersession.
+  be edited freely to track rewordings in this ADR; the ADR itself
+  is edited per the *ADR amendment policy* above.
 
 ## Alternatives considered
 
@@ -164,3 +189,14 @@ source.
   §0.6 (reservation), §0.8 (CONTRIBUTING.md ramp-down).
 - ADR-0007 (Replication workflow) — depends on attribution honesty
   for the citation-backed verification trail.
+
+## Amendments
+
+- **2026-04-14.** Relaxed the immutability clause. Accepted ADRs
+  may now be amended in place by forward commit when the change is
+  discussed and agreed in-session; reversals still require
+  supersession. Prior policy optimised for an audit strictness the
+  single-contributor, pre-1.0 phase of the project does not need,
+  and blocked agents from proposing edits to existing ADRs when a
+  conversation clearly implied one. See new *ADR amendment policy*
+  subsection under Decision.
