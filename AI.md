@@ -23,10 +23,15 @@ ADR wins.
 
 ### Commit size
 
-- Code commits target approximately 100 lines of diff or smaller.
-  This is a guideline, not a hard limit.
+- Code commits target approximately 150 lines of diff, with a
+  soft ceiling of ~400 lines. Past the ceiling, split the commit
+  or justify the size in the PR description.
+- One logical change per commit — the LOC numbers are a proxy
+  for reviewer cognitive load, not the rule itself.
+- Generated files, lock files, fixtures / golden data, and pure
+  deletions don't count toward the target or ceiling.
 - Documentation diffs (ADRs, research notes, roadmap edits,
-  README / AI.md / similar) may exceed the guideline.
+  README / AI.md / similar) are exempt from the guideline.
 
 ### History
 
