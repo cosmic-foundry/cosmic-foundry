@@ -53,14 +53,21 @@ Each item becomes a spec under `specs/` as it is tackled:
 1. Compressible Euler solver, 1-D planar, specified boundary
    conditions (outflow / sustained upstream — confirm from
    paper).
-2. Degenerate stellar EOS, Helmholtz-family, with the
+2. Constant acceleration source term representing gravity: a
+   fixed uniform body force on the momentum equation and the
+   associated work term on the energy equation. The paper uses
+   this in place of a full self-gravity solve; its magnitude
+   and direction must be pinned from the paper, along with any
+   hydrostatic-balance requirement on the initial pressure
+   profile that drives the well-balanced-discretization choice.
+3. Degenerate stellar EOS, Helmholtz-family, with the
    thermodynamic derivatives required by the hydrodynamics and
    burner.
-3. Nuclear reaction network (aprox13 expected; confirm exact
+4. Nuclear reaction network (aprox13 expected; confirm exact
    network from paper) with an implicit integrator.
-4. Strang-split hydro–burn coupling, including the reactive
+5. Strang-split hydro–burn coupling, including the reactive
    source treatment used by the target.
-5. Ignition-event diagnostic: detect and time-stamp the onset
+6. Ignition-event diagnostic: detect and time-stamp the onset
    of self-sustained thermonuclear burning, and record its
    spatial location. The detection criterion itself (local
    energy generation rate vs. loss, species threshold, or a
@@ -71,8 +78,11 @@ Capability 1 is expected to be shared with the KH target
 (`replication/castro-wd-merger/`). Under the current per-target
 `specs/` layout, the shared capability lives in whichever
 target's `specs/` first writes it; the other cross-references
-rather than duplicating. Capabilities 2–4 are unique to this
-target at present.
+rather than duplicating. Capability 2 (constant acceleration
+source) is not needed by the KH test but is a general-enough
+hydro source term that a future target may reuse it, so it is
+written as a standalone spec rather than baked into the Euler
+spec. Capabilities 3–6 are unique to this target at present.
 
 ## Open questions
 
@@ -80,6 +90,10 @@ target at present.
   from the paper when the reaction-network spec is written.
 - Upstream thermodynamic state, domain extent, and termination
   time. Pin from the paper.
+- Magnitude and direction of the constant gravitational
+  acceleration, and whether the initial profile is required to
+  be in hydrostatic balance against it (which constrains the
+  discretization choice toward a well-balanced scheme).
 - Specific EOS implementation (Timmes Helmholtz table, or an
   equivalent). The paper's choice is the pinned target; our
   implementation may differ in algorithmic detail so long as
