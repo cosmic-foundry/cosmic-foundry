@@ -73,14 +73,20 @@ below) and lands with the first substantial docs PR.
   shape is frozen prematurely.
 - **Interactivity model.** Interactive content is **parameter-
   driven**, not code-driven: the reader manipulates sliders,
-  dropdowns, or similar controls that feed pre-computed or
-  on-the-fly simulation outputs from the engine. Browser-side
-  Python execution (`pyodide`, `JupyterLite`) is **out of scope**
-  — an explainer that requires arbitrary user code is not the
-  product this docs stack targets. The WebGPU viewer (ADR-0006) is
-  the default surface for interactive simulation renderings;
-  `holoviews` + `bokeh` embeds are the notebook-internal fallback
-  for 1-D / 2-D parameter studies that do not need the viewer.
+  dropdowns, or similar controls, and live simulation outputs are
+  computed in the browser by **engine-authored** WebGPU / WASM
+  artifacts shipped with the docs build — not by any browser-side
+  interpreter for reader-written code. The distinction is who
+  authors the code, not when it runs: engine-authored WGSL compute
+  shaders (transpiled once from JAX kernels per ADR-0006) and
+  pre-compiled WASM modules execute live against whatever values
+  the widgets carry, producing genuinely live simulations; a
+  browser-side Python interpreter (`pyodide`, `JupyterLite`) that
+  would let the reader author and run arbitrary code is **out of
+  scope**. The WebGPU viewer (ADR-0006) is the default surface for
+  interactive simulation renderings; `holoviews` + `bokeh` embeds
+  are the notebook-internal fallback for 1-D / 2-D parameter
+  studies that do not need the viewer.
 - **Rendered-page aesthetic.** Rendered pages must read as modern
   documentation, not as Jupyter notebooks. MyST-NB is configured
   to hide input-cell prompts (`In [ ]:`) and cell numbering; by
@@ -159,13 +165,15 @@ directory.
   Rejected because the contributor ramp-up cost compounds across
   every docs PR.
 - **Browser-side Python (`pyodide` / `JupyterLite`).** Enables
-  read-execute-explain narratives in which the reader edits and
-  reruns arbitrary code. Rejected because the interactivity the
-  educational surface needs is *parameter-driven* (sliders feeding
-  pre-computed simulations), not *code-driven*, and a browser-side
-  Python runtime brings asset-budget and accessibility
-  obligations that the ADR-0006 performance targets would have to
-  absorb.
+  narratives in which the reader edits and runs arbitrary Python.
+  Rejected — but note the thing rejected is *reader-authored*
+  code, not live computation per se: the WebGPU viewer path
+  (ADR-0006) still runs real simulations live in the browser, just
+  against engine-authored WGSL / WASM. A full Python runtime would
+  add 10–50 MB of assets per page, bring sandboxing and arbitrary-
+  code-execution responsibilities the project does not want to
+  take on, and buy an interactivity mode (reader-edits-code) that
+  the educational surface does not require.
 - **Classic Jupyter-notebook rendering.** Default MyST-NB output
   surfaces `In [ ]:` prompts, cell numbering, and notebook
   chrome. Rejected because the educational surface targets

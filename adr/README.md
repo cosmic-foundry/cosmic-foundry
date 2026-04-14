@@ -36,9 +36,10 @@ old one.
 - [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) *(Proposed)* —
   Sphinx + MyST-NB documentation stack with `sphinx-design`;
   `sphinx-autodoc2` for API reference; `sphinx-build -W` in CI.
-  Interactivity is parameter-driven (sliders feeding pre-computed
-  or JIT'd simulation outputs via the WebGPU viewer and
-  `holoviews` + `bokeh`), not browser-side-Python code execution.
+  Interactivity is parameter-driven: sliders feed **live** simulation
+  outputs computed in the browser by engine-authored WebGPU / WASM
+  artifacts (per ADR-0006), not by a browser-side Python runtime.
+  The distinction is who authors the code, not when it runs.
   Rendered pages hide notebook-cell chrome by default. Theme
   (furo vs pydata-sphinx-theme), CSS polish, and hosting
   (RTD / Pages) deferred to follow-up ADRs alongside the first
