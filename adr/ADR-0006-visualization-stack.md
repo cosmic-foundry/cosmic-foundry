@@ -8,10 +8,11 @@
 Cosmic Foundry treats excellence at visualization as a core
 requirement: the engine's outputs must serve both high scientific
 rigour and high educational impact, including through public-facing
-web content. RESEARCH.md §6.10 originally catalogued visualization
+web content. RESEARCH §6.10 originally catalogued visualization
 only as "integrated analysis hooks (yt, VisIt, ParaView, Ascent)" —
-a batch, desktop-era stance. The §6.12 research survey added
-alongside this ADR reviews the modern landscape (Python plotting,
+a batch, desktop-era stance. The §6.11 research survey added
+alongside this ADR (now at `research/06-11-visualization.md` after
+the docs split) reviews the modern landscape (Python plotting,
 browser-native renderers, unit-aware plotting, tile and streaming
 formats, perceptual colormaps, visual-regression tooling, and
 science-communication surfaces).
@@ -21,9 +22,9 @@ the viz stack's output-format decisions must be made *before* those
 writers are designed — otherwise the engine ships web-hostile
 outputs or duplicates its I/O paths.
 
-ADR-0001..0005 (the five Epoch-0 seed ADRs reserved in ROADMAP.md
-§0.6) codify commitments this ADR builds on. This ADR uses number
-0006 to preserve that reservation.
+ADR-0001..0005 (the five Epoch-0 seed ADRs reserved in
+`roadmap/epoch-00-bootstrap.md` §0.6) codify commitments this ADR
+builds on. This ADR uses number 0006 to preserve that reservation.
 
 ## Decision
 
