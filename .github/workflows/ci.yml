@@ -9,11 +9,17 @@ on:
 jobs:
   docs-integrity:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: mamba-org/setup-micromamba@v2
         with:
-          python-version: '3.11'
+          environment-file: environment/cosmic_foundry.yml
+          environment-name: cosmic_foundry
+          cache-environment: true
+          cache-downloads: true
       - name: Markdown link integrity
         run: python scripts/ci/check_markdown_links.py
       - name: ADR index consistency
