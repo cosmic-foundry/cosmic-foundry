@@ -42,7 +42,7 @@ from autodiff unless there is a demonstrated performance reason to
 hand-code them.
 
 **Principle — licensing discipline.** Capabilities with a
-permissive-licensed reference code (RESEARCH.md §6.11) are studied
+permissive-licensed reference code (RESEARCH.md §6.12) are studied
 and adapted with attribution. Copyleft references are consulted
 through published papers only; any reimplementation is clean-room.
 Closed / collaboration-only codes (KEPLER, CHIMERA, FORNAX,
