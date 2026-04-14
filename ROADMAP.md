@@ -273,7 +273,34 @@ the first integration test (invoked via `subprocess` in pytest).
   pre-commit hook installation, and the ADR process for
   cross-cutting decisions.
 
-#### 0.9 Exit criteria
+#### 0.9 Visualization scaffolding
+
+Even though no physics runs in Epoch 0, the house-style
+commitments that downstream visualization depends on are made
+here so they cannot drift in later epochs:
+
+- `cmasher`, `cmocean`, and matplotlib perceptually-uniform maps
+  pinned in the `docs` extra; `unyt` pinned in the core runtime
+  dependency list for unit-aware plotting.
+- `docs/gallery/` stub page using the `sphinx-design` card layout;
+  each later physics epoch populates a card.
+- `tests/visual/` subtree with a trivial `pytest-mpl`
+  baseline-image case (e.g. a sinusoid rendered under the house
+  colormap) wired into CI, so later visual-regression work plugs
+  into an already-green harness.
+- Accessibility and performance budget stub (`docs/accessibility
+  .md`) naming the targets the public gallery will enforce: WCAG
+  2.2 AA contrast, colourblind-safe palettes, alt text, mobile
+  LCP under 2.5 s on a 4G profile, bytes-on-wire budgets per
+  tiled dataset.
+- ADR-0006 (visualization and science-communication stack) is
+  referenced from the ADR index; its decisions constrain the
+  Epoch 2 I/O design and the dedicated Epoch 3 viewer work.
+
+No runtime rendering code is written in Epoch 0; the scaffolding
+is purely dependencies, stubs, and the visual-regression harness.
+
+#### 0.10 Exit criteria
 
 Epoch 0 is complete when all of the following hold:
 
@@ -287,11 +314,13 @@ Epoch 0 is complete when all of the following hold:
 - `sphinx-build -W docs docs/_build/html` builds without errors or
   warnings.
 - The five seed ADRs are merged and the `adr/` index renders in
-  the docs.
+  the docs; ADR-0006 (visualization stack) is also merged.
 - No Numba / Taichi / Warp / Triton code is imported by any
   default code path; those extras install but remain unexercised.
+- `pytest-mpl` runs green against the baseline-image case in
+  `tests/visual/` on the pinned house colormap.
 
-#### 0.10 Explicitly deferred to later epochs
+#### 0.11 Explicitly deferred to later epochs
 
 - The kernel descriptor itself (interface, semantics, backend
   dispatch) is *sketched* in `cosmic_foundry/kernels/__init__.py`
@@ -302,7 +331,8 @@ Epoch 0 is complete when all of the following hold:
 - Documentation publishing (RTD, Pages).
 - Benchmark harness in `benchmarks/` beyond an empty directory.
 - Problem-setup DSL vs YAML vs Python-API decision — this is
-  first-touched in Epoch 3 at the earliest.
+  first-touched in Epoch 4 (Newtonian hydrodynamics) at the
+  earliest.
 
 ### Epoch 1 — Kernel abstraction and multi-backend core
 
@@ -318,8 +348,10 @@ The one piece of infrastructure we genuinely have to invent:
 - Deterministic structured logging and error handling.
 
 **Exit criterion:** a 3-D 7-point Laplacian benchmark runs under
-every backend at documented roofline fractions, and a multi-rank
-correctness test proves backend and sharding equivalence.
+every backend at documented roofline fractions; a multi-rank
+correctness test proves backend and sharding equivalence; and a
+reference render of one benchmark slice under the house colormap
+is committed as the first production visual-regression artifact.
 
 ### Epoch 2 — Mesh and AMR
 
@@ -333,14 +365,60 @@ Bring up the mesh hierarchy the physics modules will live on:
 - Task-graph driver for asynchronous dependency scheduling across
   ranks and devices.
 - Plotfile writer and yt-compatible metadata.
+- Zarr v3 writer with an OME-Zarr-style multiscale pyramid
+  convention emitted alongside the plotfile, so every AMR output
+  is simultaneously HPC-analysis-ready (HDF5 / plotfile) and
+  browser-streamable (Zarr). Pinned by ADR-0006.
 
 **Exit criterion:** a second-order advection test converges at
-design order on AMR, runs identically on CPU and GPU, and produces
-rank-invariant output.
+design order on AMR, runs identically on CPU and GPU, produces
+rank-invariant output, and writes a matching Zarr pyramid that
+the Epoch 3 viewer MVP consumes without hand editing.
 
-### Epoch 3 — Newtonian hydrodynamics
+### Epoch 3 — Visualization and science communication
 
-The first physics module and the template for every subsequent one:
+The visualization stack that every physics epoch will feed into —
+and the public-facing science-communication surface. Promoted out
+of the former Stretch Epoch 12 (subgrid physics and observables,
+now Stretch Epoch 13) because excellence at visualization is a core
+engine requirement, and because rendering-layer and output-format
+choices must precede the first physics module to avoid expensive
+rewrites. Builds directly on the Zarr writer delivered in Epoch 2
+and the house-style scaffolding from Epoch 0.
+
+- Unit-aware plotting layer over `unyt`, bridging `astropy.units`
+  at the engine boundary.
+- In-engine rendering primitives in JAX — camera, 2-D slice
+  sampler, 3-D volume raymarcher, particle projector — shared
+  between batch CPU / GPU renders and the browser viewer so the
+  same kernels drive both.
+- WebGPU viewer package (with WebGL2 fallback) that consumes
+  Zarr tile pyramids and glTF geometry. Shaders authored once in
+  WGSL and transpiled for WebGL2.
+- MyST-NB explainer template embedding the viewer as an
+  interactive widget; `sphinx-design` gallery page published as
+  part of the docs site.
+- Visual-regression harness upgraded from the Epoch 0 stub:
+  `pytest-mpl` for figures, an SSIM-based diff harness for
+  renders and short movies, references in Git LFS.
+- Accessibility and performance budgets from ADR-0006
+  (WCAG 2.2 AA, colourblind-safe palettes, mobile LCP < 2.5 s,
+  per-dataset bytes-on-wire) codified as CI checks against the
+  public gallery build.
+- Public gallery (GitHub Pages) seeded with the Epoch 2 AMR
+  advection test as its first interactive entry; later physics
+  epochs each add one canonical live demo.
+
+**Exit criterion:** the Epoch 2 AMR advection test renders as a
+live WebGPU page on the public docs site from checkpoint data
+with no hand editing; the page meets the accessibility and
+performance budgets under CI; and the visual-regression harness
+is green on figure, render, and movie references.
+
+### Epoch 4 — Newtonian hydrodynamics
+
+The first physics module and the template for every subsequent
+one:
 
 - Finite-volume Godunov with PPM reconstruction (SymPy-derived
   stencils).
@@ -349,10 +427,13 @@ The first physics module and the template for every subsequent one:
 - Golden regression suite: Sod, Sedov, Noh, blast wave,
   Kelvin–Helmholtz, Rayleigh–Taylor.
 
-**Exit criterion:** the standard hydro test battery matches reference
-solutions across all kernel backends.
+**Exit criterion:** the standard hydro test battery matches
+reference solutions across all kernel backends, and a Sod
+shock-tube explainer page (live slider over γ and initial
+conditions, unit-labelled axes, perceptual colormap) ships to
+the public gallery as the first physics demo.
 
-### Epoch 4 — Self-gravity and N-body
+### Epoch 5 — Self-gravity and N-body
 
 Close the loop with gravitational dynamics:
 
@@ -364,9 +445,11 @@ Close the loop with gravitational dynamics:
 - FMM prototype.
 
 **Exit criterion:** Zel'dovich pancake and hydrostatic-equilibrium
-tests match reference solutions.
+tests match reference solutions, and a Zel'dovich-pancake live
+explainer ships to the gallery with linked phase-space and
+density-field views.
 
-### Epoch 5 — Magnetohydrodynamics and non-ideal transport
+### Epoch 6 — Magnetohydrodynamics and non-ideal transport
 
 Extend the hydro module into the MHD regime:
 
@@ -376,10 +459,12 @@ Extend the hydro module into the MHD regime:
 - Resistive, Hall, and ambipolar MHD.
 - Anisotropic thermal conduction and viscosity.
 
-**Exit criterion:** Orszag–Tang, MHD rotor, and MHD blast wave match
-literature benchmarks.
+**Exit criterion:** Orszag–Tang, MHD rotor, and MHD blast wave
+match literature benchmarks, and an Orszag–Tang live explainer
+ships to the gallery with field-line overlays and a resistivity
+slider.
 
-### Epoch 6 — Microphysics sub-layer
+### Epoch 7 — Microphysics sub-layer
 
 Bring up the equations of state and reaction networks that later
 physics modules depend on:
@@ -393,9 +478,10 @@ physics modules depend on:
 - Radiation opacities.
 
 **Exit criterion:** thermonuclear flame and primordial cooling
-benchmarks match published results.
+benchmarks match published results, and a 1-D thermonuclear-flame
+explainer ships with interactive EOS / network switching.
 
-### Epoch 7 — Radiation transport
+### Epoch 8 — Radiation transport
 
 Close the radiation-hydrodynamics loop:
 
@@ -406,10 +492,12 @@ Close the radiation-hydrodynamics loop:
 - Interfaces left open for DG and Monte Carlo (the latter is a
   natural fit for Warp).
 
-**Exit criterion:** shadow, linear-wave, and radiating-shock tests
-pass.
+**Exit criterion:** shadow, linear-wave, and radiating-shock
+tests pass, and a radiating-shock explainer ships with a
+reduced-speed-of-light slider and linked spectral / spatial
+views.
 
-### Epoch 8 — Relativistic physics
+### Epoch 9 — Relativistic physics
 
 The hardest grid-based physics target:
 
@@ -417,18 +505,21 @@ The hardest grid-based physics target:
 - GR hydro and GRMHD on fixed stationary spacetimes, with robust
   primitive-variable recovery (multiple schemes, autodiff
   Jacobians).
-- Dynamical-spacetime evolution via BSSN or Z4c with moving-puncture
-  gauge. SymPy derives the Einstein source terms.
+- Dynamical-spacetime evolution via BSSN or Z4c with moving-
+  puncture gauge. SymPy derives the Einstein source terms.
 
 **Exit criterion:** Fishbone–Moncrief torus and binary-black-hole
-inspiral benchmarks.
+inspiral benchmarks pass, and a binary-black-hole inspiral
+cinematic ships to the gallery — orbit-then-merger flythrough,
+gravitational-wave strain panel, unit-labelled axes — as the
+flagship demo of the engine's relativistic capability.
 
-### Epoch 9 — Particle / meshless hydrodynamics and cosmology
+### Epoch 10 — Particle / meshless hydrodynamics and cosmology
 
 The second mesh paradigm and the cosmological stack:
 
-- SPH with modern pressure–energy and density-independent variants;
-  neighbor loops on Taichi or Warp.
+- SPH with modern pressure–energy and density-independent
+  variants; neighbor loops on Taichi or Warp.
 - Meshless finite-mass and finite-volume methods.
 - Comoving FRW integrator.
 - 2LPT initial conditions.
@@ -436,16 +527,18 @@ The second mesh paradigm and the cosmological stack:
 - Light-cones and high-dynamic-range power-spectrum estimator.
 
 **Exit criterion:** a cosmological box reproduces a published
-reference at fixed resolution within documented tolerance.
+reference at fixed resolution within documented tolerance, and a
+cosmological-flythrough explainer ships to the gallery with a
+light-cone tour and a live halo-mass-function panel.
 
-### Stretch Epoch 10 — Moving Voronoi mesh
+### Stretch Epoch 11 — Moving Voronoi mesh
 
 The Arepo-class replication target. Deferred until the above are
 stable so the engine can absorb the complexity. Likely implemented
 on Taichi or Warp with SciPy-based CPU fallbacks for correctness
 tests.
 
-### Stretch Epoch 11 — Stellar evolution
+### Stretch Epoch 12 — Stellar evolution
 
 1-D Lagrangian stellar structure with an implicit solver (JAX
 autodiff for the block-tridiagonal Jacobian), adaptive mesh and
@@ -454,14 +547,16 @@ evolution interface compatible with the multi-D explosive modules
 so that progenitor states flow naturally into merger and supernova
 runs.
 
-### Stretch Epoch 12 — Subgrid physics and observables
+### Stretch Epoch 13 — Subgrid physics and observables
 
 - Plugin interface for cooling / star formation / stellar and SN
-  feedback / AGN seeding and feedback / chemical enrichment, so that
-  EAGLE-, COLIBRE-, and FIRE-class recipes can be expressed inside
-  the engine.
+  feedback / AGN seeding and feedback / chemical enrichment, so
+  that EAGLE-, COLIBRE-, and FIRE-class recipes can be expressed
+  inside the engine.
 - On-the-fly synthetic EUV, X-ray, and spectral-line observables.
-- In-situ visualization hooks.
+- In-situ rendering passes wired into the Epoch 3 pipeline so
+  long-running simulations emit gallery-ready assets during
+  runtime rather than only at checkpoint.
 
 ---
 
@@ -483,6 +578,18 @@ These grow every epoch; they are not tied to a single phase.
 - **Reproducibility.** Bitwise-reproducible runs are a goal for
   single-backend CPU execution (following GAMER-2, GADGET-4); full
   cross-backend bitwise reproducibility is not expected.
+- **Visualization and communication.** Excellence at visualization
+  is a core engine requirement, not a downstream concern. Every
+  physics epoch from Epoch 4 onward ships a canonical live demo
+  (interactive WebGPU explainer or notebook widget, perceptual
+  colormaps, unit-labelled axes) alongside its regression
+  benchmarks. The public gallery is regenerated per release with
+  accessibility (WCAG 2.2 AA, colourblind-safe palettes, alt text)
+  and mobile performance budgets (LCP < 2.5 s on a 4G profile,
+  per-dataset bytes-on-wire targets) enforced in CI. Visual-
+  regression references (figures, renders, short movies) live in
+  Git LFS and are updated only by explicit tag-and-review, never
+  auto-replaced. See ADR-0006 for the stack choices.
 
 ---
 
@@ -494,14 +601,30 @@ named epoch, via an ADR:
 - **Host-level parallelism model** — JAX `pjit` / `shard_map` vs
   explicit mpi4py, or both. Likely both, with the former inside a
   node and the latter between nodes. Decide before Epoch 1 stable.
+- **In-engine renderer vs. yt hand-off** — whether the camera,
+  slice sampler, and volume raymarcher live inside the engine
+  (and are therefore shareable between CPU batch, GPU batch, and
+  in-browser WebGPU) or are delegated to yt + widgyts. ADR-0006
+  currently proposes in-engine; confirm before Epoch 3 starts.
+- **Web streaming format — Zarr vs. ADIOS2** — the canonical
+  output consumed by browser viewers. Expected to be Zarr v3 for
+  its mature browser story with ADIOS2 retained for HPC analysis.
+  Decide before Epoch 3.
+- **Browser rendering target — WebGPU-first vs. WebGL2-first** —
+  whether engine-side shaders are authored against WebGPU with a
+  WebGL2 fallback, or vice versa. Decide before Epoch 3.
+- **Scene-graph / camera ownership** — whether the engine ships
+  its own minimal scene abstraction (transforms, cameras, lights)
+  or adopts one from `three.js` / `pyvista`. Decide before
+  Epoch 3.
 - **Preferred particle / SPH backend** — Taichi vs NVIDIA Warp.
-  Decide before Epoch 4.
+  Decide before Epoch 5.
 - **Symbolic vs hand-written microphysics** — how much of the EOS
   and reaction-network machinery is SymPy-derived. Decide before
-  Epoch 6.
+  Epoch 7.
 - **NR discretization** — whether dynamical-spacetime evolution in
-  Epoch 8 stays on block AMR or adopts a DG / spectral
-  discretization. Decide before Epoch 8.
+  Epoch 9 stays on block AMR or adopts a DG / spectral
+  discretization. Decide before Epoch 9.
 - **Problem-setup surface** — pure Python API, YAML + validated
   schema, or a small domain-specific language. Decide before the
   first external user.
@@ -519,19 +642,20 @@ RESEARCH.md §6:
 
 | Epoch | RESEARCH.md §6 capabilities covered |
 |------:|-------------------------------------|
-| 0 | — (scaffolding) |
+| 0 | — (scaffolding; viz house style seeded from §6.11) |
 | 1 | §6.9 (parallelism), §6.10 (I/O), §6.8 (solver infrastructure) |
-| 2 | §6.1 (meshes and AMR), §6.10 (plotfiles) |
-| 3 | §6.2 (Newtonian hydro) |
-| 4 | §6.4 (gravity and N-body) |
-| 5 | §6.2 (MHD, non-ideal) |
-| 6 | §6.5 (EOS and microphysics), §6.3 (cooling) |
-| 7 | §6.3 (radiation transport) |
-| 8 | §6.2 (SR / GR / NR), §6.8 (primitive recovery) |
-| 9 | §6.1 (SPH / meshless), §6.4 (cosmology) |
-| 10 | §6.1 (moving mesh) |
-| 11 | §6.7 (stellar evolution) |
-| 12 | §6.6 (subgrid), §6.10 (diagnostics) |
+| 2 | §6.1 (meshes and AMR), §6.10 (plotfiles + Zarr) |
+| 3 | §6.11 (visualization and science communication), §6.10 (web streaming) |
+| 4 | §6.2 (Newtonian hydro) |
+| 5 | §6.4 (gravity and N-body) |
+| 6 | §6.2 (MHD, non-ideal) |
+| 7 | §6.5 (EOS and microphysics), §6.3 (cooling) |
+| 8 | §6.3 (radiation transport) |
+| 9 | §6.2 (SR / GR / NR), §6.8 (primitive recovery) |
+| 10 | §6.1 (SPH / meshless), §6.4 (cosmology) |
+| 11 | §6.1 (moving mesh) |
+| 12 | §6.7 (stellar evolution) |
+| 13 | §6.6 (subgrid), §6.10 (diagnostics) |
 
 No epoch covers a capability that is not named in RESEARCH.md §6,
 and every capability named in §6 appears in at least one epoch.
