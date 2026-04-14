@@ -18,7 +18,7 @@ jobs:
         shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@v3
         with:
           environment-file: environment/cosmic_foundry.yml
           environment-name: cosmic_foundry
