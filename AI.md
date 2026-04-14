@@ -30,6 +30,10 @@ ADR wins.
   ```
 - CI's `pre-commit` job is a required status check on
   `upstream/main`; PRs cannot merge red.
+- **Run `pre-commit run --all-files` before pushing.** CI runs the
+  same hooks; catching failures locally avoids a round-trip. If the
+  command is not found, the working copy's env is stale or the git
+  hook was never installed — see *Environment → Before Any Work*.
 
 ### Commit size
 
@@ -89,18 +93,28 @@ bash environment/setup_environment.sh
 
 ### Before Any Work
 
-**Every session**, verify miniforge exists:
+**Every session**, verify miniforge exists and the env is wired for
+pre-commit:
 ```bash
 test -d miniforge && echo "✓ miniforge found" || echo "✗ Run setup script"
+source miniforge/etc/profile.d/conda.sh && conda activate cosmic_foundry \
+  && python -c "import pre_commit" 2>/dev/null \
+  && echo "✓ pre-commit available" \
+  || echo "✗ env stale — run 'conda env update -f environment/cosmic_foundry.yml --prune'"
+test -x .git/hooks/pre-commit \
+  && echo "✓ pre-commit git hook installed" \
+  || echo "✗ run 'pre-commit install' inside the activated env"
 ```
 
-If the session starts from a parent organization workspace, run the same check
-against the `cosmic-foundry` checkout path:
-```bash
-test -d cosmic-foundry/miniforge && echo "✓ miniforge found" || echo "✗ Run setup script"
-```
+If the session starts from a parent organization workspace, run the
+same checks against the `cosmic-foundry` checkout path (prefix each
+with `cd cosmic-foundry` or equivalent).
 
-If missing, ask user to run the setup script before proceeding.
+If miniforge is missing, ask user to run the setup script before
+proceeding. If only the pre-commit env or hook is missing, re-run
+`setup_environment.sh` or the remediation commands printed above —
+both are needed so `pre-commit run --all-files` works locally before
+pushing (see *Branches and PRs*).
 
 ## Architectural Decisions
 
