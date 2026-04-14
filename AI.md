@@ -5,17 +5,60 @@ regardless of platform (Claude Code, Codex, Gemini, or others).
 
 ## Development Rules
 
-- Every commit should be no more than approximately 100 lines of code changes (larger diffs are fine to documentation).
+The authoritative source is
+[ADR-0005](adr/ADR-0005-branch-pr-attribution-discipline.md). This
+section is the informal quick-reference; when the two disagree, the
+ADR wins.
+
+### Branches and PRs
+
 - Only work on a fork of the upstream repository.
-- Every change should be done on a branch and handled via a pull request on GitHub.
-- Never force push.
-- Never alter the git history.
-- Never include the user's local absolute filesystem paths in commit messages,
-  PR titles, PR descriptions, or other durable repository metadata. Use
-  repository-relative paths or generic tool commands so private workstation
-  details are not published.
-- This project has not started versioning or published stable APIs yet. Do not
-  preserve backwards compatibility by default during structural refactors.
+- Every change lands via a pull request; no direct commits to
+  `upstream/main`.
+- Create topic branches from `origin/main` (the fork's main), not
+  from `upstream/main` directly. Syncing `origin/main` to
+  `upstream/main` is an explicit separate step.
+- CI's `pre-commit` job is a required status check on
+  `upstream/main`; PRs cannot merge red.
+
+### Commit size
+
+- Code commits target approximately 100 lines of diff or smaller.
+  This is a guideline, not a hard limit.
+- Documentation diffs (ADRs, research notes, roadmap edits,
+  README / AI.md / similar) may exceed the guideline.
+
+### History
+
+- Never force-push a branch with an open PR or merged commits.
+- Never alter merged history (no rebase, no `reset --hard`, no
+  amending merged commits).
+- One-off `git push --force-with-lease` on a pre-PR topic branch
+  is allowed only with explicit user approval, for fixes that
+  cannot be resolved with a forward commit (e.g. correcting author
+  identity on a just-pushed commit).
+
+### Durable metadata
+
+- Never include local absolute filesystem paths (e.g. `/Users/…`,
+  `/home/…`, `C:\Users\…`) in commit messages, PR titles, PR
+  descriptions, or ADR text. Use repository-relative paths or
+  generic tool commands instead.
+- Never commit API keys, tokens, or credentials. If one leaks,
+  rotate it — rewriting history does not un-leak a pushed secret.
+
+### Attribution
+
+- AI-agent commits carry a `Co-Authored-By` trailer naming the
+  agent and model.
+- PR descriptions disclose AI-agent involvement when an agent
+  generated substantial content.
+
+### Project status
+
+- This project has not started versioning or published stable APIs
+  yet. Do not preserve backwards compatibility by default during
+  structural refactors.
 
 ## Environment
 

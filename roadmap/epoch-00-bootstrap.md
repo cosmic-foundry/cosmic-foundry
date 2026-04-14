@@ -59,10 +59,17 @@ or extensions of existing directories.
 - **Build backend:** `hatchling` with `hatch-vcs` for version
   derivation from git tags.
 - **Core runtime dependencies:** `numpy`, `scipy`, `jax`, `jaxlib`,
-  `h5py`, `mpi4py`, `click`, `sympy`, `typing-extensions`.
+  `h5py`, `click`, `sympy`, `typing-extensions`. (`mpi4py` is *not*
+  in the core set — ADR-0003 places MPI behind the optional `mpi`
+  extra below.)
 - **Optional extras (stubbed, not validated in Epoch 0):**
-  - `dev`: pytest, pytest-cov, pytest-mpi, pre-commit, black, ruff,
-    mypy, hypothesis.
+  - `dev`: pytest, pytest-cov, pre-commit, black, ruff, mypy,
+    hypothesis. (`pytest-mpi` is not in `dev`; it moves to the
+    optional `mpi` extra below alongside `mpi4py` / `mpi4jax`,
+    since ADR-0003 relegates MPI to an optional per-site fallback.)
+  - `mpi` *(optional, not installed by default)*: `mpi4py`,
+    `mpi4jax`, `pytest-mpi`. For sites where `jax.distributed`
+    cannot initialize over the native interconnect (ADR-0003).
   - `docs`: sphinx, myst-nb, furo, sphinx-design, sphinx-autodoc2.
   - `numba`, `taichi`, `warp`, `triton`: each pins the relevant
     package at a known-good version. These extras exist so the
@@ -105,9 +112,11 @@ running on push and pull-request:
   `workflow_dispatch: {}` only — it contains placeholder steps for
   GPU runs but is not wired to any runner. Enabling it is deferred
   to whenever GPU runners become available.
-- Multi-rank MPI tests (`pytest-mpi`) are scaffolded in the tests
-  tree but gated behind an `--mpi` marker and not run in CI in
-  Epoch 0; they will be turned on in Epoch 1.
+- Multi-host `jax.distributed` tests are scaffolded in the tests
+  tree behind a `--multihost` marker (per ADR-0003) and not run in
+  CI in Epoch 0; they will be turned on in Epoch 1 once a
+  `ShardedField` smoke test exists on a two-process
+  `jax.distributed` harness.
 
 ## 0.5 Documentation scaffolding
 
@@ -138,8 +147,9 @@ codifying commitments already documented elsewhere:
 - **ADR-0002** — JAX + XLA as the primary kernel backend; Numba,
   Taichi, Warp, and Triton accommodated in the descriptor layer
   but deferred.
-- **ADR-0003** — MPI (via mpi4py and `jax.distributed`) is in the
-  baseline from Epoch 1.
+- **ADR-0003** — `jax.distributed` + NCCL / GLOO as the
+  host-parallelism baseline from Epoch 1; MPI is an optional
+  per-site fallback, not in the baseline.
 - **ADR-0004** — Documentation is authored in Sphinx + MyST-NB and
   versioned alongside code.
 - **ADR-0005** — Branch and PR discipline, single-file
@@ -155,11 +165,14 @@ ones.
 A minimal CLI exercise that proves the toolchain is wired up:
 
 - Parse no arguments (Epoch 0) beyond `--help` / `--version`.
-- Initialize MPI via `mpi4py` and report `rank` / `size`.
-- Query JAX device list and print backend name + device summary
-  from rank 0.
+- Call `jax.distributed.initialize()` (ADR-0003) and report
+  `process_index` / `process_count` along with the local / global
+  device lists.
+- Print the JAX backend name and device summary from
+  `process_index == 0`.
 - Run a trivially small JAX `jit` (e.g. a 32³ Laplacian smoke
-  test) on rank 0 to confirm the JIT path is functional.
+  test) on `process_index == 0` to confirm the JIT path is
+  functional.
 - Exit cleanly with code 0, and with a non-zero code plus
   actionable message if any step fails.
 
@@ -232,7 +245,7 @@ Epoch 0 is complete when all of the following hold:
   as a placeholder only. The real design lands in Epoch 1.
 - Non-JAX backend adapters (Numba, Taichi, Warp, Triton).
 - GPU CI.
-- Multi-rank MPI CI.
+- Multi-host `jax.distributed` CI (turned on in Epoch 1; see §0.4).
 - Documentation publishing (RTD, Pages).
 - Benchmark harness in `benchmarks/` beyond an empty directory.
 - Problem-setup DSL vs YAML vs Python-API decision — this is

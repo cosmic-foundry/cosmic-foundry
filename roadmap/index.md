@@ -61,8 +61,9 @@ require an ADR.
   extensions shipped from this repository; any native code is
   produced at runtime by a codegen backend.
 - **JAX + XLA** as the primary array, autodiff, and JIT layer.
-  `pjit` / `shard_map` provide device- and host-parallelism on top
-  of MPI.
+  `pjit` / `shard_map` provide device parallelism within a host,
+  composed with `jax.distributed` (NCCL / GLOO, ADR-0003) for
+  between-host collectives.
 - **Secondary kernel backends**, wrapped behind a `@kernel`
   descriptor layer so they are interchangeable per-kernel. These
   backends are **designed for but not exercised in the early
@@ -76,8 +77,11 @@ require an ADR.
     Monte Carlo transport.
   - **Triton** — hand-tuned GPU kernels for the few cases that need
     full control.
-- **mpi4py** for message passing; `mpi4jax` and `jax.distributed` for
-  JAX interop.
+- **`jax.distributed`** with NCCL (GPU) / GLOO (CPU) as the
+  host-parallelism baseline (ADR-0003). `mpi4py` and `mpi4jax` are
+  *not* baseline dependencies; they remain available as optional
+  extras for sites where `jax.distributed` cannot initialize over
+  the native interconnect.
 - **h5py + parallel HDF5** for checkpoints and plotfiles. ADIOS2
   (Python) considered later.
 - **NumPy + SciPy** for low-cost CPU work and reference
@@ -156,9 +160,10 @@ These grow every epoch; they are not tied to a single phase.
 These are flagged now and must be resolved before entering the
 named epoch, via an ADR:
 
-- **Host-level parallelism model** — JAX `pjit` / `shard_map` vs
-  explicit mpi4py, or both. Likely both, with the former inside a
-  node and the latter between nodes. Decide before Epoch 1 stable.
+- ~~**Host-level parallelism model**~~ — resolved by ADR-0003:
+  `jax.distributed` + NCCL / GLOO is the baseline between hosts,
+  composed with `pjit` / `shard_map` within a host; MPI is an
+  optional per-site fallback, not in the baseline.
 - **In-engine renderer vs. yt hand-off** — whether the camera,
   slice sampler, and volume raymarcher live inside the engine
   (and are therefore shareable between CPU batch, GPU batch, and
