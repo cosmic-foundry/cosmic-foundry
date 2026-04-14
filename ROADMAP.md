@@ -63,7 +63,10 @@ require an ADR.
   `pjit` / `shard_map` provide device- and host-parallelism on top
   of MPI.
 - **Secondary kernel backends**, wrapped behind a `@kernel`
-  descriptor layer so they are interchangeable per-kernel:
+  descriptor layer so they are interchangeable per-kernel. These
+  backends are **designed for but not exercised in the early
+  epochs** — only JAX is brought up first, with the others stubbed
+  so that additional adapters can slot in later without surgery:
   - **Numba** — CPU SIMD and CUDA kernels where XLA's shape /
     control-flow constraints are limiting.
   - **Taichi** — particle / SPH / unstructured / moving-mesh
@@ -94,22 +97,212 @@ require an ADR.
 
 ### Epoch 0 — Project bootstrap
 
-Establish the scaffolding that every later epoch assumes:
+Epoch 0 delivers the project scaffolding every later epoch
+assumes: a Python package, a tooling and CI stack, a documentation
+system, an architecture-decision-record process, and a trivial
+end-to-end "hello" entrypoint that proves the environment works.
 
-- Python package layout: `cosmic_foundry/`, `tests/`, `docs/`,
-  `examples/`, `benchmarks/`.
-- `pyproject.toml` with backend extras.
-- Pre-commit hooks: black, ruff, mypy.
-- GitHub Actions CI: lint, type-check, build, unit tests on CPU.
-  Manual-dispatch GPU job scaffolded for when runners exist.
-- Coding standards document and an ADR directory seeded with the
-  decisions in §2.
-- A first `cosmic-foundry hello` entrypoint that initializes MPI,
-  prints rank/size, and exits cleanly under every kernel backend.
+The scope is deliberately narrow. Only the **JAX** kernel backend
+is exercised here; Numba, Taichi, Warp, and Triton are listed as
+optional extras in `pyproject.toml` and accommodated in the
+descriptor-layer design, but no adapters are written, installed,
+or tested in Epoch 0. This keeps the bootstrap small and avoids
+committing to the details of the kernel interface before Epoch 1
+has a chance to evolve it against a real workload.
 
-**Exit criterion:** CI is green on main; a developer can clone,
-install, and run `pytest` and `cosmic-foundry hello` in under ten
-minutes on a fresh machine that has miniforge.
+#### 0.1 Repository layout
+
+```
+cosmic-foundry/
+├── cosmic_foundry/                 # main Python package
+│   ├── __init__.py                 # version, top-level API
+│   ├── cli/                        # click-based entry points
+│   ├── kernels/                    # kernel descriptor + JAX adapter (stub)
+│   ├── mesh/                       # mesh primitives (stub)
+│   ├── io/                         # HDF5 + plotfile helpers (stub)
+│   ├── physics/                    # physics module namespace (stub)
+│   └── _version.py                 # populated by setuptools-scm or hatch-vcs
+├── tests/                          # pytest tree, mirrors the package layout
+├── docs/                           # Sphinx sources (MyST-NB enabled)
+├── examples/                       # runnable example scripts and notebooks
+├── benchmarks/                     # perf harnesses (wired up in Epoch 1)
+├── adr/                            # architecture decision records
+├── .github/workflows/              # CI definitions
+├── environment/                    # miniforge setup (already present)
+├── scripts/                        # developer scripts (already present)
+├── assets/                         # brand assets (already present)
+├── pyproject.toml                  # PEP 621 metadata and tooling config
+├── ruff.toml                       # lint rules (or section in pyproject)
+├── .pre-commit-config.yaml
+├── .editorconfig
+├── README.md                       # expanded from the current one-liner
+├── CONTRIBUTING.md
+├── AI.md                           # already present
+├── CLAUDE.md / CODEX.md / GEMINI.md
+├── RESEARCH.md                     # already present
+├── ROADMAP.md                      # this document
+└── LICENSE
+```
+
+Only `cosmic_foundry/`, `tests/`, `docs/`, `examples/`,
+`benchmarks/`, `adr/`, and `.github/workflows/` are genuinely new
+in Epoch 0; everything else is scaffolding files at the repo root
+or extensions of existing directories.
+
+#### 0.2 Packaging — `pyproject.toml`
+
+- **Build backend:** `hatchling` with `hatch-vcs` for version
+  derivation from git tags.
+- **Core runtime dependencies:** `numpy`, `scipy`, `jax`, `jaxlib`,
+  `h5py`, `mpi4py`, `click`, `sympy`, `typing-extensions`.
+- **Optional extras (stubbed, not validated in Epoch 0):**
+  - `dev`: pytest, pytest-cov, pytest-mpi, pre-commit, black, ruff,
+    mypy, hypothesis.
+  - `docs`: sphinx, myst-nb, furo, sphinx-design, sphinx-autodoc2.
+  - `numba`, `taichi`, `warp`, `triton`: each pins the relevant
+    package at a known-good version. These extras exist so the
+    descriptor layer has a clear target, but they are not
+    installed or imported by default code paths.
+- **Console scripts:** `cosmic-foundry = cosmic_foundry.cli:main`.
+- **Python:** `requires-python = ">=3.11"` to match miniforge.
+
+#### 0.3 Tooling and code quality
+
+- **Formatting:** black (default settings, line length 88).
+- **Lint:** ruff with a curated rule set (pycodestyle, pyflakes,
+  isort, bugbear, pyupgrade, numpy-specific rules). Configuration
+  lives in `pyproject.toml`.
+- **Type-checking:** mypy in strict mode for `cosmic_foundry/` and
+  non-strict for `tests/`. JAX stubs pulled in as needed.
+- **Pre-commit:** black, ruff, mypy, end-of-file fixer,
+  trailing-whitespace, check-yaml, check-toml. Installed on first
+  developer clone via `pre-commit install` documented in
+  CONTRIBUTING.md.
+- **Editor config:** `.editorconfig` for tab/space consistency.
+
+#### 0.4 Continuous integration
+
+A single GitHub Actions workflow, `.github/workflows/ci.yml`,
+running on push and pull-request:
+
+- **OS matrix:** Linux only (ubuntu-latest).
+- **Python matrix:** 3.11 only.
+- **Steps:**
+  1. Check out, set up miniforge via the project's
+     `environment/setup_environment.sh`, cache the resulting
+     environment keyed on `environment/*.yml`.
+  2. `pip install -e .[dev,docs]`.
+  3. `pre-commit run --all-files`.
+  4. `mypy cosmic_foundry`.
+  5. `pytest -q` (single-rank CPU tests).
+  6. `sphinx-build -W docs docs/_build/html` (fail on warnings).
+- A second workflow, `gpu.yml`, is scaffolded with
+  `workflow_dispatch: {}` only — it contains placeholder steps for
+  GPU runs but is not wired to any runner. Enabling it is deferred
+  to whenever GPU runners become available.
+- Multi-rank MPI tests (`pytest-mpi`) are scaffolded in the tests
+  tree but gated behind an `--mpi` marker and not run in CI in
+  Epoch 0; they will be turned on in Epoch 1.
+
+#### 0.5 Documentation scaffolding
+
+- **Engine:** Sphinx with `myst-nb`, `furo` theme, `sphinx-design`.
+- **Pages seeded:**
+  - `index.md` — overview + links to RESEARCH.md, ROADMAP.md,
+    ADR index.
+  - `getting-started.md` — environment setup, install, running
+    `cosmic-foundry hello`.
+  - `contributing.md` — linked from `CONTRIBUTING.md`.
+  - `coding-standards.md` — style, docstrings (NumPy format),
+    typing expectations, test philosophy.
+  - `theory/` — empty section with a stub page per physics module
+    planned in later epochs, each saying "to be written."
+  - `api/` — autodoc entry point, populated as modules land.
+  - `adr/index.md` — generated listing of ADRs.
+- **Build:** local `sphinx-build` only. RTD / Pages publishing is
+  deferred until there is real content to host.
+
+#### 0.6 Architecture Decision Record process
+
+An `adr/` directory with `adr-template.md` and five seed ADRs
+codifying commitments already documented elsewhere:
+
+- **ADR-0001** — Python-only engine with runtime code generation
+  (references RESEARCH.md §7 and the user decisions recorded in the
+  ROADMAP planning notes).
+- **ADR-0002** — JAX + XLA as the primary kernel backend; Numba,
+  Taichi, Warp, and Triton accommodated in the descriptor layer
+  but deferred.
+- **ADR-0003** — MPI (via mpi4py and `jax.distributed`) is in the
+  baseline from Epoch 1.
+- **ADR-0004** — Documentation is authored in Sphinx + MyST-NB and
+  versioned alongside code.
+- **ADR-0005** — Branch and PR discipline, single-file
+  documentation-commit exception, and attribution rules (mirrors
+  AI.md, made explicit for new contributors).
+
+Each ADR follows the same short format: context, decision, status,
+consequences. Future epochs open new ADRs rather than mutate old
+ones.
+
+#### 0.7 `cosmic-foundry hello` entry point
+
+A minimal CLI exercise that proves the toolchain is wired up:
+
+- Parse no arguments (Epoch 0) beyond `--help` / `--version`.
+- Initialize MPI via `mpi4py` and report `rank` / `size`.
+- Query JAX device list and print backend name + device summary
+  from rank 0.
+- Run a trivially small JAX `jit` (e.g. a 32³ Laplacian smoke
+  test) on rank 0 to confirm the JIT path is functional.
+- Exit cleanly with code 0, and with a non-zero code plus
+  actionable message if any step fails.
+
+This is the one runtime behavior Epoch 0 adds; it also serves as
+the first integration test (invoked via `subprocess` in pytest).
+
+#### 0.8 README and CONTRIBUTING
+
+- **README.md** expands to: one-paragraph positioning, a "quick
+  start" block (setup_environment.sh → activate → `pip install
+  -e .[dev]` → `cosmic-foundry hello`), pointers to RESEARCH.md
+  and ROADMAP.md, license pointer.
+- **CONTRIBUTING.md** captures the developer workflow: fork,
+  branch naming, 100-line-per-commit guideline from AI.md with
+  the documented documentation-commit exception, PR expectations,
+  pre-commit hook installation, and the ADR process for
+  cross-cutting decisions.
+
+#### 0.9 Exit criteria
+
+Epoch 0 is complete when all of the following hold:
+
+- CI is green on `main` with lint, type-check, test, and docs
+  build all passing.
+- A developer on a fresh Linux machine can, in under ten minutes,
+  clone the repo, run `bash environment/setup_environment.sh`,
+  activate the env, `pip install -e .[dev]`, run `pytest`, and
+  run `cosmic-foundry hello` with each step succeeding.
+- `pre-commit run --all-files` is clean on every committed file.
+- `sphinx-build -W docs docs/_build/html` builds without errors or
+  warnings.
+- The five seed ADRs are merged and the `adr/` index renders in
+  the docs.
+- No Numba / Taichi / Warp / Triton code is imported by any
+  default code path; those extras install but remain unexercised.
+
+#### 0.10 Explicitly deferred to later epochs
+
+- The kernel descriptor itself (interface, semantics, backend
+  dispatch) is *sketched* in `cosmic_foundry/kernels/__init__.py`
+  as a placeholder only. The real design lands in Epoch 1.
+- Non-JAX backend adapters (Numba, Taichi, Warp, Triton).
+- GPU CI.
+- Multi-rank MPI CI.
+- Documentation publishing (RTD, Pages).
+- Benchmark harness in `benchmarks/` beyond an empty directory.
+- Problem-setup DSL vs YAML vs Python-API decision — this is
+  first-touched in Epoch 3 at the earliest.
 
 ### Epoch 1 — Kernel abstraction and multi-backend core
 
