@@ -11,54 +11,110 @@ each replication target.
 
 ```text
 replication/
-  README.md                    # this file (the workflow)
-  <target-code>/
-    plan.md                    # ordered checklist of capability specs
-    specs/
-      NNNN-<capability>.md     # one spec per capability
-    golden/
-      manifest.yaml            # fixture_id → (target version, generator, hash, default tolerance)
-      generators/              # scripts that produce reference outputs from the target
-      fixtures/                # the reference outputs themselves (or LFS pointers)
-    conftest.py                # exposes load_golden(fixture_id) → array + metadata
+  README.md                      # this file (the workflow)
+  capabilities/                  # shared engine specs (one per capability)
+    CNNNN-<capability>.md
+  targets/
+    <target-code>/
+      plan.md                    # ordered problem list + capability dependencies
+      problems/
+        PNN-<problem>.md         # one spec per test problem
+      golden/
+        manifest.yaml            # fixture_id → (target version, generator, hash, default tolerance)
+        generators/              # scripts that produce reference outputs from the target
+        fixtures/                # the reference outputs themselves (or LFS pointers)
+      conftest.py                # exposes load_golden(fixture_id) → array + metadata
 ```
 
-One directory per target code. Specs are numbered for stable
-ordering; the plan provides the human-readable sequence.
+**Capabilities** are engine features (a PPM solver, a reaction
+network, a passive-tracer advector). Each capability has one
+canonical spec in `capabilities/` and is referenced by ID
+(`CNNNN`) from the problem specs that depend on it.
 
-## Spec doc template
+**Problems** are the test cases we replicate from a target code
+(e.g. a KH Galilean-invariance setup, a 1D nuclear detonation).
+Each target has a `plan.md` that orders its problems and names
+the capabilities each consumes.
 
-Copy this skeleton into `replication/<target>/specs/NNNN-<capability>.md`.
+A capability's status reflects the union of its dependents:
+`Verified` once at least one problem depending on it passes its
+verification; `Drifted` if any dependent starts failing.
+Cross-target regressions surface without bookkeeping.
+
+## Spec templates
+
+Two kinds of spec. Capability specs describe engine features in
+isolation; problem specs describe a target code's test case and
+name the capabilities they consume.
+
+### Capability spec
+
+Copy into `replication/capabilities/CNNNN-<capability>.md`.
 
 ```markdown
 # Capability: <name>
 
+- **ID:** CNNNN
 - **Status:** Proposed | Implementing | Verified | Drifted
-- **Target code:** <name@version-or-commit>
-- **References:** [paper §, source file:line, …]
+- **Implemented in:** <engine module path, once it exists>
 
 ## Behavior
 
-What the target does, in equations and prose. Inputs, outputs,
-units. Be explicit about coordinate conventions, sign
-conventions, and any quirks that look like bugs but are
-load-bearing.
+What the feature does, independently of any target. Inputs,
+outputs, units. Algorithmic choices (e.g. PPM vs MUSCL) when the
+choice is load-bearing.
 
 ## Numerical signature
 
-- Expected convergence order(s) and the test that proves it.
+- Expected convergence order(s).
 - Conservation / symmetry invariants and their tolerances.
-- Known target-side failure modes (so we *replicate*, not "fix").
+- Interface contract with other capabilities it couples to.
+
+## Dependents
+
+Problems that consume this capability. Kept in sync with problem
+specs' `Capabilities required` fields.
+
+## Open questions
+
+Unresolved choices. Removed once resolved.
+```
+
+### Problem spec
+
+Copy into `replication/targets/<target>/problems/PNN-<problem>.md`.
+
+```markdown
+# Problem: <name>
+
+- **ID:** PNN (unique within target)
+- **Status:** Proposed | Implementing | Verified | Drifted
+- **Target code:** <name@version-or-commit>
+- **References:** [paper §, source file:line, …]
+- **Capabilities required:** [CNNNN, CNNNN, …]
+
+## Setup
+
+Initial conditions, domain, boundary conditions, units. Any
+target-specific conventions (sign, coordinate, scaling) that are
+load-bearing for reproduction. Known target-side quirks to
+replicate rather than "fix".
+
+## Success criterion
+
+What exactly must be reproduced, with tolerances. This is the
+numerical claim the PR must verify.
 
 ## Verification plan
 
-- Unit fixtures: list of (input, golden output, tolerance).
+- Unit fixtures: (input, golden output, tolerance).
 - Convergence test: grid sequence and expected slope.
-- Integration anchor: which scenario this capability appears in.
+- Target-specific diagnostics (mode amplitude, detonation speed,
+  etc.).
 
 ## Out of scope
 
-Adjacent capabilities deliberately deferred to other specs.
+Adjacent problems deliberately deferred.
 
 ## Open questions
 
@@ -66,11 +122,12 @@ Things to resolve before or during implementation. Removed once
 resolved; surviving entries indicate the spec is still living.
 ```
 
-The `Status` and `Open questions` fields are how we keep specs
-honest as we learn — entries get updated, not rewritten.
-`Drifted` flags a previously-verified capability whose fixtures
-or invariants have started failing; opening that status is a
-signal to investigate before further work in the area.
+The `Status` and `Open questions` fields on both kinds of spec
+are how we keep them honest as we learn — entries get updated,
+not rewritten. `Drifted` on a capability or problem flags a
+previously-verified artifact whose fixtures or invariants have
+started failing; opening that status is a signal to investigate
+before further work in the area.
 
 ## Golden-data harness rules
 
