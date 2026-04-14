@@ -1,0 +1,19 @@
+name: GPU
+
+# Scaffolded for future GPU runners. Not wired to any runner in Epoch 0.
+# Enable by adding a `push` / `pull_request` trigger once GPU runners are
+# available; see roadmap §0.4.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  gpu-smoke:
+    runs-on: ubuntu-latest  # replace with GPU runner label when available
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "GPU runner not yet configured — see roadmap §0.4"
