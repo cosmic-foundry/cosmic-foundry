@@ -76,8 +76,11 @@ require an ADR.
     Monte Carlo transport.
   - **Triton** — hand-tuned GPU kernels for the few cases that need
     full control.
-- **mpi4py** for message passing; `mpi4jax` and `jax.distributed` for
-  JAX interop.
+- **`jax.distributed`** with NCCL (GPU) / GLOO (CPU) as the
+  host-parallelism baseline (ADR-0003). `mpi4py` and `mpi4jax` are
+  *not* baseline dependencies; they remain available as optional
+  extras for sites where `jax.distributed` cannot initialize over
+  the native interconnect.
 - **h5py + parallel HDF5** for checkpoints and plotfiles. ADIOS2
   (Python) considered later.
 - **NumPy + SciPy** for low-cost CPU work and reference

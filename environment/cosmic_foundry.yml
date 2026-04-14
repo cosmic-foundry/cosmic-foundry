@@ -22,6 +22,5 @@ dependencies:
   - gcc
   - gxx
   - gfortran
-  - openmpi
   - make
   - git

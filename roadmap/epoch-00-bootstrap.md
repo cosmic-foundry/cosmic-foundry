@@ -155,11 +155,14 @@ ones.
 A minimal CLI exercise that proves the toolchain is wired up:
 
 - Parse no arguments (Epoch 0) beyond `--help` / `--version`.
-- Initialize MPI via `mpi4py` and report `rank` / `size`.
-- Query JAX device list and print backend name + device summary
-  from rank 0.
+- Call `jax.distributed.initialize()` (ADR-0003) and report
+  `process_index` / `process_count` along with the local / global
+  device lists.
+- Print the JAX backend name and device summary from
+  `process_index == 0`.
 - Run a trivially small JAX `jit` (e.g. a 32³ Laplacian smoke
-  test) on rank 0 to confirm the JIT path is functional.
+  test) on `process_index == 0` to confirm the JIT path is
+  functional.
 - Exit cleanly with code 0, and with a non-zero code plus
   actionable message if any step fails.
 
