@@ -33,11 +33,16 @@ old one.
   baseline. Single-layer programming model with `pjit` / `shard_map`
   within a host; MPI is available as an optional per-site fallback
   but not in the baseline dependencies.
-- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) — Sphinx +
-  MyST-NB documentation stack with the furo theme and
-  `sphinx-design`; `sphinx-autodoc2` for API reference;
-  `sphinx-build -W` in CI. Hosting (RTD / Pages) deferred to a
-  future ADR.
+- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) *(Proposed)* —
+  Sphinx + MyST-NB documentation stack with `sphinx-design`;
+  `sphinx-autodoc2` for API reference; `sphinx-build -W` in CI.
+  Interactivity is parameter-driven (sliders feeding pre-computed
+  or JIT'd simulation outputs via the WebGPU viewer and
+  `holoviews` + `bokeh`), not browser-side-Python code execution.
+  Rendered pages hide notebook-cell chrome by default. Theme
+  (furo vs pydata-sphinx-theme), CSS polish, and hosting
+  (RTD / Pages) deferred to follow-up ADRs alongside the first
+  substantial docs PR.
 - [**ADR-0005**](ADR-0005-branch-pr-attribution-discipline.md) —
   Branch, PR, commit-size, history, and attribution discipline for
   human and AI-agent contributors. Authoritative source; AI.md is

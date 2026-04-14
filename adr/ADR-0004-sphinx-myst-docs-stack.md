@@ -1,7 +1,14 @@
 # ADR-0004 — Sphinx + MyST-NB documentation stack
 
-- **Status:** Accepted
+- **Status:** Proposed
 - **Date:** 2026-04-14
+
+> **Note on status.** Of the five Epoch-0 seed ADRs, the
+> documentation stack is the one expected to iterate the most as
+> real content lands. The decision below is Proposed, not Accepted:
+> the Sphinx + MyST-NB foundation is firm, but theme, styling, and
+> the interactive-embed path are open to revision in follow-up ADRs
+> without disrupting prose, notebooks, or the API reference.
 
 ## Context
 
@@ -41,11 +48,12 @@ layer shallower without losing capability.
 ## Decision
 
 Documentation is authored and built with **Sphinx + MyST-NB**,
-rendered with the **furo** theme, and extended with
-**`sphinx-design`** for layout primitives (cards, grids, tabbed
-content for the public gallery and explainer pages). `myst-parser`
-handles Markdown prose; `myst-nb` executes notebooks in-build and
-renders their outputs.
+extended with **`sphinx-design`** for layout primitives (cards,
+grids, tabbed content for the public gallery and explainer pages).
+`myst-parser` handles Markdown prose; `myst-nb` executes notebooks
+in-build and renders their outputs. The rendering theme is
+intentionally left open (see the "Rendered-page aesthetic" bullet
+below) and lands with the first substantial docs PR.
 
 - **Author format.** MyST-flavoured Markdown for prose pages;
   Jupyter notebooks (`.ipynb`) for executable content. Reference
@@ -63,13 +71,25 @@ renders their outputs.
   content to host; the decision to adopt one or the other is left
   to a future ADR so that neither the hosting surface nor the URL
   shape is frozen prematurely.
-- **Interactive embeds.** MyST notebooks embed the WebGPU viewer
-  per ADR-0006 once the viewer ships in Epoch 3. Docs-internal
-  interactive widgets use `holoviews` + `bokeh` (the same choice
-  ADR-0006 commits to for notebook interactivity).
-- **Browser-side Python.** `pyodide` / `JupyterLite` are adopted
-  where an explainer needs read-execute-explain narratives without
-  a server; not used for pages where static rendering is enough.
+- **Interactivity model.** Interactive content is **parameter-
+  driven**, not code-driven: the reader manipulates sliders,
+  dropdowns, or similar controls that feed pre-computed or
+  on-the-fly simulation outputs from the engine. Browser-side
+  Python execution (`pyodide`, `JupyterLite`) is **out of scope**
+  — an explainer that requires arbitrary user code is not the
+  product this docs stack targets. The WebGPU viewer (ADR-0006) is
+  the default surface for interactive simulation renderings;
+  `holoviews` + `bokeh` embeds are the notebook-internal fallback
+  for 1-D / 2-D parameter studies that do not need the viewer.
+- **Rendered-page aesthetic.** Rendered pages must read as modern
+  documentation, not as Jupyter notebooks. MyST-NB is configured
+  to hide input-cell prompts (`In [ ]:`) and cell numbering; by
+  default, pages surface prose and figure / widget output, with
+  source cells collapsed behind an opt-in "show code" affordance
+  for readers who want to inspect the derivation. The specific
+  theme and CSS polish are intentionally not pinned by this ADR —
+  `furo` and `pydata-sphinx-theme` are the two finalists, with the
+  choice made alongside the first substantial docs PR.
 - **Cross-referencing.** `intersphinx` is enabled against NumPy,
   SciPy, JAX, h5py, and `unyt` from day one so API-reference cross-
   links into upstream docs are cheap.
@@ -88,9 +108,10 @@ directory.
   executes examples at build time, which converts "docs drift" from
   a human-spotting problem into a CI failure. Cross-reference
   ecosystem (`intersphinx`, `sphinx-design`, `sphinx-autodoc2`) is
-  the largest in scientific Python. Furo is a known-good theme with
-  accessibility defaults that reduce the ADR-0006 accessibility-
-  budget work.
+  the largest in scientific Python. Both theme finalists (`furo`,
+  `pydata-sphinx-theme`) ship with accessibility defaults that
+  reduce the ADR-0006 accessibility-budget work; confirming the
+  chosen theme still clears WCAG 2.2 AA is a check at docs-PR time.
 - **Negative.** Sphinx's build is heavier than MkDocs'; a full
   notebook-execution pass through the docs tree is minutes rather
   than seconds once physics notebooks land. Mitigated by MyST-NB's
@@ -107,6 +128,13 @@ directory.
   between the two surfaces is one-way: the docs tree can reference
   repo-root files by relative path; the repo-root files do not
   reach into `docs/_build/`.
+- **Neutral — open follow-ups.** The ADR is Proposed; three
+  sub-decisions land alongside the first substantial docs PR:
+  exact theme (`furo` vs `pydata-sphinx-theme` vs a heavier
+  custom skin), the CSS treatment that delivers the "not
+  notebook-looking" aesthetic, and the widget layout conventions
+  that keep parameter-driven simulation pages consistent across
+  physics modules.
 
 ## Alternatives considered
 
@@ -130,6 +158,21 @@ directory.
   same Markdown flavour used elsewhere in the repository.
   Rejected because the contributor ramp-up cost compounds across
   every docs PR.
+- **Browser-side Python (`pyodide` / `JupyterLite`).** Enables
+  read-execute-explain narratives in which the reader edits and
+  reruns arbitrary code. Rejected because the interactivity the
+  educational surface needs is *parameter-driven* (sliders feeding
+  pre-computed simulations), not *code-driven*, and a browser-side
+  Python runtime brings asset-budget and accessibility
+  obligations that the ADR-0006 performance targets would have to
+  absorb.
+- **Classic Jupyter-notebook rendering.** Default MyST-NB output
+  surfaces `In [ ]:` prompts, cell numbering, and notebook
+  chrome. Rejected because the educational surface targets
+  readers who do not want to parse notebook semantics to follow a
+  physics explainer. Rendered pages should look like modern
+  documentation; notebook-cell chrome is explicitly hidden by
+  default.
 
 ## Cross-references
 
