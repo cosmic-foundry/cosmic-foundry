@@ -44,6 +44,18 @@ test -d cosmic-foundry/miniforge && echo "✓ miniforge found" || echo "✗ Run 
 
 If missing, ask user to run the setup script before proceeding.
 
+## Architectural Decisions
+
+Architectural decisions are recorded as ADRs in `adr/`. **At the
+start of every session**, read `adr/README.md` — it indexes every
+ADR in force. When work touches a topic listed there, read the
+full ADR before making changes; the index is a pointer, not a
+summary substitute.
+
+When making a new architectural decision, copy
+`adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md`, mark it
+Proposed, and add a line to `adr/README.md` in the same PR.
+
 ## Code Quality
 
 - Write code that is:
