@@ -9,8 +9,11 @@ The one piece of infrastructure we genuinely have to invent:
   adapters that lower it to JAX, Numba, Taichi, Warp, or Triton at
   runtime.
 - A `ShardedField` distributed-array primitive built on
-  `jax.distributed` + mpi4py for cross-device / cross-host cases.
-- Parallel HDF5 I/O via h5py+MPI.
+  `jax.distributed` (NCCL / GLOO per ADR-0003) for cross-device /
+  cross-host cases.
+- HDF5 I/O via `h5py`, parallel where `jax.distributed` can be
+  composed with a parallel-HDF5 build, otherwise per-process writes
+  with a post-processing merge.
 - Deterministic structured logging and error handling.
 
 **Exit criterion:** a 3-D 7-point Laplacian benchmark runs under
