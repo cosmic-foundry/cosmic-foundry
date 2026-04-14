@@ -5,7 +5,7 @@ regardless of platform (Claude Code, Codex, Gemini, or others).
 
 ## Development Rules
 
-- Every commit should be no more than 100 lines of code.
+- Every commit should be no more than approximately 100 lines of code changes (larger diffs are fine to documentation).
 - Only work on a fork of the upstream repository.
 - Every change should be done on a branch and handled via a pull request on GitHub.
 - Never force push.
