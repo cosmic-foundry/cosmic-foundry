@@ -66,7 +66,8 @@ The primary kernel backend is **JAX + XLA**.
 
 - **Positive.** A single backend to support in Epoch 0–1 cuts scope
   sharply. `pjit` / `shard_map` inside a node composes cleanly with
-  mpi4py between nodes (ADR-0003). Autodiff is native, which cashes
+  `jax.distributed` + NCCL between hosts (ADR-0003). Autodiff is
+  native, which cashes
   in directly on ADR-0001's symbolic-codegen bet. CPU, CUDA, ROCm,
   and TPU all reachable from one kernel definition.
 - **Negative.** XLA constrains shape polymorphism and control flow;
@@ -109,4 +110,5 @@ The primary kernel backend is **JAX + XLA**.
 - [`roadmap/epoch-01-kernels.md`](../roadmap/epoch-01-kernels.md)
   (kernel descriptor, where the interface solidifies).
 - ADR-0001 (Python-only engine with runtime codegen) — this ADR depends on it.
-- ADR-0003 (MPI baseline) — combines with JAX device parallelism for host parallelism.
+- ADR-0003 (`jax.distributed` + NCCL host-parallelism baseline) —
+  combines with JAX device parallelism for between-host collectives.

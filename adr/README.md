@@ -28,9 +28,11 @@ old one.
   as the primary kernel backend. Numba, Taichi, NVIDIA Warp, and
   Triton accommodated as optional extras behind a `@kernel`
   descriptor layer but not exercised in Epoch 0–1.
-- [**ADR-0003**](ADR-0003-mpi-baseline.md) — MPI in the parallelism
-  baseline from Epoch 1: `mpi4py` between nodes, composed with JAX
-  `pjit` / `shard_map` within the node; parallel HDF5 for I/O.
+- [**ADR-0003**](ADR-0003-jax-distributed-host-parallelism.md) —
+  `jax.distributed` + NCCL (GPU) / GLOO (CPU) as the host-parallelism
+  baseline. Single-layer programming model with `pjit` / `shard_map`
+  within a host; MPI is available as an optional per-site fallback
+  but not in the baseline dependencies.
 - **ADR-0004 — ADR-0005:** Reserved for the remaining Epoch-0 seed
   ADRs enumerated in `roadmap/epoch-00-bootstrap.md` §0.6
   (documentation stack; branch and PR discipline). Not yet written.
