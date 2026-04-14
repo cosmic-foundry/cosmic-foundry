@@ -1,0 +1,113 @@
+## ADR-0007 — Replication workflow: bounded-increment, verification-first
+
+- **Status:** Proposed
+- **Date:** 2026-04-14
+
+## Context
+
+A common engine task is replicating another astrophysics
+code's results to within numerical roundoff. Doing this
+reliably requires both careful planning of *what* the target
+code does and a verification structure that catches numerical
+drift before it accumulates across capabilities or epochs.
+
+The 100-line commit guideline (PR #8) already encodes part of
+the answer: small, reviewable units. The motivation behind it
+is broader, however — long uninterrupted AI sessions and
+long uninterrupted human edits both degrade in accuracy
+without frequent grounding against verifiable evidence. The
+guideline as written says *how big* a change can be but does
+not say *what evidence* must accompany it, and so leaves
+numerical correctness to integration-time debugging.
+
+This ADR generalizes the bounded-increment idea into a
+workflow that also pins what each increment must prove.
+
+## Decision
+
+Adopt a **bounded-increment, verification-first** workflow
+for all engine work that makes a numerical claim. Concretely:
+
+- **Spec before code.** Each capability gets a short spec doc
+  capturing the target code's algorithm, references
+  (paper section, source file:line), inputs and units,
+  expected numerical signature (convergence order,
+  conservation invariants, known target-side failure modes
+  we should replicate rather than "fix"), and a verification
+  plan (fixtures, convergence tests, integration anchor).
+- **Golden-data harness.** Reference outputs are produced by
+  scripted, version-pinned generators, recorded in a
+  manifest with content hashes, and consumed via a single
+  fixture-loading API. Fixtures are never hand-edited; tests
+  that load a fixture absent from the manifest fail.
+- **Verification-driven PRs.** Every PR landing a numerical
+  claim ships with a test that compares against golden data
+  within a stated tolerance, plus the relevant convergence
+  or invariant test where the spec calls for one. The
+  ≤100-line size guidance still applies; it may stretch when
+  a fix is genuinely cross-cutting, but the verification
+  artifact is non-negotiable.
+- **Numerical guardrails beyond point checks.** Convergence-
+  order tests, conservation/symmetry invariants, and
+  regression sentinels run alongside fixture comparisons.
+  Point checks alone do not catch drift.
+- **A living plan per replication target.** A checklist doc
+  (`replication/<target>/plan.md`) decomposes the target
+  into ordered capability specs; spec status fields
+  (Proposed → Implementing → Verified → Drifted) update as
+  work progresses.
+
+Named exceptions (emergent integration-only drift,
+calibration passes, reference-code archaeology, trivial
+changes, pure scaffolding) are enumerated in
+`replication/README.md`. Invariant across all exceptions:
+**never both skip the spec and skip the verification.** One
+of them must exist for the change to land.
+
+The workflow itself lives in `replication/` and is a living
+specification — `replication/README.md` is updated as we
+accumulate experience with replication targets, and ADRs
+amending this one are expected.
+
+## Consequences
+
+**Positive.** Numerical drift is caught at the unit level
+where it is cheap to diagnose, instead of at integration
+time where causes and effects are entangled across
+capabilities. PRs remain small and reviewable. Replication
+tasks decompose into trackable units that survive across
+sessions and across agents. AI-agent runs are continually
+grounded against fixtures rather than running blind for
+long stretches.
+
+**Negative.** Significant upfront investment per replication
+target before the first line of "real" engine code: spec
+authoring, generator scripts, fixture storage, manifest
+plumbing. Calibration and archaeology work need explicit
+"exception" framing in PRs rather than open-ended
+exploration on main.
+
+**Neutral.** Introduces a new top-level directory
+`replication/`. Adds a class of test (convergence and
+invariant) on top of standard unit tests. Large reference
+fixtures will route through Git LFS as already established
+by ADR-0006 for visual-regression assets.
+
+## Alternatives considered
+
+- **Status quo (size guideline alone).** Keeps PRs
+  reviewable but leaves verification ad hoc, so numerical
+  drift continues to surface at integration time.
+- **Spec-only, no fixture harness.** Captures intent but
+  provides no automated grounding signal between PRs;
+  regressions are caught only when someone re-runs the
+  target code by hand.
+- **Fixture-only, no spec docs.** Catches regressions but
+  loses the "what are we replicating and why" context,
+  making test failures hard to interpret months later and
+  making it easy to mistake target-side quirks for bugs.
+- **Full per-capability TDD without size discipline.**
+  Strong on verification but encourages large,
+  hard-to-review PRs and reintroduces the long-uninterrupted-
+  edit failure mode the size guideline was written to
+  prevent.
