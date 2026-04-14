@@ -54,6 +54,12 @@ old one.
   colormaps via cmasher / cmocean; pyvista and vispy for desktop
   3-D; pytest-mpl plus an in-repo perceptual-diff harness for
   visual regressions.
+- [**ADR-0008**](ADR-0008-numerical-transcription-discipline.md)
+  *(Proposed — stub)* — Numerical-transcription discipline for
+  files like `aprox_rates.H` where the ~100-LOC guideline is
+  ill-fitted and ADR-0007's verification-first discipline is
+  what actually catches defects. Reserves the number and records
+  the problem framing; final decision deferred to before Epoch 6.
 - [**ADR-0007**](ADR-0007-replication-workflow.md) — Replication
   workflow: bounded-increment, verification-first. Every PR with
   a numerical claim ships with golden-data verification; spec

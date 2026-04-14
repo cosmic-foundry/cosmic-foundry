@@ -185,6 +185,14 @@ named epoch, via an ADR:
 - **Symbolic vs hand-written microphysics** — how much of the EOS
   and reaction-network machinery is SymPy-derived. Decide before
   Epoch 6.
+- **Numerical-transcription discipline** — how to reconcile
+  ADR-0005's ~100-LOC commit guideline with files like
+  `aprox_rates.H` that are dense collections of analytic rate
+  formulas, where the real defect defense is ADR-0007's
+  golden-data verification, not diff-size reviewability.
+  Problem framing and candidate approaches captured in
+  [ADR-0008](../adr/ADR-0008-numerical-transcription-discipline.md)
+  (stub). Decide before Epoch 6.
 - **NR discretization** — whether dynamical-spacetime evolution in
   Epoch 9 stays on block AMR or adopts a DG / spectral
   discretization. Decide before Epoch 9.
