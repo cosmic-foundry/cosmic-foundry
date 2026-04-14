@@ -1,0 +1,110 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cosmic-foundry"
+dynamic = ["version"]
+description = "A high-performance computational astrophysics engine"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "scipy",
+    "jax[cpu]",
+    "jaxlib",
+    "h5py",
+    "click",
+    "sympy",
+    "typing-extensions",
+    "unyt",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mpl",
+    "pre-commit",
+    "black",
+    "ruff",
+    "mypy",
+    "hypothesis",
+]
+mpi = [
+    "mpi4py",
+    "mpi4jax",
+    "pytest-mpi",
+]
+docs = [
+    "sphinx",
+    "myst-nb",
+    "furo",
+    "sphinx-design",
+    "sphinx-autodoc2",
+    "sphinx-copybutton",
+    "cmasher",
+    "cmocean",
+]
+numba = ["numba"]
+taichi = ["taichi"]
+warp = ["warp-lang"]
+triton = ["triton"]
+
+[project.scripts]
+cosmic-foundry = "cosmic_foundry.cli:main"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cosmic_foundry"]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "NPY", # numpy-specific rules
+]
+
+# ---------------------------------------------------------------------------
+# Mypy (curated strict-ish; full --strict excluded where JAX stubs fall short)
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.11"
+files = ["cosmic_foundry"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = ["jax.*", "jaxlib.*", "h5py.*", "unyt.*", "scipy.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "multihost: requires jax.distributed multi-process setup (deferred to Epoch 1)",
+    "visual: pytest-mpl image-comparison tests",
+]
