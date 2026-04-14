@@ -94,4 +94,10 @@ source "${MINIFORGE_DIR}/etc/profile.d/conda.sh"
 echo "Creating cosmic_foundry environment..."
 conda env create -f "$ENV_FILE" --yes
 
+# Install pre-commit git hook so local commits run the same checks as CI
+echo "Installing pre-commit hooks..."
+conda activate cosmic_foundry
+pre-commit install
+conda deactivate
+
 echo "Miniforge setup complete"

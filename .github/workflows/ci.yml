@@ -28,3 +28,23 @@ jobs:
         run: python scripts/ci/check_markdown_links.py
       - name: ADR index consistency
         run: python scripts/ci/check_adr_index.py
+
+  pre-commit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: mamba-org/setup-micromamba@v3
+        with:
+          environment-file: environment/cosmic_foundry.yml
+          environment-name: cosmic_foundry
+          cache-environment: true
+          cache-downloads: true
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
