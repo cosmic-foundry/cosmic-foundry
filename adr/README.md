@@ -33,9 +33,21 @@ old one.
   baseline. Single-layer programming model with `pjit` / `shard_map`
   within a host; MPI is available as an optional per-site fallback
   but not in the baseline dependencies.
-- **ADR-0004 — ADR-0005:** Reserved for the remaining Epoch-0 seed
-  ADRs enumerated in `roadmap/epoch-00-bootstrap.md` §0.6
-  (documentation stack; branch and PR discipline). Not yet written.
+- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) *(Proposed)* —
+  Sphinx + MyST-NB documentation stack with `sphinx-design`;
+  `sphinx-autodoc2` for API reference; `sphinx-build -W` in CI.
+  Interactivity is parameter-driven: sliders feed **live** simulation
+  outputs computed in the browser by engine-authored WebGPU / WASM
+  artifacts (per ADR-0006), not by a browser-side Python runtime.
+  The distinction is who authors the code, not when it runs.
+  Rendered pages hide notebook-cell chrome by default. Theme
+  (furo vs pydata-sphinx-theme), CSS polish, and hosting
+  (RTD / Pages) deferred to follow-up ADRs alongside the first
+  substantial docs PR.
+- [**ADR-0005**](ADR-0005-branch-pr-attribution-discipline.md) —
+  Branch, PR, commit-size, history, and attribution discipline for
+  human and AI-agent contributors. Authoritative source; AI.md is
+  an informal quick-reference kept aligned with this ADR.
 - [**ADR-0006**](ADR-0006-visualization-stack.md) — Visualization
   and science-communication stack: Zarr v3 alongside HDF5;
   WebGPU-first browser target with WebGL2 fallback; perceptual
