@@ -31,4 +31,3 @@ per amendment (what changed, why). Per ADR-0005 §Decision → ADR
 amendment policy, reversals of the decision itself are handled by
 superseding the ADR rather than by entries here.
 -->
-
