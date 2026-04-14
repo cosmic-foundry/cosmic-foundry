@@ -6,6 +6,7 @@ dependencies:
   - numpy
   - jax
   - sympy
+  - pre-commit
   - pytest
   - pyyaml
   - jsonschema
