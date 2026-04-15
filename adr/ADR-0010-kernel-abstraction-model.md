@@ -55,16 +55,91 @@ each owning exactly one axis or one composition:
 
 ### Op (computational axis)
 
-A per-element callable with a declared stencil footprint. An Op
-describes *what* to compute at a single element given its local
-neighborhood. It is not dispatchable on its own.
+An Op is a per-element callable declared as a subclass of the `Op`
+abstract base class. It describes *what* to compute at a single element
+given its local neighborhood. It is not dispatchable on its own.
 
-- The stencil footprint is metadata attached to the Op declaration.
-  It is used by the driver to determine halo widths for any given
-  Region partition size.
-- An Op must be expressible in the backend's execution context
-  (JAX-jittable for the primary backend; `@njit`-able, `@wp.func`-
-  decorated, etc. for secondary backends when they are introduced).
+Metadata is declared as class attributes (for fixed values) or
+`@property` (for values that depend on constructor parameters):
+
+```python
+class Op(ABC):
+    @property
+    @abstractmethod
+    def stencil(self) -> Stencil: ...
+
+    reads:    tuple[str, ...] = ()
+    writes:   tuple[str, ...] = ()
+    backends: frozenset[Backend] = frozenset({Backend.JAX})
+
+    @abstractmethod
+    def __call__(self, ...): ...
+```
+
+A fixed Op declares `stencil` as a class attribute:
+
+```python
+class SevenPointLaplacian(Op):
+    stencil = Stencil.seven_point()
+    reads   = ("phi",)
+    writes  = ("laplacian_phi",)
+
+    def __call__(self, q, i, j, k): ...
+```
+
+A parameterized Op declares `stencil` as a `@property` and resolves
+it from constructor arguments:
+
+```python
+class Reconstruct(Op):
+    def __init__(self, order: int):
+        self.order = order
+
+    @property
+    def stencil(self) -> Stencil:
+        return Stencil.symmetric(self.order)
+
+    reads  = ("primitive_vars",)
+    writes = ("edge_states",)
+
+    def __call__(self, q, i, j, k): ...
+```
+
+Instantiation is specialization: `ppm = Reconstruct(order=2)`. Each
+instance is a fully-specified Op with concrete metadata. This is the
+Python/JAX analog of a C++ function template instantiation: `order`
+is resolved before JAX traces `__call__`, producing an
+order-specialized XLA computation per instance. The factory function
+pattern (a function returning a decorated closure) was considered and
+rejected; see *Alternatives considered*.
+
+**Metadata catalog for Epoch 1:**
+
+| Attribute | Type | Required | Purpose |
+|---|---|---|---|
+| `stencil` | `Stencil` | Yes | Per-axis halo width; driver sizes halos before each Pass |
+| `reads` | `tuple[str, ...]` | Epoch 2 | Named fields read; task graph derives data dependencies |
+| `writes` | `tuple[str, ...]` | Epoch 2 | Named fields written; task graph derives data dependencies |
+| `backends` | `frozenset[Backend]` | No | Execution contexts that can lower this Op |
+
+Additional metadata (divergence hint for Policy selection, register
+pressure estimate, analytic solution for test generation) may be
+added as the interface matures.
+
+**Open question — `__call__` signature.** Whether an Op receives
+element indices plus a global field reference, a pre-extracted
+neighborhood window, or indices into a context object is not yet
+decided. This choice determines how physics code is written and
+whether the `TiledPolicy` cooperative-load phase changes the Op's
+call signature. See *Open questions*.
+
+- The `Op` abstract base class enforces the interface at import time:
+  a subclass that omits `stencil` or `__call__` raises `TypeError`
+  on class construction, not at driver assembly.
+- An Op's `__call__` must be traceable in the backend's execution
+  context (JAX-jittable for the primary backend). Constructor
+  parameters like `order` are resolved before tracing and do not
+  appear in the traced computation.
 - Examples: Helmholtz EOS evaluation, HLLC Riemann solver, PPM
   reconstruction, 7-point Laplacian stencil, cooling rate per cell.
 
@@ -155,6 +230,42 @@ solidifies against real workloads in Epoch 1.
   a code-generation path (SymPy → Triton / Pallas) rather than a
   pure library implementation.
 
+## Open questions
+
+The following questions are unresolved and should be answered before
+the Epoch 1 implementation PR is opened:
+
+1. **`__call__` signature.** Does an Op receive (a) element indices
+   plus a global field reference, (b) a pre-extracted neighborhood
+   window, or (c) indices into a context object? This is the most
+   consequential open question: it determines how physics code is
+   written in every Op, and whether `TiledPolicy` can reuse the same
+   `__call__` or requires a different interface.
+
+2. **Non-stencil access patterns.** Particle Ops use gather/scatter
+   rather than a fixed-width stencil. Diagnostic Ops (CFL, divergence
+   check) reduce over a region rather than computing per-element.
+   Does the `stencil` attribute generalize to cover these — e.g.,
+   `Stencil.none()`, `Stencil.gather(radius=...)` — or does the `Op`
+   base class need a separate `access_pattern` attribute?
+
+3. **Policy taxonomy completeness.** Block-level reductions (partial
+   sum per thread block, then inter-block combine) appear in CFL
+   computation and convergence tests. Do these fit within
+   `FlatPolicy` (via JAX's `jnp.sum` lowering), or does a
+   `ReducePolicy` belong in the taxonomy?
+
+4. **Naming in code.** Does `Op` read naturally as a base class name
+   in `class HLLCRiemann(Op):`? Does `Region` conflict with
+   AMR-context usage (refinement regions, domain decomposition
+   subdomains)? Does `Pass` parse as jargon without the
+   compiler/render-pipeline analogy?
+
+5. **Epoch 1 testing path.** Before the Epoch 2 driver exists, how
+   do physics authors verify their Ops? Options: construct a `Pass`
+   directly, call `__call__` at element level in pure Python, or use
+   a thin `run(op, region)` test helper.
+
 ## Alternatives considered
 
 **Keep Stage / Sweep / Domain** (prior terminology). Rejected because
@@ -176,6 +287,20 @@ execution organization. Rejected as primary naming because "schedule"
 in Halide encompasses both spatial tiling decisions and execution
 decisions that we assign to separate axes (Region vs. Policy); adopting
 it would import an ambiguity rather than resolving one.
+
+**Decorator-based Op annotation.** An `@op(stencil=...)` function
+decorator was considered as the mechanism for attaching metadata to
+per-element functions. Rejected in favor of class inheritance because:
+(1) class attributes are the natural Python mechanism for structured
+metadata on named objects; (2) the `Op` abstract base class enforces
+the interface contract at import time, not at driver assembly time;
+(3) the class/instance model maps cleanly to the C++ function template
+analogy — `Reconstruct(order=2)` is the Python analog of
+`ReconstructOp<2>`, a named type instantiated with a compile-time
+constant; (4) expressing parameterized metadata via a decorator
+requires a factory function (a function returning a decorated closure),
+which is syntactically awkward and obscures the Op's identity in
+profiler output and error messages.
 
 ## Cross-references
 

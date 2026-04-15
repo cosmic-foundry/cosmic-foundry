@@ -45,13 +45,17 @@ The research survey (§1.2 Kokkos, §1.6 Singe in
 `research/01-frameworks.md`) establishes that performance-portable
 kernel abstraction requires three independently variable axes:
 
-**Computational axis — Op.** A per-element callable with a declared
-stencil footprint. Examples: Helmholtz EOS, HLLC Riemann solver, PPM
-reconstruction, Laplacian stencil. An Op is not dispatchable on its
-own. It just needs to be callable from within a backend's execution
-context (JAX-jittable, Numba `@njit`-able, Warp `@wp.func`-decorated,
-etc.). The stencil footprint is metadata attached to the Op and is used
-by the driver to derive halo sizes.
+**Computational axis — Op.** A subclass of the `Op` abstract base
+class that declares a `stencil` attribute and implements `__call__`.
+Examples: Helmholtz EOS, HLLC Riemann solver, PPM reconstruction,
+Laplacian stencil. An Op is not dispatchable on its own. Its
+`__call__` must be traceable in the backend's execution context
+(JAX-jittable for the primary backend). The stencil attribute is used
+by the driver to derive halo sizes. Parameterized Ops (e.g.,
+variable-order reconstruction) declare `stencil` as a `@property`
+and resolve it from constructor arguments; instantiation is
+specialization. See ADR-0010 for the full interface and metadata
+catalog.
 
 **Spatial axis — Region.** A spatial sub-domain over which an Op is
 applied. May represent a single meshblock or a packed collection of
