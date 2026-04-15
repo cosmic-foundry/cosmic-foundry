@@ -90,9 +90,21 @@ fi
 echo "Activating Miniforge..."
 source "${MINIFORGE_DIR}/etc/profile.d/conda.sh"
 
-# Create conda environment from YAML
-echo "Creating cosmic_foundry environment..."
-conda env create -f "$ENV_FILE" --yes
+# Keep conda itself current before touching any environments.
+# conda lives in the base env, not in cosmic_foundry.
+echo "Updating conda..."
+conda update -n base conda --yes || true
+
+# Create or update the conda environment from YAML.
+# Using update --prune on an existing env avoids the "already exists" error
+# from create and removes packages that have been dropped from the spec.
+if conda env list | grep -qE "^cosmic_foundry[[:space:]]"; then
+  echo "Updating existing cosmic_foundry environment..."
+  conda env update -f "$ENV_FILE" --prune
+else
+  echo "Creating cosmic_foundry environment..."
+  conda env create -f "$ENV_FILE" --yes
+fi
 
 conda activate cosmic_foundry
 
@@ -104,6 +116,13 @@ conda activate cosmic_foundry
 # env — no need to re-run this whole script.
 echo "Installing cosmic_foundry package (editable, dev+docs extras)..."
 pip install -e ".[dev,docs]"
+
+# Install agent CLIs via the conda env's npm so the installs land in the
+# conda prefix — no system-wide writes, no admin privileges required.
+echo "Installing agent CLIs (Claude, Codex, Gemini)..."
+npm install -g @anthropic-ai/claude-code
+npm install -g @openai/codex
+npm install -g @google/gemini-cli
 
 # Install pre-commit git hook so local commits run the same checks as CI.
 # pre-commit refuses to install while core.hooksPath is set. Clear any
@@ -124,6 +143,13 @@ if [ -n "$remaining_hooks_path" ]; then
   exit 1
 fi
 pre-commit install
+
+# Record that the environment is in sync with the current spec files.
+# start_agent.sh compares this sentinel against the mtimes of
+# cosmic_foundry.yml and setup_environment.sh to decide whether a
+# sync is needed before launching an agent session.
+touch "${MINIFORGE_DIR}/envs/cosmic_foundry/.env_last_updated"
+
 conda deactivate
 
-echo "Miniforge setup complete"
+echo "Setup complete"

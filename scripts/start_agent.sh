@@ -40,6 +40,25 @@ fi
 # miniforge and exits with a clear message if it is missing.
 source "$ENGINE_ROOT/environment/activate_environment.sh"
 
+# Auto-sync when environment spec files have changed since the last
+# setup/update run. setup_environment.sh is idempotent — it skips the
+# Miniforge download if already present and handles both create and update —
+# so calling it here is safe. The sentinel it writes is used to avoid
+# re-running on every agent start.
+_SENTINEL="${ENGINE_ROOT}/miniforge/envs/cosmic_foundry/.env_last_updated"
+_needs_update=0
+if [ ! -f "$_SENTINEL" ]; then
+    _needs_update=1
+elif [ "${ENGINE_ROOT}/environment/cosmic_foundry.yml" -nt "$_SENTINEL" ] \
+  || [ "${ENGINE_ROOT}/environment/setup_environment.sh" -nt "$_SENTINEL" ]; then
+    _needs_update=1
+fi
+if [ "$_needs_update" = "1" ]; then
+    echo "Environment spec changed — re-running setup..."
+    bash "$ENGINE_ROOT/environment/setup_environment.sh"
+fi
+unset _SENTINEL _needs_update
+
 AGENT_TYPE=$1
 
 case $AGENT_TYPE in
