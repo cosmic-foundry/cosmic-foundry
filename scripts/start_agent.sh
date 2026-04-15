@@ -34,12 +34,11 @@ else
     exit 1
 fi
 
-# check for miniforge
-if [ ! -d "$ENGINE_ROOT/miniforge" ]; then
-    echo "✗ miniforge not found at $ENGINE_ROOT/miniforge."
-    echo "Run 'bash $DOC_PREFIX""environment/setup_environment.sh' from the launch directory, or run setup from $ENGINE_ROOT."
-    exit 1
-fi
+# Activate the repo-provided conda environment. This makes it available to the
+# agent process and all subprocesses it spawns (Bash tool calls, pre-commit
+# hooks, pytest, mypy, sphinx-build, etc.). activate_environment.sh checks for
+# miniforge and exits with a clear message if it is missing.
+source "$ENGINE_ROOT/environment/activate_environment.sh"
 
 AGENT_TYPE=$1
 
