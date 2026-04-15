@@ -39,11 +39,14 @@ ADR wins.
   historical failure modes). Run the reviewer against any non-trivial
   PR before requesting human review.
 
-  **Invocation modes:**
-  - **Claude Code:** use `/review-pr <n>` (requires `setup_environment.sh`).
-  - **Codex / Gemini CLI:** use `./scripts/review_pr_with_[codex|gemini].sh <n>`.
-    Set `COSMIC_FOUNDRY_PR_REPO` to override the default upstream
-    repository (`cosmic-foundry/cosmic-foundry`).
+  **Terminal / automation:**
+  ```bash
+  ./scripts/review_pr_with_claude.sh <n>   # Claude Code
+  ./scripts/review_pr_with_codex.sh <n>    # Codex
+  ./scripts/review_pr_with_gemini.sh <n>   # Gemini CLI
+  ```
+  Set `COSMIC_FOUNDRY_PR_REPO` to override the default repository
+  (`cosmic-foundry/cosmic-foundry`).
 
   **In-session requests:**
   Inside an active session, treat user requests of the form "Review PR N"
@@ -55,7 +58,6 @@ ADR wins.
   3. Perform the review using the fetched data and the working tree
      (read-only inspection only).
   4. Return the report in the exact format required by `pr-review/agent.md`.
-  Gemini CLI provides a `pr-reviewer` skill that encapsulates this.
 
 ### Commit size
 
