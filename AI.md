@@ -93,12 +93,36 @@ bash environment/setup_environment.sh
 
 ### Before Any Work
 
-**Every session**, verify miniforge exists and the env is wired for
-pre-commit:
+**First: verify the correct conda environment is active.** Run this
+immediately at the start of every session:
 ```bash
-test -d miniforge && echo "✓ miniforge found" || echo "✗ Run setup script"
-source miniforge/etc/profile.d/conda.sh && conda activate cosmic_foundry \
-  && python -c "import pre_commit" 2>/dev/null \
+[[ "${CONDA_DEFAULT_ENV:-}" == "cosmic_foundry" ]] \
+  && echo "✓ cosmic_foundry env active" \
+  || echo "✗ WRONG ENVIRONMENT"
+```
+
+**If the check fails**, stop immediately and warn the user:
+
+> ⚠️ The `cosmic_foundry` conda environment is not active. All Python
+> commands in this repo (`python`, `pytest`, `mypy`, `pre-commit`,
+> `sphinx-build`) must run inside this environment. Using the wrong
+> environment causes silent misconfiguration errors.
+>
+> The correct way to start an agent session is:
+> ```bash
+> ./scripts/start_agent.sh claude   # or gemini / codex
+> ```
+> `start_agent.sh` activates the environment automatically before
+> launching the agent. Do not proceed until the user confirms the
+> session has been restarted this way, or manually activates the env:
+> ```bash
+> source environment/activate_environment.sh
+> ```
+> then re-launches the agent from that shell.
+
+**If the check passes**, continue with the following health checks:
+```bash
+python -c "import pre_commit" 2>/dev/null \
   && echo "✓ pre-commit available" \
   || echo "✗ env stale — run 'conda env update -f environment/cosmic_foundry.yml --prune'"
 test -x .git/hooks/pre-commit \
@@ -106,12 +130,10 @@ test -x .git/hooks/pre-commit \
   || echo "✗ run 'pre-commit install' inside the activated env"
 ```
 
-If the session starts from a parent organization workspace, run the
-same checks against the `cosmic-foundry` checkout path (prefix each
-with `cd cosmic-foundry` or equivalent).
+If the session starts from a parent organization workspace, run all
+checks from the `cosmic-foundry` checkout directory.
 
-If miniforge is missing, ask user to run the setup script before
-proceeding. If only the pre-commit env or hook is missing, re-run
+If the pre-commit package or hook is missing, re-run
 `setup_environment.sh` or the remediation commands printed above —
 both are needed so `pre-commit run --all-files` works locally before
 pushing (see *Branches and PRs*).
