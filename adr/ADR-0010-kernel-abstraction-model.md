@@ -53,6 +53,71 @@ the per-element function and its dispatch configuration).
 The kernel abstraction layer is structured around four named concepts,
 each owning exactly one axis or one composition:
 
+### AccessPattern (data-access taxonomy)
+
+Every Op declares an `access_pattern` attribute describing what data
+its `__call__` reads and how the output is assembled. Three concrete
+subtypes are defined; new patterns extend `AccessPattern` without
+touching `Op` or the driver's halo-fill logic.
+
+```python
+class AccessPattern(ABC):
+    @abstractmethod
+    def halo_width(self, axis: int) -> int:
+        """Ghost-cell depth the driver must fill on this axis."""
+        ...
+
+    def __or__(self, other: "AccessPattern") -> "Composite":
+        return Composite(self, other)
+
+class Stencil(AccessPattern):
+    """Fixed-width neighborhood centered on a grid element."""
+    @classmethod
+    def seven_point(cls) -> "Stencil": ...
+    @classmethod
+    def symmetric(cls, order: int) -> "Stencil": ...
+
+    def halo_width(self, axis: int) -> int: ...   # returns stencil radius
+
+class GatherScatter(AccessPattern):
+    """Irregular particle-position access within a radius."""
+    def __init__(self, radius: float): ...
+
+    def halo_width(self, axis: int) -> int:
+        return math.ceil(self.radius)
+
+class Reduction(AccessPattern):
+    """Per-element map whose outputs are accumulated to a scalar."""
+    def __init__(self, accum: Callable = jnp.sum): ...
+
+    def halo_width(self, axis: int) -> int:
+        return 0   # whole-region read; no ghost cells required
+
+class Composite(AccessPattern):
+    """Union of two or more patterns, constructed via |."""
+    def __init__(self, *patterns: AccessPattern):
+        # flatten nested Composites so A | (B | C) == Composite(A, B, C)
+        self.patterns = tuple(
+            p for ap in patterns
+            for p in (ap.patterns if isinstance(ap, Composite) else (ap,))
+        )
+
+    def halo_width(self, axis: int) -> int:
+        return max(p.halo_width(axis) for p in self.patterns)
+```
+
+The `|` operator makes compound access patterns readable:
+
+```python
+access_pattern = Stencil.seven_point() | Reduction(accum=jnp.sum)
+```
+
+The driver calls `op.access_pattern.halo_width(axis)` uniformly; no
+Op-type special-casing is needed. For a `Reduction` Op the Policy maps
+`__call__` over all elements and then applies `accum` to the results;
+the Op author writes a per-element function and declares the
+accumulation on the `Reduction` pattern, not in `__call__`.
+
 ### Op (computational axis)
 
 An Op is a per-element callable declared as a subclass of the `Op`
@@ -66,7 +131,7 @@ Metadata is declared as class attributes (for fixed values) or
 class Op(ABC):
     @property
     @abstractmethod
-    def stencil(self) -> Stencil: ...
+    def access_pattern(self) -> AccessPattern: ...
 
     reads:    tuple[str, ...] = ()
     writes:   tuple[str, ...] = ()
@@ -76,19 +141,19 @@ class Op(ABC):
     def __call__(self, ...): ...
 ```
 
-A fixed Op declares `stencil` as a class attribute:
+A fixed Op declares `access_pattern` as a class attribute:
 
 ```python
 class SevenPointLaplacian(Op):
-    stencil = Stencil.seven_point()
+    access_pattern = Stencil.seven_point()   # Stencil is-a AccessPattern
     reads   = ("phi",)
     writes  = ("laplacian_phi",)
 
     def __call__(self, q, i, j, k): ...
 ```
 
-A parameterized Op declares `stencil` as a `@property` and resolves
-it from constructor arguments:
+A parameterized Op declares `access_pattern` as a `@property` and
+resolves it from constructor arguments:
 
 ```python
 class Reconstruct(Op):
@@ -96,13 +161,37 @@ class Reconstruct(Op):
         self.order = order
 
     @property
-    def stencil(self) -> Stencil:
+    def access_pattern(self) -> AccessPattern:
         return Stencil.symmetric(self.order)
 
     reads  = ("primitive_vars",)
     writes = ("edge_states",)
 
     def __call__(self, q, i, j, k): ...
+```
+
+A particle Op and a reduction Op follow the same pattern:
+
+```python
+class DepositCharge(Op):
+    access_pattern = GatherScatter(radius=2)
+    reads  = ("charge",)
+    writes = ("charge_density",)
+
+    def __call__(self, q, i, j, k): ...
+
+class ComputeCFL(Op):
+    access_pattern = Reduction(accum=jnp.min)
+    reads = ("velocity",)
+
+    def __call__(self, q, i, j, k) -> float:
+        return dx / jnp.abs(q[i, j, k])   # per-element; Policy reduces
+
+class DivergenceNorm(Op):
+    access_pattern = Stencil.seven_point() | Reduction(accum=jnp.sum)
+    reads = ("B",)
+
+    def __call__(self, q, i, j, k) -> float: ...
 ```
 
 Instantiation is specialization: `ppm = Reconstruct(order=2)`. Each
@@ -117,31 +206,42 @@ rejected; see *Alternatives considered*.
 
 | Attribute | Type | Required | Purpose |
 |---|---|---|---|
-| `stencil` | `Stencil` | Yes | Per-axis halo width; driver sizes halos before each Pass |
+| `access_pattern` | `AccessPattern` | Yes | Halo width + output assembly; driver sizes halos and Policy accumulates reductions |
 | `reads` | `tuple[str, ...]` | Epoch 2 | Named fields read; task graph derives data dependencies |
 | `writes` | `tuple[str, ...]` | Epoch 2 | Named fields written; task graph derives data dependencies |
 | `backends` | `frozenset[Backend]` | No | Execution contexts that can lower this Op |
 
-Additional metadata (divergence hint for Policy selection, register
-pressure estimate, analytic solution for test generation) may be
-added as the interface matures.
+Additional metadata (register pressure estimate, analytic solution for
+test generation) may be added as the interface matures.
 
-**Open question — `__call__` signature.** Whether an Op receives
-element indices plus a global field reference, a pre-extracted
-neighborhood window, or indices into a context object is not yet
-decided. This choice determines how physics code is written and
-whether the `TiledPolicy` cooperative-load phase changes the Op's
-call signature. See *Open questions*.
+**`__call__` signature — decided.** An Op receives element indices
+plus an array-like field argument. The field argument is *not*
+required to be a raw JAX array; it is required to support
+`__getitem__` with global index semantics. Under `FlatPolicy` the
+argument is the global field directly. Under `TiledPolicy` the
+Policy passes a `FieldView` wrapper that intercepts `__getitem__`
+calls and redirects them to an SRAM-backed halo-extended tile,
+translating global indices to tile-local offsets transparently.
+The Op's `__call__` code is identical under both policies; the
+index semantics are always global coordinates. The physics author
+is never aware of tile boundaries.
+
+`FieldView` is a JAX pytree (registered via
+`jax.tree_util.register_pytree_node`); JAX traces through its
+`__getitem__` as ordinary index arithmetic on the underlying tile
+array. `FieldView` is a `TiledPolicy` implementation concern and
+is not part of the Epoch 1 deliverable.
 
 - The `Op` abstract base class enforces the interface at import time:
-  a subclass that omits `stencil` or `__call__` raises `TypeError`
-  on class construction, not at driver assembly.
+  a subclass that omits `access_pattern` or `__call__` raises
+  `TypeError` on class construction, not at driver assembly.
 - An Op's `__call__` must be traceable in the backend's execution
   context (JAX-jittable for the primary backend). Constructor
   parameters like `order` are resolved before tracing and do not
   appear in the traced computation.
 - Examples: Helmholtz EOS evaluation, HLLC Riemann solver, PPM
-  reconstruction, 7-point Laplacian stencil, cooling rate per cell.
+  reconstruction, 7-point Laplacian stencil, cooling rate per cell,
+  CFL computation, divergence norm check.
 
 ### Region (spatial axis)
 
@@ -219,12 +319,19 @@ solidifies against real workloads in Epoch 1.
 
 ## Implementation staging
 
-- **Epoch 1:** `Op` declaration with stencil footprint; `Region` with
-  single-block and batched variants; `FlatPolicy`; `Pass` as the
-  dispatch unit. JAX primary backend only.
+- **Epoch 1:** `Op` declaration with `access_pattern` metadata
+  (`Stencil`, `GatherScatter`, `Reduction`, `Composite`); `Region`
+  with single-block and batched variants; `FlatPolicy` (including
+  reduction accumulation via `Reduction.accum`); `Pass` as the
+  dispatch unit. JAX primary backend only. Field arguments to
+  `__call__` are raw JAX arrays (global index semantics; no wrapper
+  needed under `FlatPolicy`).
 - **Epoch 2–3:** `TiledPolicy` when mesh stencil operations are
-  written. Halo-fill coordination between the task graph and the
-  Region's declared footprint.
+  written. Introduce `FieldView` as a JAX-pytree wrapper that
+  presents global index semantics over a halo-extended SRAM tile,
+  enabling `TiledPolicy` to swap in without changes to any Op.
+  Halo-fill coordination between the task graph and the Region's
+  declared footprint.
 - **Epoch 6:** `WarpSpecializedPolicy` for nuclear reaction networks,
   if benchmarking shows `FlatPolicy` is insufficient. May require
   a code-generation path (SymPy → Triton / Pallas) rather than a
@@ -235,19 +342,24 @@ solidifies against real workloads in Epoch 1.
 The following questions are unresolved and should be answered before
 the Epoch 1 implementation PR is opened:
 
-1. **`__call__` signature.** Does an Op receive (a) element indices
-   plus a global field reference, (b) a pre-extracted neighborhood
-   window, or (c) indices into a context object? This is the most
-   consequential open question: it determines how physics code is
-   written in every Op, and whether `TiledPolicy` can reuse the same
-   `__call__` or requires a different interface.
+1. **`__call__` signature — resolved.** Option A: element indices
+   plus an array-like field argument supporting `__getitem__` with
+   global index semantics. `TiledPolicy` passes a `FieldView` wrapper
+   that redirects global-index accesses to a halo-extended SRAM tile;
+   the Op code is unchanged across policies. See Op section above.
 
-2. **Non-stencil access patterns.** Particle Ops use gather/scatter
-   rather than a fixed-width stencil. Diagnostic Ops (CFL, divergence
-   check) reduce over a region rather than computing per-element.
-   Does the `stencil` attribute generalize to cover these — e.g.,
-   `Stencil.none()`, `Stencil.gather(radius=...)` — or does the `Op`
-   base class need a separate `access_pattern` attribute?
+2. **Non-stencil access patterns — resolved.** `access_pattern:
+   AccessPattern` replaces the `stencil: Stencil` attribute. `Stencil`
+   is a subclass of `AccessPattern`; `GatherScatter(radius)` covers
+   particle Ops; `Reduction(accum)` covers diagnostic Ops. Compound
+   patterns are expressed via `|` (e.g., `Stencil.seven_point() |
+   Reduction(accum=jnp.sum)`), producing a `Composite` that delegates
+   `halo_width` to the maximum of its children. An Op's `__call__`
+   is always per-element; the Policy maps it over the region and
+   applies the `Reduction.accum` function if a `Reduction` pattern is
+   present. The accumulation function lives on the `Reduction` pattern
+   (not at Pass level) so the Op is self-describing. See
+   *AccessPattern* section above.
 
 3. **Policy taxonomy completeness.** Block-level reductions (partial
    sum per thread block, then inter-block combine) appear in CFL

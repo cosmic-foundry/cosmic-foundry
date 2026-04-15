@@ -46,16 +46,18 @@ The research survey (§1.2 Kokkos, §1.6 Singe in
 kernel abstraction requires three independently variable axes:
 
 **Computational axis — Op.** A subclass of the `Op` abstract base
-class that declares a `stencil` attribute and implements `__call__`.
-Examples: Helmholtz EOS, HLLC Riemann solver, PPM reconstruction,
-Laplacian stencil. An Op is not dispatchable on its own. Its
-`__call__` must be traceable in the backend's execution context
-(JAX-jittable for the primary backend). The stencil attribute is used
-by the driver to derive halo sizes. Parameterized Ops (e.g.,
-variable-order reconstruction) declare `stencil` as a `@property`
-and resolve it from constructor arguments; instantiation is
-specialization. See ADR-0010 for the full interface and metadata
-catalog.
+class that declares an `access_pattern` attribute and implements
+`__call__`. Examples: Helmholtz EOS, HLLC Riemann solver, PPM
+reconstruction, Laplacian stencil, CFL computation. An Op is not
+dispatchable on its own. Its `__call__` must be traceable in the
+backend's execution context (JAX-jittable for the primary backend).
+The `access_pattern` attribute (a `Stencil`, `GatherScatter`,
+`Reduction`, or `Composite` thereof) is used by the driver to derive
+halo sizes and by the Policy to determine output assembly (element
+field vs. reduced scalar). Parameterized Ops declare `access_pattern`
+as a `@property` and resolve it from constructor arguments;
+instantiation is specialization. See ADR-0010 for the full interface,
+`AccessPattern` type hierarchy, and metadata catalog.
 
 **Spatial axis — Region.** A spatial sub-domain over which an Op is
 applied. May represent a single meshblock or a packed collection of
