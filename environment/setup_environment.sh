@@ -116,11 +116,7 @@ fi
 pre-commit install
 conda deactivate
 
-# Generate AI-tool invocation glue (`.claude/`, gitignored). The
-# project-artifact layer for review lives in `pr-review/` and is
-# tracked; the per-tool glue is a thin pointer regenerated here so
-# contributors using different AI tools don't carry each other's
-# config. Run unconditionally — the generator is idempotent.
+# Generate AI-tool invocation glue (idempotent; see pr-review/).
 echo "Installing Claude Code glue..."
 bash "${SCRIPT_DIR}/../scripts/install_claude_glue.sh"
 

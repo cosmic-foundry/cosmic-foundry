@@ -34,6 +34,12 @@ ADR wins.
   same hooks; catching failures locally avoids a round-trip. If the
   command is not found, the working copy's env is stale or the git
   hook was never installed — see *Environment → Before Any Work*.
+- **PR review.** The project's adversarial reviewer lives at
+  [`pr-review/`](pr-review/README.md) (roles + checklist of
+  historical failure modes). Under Claude Code, invoke it via
+  `/review-pr <n>` after `setup_environment.sh` has generated the
+  glue; under other tools, the glue is pending. Run the reviewer
+  against any non-trivial PR before requesting human review.
 
 ### Commit size
 

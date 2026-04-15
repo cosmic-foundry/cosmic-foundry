@@ -45,13 +45,14 @@ request.
 
 ### `install_claude_glue.sh`
 
-Generates the Claude Code invocation glue (`.claude/commands/review-pr.md`
-and `.claude/agents/pr-reviewer.md`) from the in-repo reviewer spec at
-`pr-review/`. Called unconditionally by `environment/setup_environment.sh`;
-idempotent, safe to rerun.
+Generates the Claude Code invocation glue for the adversarial PR
+reviewer (`.claude/commands/review-pr.md`,
+`.claude/agents/pr-reviewer-sweep.md`, `.claude/agents/pr-reviewer.md`)
+from the in-repo reviewer spec at `pr-review/`. Called unconditionally
+by `environment/setup_environment.sh`; idempotent, safe to rerun.
 
-`.claude/` is gitignored — tool-specific invocation files are not tracked
-so the project-artifact layer (`pr-review/`) stays the single source of
-truth and so contributors using a different AI tool don't carry glue
-they don't use. A parallel `install_codex_glue.sh` /
-`install_gemini_glue.sh` would be added in the same pattern.
+`.claude/` is gitignored so the project-artifact layer (`pr-review/`)
+stays the single source of truth. Only Claude glue ships today;
+parallel `install_codex_glue.sh` / `install_gemini_glue.sh` generators
+pointing at the same `pr-review/` spec are a follow-up, not part of
+this scaffolding.

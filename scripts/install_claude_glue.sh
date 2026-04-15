@@ -109,8 +109,9 @@ On invocation:
    no closing summary, no severity judgments.
 
 Do not reason about intent, taste, or ADR consistency — those
-belong to the synthesis pass. Do not modify the working tree,
-push, or comment on the PR.
+belong to the synthesis pass. The shared constraints in
+`pr-review/agent.md` (no tree modification, no pushing, no PR
+comments) apply.
 EOF
 
 cat >"${AGENTS_DIR}/pr-reviewer.md" <<'EOF'
@@ -148,7 +149,8 @@ On invocation:
    existence; "None." under Blocker / Critical / Notable is
    a valid outcome.
 
-Do not modify the working tree, push, or comment on the PR.
+The shared constraints in `pr-review/agent.md` (no tree
+modification, no pushing, no PR comments) apply.
 EOF
 
 echo "Installed Claude Code glue:"
