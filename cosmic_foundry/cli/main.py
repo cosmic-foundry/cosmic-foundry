@@ -55,7 +55,7 @@ def hello() -> None:
     if process_index == 0:
         click.echo(f"cosmic-foundry {__version__}")
         click.echo(f"JAX backend : {jax.default_backend()}")
-        click.echo(f"Processes  : {process_index + 1}/{process_count}")
+        click.echo(f"Processes   : {process_index + 1}/{process_count}")
         click.echo(f"Local devs  : {[str(d) for d in local_devices]}")
         click.echo(f"Global devs : {[str(d) for d in global_devices]}")
 

@@ -3,13 +3,25 @@ channels:
   - conda-forge
 dependencies:
   - python=3.11
+  # core runtime
   - numpy
+  - scipy
   - jax
+  - h5py
+  - click
   - sympy
+  - typing_extensions
+  - unyt
+  # dev / test
   - pre-commit
   - pytest
-  - pyyaml
-  - jsonschema
+  - pytest-cov
+  - pytest-mpl
+  - black
+  - ruff
+  - mypy
+  - hypothesis
+  # docs
   - sphinx
   - furo
   - myst-nb
@@ -19,6 +31,10 @@ dependencies:
   - plotly
   - ipykernel
   - nbformat
+  # CI helpers
+  - pyyaml
+  - jsonschema
+  # compilers / build tools
   - gcc
   - gxx
   - gfortran

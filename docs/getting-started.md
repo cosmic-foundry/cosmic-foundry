@@ -49,7 +49,7 @@ JIT path:
 ```
 cosmic-foundry 0.1.0.dev0
 JAX backend : cpu
-Processes  : 1/1
+Processes   : 1/1
 Local devs  : ['CpuDevice(id=0)']
 Global devs : ['CpuDevice(id=0)']
 JIT smoke   : ok

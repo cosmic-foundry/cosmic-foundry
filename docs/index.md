@@ -50,11 +50,11 @@ N-body, microphysics, and cosmology. It is being built incrementally through
 a series of epochs, starting from this bootstrap (Epoch 0) and growing toward
 a code that can replicate published astrophysics results.
 
-JAX powers the numerical kernels; see
-[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0002-jax-primary-kernel-backend.md).
 For the full design survey and development plan, see
 [`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
 and the
 [development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
 Architectural decisions are recorded in
 [`adr/README.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/README.md).
+The numerical kernels run on JAX; see
+[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0002-jax-primary-kernel-backend.md).
