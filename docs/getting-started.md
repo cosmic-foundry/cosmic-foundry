@@ -17,8 +17,7 @@ cd cosmic-foundry
 bash environment/setup_environment.sh
 
 # 3. Activate the environment
-source miniforge/etc/profile.d/conda.sh
-conda activate cosmic_foundry
+source environment/activate_environment.sh
 
 # 4. Install the package in editable mode with dev dependencies
 pip install -e .[dev]
