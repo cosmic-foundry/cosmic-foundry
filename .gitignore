@@ -44,8 +44,13 @@ miniforge/
 
 # Tool-specific AI-agent directories. The project-artifact layer
 # (pr-review/) is tracked; any tool-specific files that agents
-# create locally stay out of the repo.
+# create locally stay out of the repo. Narrow exception: the
+# project-scoped Claude Code settings file is committed so that
+# permission rules tied to in-repo scripts reach every teammate.
 .claude/
+!/.claude/
+/.claude/*
+!/.claude/settings.json
 .codex/
 .gemini/
 
