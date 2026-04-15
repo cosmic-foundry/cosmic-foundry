@@ -55,6 +55,22 @@ After `environment/setup_environment.sh` has run:
 
 With Codex:
 
+Inside an active Codex session, either of these user requests means
+"run the adversarial PR reviewer for that pull request":
+
+```text
+Review PR <pr-number>
+Review <pr-number>
+```
+
+The Codex agent should read `pr-review/agent.md` and
+`pr-review/checklist.md`, fetch PR metadata and diff with
+`gh pr view <pr-number> --repo cosmic-foundry/cosmic-foundry` and
+`gh pr diff <pr-number> --repo cosmic-foundry/cosmic-foundry`, then
+return the exact report format required by `pr-review/agent.md`.
+
+From a terminal or automation:
+
 ```bash
 ./scripts/review_pr_with_codex.sh <pr-number>
 ```
