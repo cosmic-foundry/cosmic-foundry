@@ -63,10 +63,11 @@ intersphinx_mapping = {
 # Link checking (sphinx-build -b linkcheck)
 # ---------------------------------------------------------------------------
 #
-# Bootstrap ignores: URLs that reference files added in the same PR as the
-# docs that link to them. On the PR run, the target URL (pointing at the
-# main branch) 404s because the file has not yet merged. Remove each entry
-# after the merge that makes its target resolve.
+# Own-repo URLs pointing at the main branch are validated against the working
+# tree by scripts/ci/check_markdown_links.py, not over HTTP. Linkcheck would
+# otherwise 404 on any link added in the same PR as its target file (main
+# does not yet contain the file at the time the PR runs). Keep this list
+# for true external URLs only.
 linkcheck_ignore = [
-    r"^https://github\.com/cosmic-foundry/cosmic-foundry/blob/main/CONTRIBUTING\.md$",
+    r"^https://github\.com/cosmic-foundry/cosmic-foundry/(?:blob|tree|raw)/main/",
 ]

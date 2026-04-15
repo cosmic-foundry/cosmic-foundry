@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 """Verify relative markdown links resolve to existing files.
 
-External URLs (http, https, mailto) and pure in-page fragments (#anchor)
-are skipped. Fragments on relative links (path#section) are checked for
-file existence only; anchor targets are not validated.
+Also validates own-repo GitHub URLs (``https://github.com/cosmic-foundry/
+cosmic-foundry/{blob,tree,raw}/main/…``) against the working tree. These
+links appear in docs that live inside ``docs/`` but point at files outside
+the docs tree (ADRs, CONTRIBUTING.md, AI.md, …). Letting ``sphinx-build
+-b linkcheck`` validate them over HTTP would 404 pre-merge whenever a PR
+adds both the target file and the link to it in the same change. Validating
+here — against the tree that is about to become ``main`` — avoids that
+bootstrap problem and still catches path typos and stale links.
+
+Other external URLs (http, https, mailto) and pure in-page fragments
+(#anchor) are skipped. Fragments on relative links (path#section) are
+checked for file existence only; anchor targets are not validated.
 
 Run from any directory; resolves the repo root from this file's location.
 """
@@ -15,6 +24,10 @@ from pathlib import Path
 
 LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 INLINE_CODE_RE = re.compile(r"`[^`]*`")
+OWN_REPO_MAIN_RE = re.compile(
+    r"^https://github\.com/cosmic-foundry/cosmic-foundry/"
+    r"(?:blob|tree|raw)/main/(.+)$"
+)
 SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
 SKIP_DIRS = {"miniforge", ".git"}
 
@@ -39,7 +52,19 @@ def scan(repo_root: Path) -> list[str]:
             stripped = INLINE_CODE_RE.sub("", line)
             for match in LINK_RE.finditer(stripped):
                 href = match.group(2).strip()
-                if not href or href.startswith(SKIP_PREFIXES):
+                if not href:
+                    continue
+                own_repo = OWN_REPO_MAIN_RE.match(href)
+                if own_repo:
+                    path = own_repo.group(1).split("#", 1)[0]
+                    if not path:
+                        continue
+                    resolved = (repo_root / path).resolve()
+                    if not resolved.exists():
+                        rel = md.relative_to(repo_root)
+                        errors.append(f"{rel}:{lineno}: broken own-repo link -> {href}")
+                    continue
+                if href.startswith(SKIP_PREFIXES):
                     continue
                 target = href.split("#", 1)[0]
                 if not target:
