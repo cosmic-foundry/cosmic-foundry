@@ -10,10 +10,10 @@ Tool-specific invocation glue is a thin layer over these files.
 All agents share the wrapper scripts under `scripts/` —
 `scripts/_review_pr_impl.sh` contains the shared fetch logic and
 prompt; `scripts/review_pr_with_[claude|codex|gemini].sh` are the
-per-agent entry points. Some agents also have generated skill-layer
-glue (`.claude/`, `.gemini/`) installed by `scripts/install_*_glue.sh`
-at environment-setup time and gitignored; that glue is supplementary
-and not tracked.
+per-agent entry points. Gemini CLI additionally has generated
+skill-layer glue under `.gemini/` installed by
+`scripts/install_gemini_glue.sh` at environment-setup time and
+gitignored; that glue is supplementary and not tracked.
 
 ## Files
 

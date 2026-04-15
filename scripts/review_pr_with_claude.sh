@@ -14,4 +14,4 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 # shellcheck source=scripts/_review_pr_impl.sh
 source "$SCRIPT_DIR/_review_pr_impl.sh" "$@"
 
-claude -p "$REVIEW_PROMPT"
+claude -p <<< "$REVIEW_PROMPT"

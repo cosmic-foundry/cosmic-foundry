@@ -43,19 +43,6 @@ In the multi-repo workflow, reusable engine changes should stay in
 and each repository should get its own branch, worktree, commit, and pull
 request.
 
-### `install_claude_glue.sh`
-
-Generates supplementary Claude Code invocation glue for the adversarial
-PR reviewer (`.claude/commands/review-pr.md`,
-`.claude/agents/pr-reviewer.md`)
-from the in-repo reviewer spec at `pr-review/`. Called unconditionally
-by `environment/setup_environment.sh`; idempotent, safe to rerun.
-
-`.claude/` is gitignored so the project-artifact layer (`pr-review/`)
-stays the single source of truth. The primary invocation path for
-Claude is `review_pr_with_claude.sh` (see below), which matches the
-Codex and Gemini scripts.
-
 ### `_review_pr_impl.sh`
 
 Internal shared implementation for the `review_pr_with_*.sh` scripts.

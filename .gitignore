@@ -44,9 +44,9 @@ miniforge/
 
 # Generated AI-tool invocation glue. The project-artifact layer
 # (pr-review/) is tracked; tool-specific invocation files are
-# regenerated at setup time and kept out of the repo. Only .claude/
-# has a generator today (scripts/install_claude_glue.sh); .codex/
-# and .gemini/ are listed defensively so local experimentation
+# regenerated at setup time and kept out of the repo. Only .gemini/
+# has a generator today (scripts/install_gemini_glue.sh); .claude/
+# and .codex/ are listed defensively so local experimentation
 # with those tools doesn't pollute commits.
 .claude/
 .codex/

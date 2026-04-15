@@ -127,9 +127,6 @@ pre-commit install
 conda deactivate
 
 # Generate AI-tool invocation glue (idempotent; see pr-review/).
-echo "Installing Claude Code glue..."
-bash "${SCRIPT_DIR}/../scripts/install_claude_glue.sh"
-
 echo "Installing Gemini CLI glue..."
 bash "${SCRIPT_DIR}/../scripts/install_gemini_glue.sh"
 

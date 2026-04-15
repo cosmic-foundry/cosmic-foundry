@@ -11,7 +11,7 @@
 # to pipe into the agent CLI.
 
 if [ "$#" -ne 1 ]; then
-    echo "Usage: $(basename "${BASH_SOURCE[1]}") <pr-number>" >&2
+    echo "Usage: $(basename "${BASH_SOURCE[1]:-$0}") <pr-number>" >&2
     return 2 2>/dev/null || exit 2
 fi
 
