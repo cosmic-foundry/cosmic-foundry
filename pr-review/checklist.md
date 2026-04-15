@@ -1,8 +1,8 @@
 # PR-review checklist — historical failure modes
 
 The reviewer walks this file end-to-end on every PR. It is a
-catalogue of failure modes that have actually escaped
-self-review on this repository, organised by theme. Each theme
+catalog of failure modes that have actually escaped
+self-review on this repository, organized by theme. Each theme
 states *what to look for*, *why it matters*, and (where useful)
 *how to probe it* in the current PR.
 
@@ -89,11 +89,13 @@ line items.
 ## Spelling and copy
 
 - **British vs. American spelling.** Project standard is
-  American English, enforced via codespell. If codespell isn't
-  yet in pre-commit for this PR's file types (check
-  `.pre-commit-config.yaml`), spot-check new copy for
+  American English. Codespell enforcement is pending (it lands
+  with PR #36); until then, spot-check new copy for
   `colour/color`, `behaviour/behavior`, `organise/organize`,
-  `centre/center`.
+  `centre/center`, `catalogue/catalog`, `summarise/summarize`.
+  Once codespell is in `.pre-commit-config.yaml`, tighten this
+  entry back to "enforced via codespell" and leave the spot-
+  check list only as a reviewer aide-memoire.
 
 ## Architectural-option bias
 

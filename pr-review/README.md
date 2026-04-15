@@ -16,7 +16,7 @@ from these files and is **not** tracked in the repository. See
 
 - [`agent.md`](agent.md) — reviewer role, inputs, protocol, and
   output format. Read this first.
-- [`checklist.md`](checklist.md) — catalogue of historical
+- [`checklist.md`](checklist.md) — catalog of historical
   failure modes on this repository, grouped by theme. The
   reviewer is expected to walk this on every PR.
 

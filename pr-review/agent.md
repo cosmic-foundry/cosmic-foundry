@@ -20,7 +20,7 @@ intuition when the two disagree.
 - The working tree of the repository the PR targets. You may
   read any file, run read-only tooling (`git log`, `rg`, test
   discovery), and open ADRs for context.
-- [`checklist.md`](checklist.md) — the catalogue of historical
+- [`checklist.md`](checklist.md) — the catalog of historical
   failure modes. Walk it end-to-end on every PR. Do not
   substitute your own mental list.
 
@@ -70,7 +70,7 @@ exactly; downstream tooling may parse them.
 ## Critical
 <Issues that are very likely wrong but not merge-blocking:
  missing tests for non-trivial code paths, unhandled edge
- cases, contradictions with an ADR, undocumented behaviour
+ cases, contradictions with an ADR, undocumented behavior
  changes.>
 
 ## Notable

@@ -50,7 +50,7 @@ Perform these steps:
    will follow the protocol defined in `pr-review/agent.md`
    and produce the report in the format specified there.
 4. Return the subagent's report to the user verbatim. Do not
-   summarise, soften, or re-order the findings.
+   summarize, soften, or re-order the findings.
 
 The reviewer is same-model (Claude reviewing Claude). Surface
 the "Confidence and blind spots" section of the report
@@ -61,12 +61,12 @@ EOF
 cat >"${AGENTS_DIR}/pr-reviewer.md" <<'EOF'
 ---
 name: pr-reviewer
-description: Adversarial PR reviewer specialised for this repository's historical failure modes. Use via the /review-pr slash command.
+description: Adversarial PR reviewer specialized for this repository's historical failure modes. Use via the /review-pr slash command.
 tools: Read, Grep, Glob, Bash
 ---
 
 Your role, protocol, and output format are defined in
-`pr-review/agent.md` at the repository root. The catalogue of
+`pr-review/agent.md` at the repository root. The catalog of
 historical failure modes you must walk on every review is in
 `pr-review/checklist.md`.
 
