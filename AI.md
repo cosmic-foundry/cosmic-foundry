@@ -47,6 +47,28 @@ ADR wins.
 - Documentation diffs (ADRs, research notes, roadmap edits,
   README / AI.md / similar) are exempt from the guideline.
 
+### Weighing architectural options
+
+When comparing architectural options (in ADRs, design discussions,
+or ad-hoc recommendations), do **not** weight by author effort or
+lines of code produced. Agent-assisted authoring has made upstream
+writing cost a rounding error; downstream costs now dominate and are
+what the analysis should rank by:
+
+- reviewer cognitive load (the existing ~150-line commit guideline
+  is also a proxy for this),
+- ongoing operational and maintenance cost,
+- reversibility if the choice turns out wrong,
+- correctness and safety guarantees,
+- blast radius of a failure.
+
+Implementation effort is a tiebreaker at most. Present options to
+the user in terms of these downstream costs, not in terms of "cheap
+vs. expensive to build." Always include the lower-complexity option
+in the comparison even when recommending a richer one — the goal is
+to keep the decision with the user, not to bias toward ambition just
+because ambition is cheap to type.
+
 ### History
 
 - Never force-push a branch with an open PR or merged commits.
