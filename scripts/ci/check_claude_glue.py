@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Verify that scripts/install_claude_glue.sh produces the expected files.
+"""Run install_claude_glue.sh and verify its output is correct.
 
-The installer writes Claude Code invocation glue under .claude/ at
-setup time. That directory is gitignored, so without this gate a
-breaking edit to the installer — bad heredoc, renamed pr-review/
-path, stray syntax error — would only surface on the next fresh
-clone's setup_environment.sh run.
+Running the installer is intentionally in scope: .claude/ is
+gitignored and regenerated at setup time, so running it here is
+idempotent and has no effect on the git index. The side effect is
+desirable — contributors who trigger this hook via pre-commit on a
+fresh clone get .claude/ populated without having to run
+setup_environment.sh first.
 
-This hook runs the installer and asserts the generated files exist
-with the expected frontmatter fields (agent name, model tier).
-It also verifies the in-repo files the glue points at still exist,
-so renaming pr-review/agent.md or pr-review/checklist.md without
-updating the installer fails loudly.
+The check fails if:
+- pr-review/agent.md or pr-review/checklist.md are missing (the
+  installer would produce broken glue pointing at absent files).
+- The installer exits non-zero (syntax error, bad heredoc, etc.).
+- Any expected output file is absent or has wrong frontmatter fields
+  (agent name, model tier). This catches installer edits that change
+  the output without updating this check, and vice versa.
 """
 from __future__ import annotations
 

@@ -33,4 +33,4 @@ repos:
         entry: python scripts/ci/check_claude_glue.py
         language: system
         pass_filenames: false
-        files: ^(scripts/install_claude_glue\.sh|scripts/ci/check_claude_glue\.py|pr-review/.*\.md)$
+        files: ^(scripts/install_claude_glue\.sh|scripts/ci/check_claude_glue\.py|pr-review/)
