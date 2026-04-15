@@ -26,11 +26,29 @@ these foundations:
    - A performance-portability abstraction over CPU SIMD, CUDA, HIP,
      and SYCL execution — conceptually a Kokkos analog — so that
      kernels written once compile and run across vendor GPUs and
-     CPUs.
+     CPUs. The research survey (§1.2 Kokkos, §1.6 Singe) reveals
+     that this abstraction must keep three axes independent: an *Op*
+     (per-element callable with declared stencil footprint, analogous
+     to a Kokkos `__device__` function), a *Region* (spatial
+     sub-domain over which an Op is applied, potentially a packed
+     collection of meshblocks analogous to Parthenon's
+     `MeshBlockPack`), and a *Policy* (execution organization —
+     flat, tiled-with-scratchpad, or warp-specialized — controlling
+     how threads are arranged to process a Region). The dispatch
+     unit, a *Pass*, composes these three. Kernel-launch granularity
+     is controlled at the Pass/Policy level; Ops are unaware of it.
+     This separation allows both fusion experiments and execution
+     policy substitution without touching physics code. See ADR-0010.
    - A task-based asynchronous driver with explicit dependency
      graphs, over-decomposition, and dynamic load balancing (the
      role played elsewhere by Athena++'s task list, Parthenon's
-     driver, SWIFT's task graph, and Charm++).
+     driver, SWIFT's task graph, and Charm++). Note: this is
+     *separate* from the Pass/Region batching above. The task graph
+     controls sequencing and communication overlap between logical
+     work units; Region batching controls how many items of work
+     enter one kernel launch. Parthenon implements these separately
+     as `TaskList` and `MeshBlockPack`; the same separation applies
+     here.
    - A particle / swarm infrastructure with particle–mesh
      operators, tree and FMM gravity, and adaptive softening.
    - Linear solver suite: geometric multigrid (cell-centered and
