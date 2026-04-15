@@ -67,3 +67,18 @@ context plus the tracked `pr-review/` instructions to a read-only
 `codex exec` session. Set `COSMIC_FOUNDRY_PR_REPO` to override the
 default upstream repository (`cosmic-foundry/cosmic-foundry`) when
 testing against another remote.
+
+### `review_pr_with_gemini.sh`
+
+Runs the same adversarial PR reviewer through Gemini CLI:
+
+```bash
+./scripts/review_pr_with_gemini.sh <pr-number>
+```
+
+The wrapper fetches PR metadata and diff with `gh`, then passes that
+context plus the tracked `pr-review/` instructions to a Gemini CLI
+session. It uses the `pr-reviewer` skill defined in `.gemini/skills/`.
+Set `COSMIC_FOUNDRY_PR_REPO` to override the default upstream
+repository (`cosmic-foundry/cosmic-foundry`) when testing against another
+remote.

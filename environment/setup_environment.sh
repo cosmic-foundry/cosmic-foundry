@@ -130,4 +130,7 @@ conda deactivate
 echo "Installing Claude Code glue..."
 bash "${SCRIPT_DIR}/../scripts/install_claude_glue.sh"
 
+echo "Installing Gemini CLI glue..."
+bash "${SCRIPT_DIR}/../scripts/install_gemini_glue.sh"
+
 echo "Miniforge setup complete"
