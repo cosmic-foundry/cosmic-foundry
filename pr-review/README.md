@@ -7,12 +7,13 @@ historical failure modes — independent of any particular AI
 tool.
 
 Tool-specific invocation glue is a thin layer over these files.
-Generated glue is installed at environment-setup time and is **not**
-tracked in the repository. Tracked wrapper scripts live under
-`scripts/` when a tool has no generated project-local command
-format. See `scripts/install_claude_glue.sh`,
-`scripts/review_pr_with_codex.sh`, and the call site in
-`environment/setup_environment.sh`.
+All agents share the wrapper scripts under `scripts/` —
+`scripts/_review_pr_impl.sh` contains the shared fetch logic and
+prompt; `scripts/review_pr_with_[claude|codex|gemini].sh` are the
+per-agent entry points. Some agents also have generated skill-layer
+glue (`.claude/`, `.gemini/`) installed by `scripts/install_*_glue.sh`
+at environment-setup time and gitignored; that glue is supplementary
+and not tracked.
 
 ## Files
 

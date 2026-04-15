@@ -12,7 +12,7 @@
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: $(basename "${BASH_SOURCE[1]}") <pr-number>" >&2
-    return 2
+    return 2 2>/dev/null || exit 2
 fi
 
 PR_NUMBER="$1"
