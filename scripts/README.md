@@ -47,12 +47,23 @@ request.
 
 Generates the Claude Code invocation glue for the adversarial PR
 reviewer (`.claude/commands/review-pr.md`,
-`.claude/agents/pr-reviewer-sweep.md`, `.claude/agents/pr-reviewer.md`)
+`.claude/agents/pr-reviewer.md`)
 from the in-repo reviewer spec at `pr-review/`. Called unconditionally
 by `environment/setup_environment.sh`; idempotent, safe to rerun.
 
 `.claude/` is gitignored so the project-artifact layer (`pr-review/`)
-stays the single source of truth. Only Claude glue ships today;
-parallel `install_codex_glue.sh` / `install_gemini_glue.sh` generators
-pointing at the same `pr-review/` spec are a follow-up, not part of
-this scaffolding.
+stays the single source of truth.
+
+### `review_pr_with_codex.sh`
+
+Runs the same adversarial PR reviewer through Codex:
+
+```bash
+./scripts/review_pr_with_codex.sh <pr-number>
+```
+
+The wrapper fetches PR metadata and diff with `gh`, then passes that
+context plus the tracked `pr-review/` instructions to a read-only
+`codex exec` session. Set `COSMIC_FOUNDRY_PR_REPO` to override the
+default upstream repository (`cosmic-foundry/cosmic-foundry`) when
+testing against another remote.

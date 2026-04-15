@@ -38,8 +38,9 @@ ADR wins.
   [`pr-review/`](pr-review/README.md) (roles + checklist of
   historical failure modes). Under Claude Code, invoke it via
   `/review-pr <n>` after `setup_environment.sh` has generated the
-  glue; under other tools, the glue is pending. Run the reviewer
-  against any non-trivial PR before requesting human review.
+  glue. Under Codex, invoke it via
+  `./scripts/review_pr_with_codex.sh <n>`. Run the reviewer against
+  any non-trivial PR before requesting human review.
 
 ### Commit size
 
