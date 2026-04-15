@@ -22,3 +22,9 @@ repos:
         language: system
         pass_filenames: false
         files: ^adr/.*\.md$
+      - id: action-version-downgrade
+        name: GitHub Actions version downgrade check
+        entry: python scripts/ci/check_action_versions.py
+        language: system
+        pass_filenames: false
+        files: ^\.github/workflows/.*\.ya?ml$
