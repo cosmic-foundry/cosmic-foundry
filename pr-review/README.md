@@ -69,10 +69,25 @@ The Codex agent should read `pr-review/agent.md` and
 `gh pr diff <pr-number> --repo cosmic-foundry/cosmic-foundry`, then
 return the exact report format required by `pr-review/agent.md`.
 
+With Gemini CLI:
+
+Inside an active Gemini CLI session, either of these user requests means
+"run the adversarial PR reviewer for that pull request":
+
+```text
+Review PR <pr-number>
+Review <pr-number>
+```
+
+The Gemini CLI will activate the `pr-reviewer` skill, follow its
+instructions to fetch PR context and perform the review, then return
+the report in the exact format required by `pr-review/agent.md`.
+
 From a terminal or automation:
 
 ```bash
 ./scripts/review_pr_with_codex.sh <pr-number>
+./scripts/review_pr_with_gemini.sh <pr-number>
 ```
 
 ## Updating the checklist
