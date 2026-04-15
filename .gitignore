@@ -42,6 +42,13 @@ pip-delete-this-directory.txt
 # Environment
 miniforge/
 
+# Generated AI-tool invocation glue (see scripts/install_<tool>_glue.sh).
+# The project-artifact layer lives in pr-review/ and is tracked; the
+# glue here is a thin tool-specific pointer regenerated at setup time.
+.claude/
+.codex/
+.gemini/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
