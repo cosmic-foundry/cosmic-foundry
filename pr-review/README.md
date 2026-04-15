@@ -24,13 +24,13 @@ format. See `scripts/install_claude_glue.sh`,
 
 ## Architecture
 
-The reviewer spec is tool-independent. Claude Code invokes it through
-a single Sonnet subagent behind `/review-pr`; Codex invokes it through
-`scripts/review_pr_with_codex.sh`, which runs a read-only
-`codex exec` session. Each wrapper pre-fetches all external data
+The reviewer spec is tool-independent. Each agent has a thin wrapper
+script under `scripts/` that pre-fetches all external data
 (`gh pr view`, `gh pr diff`) and passes it as text; the reviewer uses
 the working tree only for read-only inspection, so no shell-command
-approvals are needed during review.
+approvals are needed during review. The shared fetch logic and prompt
+live in `scripts/_review_pr_impl.sh`; the per-agent scripts source it
+and supply the single agent-specific CLI invocation.
 
 Upstream enforces squash merge, so the PR diff against the target
 branch is the unit of review — individual commit history is not
@@ -47,48 +47,30 @@ agent family; cross-tool review is preferred for higher-risk PRs.
 
 ## Invoking
 
-After `environment/setup_environment.sh` has run:
-
-```text
-/review-pr <pr-number>
-```
-
-With Codex:
-
-Inside an active Codex session, either of these user requests means
-"run the adversarial PR reviewer for that pull request":
-
-```text
-Review PR <pr-number>
-Review <pr-number>
-```
-
-The Codex agent should read `pr-review/agent.md` and
-`pr-review/checklist.md`, fetch PR metadata and diff with
-`gh pr view <pr-number> --repo cosmic-foundry/cosmic-foundry` and
-`gh pr diff <pr-number> --repo cosmic-foundry/cosmic-foundry`, then
-return the exact report format required by `pr-review/agent.md`.
-
-With Gemini CLI:
-
-Inside an active Gemini CLI session, either of these user requests means
-"run the adversarial PR reviewer for that pull request":
-
-```text
-Review PR <pr-number>
-Review <pr-number>
-```
-
-The Gemini CLI will activate the `pr-reviewer` skill, follow its
-instructions to fetch PR context and perform the review, then return
-the report in the exact format required by `pr-review/agent.md`.
-
 From a terminal or automation:
 
 ```bash
-./scripts/review_pr_with_codex.sh <pr-number>
-./scripts/review_pr_with_gemini.sh <pr-number>
+./scripts/review_pr_with_claude.sh <pr-number>   # Claude Code
+./scripts/review_pr_with_codex.sh <pr-number>    # Codex
+./scripts/review_pr_with_gemini.sh <pr-number>   # Gemini CLI
 ```
+
+Set `COSMIC_FOUNDRY_PR_REPO` to override the default upstream
+repository (`cosmic-foundry/cosmic-foundry`).
+
+Inside an active session (any agent), either of these user requests
+means "run the adversarial PR reviewer for that pull request":
+
+```text
+Review PR <pr-number>
+Review <pr-number>
+```
+
+The agent should read `pr-review/agent.md` and `pr-review/checklist.md`,
+fetch PR metadata and diff with
+`gh pr view <pr-number> --repo cosmic-foundry/cosmic-foundry` and
+`gh pr diff <pr-number> --repo cosmic-foundry/cosmic-foundry`, then
+return the exact report format required by `pr-review/agent.md`.
 
 ## Updating the checklist
 
