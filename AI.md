@@ -36,10 +36,28 @@ ADR wins.
   hook was never installed — see *Environment → Before Any Work*.
 - **PR review.** The project's adversarial reviewer lives at
   [`pr-review/`](pr-review/README.md) (roles + checklist of
-  historical failure modes). Under Claude Code, invoke it via
-  `/review-pr <n>` after `setup_environment.sh` has generated the
-  glue; under other tools, the glue is pending. Run the reviewer
-  against any non-trivial PR before requesting human review.
+  historical failure modes). Run the reviewer against any non-trivial
+  PR before requesting human review.
+
+  **Terminal / automation:**
+  ```bash
+  ./scripts/review_pr_with_claude.sh <n>   # Claude Code
+  ./scripts/review_pr_with_codex.sh <n>    # Codex
+  ./scripts/review_pr_with_gemini.sh <n>   # Gemini CLI
+  ```
+  Set `COSMIC_FOUNDRY_PR_REPO` to override the default repository
+  (`cosmic-foundry/cosmic-foundry`).
+
+  **In-session requests:**
+  Inside an active session, treat user requests of the form "Review PR N"
+  or "Review N" as a request to run the adversarial reviewer:
+  1. Read `pr-review/agent.md` and `pr-review/checklist.md` in full.
+  2. Fetch PR metadata and diff:
+     `gh pr view N --repo cosmic-foundry/cosmic-foundry`
+     `gh pr diff N --repo cosmic-foundry/cosmic-foundry`
+  3. Perform the review using the fetched data and the working tree
+     (read-only inspection only).
+  4. Return the report in the exact format required by `pr-review/agent.md`.
 
 ### Commit size
 

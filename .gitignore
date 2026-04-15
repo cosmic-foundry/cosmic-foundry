@@ -42,12 +42,9 @@ pip-delete-this-directory.txt
 # Environment
 miniforge/
 
-# Generated AI-tool invocation glue. The project-artifact layer
-# (pr-review/) is tracked; tool-specific invocation files are
-# regenerated at setup time and kept out of the repo. Only .claude/
-# has a generator today (scripts/install_claude_glue.sh); .codex/
-# and .gemini/ are listed defensively so local experimentation
-# with those tools doesn't pollute commits.
+# Tool-specific AI-agent directories. The project-artifact layer
+# (pr-review/) is tracked; any tool-specific files that agents
+# create locally stay out of the repo.
 .claude/
 .codex/
 .gemini/

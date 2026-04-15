@@ -126,8 +126,4 @@ fi
 pre-commit install
 conda deactivate
 
-# Generate AI-tool invocation glue (idempotent; see pr-review/).
-echo "Installing Claude Code glue..."
-bash "${SCRIPT_DIR}/../scripts/install_claude_glue.sh"
-
 echo "Miniforge setup complete"

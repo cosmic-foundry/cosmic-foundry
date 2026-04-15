@@ -43,16 +43,38 @@ In the multi-repo workflow, reusable engine changes should stay in
 and each repository should get its own branch, worktree, commit, and pull
 request.
 
-### `install_claude_glue.sh`
+### `_review_pr_impl.sh`
 
-Generates the Claude Code invocation glue for the adversarial PR
-reviewer (`.claude/commands/review-pr.md`,
-`.claude/agents/pr-reviewer-sweep.md`, `.claude/agents/pr-reviewer.md`)
-from the in-repo reviewer spec at `pr-review/`. Called unconditionally
-by `environment/setup_environment.sh`; idempotent, safe to rerun.
+Internal shared implementation for the `review_pr_with_*.sh` scripts.
+Handles argument validation, `gh pr view` / `gh pr diff` fetching, and
+prompt assembly. Sets `REVIEW_PROMPT` for the calling script to pipe
+into its agent CLI. Source this from a wrapper — do not invoke directly.
 
-`.claude/` is gitignored so the project-artifact layer (`pr-review/`)
-stays the single source of truth. Only Claude glue ships today;
-parallel `install_codex_glue.sh` / `install_gemini_glue.sh` generators
-pointing at the same `pr-review/` spec are a follow-up, not part of
-this scaffolding.
+### `review_pr_with_claude.sh`
+
+Runs the adversarial PR reviewer through Claude Code CLI:
+
+```bash
+./scripts/review_pr_with_claude.sh <pr-number>
+```
+
+### `review_pr_with_codex.sh`
+
+Runs the adversarial PR reviewer through Codex:
+
+```bash
+./scripts/review_pr_with_codex.sh <pr-number>
+```
+
+### `review_pr_with_gemini.sh`
+
+Runs the adversarial PR reviewer through Gemini CLI:
+
+```bash
+./scripts/review_pr_with_gemini.sh <pr-number>
+```
+
+All three `review_pr_with_*.sh` scripts share the same implementation
+via `_review_pr_impl.sh`. Set `COSMIC_FOUNDRY_PR_REPO` to override the
+default upstream repository (`cosmic-foundry/cosmic-foundry`) when
+testing against another remote.
