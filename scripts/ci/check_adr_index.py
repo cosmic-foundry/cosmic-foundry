@@ -21,7 +21,7 @@ def main() -> int:
     index = adr_dir / "README.md"
 
     if not index.exists():
-        print(f"adr/README.md: missing", file=sys.stderr)
+        print("adr/README.md: missing", file=sys.stderr)
         return 1
 
     adr_files = {p.name for p in adr_dir.iterdir() if ADR_FILE_RE.match(p.name)}
