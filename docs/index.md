@@ -1,6 +1,6 @@
 # Cosmic Foundry
 
-A high-performance computational astrophysics engine built on JAX.
+A computational astrophysics engine for multi-physics simulation.
 
 ```{toctree}
 :maxdepth: 2
@@ -42,11 +42,17 @@ adr/index
 
 ## Overview
 
-Cosmic Foundry is a Python engine for astrophysics simulations. It uses JAX
-for JIT-compiled, differentiable kernels that run on CPU or GPU without code
-changes.
+Cosmic Foundry is a Python engine for numerical astrophysics, targeting
+the capability set surveyed in
+[`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
+— hydrodynamics through numerical relativity, radiation transport, gravity,
+N-body, microphysics, and cosmology. It is being built incrementally through
+a series of epochs, starting from this bootstrap (Epoch 0) and growing toward
+a code that can replicate published astrophysics results.
 
-For background on the design, see
+JAX powers the numerical kernels; see
+[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0002-jax-primary-kernel-backend.md).
+For the full design survey and development plan, see
 [`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
 and the
 [development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
