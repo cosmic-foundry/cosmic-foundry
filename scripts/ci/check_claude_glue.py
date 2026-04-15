@@ -29,10 +29,6 @@ EXPECTED_FILES: dict[Path, dict[str, str]] = {
         "description": r".+",
         "argument-hint": r".+",
     },
-    CLAUDE_DIR / "agents" / "pr-reviewer-sweep.md": {
-        "name": r"pr-reviewer-sweep",
-        "model": r"haiku",
-    },
     CLAUDE_DIR / "agents" / "pr-reviewer.md": {
         "name": r"pr-reviewer",
         "model": r"sonnet",
