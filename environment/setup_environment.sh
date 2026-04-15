@@ -91,8 +91,9 @@ echo "Activating Miniforge..."
 source "${MINIFORGE_DIR}/etc/profile.d/conda.sh"
 
 # Keep conda itself current before touching any environments.
+# conda lives in the base env, not in cosmic_foundry.
 echo "Updating conda..."
-conda update conda --yes || true
+conda update -n base conda --yes || true
 
 # Create or update the conda environment from YAML.
 # Using update --prune on an existing env avoids the "already exists" error
