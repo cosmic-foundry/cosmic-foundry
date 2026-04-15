@@ -105,6 +105,13 @@ conda activate cosmic_foundry
 echo "Installing cosmic_foundry package (editable, dev+docs extras)..."
 pip install -e ".[dev,docs]"
 
+# Install agent CLIs via the conda env's npm so the installs land in the
+# conda prefix — no system-wide writes, no admin privileges required.
+echo "Installing agent CLIs (Claude, Codex, Gemini)..."
+npm install -g @anthropic-ai/claude-code
+npm install -g @openai/codex
+npm install -g @google/gemini-cli
+
 # Install pre-commit git hook so local commits run the same checks as CI.
 # pre-commit refuses to install while core.hooksPath is set. Clear any
 # stale local override (e.g. inherited from a git init template) so the
