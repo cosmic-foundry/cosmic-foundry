@@ -72,3 +72,10 @@ for the authoritative rule.
   docs and a per-target plan live under `replication/`; named
   exceptions for integration-time debugging are enumerated in
   `replication/README.md`.
+- [**ADR-0009**](ADR-0009-float64-default-precision.md) —
+  Float64 is the default and only supported precision for all
+  kernels and public APIs. `jax_enable_x64` is set at package
+  import; no `dtype=` on public signatures yet; no ambient
+  precision flag. Expected to be amended in place — not
+  superseded — when mixed-precision experimentation begins, to
+  add an explicit per-kernel opt-in for lower dtypes.
