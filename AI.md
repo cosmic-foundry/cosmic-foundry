@@ -38,8 +38,16 @@ ADR wins.
   [`pr-review/`](pr-review/README.md) (roles + checklist of
   historical failure modes). Under Claude Code, invoke it via
   `/review-pr <n>` after `setup_environment.sh` has generated the
-  glue; under other tools, the glue is pending. Run the reviewer
-  against any non-trivial PR before requesting human review.
+  glue. Under Codex, invoke it via
+  `./scripts/review_pr_with_codex.sh <n>`. Inside an active Codex
+  session, treat user requests of the form "Review PR N" or
+  "Review N" as a request to run this adversarial reviewer: read
+  `pr-review/agent.md` and `pr-review/checklist.md`, fetch
+  `gh pr view N --repo cosmic-foundry/cosmic-foundry` and
+  `gh pr diff N --repo cosmic-foundry/cosmic-foundry`, then return
+  the report format required by `pr-review/agent.md`. Run the
+  reviewer against any non-trivial PR before requesting human
+  review.
 
 ### Commit size
 
