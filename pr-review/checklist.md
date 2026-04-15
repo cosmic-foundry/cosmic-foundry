@@ -38,6 +38,16 @@ when pre-commit now catches them.
   the target is outside the docs source tree or the path is
   wrong. Verify any new include target exists and is reachable
   from `docs/`.
+- **Stale codebase references.** Comments, docstrings, and prose
+  that describe the *previous* state of the code rather than its
+  current state are defects. Flag: "previously X", "the old
+  implementation", "before the refactor", "this replaces Y",
+  references to symbols or files that no longer exist, and
+  forward-references to code that is not yet present (these
+  should be explicit `TODO` markers with a tracking reference,
+  not narrative prose). The test: does every claim hold against
+  the post-merge working tree, with no knowledge of how it
+  arrived there?
 
 ## CI / pre-commit parity
 
@@ -81,6 +91,15 @@ when pre-commit now catches them.
   stable API. If the PR preserves legacy names, adds
   deprecation warnings, or keeps a shim "just in case", push
   back — the expected mode is structural edits.
+- **Conversational or agent-session prose.** Code comments,
+  docstrings, ADR text, and roadmap prose must read as durable
+  documentation, not transcribed conversation. Flag: first- or
+  second-person voice ("we decided", "you should", "I think"),
+  phrases that presuppose a live exchange ("as discussed", "as
+  mentioned above", "based on our conversation"), and reasoning
+  that only makes sense in the context of a specific session
+  rather than the repository itself. The test: does this
+  sentence stand alone to a reader who was not present?
 
 ## Spelling and copy
 
