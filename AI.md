@@ -139,15 +139,32 @@ bash environment/setup_environment.sh
 
 ### Before Any Work
 
-**First: verify the correct conda environment is active.** Run this
-immediately at the start of every session:
+**Run the startup health check** immediately at the start of every
+session:
 ```bash
-[[ "${CONDA_DEFAULT_ENV:-}" == "cosmic_foundry" ]] \
-  && echo "✓ cosmic_foundry env active" \
-  || echo "✗ WRONG ENVIRONMENT"
+./scripts/agent_health_check.sh
 ```
 
-**If the check fails**, stop immediately and warn the user:
+The script verifies three things in order:
+1. `cosmic_foundry` conda environment is active
+2. `pre_commit` Python package is importable
+3. `.git/hooks/pre-commit` is installed
+
+It is the only bash command auto-approved by the repository's
+`.claude/settings.json`; the trust surface is exactly this committed
+script and nothing else.
+
+The auto-approval is Claude Code-specific because only Claude Code
+supports exact-match Bash allowlists. Codex has no per-command
+allowlist primitive, and Gemini's `tools.allowed` is prefix-match
+(it would also auto-approve any command starting with the script
+path, including chained or arg-appended invocations). Rather than
+weaken the trust surface for those agents, the shortcut is omitted
+— Codex and Gemini operators approve the health check once per
+session the normal way.
+
+**If the env check fails** (script prints `✗ WRONG ENVIRONMENT` and
+exits non-zero), stop immediately and warn the user:
 
 > ⚠️ The `cosmic_foundry` conda environment is not active. All Python
 > commands in this repo (`python`, `pytest`, `mypy`, `pre-commit`,
@@ -166,23 +183,13 @@ immediately at the start of every session:
 > ```
 > then re-launches the agent from that shell.
 
-**If the check passes**, continue with the following health checks:
-```bash
-python -c "import pre_commit" 2>/dev/null \
-  && echo "✓ pre-commit available" \
-  || echo "✗ env stale — run 'conda env update -f environment/cosmic_foundry.yml --prune'"
-test -x .git/hooks/pre-commit \
-  && echo "✓ pre-commit git hook installed" \
-  || echo "✗ run 'pre-commit install' inside the activated env"
-```
+**If the env check passes but either follow-up check fails**, re-run
+`setup_environment.sh` or the remediation commands printed by the
+script — both are needed so `pre-commit run --all-files` works
+locally before pushing (see *Branches and PRs*).
 
-If the session starts from a parent organization workspace, run all
-checks from the `cosmic-foundry` checkout directory.
-
-If the pre-commit package or hook is missing, re-run
-`setup_environment.sh` or the remediation commands printed above —
-both are needed so `pre-commit run --all-files` works locally before
-pushing (see *Branches and PRs*).
+If the session starts from a parent organization workspace, run the
+script from the `cosmic-foundry` checkout directory.
 
 ## Architectural Decisions
 
