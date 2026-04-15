@@ -20,6 +20,7 @@ import pytest
 HOUSE_CMAP = "viridis"
 
 
+@pytest.mark.visual
 @pytest.mark.mpl_image_compare(
     baseline_dir="baseline",
     filename="sinusoid_viridis.png",

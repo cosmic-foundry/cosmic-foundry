@@ -13,7 +13,6 @@ dependencies = [
     "numpy",
     "scipy",
     "jax[cpu]",
-    "jaxlib",
     "h5py",
     "click",
     "sympy",

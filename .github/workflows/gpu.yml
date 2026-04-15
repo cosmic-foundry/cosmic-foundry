@@ -14,6 +14,6 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Placeholder
         run: echo "GPU runner not yet configured — see roadmap §0.4"
