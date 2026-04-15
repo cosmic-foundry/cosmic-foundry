@@ -13,15 +13,25 @@
 git clone git@github.com:<your-fork>/cosmic-foundry.git
 cd cosmic-foundry
 
-# 2. Install miniforge and create the conda environment (~5 min, one-time)
+# 2. Install miniforge, create the conda env, install the package
+#    in editable mode, and register the pre-commit hook (~5 min, one-time)
 bash environment/setup_environment.sh
 
-# 3. Activate the environment
+# 3. Activate the environment (required at the start of every session)
 source environment/activate_environment.sh
-
-# 4. Install the package in editable mode with dev dependencies
-pip install -e .[dev]
 ```
+
+### Keeping the env current
+
+After a `git pull` that changes `pyproject.toml` extras or entry points,
+refresh the editable install from inside the activated environment:
+
+```bash
+pip install -e .[dev,docs]
+```
+
+No need to re-run `setup_environment.sh` for this — it's intended as a
+one-time bootstrap.
 
 ## Verify the installation
 

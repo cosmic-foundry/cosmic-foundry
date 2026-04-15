@@ -94,6 +94,17 @@ source "${MINIFORGE_DIR}/etc/profile.d/conda.sh"
 echo "Creating cosmic_foundry environment..."
 conda env create -f "$ENV_FILE" --yes
 
+conda activate cosmic_foundry
+
+# Install the cosmic_foundry package in editable mode with dev and docs
+# extras. Editable install lets source changes take effect without
+# reinstalling; the [dev,docs] extras are the superset CI uses, so local
+# setup matches CI by default. After a git pull that changes extras or
+# entry points, re-run 'pip install -e .[dev,docs]' inside the activated
+# env — no need to re-run this whole script.
+echo "Installing cosmic_foundry package (editable, dev+docs extras)..."
+pip install -e ".[dev,docs]"
+
 # Install pre-commit git hook so local commits run the same checks as CI.
 # pre-commit refuses to install while core.hooksPath is set. Clear any
 # stale local override (e.g. inherited from a git init template) so the
@@ -101,7 +112,6 @@ conda env create -f "$ENV_FILE" --yes
 # system value is still in effect, surface it instead of silently
 # overriding the user's dotfiles.
 echo "Installing pre-commit hooks..."
-conda activate cosmic_foundry
 if [ -n "$(git -C "$REPO_ROOT" config --local --get core.hooksPath 2>/dev/null)" ]; then
   echo "  Clearing stale local core.hooksPath override"
   git -C "$REPO_ROOT" config --local --unset-all core.hooksPath

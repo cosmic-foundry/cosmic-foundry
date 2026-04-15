@@ -26,7 +26,6 @@ bash environment/setup_environment.sh
 
 # Or activate manually and work directly
 source environment/activate_environment.sh
-pip install -e .[dev]
 cosmic-foundry hello
 ```
 
@@ -35,7 +34,7 @@ smoke-test result. If it exits 0, the environment is correctly wired.
 
 ## Documentation
 
-Build the docs locally after `pip install -e .[dev,docs]`:
+Build the docs locally:
 
 ```bash
 sphinx-build -W docs docs/_build/html

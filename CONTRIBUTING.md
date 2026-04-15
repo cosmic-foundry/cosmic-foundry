@@ -6,15 +6,17 @@ The repo ships its own Python environment. You must use it — running
 with system Python or a different conda env causes silent misconfiguration.
 
 ```bash
-# One-time: install miniforge and create the cosmic_foundry conda env
+# One-time: install miniforge, create the cosmic_foundry conda env,
+# install the package in editable mode, and register the pre-commit hook
 bash environment/setup_environment.sh
 
 # Every session: activate before doing any work
 source environment/activate_environment.sh
-
-# Install the package in editable mode with dev dependencies
-pip install -e .[dev]
 ```
+
+After a pull that changes `pyproject.toml`, refresh the editable install
+inside the activated env with `pip install -e .[dev,docs]` — no need to
+re-run the full setup script.
 
 ## Workflow
 
