@@ -14,9 +14,6 @@ source environment/activate_environment.sh
 
 # Install the package in editable mode with dev dependencies
 pip install -e .[dev]
-
-# Install the pre-commit git hook (one-time, after setup)
-pre-commit install
 ```
 
 ## Workflow
