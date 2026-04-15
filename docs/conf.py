@@ -58,3 +58,15 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "jax": ("https://jax.readthedocs.io/en/latest", None),
 }
+
+# ---------------------------------------------------------------------------
+# Link checking (sphinx-build -b linkcheck)
+# ---------------------------------------------------------------------------
+#
+# Bootstrap ignores: URLs that reference files added in the same PR as the
+# docs that link to them. On the PR run, the target URL (pointing at the
+# main branch) 404s because the file has not yet merged. Remove each entry
+# after the merge that makes its target resolve.
+linkcheck_ignore = [
+    r"^https://github\.com/cosmic-foundry/cosmic-foundry/blob/main/CONTRIBUTING\.md$",
+]

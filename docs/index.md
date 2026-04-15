@@ -30,6 +30,7 @@ api/index
 :caption: Gallery
 
 gallery/index
+accessibility
 ```
 
 ```{toctree}
@@ -45,6 +46,9 @@ Cosmic Foundry is a Python engine for astrophysics simulations. It uses JAX
 for JIT-compiled, differentiable kernels that run on CPU or GPU without code
 changes.
 
-For background on the design, see [RESEARCH.md](../RESEARCH.md) and the
-[development roadmap](../ROADMAP.md). Architectural decisions are recorded in
-[adr/README.md](../adr/README.md).
+For background on the design, see
+[`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
+and the
+[development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
+Architectural decisions are recorded in
+[`adr/README.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/README.md).

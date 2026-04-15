@@ -1,7 +1,12 @@
 # Architecture Decision Records
 
-The ADR index lives in the repository at
-[adr/README.md](../../adr/README.md).
+The canonical ADR index lives at
+[`adr/README.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/README.md)
+in the repository. Individual ADRs live alongside it under
+[`adr/`](https://github.com/cosmic-foundry/cosmic-foundry/tree/main/adr).
 
-```{include} ../../adr/README.md
-```
+ADRs are authored as GitHub-rendered markdown and are not mirrored into
+these docs. See
+[ADR-0005](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0005-branch-pr-attribution-discipline.md)
+for the amendment policy and the rules on when an accepted ADR may be
+edited in place versus superseded.
