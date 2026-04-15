@@ -40,3 +40,6 @@ dependencies:
   - gfortran
   - make
   - git
+  # agent tooling (Codex and Gemini CLIs run on Node; operators
+  # npm-install the CLIs themselves once Node is available)
+  - nodejs
