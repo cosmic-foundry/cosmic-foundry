@@ -15,5 +15,5 @@ one:
 **Exit criterion:** the standard hydro test battery matches
 reference solutions across all kernel backends, and a Sod
 shock-tube explainer page (live slider over γ and initial
-conditions, unit-labelled axes, perceptual colormap) ships to
+conditions, unit-labeled axes, perceptual colormap) ships to
 the public gallery as the first physics demo.

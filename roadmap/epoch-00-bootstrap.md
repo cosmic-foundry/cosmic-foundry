@@ -208,7 +208,7 @@ here so they cannot drift in later epochs:
   into an already-green harness.
 - Accessibility and performance budget stub (`docs/accessibility
   .md`) naming the targets the public gallery will enforce: WCAG
-  2.2 AA contrast, colourblind-safe palettes, alt text, mobile
+  2.2 AA contrast, colorblind-safe palettes, alt text, mobile
   LCP under 2.5 s on a 4G profile, bytes-on-wire budgets per
   tiled dataset.
 - ADR-0006 (visualization and science-communication stack) is

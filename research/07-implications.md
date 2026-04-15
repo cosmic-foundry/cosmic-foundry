@@ -24,7 +24,7 @@ these foundations:
      centering, subcycling in time, and refinement-flux correction
      (functionally equivalent to what AMReX and Parthenon provide).
    - A performance-portability abstraction over CPU SIMD, CUDA, HIP,
-     and SYCL execution — conceptually a Kokkos analogue — so that
+     and SYCL execution — conceptually a Kokkos analog — so that
      kernels written once compile and run across vendor GPUs and
      CPUs.
    - A task-based asynchronous driver with explicit dependency

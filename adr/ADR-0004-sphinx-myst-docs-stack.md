@@ -161,7 +161,7 @@ directory.
 - **ReStructuredText instead of MyST.** RST has Sphinx-native
   tooling and the widest ecosystem, but is less approachable for
   external contributors and prevents authors from writing in the
-  same Markdown flavour used elsewhere in the repository.
+  same Markdown flavor used elsewhere in the repository.
   Rejected because the contributor ramp-up cost compounds across
   every docs PR.
 - **Browser-side Python (`pyodide` / `JupyterLite`).** Enables

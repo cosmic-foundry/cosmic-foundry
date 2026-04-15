@@ -7,6 +7,10 @@
 - **Linter:** [ruff](https://docs.astral.sh/ruff/) with the rule sets
   configured in `pyproject.toml` (pycodestyle, pyflakes, isort, bugbear,
   pyupgrade, numpy). Ruff auto-fixes safe issues on commit.
+- **Spelling:** American English (color, analyze, center, behavior). Enforced
+  by [codespell](https://github.com/codespell-project/codespell) in the
+  pre-commit hook using the `en-GB_to_en-US` built-in dictionary. Applies
+  to prose (Markdown, RST) and Python docstrings/comments/identifiers.
 - **Editor config:** `.editorconfig` at the repo root enforces 4-space
   indentation, LF line endings, and trailing-whitespace trimming.
 

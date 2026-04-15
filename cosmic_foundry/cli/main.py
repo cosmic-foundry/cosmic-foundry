@@ -23,7 +23,7 @@ def hello() -> None:
     In single-process mode (no JAX_COORDINATOR_ADDRESS set), reports
     local devices and confirms the JIT path is functional.
 
-    In distributed mode (JAX_COORDINATOR_ADDRESS set), initialises
+    In distributed mode (JAX_COORDINATOR_ADDRESS set), initializes
     jax.distributed and additionally reports process_index and
     process_count.
     """

@@ -65,7 +65,7 @@ the final decision, not a commitment.
    overshoots" clause covering "logical change" atomicity. No new
    rule, just a clarification of scope.
 3. **Write ADR-0008 (this slot) as a full discipline extending
-   ADR-0007.** Formalise transcription-PR requirements in one
+   ADR-0007.** Formalize transcription-PR requirements in one
    place: source-provenance comments, golden-data coverage
    thresholds, per-file merge gates, and an explicit statement
    that LOC caps do not apply. Most durable; heaviest to draft.
@@ -93,7 +93,7 @@ begins — see `roadmap/index.md` §5 for the crossroad.
 - **Positive.** Future sessions picking up microphysics work
   start from a captured analysis rather than re-deriving it.
   ADR-0007's existing discipline covers the interim — any
-  transcription PR landing before this ADR is finalised must
+  transcription PR landing before this ADR is finalized must
   satisfy ADR-0007's golden-data verification bar.
 - **Negative.** The open question remains visible in the ADR
   index, which slightly increases the cognitive load of

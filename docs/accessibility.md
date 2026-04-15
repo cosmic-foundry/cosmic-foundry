@@ -8,7 +8,7 @@ from them silently.
 
 - **Contrast:** WCAG 2.2 AA (minimum 4.5:1 for normal text, 3:1 for large
   text and UI components).
-- **Colour palettes:** all figure colormaps must be colourblind-safe.
+- **Color palettes:** all figure colormaps must be colorblind-safe.
   Perceptual maps from `cmasher` and `cmocean` are the preferred sources;
   matplotlib's `viridis`, `plasma`, `inferno`, and `cividis` are acceptable
   fallbacks.

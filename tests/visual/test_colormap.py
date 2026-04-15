@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-# House colormap: viridis is colourblind-safe and ships with matplotlib.
+# House colormap: viridis is colorblind-safe and ships with matplotlib.
 # cmasher / cmocean are added to the house palette in Epoch 3; swap here then.
 HOUSE_CMAP = "viridis"
 
@@ -27,7 +27,7 @@ HOUSE_CMAP = "viridis"
     style="default",
 )
 def test_sinusoid_house_colormap() -> object:  # returns Figure
-    """Sinusoid coloured by phase under the house colormap."""
+    """Sinusoid colored by phase under the house colormap."""
     import matplotlib.pyplot as plt
 
     x = np.linspace(0, 2 * np.pi, 256)

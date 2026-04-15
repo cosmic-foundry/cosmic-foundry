@@ -7,8 +7,8 @@
 
 Cosmic Foundry treats excellence at visualization as a core
 requirement: the engine's outputs must serve both high scientific
-rigour and high educational impact, including through public-facing
-web content. RESEARCH §6.10 originally catalogued visualization
+rigor and high educational impact, including through public-facing
+web content. RESEARCH §6.10 originally cataloged visualization
 only as "integrated analysis hooks (yt, VisIt, ParaView, Ascent)" —
 a batch, desktop-era stance. The §6.11 research survey added
 alongside this ADR (now at `research/06-11-visualization.md` after
