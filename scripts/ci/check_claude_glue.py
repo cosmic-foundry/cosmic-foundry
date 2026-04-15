@@ -28,11 +28,15 @@ INSTALLER = REPO_ROOT / "scripts" / "install_claude_glue.sh"
 CLAUDE_DIR = REPO_ROOT / ".claude"
 
 EXPECTED_FILES: dict[Path, dict[str, str]] = {
-    CLAUDE_DIR / "commands" / "review-pr.md": {
+    CLAUDE_DIR
+    / "commands"
+    / "review-pr.md": {
         "description": r".+",
         "argument-hint": r".+",
     },
-    CLAUDE_DIR / "agents" / "pr-reviewer.md": {
+    CLAUDE_DIR
+    / "agents"
+    / "pr-reviewer.md": {
         "name": r"pr-reviewer",
         "model": r"sonnet",
     },
@@ -65,8 +69,7 @@ def main() -> int:
     for path in REFERENCED_REPO_FILES:
         if not path.exists():
             errors.append(
-                f"installer references missing file: "
-                f"{path.relative_to(REPO_ROOT)}"
+                f"installer references missing file: " f"{path.relative_to(REPO_ROOT)}"
             )
     if errors:
         for e in errors:
@@ -97,8 +100,7 @@ def main() -> int:
                 errors.append(f"{rel}: missing frontmatter field '{key}'")
             elif not re.fullmatch(value_re, got):
                 errors.append(
-                    f"{rel}: frontmatter '{key}' is {got!r}, "
-                    f"expected /{value_re}/"
+                    f"{rel}: frontmatter '{key}' is {got!r}, " f"expected /{value_re}/"
                 )
 
     if errors:
