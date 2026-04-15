@@ -1,9 +1,11 @@
 # CI scripts
 
-Stdlib-only Python checks invoked from `.github/workflows/ci.yml`.
-Each script is runnable directly (`python scripts/ci/<name>.py`),
-exits non-zero on failure, and prints every error to stderr so CI
-logs surface the full problem rather than the first failure.
+Python checks invoked from `.github/workflows/ci.yml`. Most are
+stdlib-only; `check_action_versions.py` uses `packaging.version`
+(already a transitive dep via pip). Each script is runnable directly
+(`python scripts/ci/<name>.py`), exits non-zero on failure, and
+prints every error to stderr so CI logs surface the full problem
+rather than the first failure.
 
 Checks currently wired:
 
@@ -14,6 +16,13 @@ Checks currently wired:
 - **`check_adr_index.py`** — every ADR file in `adr/` is linked
   from `adr/README.md`, and every link in the index points to a
   file that exists.
+- **`check_action_versions.py`** — `uses: owner/action@vN` pins in
+  `.github/workflows/*.yml` must not regress below their version on
+  `origin/main`. Intentional downgrades require a
+  `# allow-downgrade: <reason>` comment on the same line as the
+  `uses:` entry or the line directly above it. SHA and branch pins
+  are skipped. Requires `origin/main` to be fetched; CI does this
+  via `git fetch --depth=1 origin main` before running pre-commit.
 
 Planned next:
 
