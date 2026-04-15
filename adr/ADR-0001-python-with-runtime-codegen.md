@@ -7,7 +7,7 @@
 
 Cosmic Foundry's goal (RESEARCH.md §6–§7,
 [`roadmap/index.md`](../roadmap/index.md) §1) is a fully self-contained
-engine covering the union of capabilities catalogued in RESEARCH.md §6.
+engine covering the union of capabilities cataloged in RESEARCH.md §6.
 Every published superset of those capabilities today — AMReX / Parthenon /
 Kokkos / Charm++ family, Flash-X, AthenaK, SWIFT, Arepo, MESA — is
 built on a compiled C++ or Fortran core with thin Python bindings for

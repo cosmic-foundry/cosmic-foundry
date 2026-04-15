@@ -84,12 +84,11 @@ when pre-commit now catches them.
 
 ## Spelling and copy
 
-- **British vs. American spelling.** *(pending pre-commit —
-  codespell lands with PR #36)* Project standard is American
-  English. Until codespell is in `.pre-commit-config.yaml`,
-  spot-check new copy for `colour/color`, `behaviour/behavior`,
-  `organise/organize`, `centre/center`, `catalogue/catalog`,
-  `summarise/summarize`. Once #36 merges, delete this entry.
+- **British vs. American spelling.** Project standard is
+  American English, enforced via codespell
+  (`--builtin=en-GB_to_en-US`) on `.md`, `.py`, and `.rst`
+  files. If the PR touches file types not covered by the hook,
+  spot-check manually.
 
 ## Architectural-option bias
 

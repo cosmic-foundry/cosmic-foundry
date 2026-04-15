@@ -27,7 +27,7 @@ and the house-style scaffolding from Epoch 0.
   `pytest-mpl` for figures, an SSIM-based diff harness for
   renders and short movies, references in Git LFS.
 - Accessibility and performance budgets from ADR-0006
-  (WCAG 2.2 AA, colourblind-safe palettes, mobile LCP < 2.5 s,
+  (WCAG 2.2 AA, colorblind-safe palettes, mobile LCP < 2.5 s,
   per-dataset bytes-on-wire) codified as CI checks against the
   public gallery build.
 - Public gallery (GitHub Pages) seeded with the Epoch 2 AMR

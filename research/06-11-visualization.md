@@ -21,7 +21,7 @@ traditional HPC analysis stack surveyed in §6.10.
   astrophysics output; unit-aware; Jupyter widgets via `widgyts`;
   supports AMReX, Enzo, Flash, GADGET, Arepo, RAMSES outputs.
 - `napari` (BSD-3) — multi-dimensional image viewer, originally
-  bio-imaging; useful for slice stacks and labelled volumes.
+  bio-imaging; useful for slice stacks and labeled volumes.
 - `pyvista` (MIT) — Pythonic VTK wrapper; fast path to 3-D
   desktop rendering of meshes and point clouds.
 - `vispy` (BSD-3) — GPU-accelerated 2-D/3-D Python library with
@@ -42,7 +42,7 @@ traditional HPC analysis stack surveyed in §6.10.
 - `regl` (MIT) — functional-reactive WebGL wrapper; thinner and
   more hackable than three.js for custom shaders.
 - `deck.gl` (MIT) — large-scale point/line/polygon layering;
-  natural fit for particle clouds and halo catalogues.
+  natural fit for particle clouds and halo catalogs.
 - `WebGPU` — emerging standard shipping in all major browsers,
   with compute shaders suitable for volume raymarching and even
   lightweight in-client re-simulation.
@@ -65,16 +65,16 @@ traditional HPC analysis stack surveyed in §6.10.
   any geometry (meshes, instanced particles) shipped to a web
   viewer.
 - `Parquet` (Apache-2) — columnar format for particle and halo
-  catalogues; streams well to notebook and browser consumers.
+  catalogs; streams well to notebook and browser consumers.
 - `ADIOS2` — HPC-grade, excellent I/O but weak browser story;
   complementary to Zarr, not a substitute.
 
-**Colour and typography.**
+**Color and typography.**
 
 - `matplotlib` perceptually-uniform maps (`viridis`, `cividis`,
   `inferno`, `magma`) — the scientific baseline.
 - `cmasher` (MIT) — extended family of perceptually-uniform,
-  colour-vision-deficient-safe colormaps aimed at astrophysics.
+  color-vision-deficient-safe colormaps aimed at astrophysics.
 - `cmocean` (MIT) — perceptual maps tuned for oceanography,
   equally appropriate for astrophysical diverging / cyclic data.
 - Cinematic renders typically call for bespoke palettes informed

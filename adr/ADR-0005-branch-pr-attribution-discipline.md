@@ -11,7 +11,7 @@ hygiene, commit size, PR workflow, attribution, and metadata
 cleanliness — are the difference between a repository that stays
 reviewable and one that becomes unreviewable at even modest scale.
 Those rules already appear informally in [`AI.md`](../AI.md) and
-were reserved for formalisation in
+were reserved for formalization in
 [`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md)
 §0.6 as ADR-0005.
 
@@ -53,7 +53,7 @@ source.
   description (e.g. "mechanical rename across N files," "generated
   from spec," "pure deletion of removed module"). ~400 is the
   point at which industry review-effectiveness data shows
-  defect-detection degrading sharply; past it, reviewer judgement
+  defect-detection degrading sharply; past it, reviewer judgment
   is worth less per line.
 - **Exclusions from the LOC count.** Generated files, lock files,
   test fixtures and golden data, and pure-deletion diffs do not
@@ -165,7 +165,7 @@ Applies to every ADR in this repository.
   keeps linear history per branch at the cost of making reviewer
   and agent coordination harder (a reviewer's comment can reference
   a commit SHA that disappears). Rejected because the repository
-  optimises for reviewability over branch-level tidiness, and
+  optimizes for reviewability over branch-level tidiness, and
   squash-merge at PR close already produces linear `main` history.
 - **Trunk-based development with direct commits to `upstream/main`.**
   Simpler for solo work; incompatible with the branch-protection
@@ -178,7 +178,7 @@ Applies to every ADR in this repository.
   enough to mechanise (e.g. "no commit exceeds 100 LOC, period")
   would push docs-heavy ADR or roadmap PRs into many small fragments
   that reviewers cannot follow as a coherent argument. Rejected in
-  favour of the content-based exception above.
+  favor of the content-based exception above.
 
 ## Cross-references
 
@@ -195,7 +195,7 @@ Applies to every ADR in this repository.
 - **2026-04-14.** Relaxed the immutability clause. Accepted ADRs
   may now be amended in place by forward commit when the change is
   discussed and agreed in-session; reversals still require
-  supersession. Prior policy optimised for an audit strictness the
+  supersession. Prior policy optimized for an audit strictness the
   single-contributor, pre-1.0 phase of the project does not need,
   and blocked agents from proposing edits to existing ADRs when a
   conversation clearly implied one. See new *ADR amendment policy*

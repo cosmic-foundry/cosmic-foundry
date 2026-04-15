@@ -14,5 +14,5 @@ The hardest grid-based physics target:
 **Exit criterion:** Fishbone–Moncrief torus and binary-black-hole
 inspiral benchmarks pass, and a binary-black-hole inspiral
 cinematic ships to the gallery — orbit-then-merger flythrough,
-gravitational-wave strain panel, unit-labelled axes — as the
+gravitational-wave strain panel, unit-labeled axes — as the
 flagship demo of the engine's relativistic capability.

@@ -18,7 +18,7 @@ alongside this one and grow in detail as each epoch approaches.
 ## 1. Framing
 
 **Goal.** A self-contained engine whose capability set is the union of
-capabilities catalogued in RESEARCH.md §6 — covering uniform and
+capabilities cataloged in RESEARCH.md §6 — covering uniform and
 adaptive meshes, Newtonian through numerical-relativistic
 (magneto)hydrodynamics, radiation transport, microphysics, gravity,
 N-body, cosmology, particle / meshless / moving-mesh methods, and
@@ -152,9 +152,9 @@ These grow every epoch; they are not tied to a single phase.
   is a core engine requirement, not a downstream concern. Every
   physics epoch from Epoch 4 onward ships a canonical live demo
   (interactive WebGPU explainer or notebook widget, perceptual
-  colormaps, unit-labelled axes) alongside its regression
+  colormaps, unit-labeled axes) alongside its regression
   benchmarks. The public gallery is regenerated per release with
-  accessibility (WCAG 2.2 AA, colourblind-safe palettes, alt text)
+  accessibility (WCAG 2.2 AA, colorblind-safe palettes, alt text)
   and mobile performance budgets (LCP < 2.5 s on a 4G profile,
   per-dataset bytes-on-wire targets) enforced in CI. Visual-
   regression references (figures, renders, short movies) live in
