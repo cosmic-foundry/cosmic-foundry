@@ -51,8 +51,8 @@ miniforge/
 !/.claude/
 /.claude/*
 !/.claude/settings.json
-.codex/
-.gemini/
+.codex
+.gemini
 
 # Unit test / coverage reports
 htmlcov/
