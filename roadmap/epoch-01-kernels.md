@@ -22,7 +22,7 @@ Before finalizing the kernel interface, read:
 
 Four pieces of infrastructure that every later epoch assumes:
 
-- **Kernel interface** — an `Op` / `Region` / `Policy` / `Pass`
+- **Kernel interface** — an `Op` / `Region` / `Policy` / `Dispatch`
   abstraction layer (ADR-0010) plus a JAX adapter implementing
   `FlatPolicy` only. Secondary-backend adapters (Numba, Taichi, Warp,
   Triton) remain stubbed extras per ADR-0002.
@@ -45,19 +45,20 @@ The research survey (§1.2 Kokkos, §1.6 Singe in
 `research/01-frameworks.md`) establishes that performance-portable
 kernel abstraction requires three independently variable axes:
 
-**Computational axis — Op.** A subclass of the `Op` abstract base
-class that declares an `access_pattern` attribute and implements
-`__call__`. Examples: Helmholtz EOS, HLLC Riemann solver, PPM
-reconstruction, Laplacian stencil, CFL computation. An Op is not
-dispatchable on its own. Its `__call__` must be traceable in the
+**Computational axis — Op.** Any per-element callable satisfying the
+Op protocol: it declares an `access_pattern` attribute and implements
+traceable call behavior. Examples: Helmholtz EOS, HLLC Riemann solver,
+PPM reconstruction, Laplacian stencil, CFL computation. An Op is not
+dispatchable on its own. Its call behavior must be traceable in the
 backend's execution context (JAX-jittable for the primary backend).
 The `access_pattern` attribute (a `Stencil`, `GatherScatter`,
 `Reduction`, or `Composite` thereof) is used by the driver to derive
 halo sizes and by the Policy to determine output assembly (element
-field vs. reduced scalar). Parameterized Ops declare `access_pattern`
-as a `@property` and resolve it from constructor arguments;
-instantiation is specialization. See ADR-0010 for the full interface,
-`AccessPattern` type hierarchy, and metadata catalog.
+field vs. reduced scalar). The reference API provides both an
+`@op(...)` decorator for function-shaped Ops and an optional `Op`
+abstract base class for class-based or parameterized Ops. See ADR-0010
+for the full interface, `AccessPattern` type hierarchy, and metadata
+catalog.
 
 **Spatial axis — Region.** A spatial sub-domain over which an Op is
 applied. May represent a single meshblock or a packed collection of
@@ -82,18 +83,19 @@ workloads. `WarpSpecializedPolicy` is anticipated in Epoch 6 when
 nuclear reaction networks require it. The interface must be designed
 so that swapping policies requires no changes to Op implementations.
 
-### The Pass
+### The Dispatch
 
-A **Pass** is the dispatch unit: an Op applied to a Region under a
-Policy. One Pass equals one kernel launch (one `jit` boundary in JAX).
-The physics author writes Ops. The driver (Epoch 2) assembles Ops into
-Passes with an attached Policy. Fusion experiments — grouping or
-splitting operations across kernel launches — are answered by changing
-how Ops are composed into Passes, not by touching Op implementations.
+A **Dispatch** is the dispatch unit: an Op applied to a Region under a
+Policy. One Dispatch equals one kernel launch (one `jit` boundary in
+JAX). The physics author writes Ops. The driver (Epoch 2) assembles Ops
+into Dispatches with an attached Policy. Fusion experiments — grouping
+or splitting operations across kernel launches — are answered by
+changing how Ops are composed into Dispatches, not by touching Op
+implementations.
 
 ### What is not part of the kernel interface
 
-The **task graph** — dependency tracking across Passes, communication
+The **task graph** — dependency tracking across Dispatches, communication
 overlap, AMR refinement-boundary synchronization, dynamic load
 balancing — belongs in the Epoch 2 driver. The task graph and Region
 batching solve different problems (latency hiding vs. launch

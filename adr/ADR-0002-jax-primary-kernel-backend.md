@@ -117,15 +117,15 @@ The primary kernel backend is **JAX + XLA**.
 
 - **2026-04-14** — Clarified the internal structure of the `@kernel`
   descriptor layer using a three-axis decomposition now recorded in
-  ADR-0010. The descriptor wraps **Passes** (parallel iterations over a
-  Region), not individual per-element physics callables. Per-element
-  operations — EOS, Riemann solvers, reconstruction operators, source
-  terms — are **Ops**: backend-compatible callables that are inlined
-  into the containing Pass and do not carry the descriptor themselves.
-  A third, orthogonal concern is **Region batching**: packing multiple
-  meshblocks into a single kernel launch (analogous to Parthenon's
-  `MeshBlockPack`) maps to JAX `vmap` over a stacked Region in the
-  primary backend. Ops are unaware of the batch dimension. In JAX, the
-  Pass dispatch boundary is a `jit` boundary; operations fused within a
-  `jit` call are in the same XLA kernel. See ADR-0010 and
-  `roadmap/epoch-01-kernels.md` §Design constraints.
+  ADR-0010. The descriptor wraps **Dispatches** (parallel iterations
+  over a Region), not individual per-element physics callables.
+  Per-element operations — EOS, Riemann solvers, reconstruction
+  operators, source terms — are **Ops**: backend-compatible callables
+  that are inlined into the containing Dispatch and do not carry the
+  descriptor themselves. A third, orthogonal concern is **Region
+  batching**: packing multiple meshblocks into a single kernel launch
+  (analogous to Parthenon's `MeshBlockPack`) maps to JAX `vmap` over a
+  stacked Region in the primary backend. Ops are unaware of the batch
+  dimension. In JAX, the Dispatch boundary is a `jit` boundary;
+  operations fused within a `jit` call are in the same XLA kernel. See
+  ADR-0010 and `roadmap/epoch-01-kernels.md` §Design constraints.

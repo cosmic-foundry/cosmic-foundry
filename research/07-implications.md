@@ -35,15 +35,15 @@ these foundations:
      `MeshBlockPack`), and a *Policy* (execution organization —
      flat, tiled-with-scratchpad, or warp-specialized — controlling
      how threads are arranged to process a Region). The dispatch
-     unit, a *Pass*, composes these three. Kernel-launch granularity
-     is controlled at the Pass/Policy level; Ops are unaware of it.
+     unit, a *Dispatch*, composes these three. Kernel-launch granularity
+     is controlled at the Dispatch/Policy level; Ops are unaware of it.
      This separation allows both fusion experiments and execution
      policy substitution without touching physics code. See ADR-0010.
    - A task-based asynchronous driver with explicit dependency
      graphs, over-decomposition, and dynamic load balancing (the
      role played elsewhere by Athena++'s task list, Parthenon's
      driver, SWIFT's task graph, and Charm++). Note: this is
-     *separate* from the Pass/Region batching above. The task graph
+     *separate* from the Dispatch/Region batching above. The task graph
      controls sequencing and communication overlap between logical
      work units; Region batching controls how many items of work
      enter one kernel launch. Parthenon implements these separately
