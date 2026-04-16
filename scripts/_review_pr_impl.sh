@@ -27,19 +27,23 @@ PR_DIFF="$(gh pr diff "$PR_NUMBER" --repo "$REPO")"
 REVIEW_PROMPT="You are running Cosmic Foundry's adversarial PR reviewer for PR
 #${PR_NUMBER} in ${REPO}.
 
-The reviewer's role, protocol, checklist, and output format are
+The reviewer's role, protocol, checklists, and output format are
 tracked in this repository:
 
 - pr-review/agent.md
 - pr-review/checklist.md
+- pr-review/architecture-checklist.md
 
 Perform these steps:
 
 1. Read pr-review/agent.md in full.
 2. Read pr-review/checklist.md in full.
-3. Review the PR using the metadata and diff below as the external
+3. If the PR is architecture-changing, also read
+   pr-review/architecture-checklist.md and run its stress-review
+   protocol.
+4. Review the PR using the metadata and diff below as the external
    PR context. Use the working tree only for read-only inspection.
-4. Return the report in the exact format specified by
+5. Return the report in the exact format specified by
    pr-review/agent.md.
 
 Do not modify the working tree, push, comment on the PR, or take any
