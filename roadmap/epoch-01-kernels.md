@@ -34,6 +34,41 @@ Four pieces of infrastructure that every later epoch assumes:
   with a post-processing merge step.
 - **Deterministic structured logging** and error-handling conventions.
 
+## Implementation sequence
+
+Epoch 1 should land as a sequence of small, independently reviewable
+PRs. The ordering below keeps correctness checks close to each new
+concept and avoids pulling Epoch 2 driver responsibilities into the
+kernel layer.
+
+1. **Kernel interface nucleus.** Implement `AccessPattern` /
+   `Stencil`, the `@op(...)` decorator, the optional `Op` ABC,
+   single-block `Region`, `FlatPolicy`, `Dispatch`, and the thin
+   `run(op, region, policy=FlatPolicy())` test helper from ADR-0010.
+   The first executable workload is a 3-D 7-point Laplacian over one
+   in-memory JAX array.
+2. **Region batching.** Add the batched-Region path and lower it with
+   JAX `vmap`, proving that the same Laplacian Op runs unchanged over
+   one block or a packed collection of at least two blocks.
+3. **`ShardedField` smoke path.** Introduce the smallest distributed
+   field primitive needed for the Laplacian exit criterion: global
+   shape metadata, local shard ownership, construction from a global
+   test array, and a two-process `jax.distributed` correctness harness.
+   This is not the Epoch 2 mesh hierarchy and should not grow AMR,
+   task-graph, or refinement-boundary behavior.
+4. **I/O and observability.** Add HDF5 output for the Laplacian result,
+   using parallel HDF5 when available and the per-rank-write /
+   post-processing merge pattern otherwise. Wire deterministic
+   structured logging around dispatch, sharding, and I/O boundaries.
+5. **Benchmark and visual artifact.** Add the CPU roofline benchmark,
+   optional GPU numbers when a runner exists, and the first reference
+   render of one Laplacian slice under the house colormap.
+
+Secondary backend adapters, non-stencil access patterns, `TiledPolicy`,
+`WarpSpecializedPolicy`, AMR, task-graph scheduling, and production
+halo-exchange semantics are explicit non-goals for Epoch 1 unless a
+later ADR changes the boundary.
+
 ## Design constraints for the kernel interface
 
 See ADR-0010 for the full rationale. The summary relevant to
