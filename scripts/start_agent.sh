@@ -2,35 +2,58 @@
 
 set -euo pipefail
 
-LAUNCH_DIR=$(pwd)
+LAUNCH_DIR=$(pwd -P)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+ENGINE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd -P)
+ENGINE_PARENT=$(dirname "$ENGINE_ROOT")
 
-if [ -f "AI.md" ] && [ -d "scripts" ]; then
-    ENGINE_ROOT=$LAUNCH_DIR
-    DOC_PREFIX=""
-    WORKSPACE_NOTE=""
-elif [ -f "cosmic-foundry/AI.md" ] && [ -d "cosmic-foundry/scripts" ]; then
-    ENGINE_ROOT="$LAUNCH_DIR/cosmic-foundry"
-    DOC_PREFIX="cosmic-foundry/"
-    WORKSPACE_NOTE="
+if [ ! -f "$ENGINE_ROOT/AI.md" ] || [ ! -d "$ENGINE_ROOT/scripts" ]; then
+    echo "✗ Could not find Cosmic Foundry project docs next to this launcher."
+    exit 1
+fi
 
-This session was launched from the parent workspace:
-- $LAUNCH_DIR
+workspace_note() {
+    local workspace=$1
+    local note="
 
 The sibling repositories available from this workspace are:"
-    for repo in "$LAUNCH_DIR"/*; do
+    for repo in "$workspace"/*; do
         if [ -d "$repo/.git" ]; then
-            WORKSPACE_NOTE="$WORKSPACE_NOTE
+            note="$note
 - $repo"
         fi
     done
-    WORKSPACE_NOTE="$WORKSPACE_NOTE
+    note="$note
 
 When work spans multiple repositories, use separate git worktrees and pull requests for each repository. Keep reusable engine changes in cosmic-foundry and application-layer changes in the relevant domain repository."
+    printf '%s' "$note"
+}
+
+if [ "$LAUNCH_DIR" = "$ENGINE_ROOT" ]; then
+    WORKSPACE_NOTE=""
+elif [ "$LAUNCH_DIR" = "$ENGINE_PARENT" ]; then
+    WORKSPACE_NOTE="
+
+This session was launched from the parent workspace:
+- $LAUNCH_DIR$(workspace_note "$LAUNCH_DIR")"
+elif [ "$(dirname "$LAUNCH_DIR")" = "$ENGINE_PARENT" ] && [ -d "$LAUNCH_DIR/.git" ]; then
+    WORKSPACE_NOTE="
+
+This session was launched from a sibling repository:
+- $LAUNCH_DIR
+
+Treat this sibling repository as the primary working repository for this session. Before changing it, read its local agent instructions if present:
+- $LAUNCH_DIR/AI.md
+- the agent-specific instruction document in $LAUNCH_DIR, if present
+
+The parent workspace is:
+- $ENGINE_PARENT$(workspace_note "$ENGINE_PARENT")"
 else
     echo "✗ Could not find Cosmic Foundry project docs."
     echo "Run from either:"
     echo "  - the cosmic-foundry repo root"
     echo "  - the parent directory containing ./cosmic-foundry"
+    echo "  - a sibling repository next to cosmic-foundry"
     exit 1
 fi
 
@@ -59,7 +82,7 @@ if [ "$_needs_update" = "1" ]; then
 fi
 unset _SENTINEL _needs_update
 
-AGENT_TYPE=$1
+AGENT_TYPE=${1:-}
 
 case $AGENT_TYPE in
     gemini)
@@ -77,6 +100,7 @@ case $AGENT_TYPE in
     *)
         echo "Usage: ./scripts/start_agent.sh [gemini|claude|codex]"
         echo "Or from a parent workspace: ./cosmic-foundry/scripts/start_agent.sh [gemini|claude|codex]"
+        echo "Or from a sibling repo: ../cosmic-foundry/scripts/start_agent.sh [gemini|claude|codex]"
         exit 1
         ;;
 esac
