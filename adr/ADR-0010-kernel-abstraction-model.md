@@ -233,14 +233,17 @@ ambiguous mutation of one timeless field.
 **`__call__` signature — decided.** An Op receives element indices
 plus an array-like field argument. The field argument is *not*
 required to be a raw JAX array; it is required to support
-`__getitem__` with global index semantics. Under `FlatPolicy` the
-argument is the global field directly. Under `TiledPolicy` the
-Policy passes a `FieldView` wrapper that intercepts `__getitem__`
-calls and redirects them to an SRAM-backed halo-extended tile,
-translating global indices to tile-local offsets transparently.
-The Op's `__call__` code is identical under both policies; the
-index semantics are always global coordinates. The physics author
-is never aware of tile boundaries.
+`__getitem__` with Region-coordinate semantics. The Field carrying the
+payload has Placement metadata, but the Op does not inspect placement
+directly. Dispatch validation checks that the Field placement covers
+the Region extent and access footprint required by the Op. Under
+`FlatPolicy` the argument can be the Field's local payload or a thin
+Field view over that payload. Under `TiledPolicy` the Policy passes a
+`FieldView` wrapper that intercepts `__getitem__` calls and redirects
+them to an SRAM-backed halo-extended tile, translating Region
+coordinates to tile-local offsets transparently. The Op's `__call__`
+code is identical under both policies; the physics author is never
+aware of tile boundaries or process ownership.
 
 `FieldView` is a JAX pytree (registered via
 `jax.tree_util.register_pytree_node`); JAX traces through its
@@ -372,11 +375,11 @@ solidifies against real workloads in Epoch 1.
 - **Epoch 1:** `Op` declaration with `access_pattern` metadata
   (`Stencil` only); `Region` with single-block and batched variants;
   `FlatPolicy`; `Dispatch` as the dispatch unit. JAX primary backend
-  only. Field arguments to `__call__` are raw JAX arrays (global index
-  semantics; no wrapper needed under `FlatPolicy`).
+  only. Under `FlatPolicy`, Field arguments to `__call__` may lower to
+  raw JAX arrays with Region-coordinate indexing over the local payload.
 - **Epoch 2–3:** `TiledPolicy` when mesh stencil operations are
   written. Introduce `FieldView` as a JAX-pytree wrapper that
-  presents global index semantics over a halo-extended SRAM tile,
+  presents Region-coordinate semantics over a halo-extended SRAM tile,
   enabling `TiledPolicy` to swap in without changes to any Op.
   Halo-fill coordination between the task graph and the Region's
   declared footprint.
@@ -392,9 +395,11 @@ Proposed, before the Epoch 1 implementation PR was opened:
 
 1. **`__call__` signature — resolved.** Option A: element indices
    plus an array-like field argument supporting `__getitem__` with
-   global index semantics. `TiledPolicy` passes a `FieldView` wrapper
-   that redirects global-index accesses to a halo-extended SRAM tile;
-   the Op code is unchanged across policies. See Op section above.
+   Region-coordinate semantics. Field Placement records process/device
+   ownership and local extent, while Dispatch validates coverage before
+   lowering. `TiledPolicy` passes a `FieldView` wrapper that redirects
+   Region-coordinate accesses to a halo-extended SRAM tile; the Op code
+   is unchanged across policies. See Op section above.
 
 2. **Non-stencil access patterns — deferred.** `access_pattern:
    AccessPattern` replaces the narrower `stencil: Stencil` attribute,

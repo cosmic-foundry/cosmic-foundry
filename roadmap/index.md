@@ -114,7 +114,7 @@ and enter the schedule only once the baseline sequence is stable.
 | # | File | Scope |
 |--:|------|-------|
 | 0 | [epoch-00-bootstrap.md](epoch-00-bootstrap.md) | Project scaffolding, packaging, CI, docs, ADR process, visualization scaffolding, `cosmic-foundry hello`. |
-| 1 | [epoch-01-kernels.md](epoch-01-kernels.md) | Op / Region / Policy / Dispatch kernel interface, JAX `FlatPolicy`, `ShardedField`, parallel HDF5. |
+| 1 | [epoch-01-kernels.md](epoch-01-kernels.md) | Op / Region / Policy / Dispatch kernel interface, JAX `FlatPolicy`, Field placement, parallel HDF5. |
 | 2 | [epoch-02-mesh.md](epoch-02-mesh.md) | Uniform grid, block-structured AMR, task-graph driver, plotfile + Zarr writers. |
 | 3 | [epoch-03-visualization.md](epoch-03-visualization.md) | Unit-aware plotting, in-engine JAX renderer, WebGPU viewer, visual-regression harness, public gallery. |
 | 4 | [epoch-04-newtonian-hydro.md](epoch-04-newtonian-hydro.md) | Finite-volume Godunov, Riemann solvers, hydro test battery, first physics explainer. |
