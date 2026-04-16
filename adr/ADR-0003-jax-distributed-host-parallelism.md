@@ -60,14 +60,15 @@ Host parallelism is delivered by **`jax.distributed`** using
 CPU path (GLOO) as the CPU collective. No MPI layer is in the
 baseline.
 
-- Epoch 1 implements `Field` with explicit `Placement` metadata
-  against `jax.distributed` semantics. A Field is not assumed to
-  represent the full simulation domain; its logical extent is
-  interpreted by the Region and Dispatch that use it. Placement owns
-  the process/device assignment and the local extent covered by the
-  Field payload. `pjit` / `shard_map` continue to provide within-node
-  device parallelism, composed with `jax.distributed` for between-host
-  collectives, producing a single-layer programming model.
+- Epoch 1 implements `Field` as one or more `FieldSegment` records
+  plus explicit `Placement` metadata against `jax.distributed`
+  semantics. A Field is not assumed to represent the full simulation
+  domain; its logical extent is interpreted by the Region and Dispatch
+  that use it. Each FieldSegment pairs a payload with the Extent over
+  which that payload is valid. Placement owns the process/device owner
+  map for SegmentIds. `pjit` / `shard_map` continue to provide
+  within-node device parallelism, composed with `jax.distributed` for
+  between-host collectives, producing a single-layer programming model.
 - Parallel I/O is done through HDF5, either via `h5py` built against
   parallel HDF5 when available or via a per-rank-write + post-
   processing merge pattern when it is not. The I/O path does not
@@ -150,10 +151,11 @@ baseline.
 ## Amendments
 
 - **2026-04-16** — Replaced the provisional `ShardedField` concept
-  with `Field` plus explicit `Placement` metadata. The host-parallelism
-  decision is unchanged: `jax.distributed` remains the baseline.
-  The amendment narrows the storage model so `Field` is not assumed to
-  represent a globally complete domain object. Region and Dispatch
-  interpret whether a Field's placement covers the extent an operation
-  needs; single-process whole-domain execution is only the degenerate
+  with `Field`, `FieldSegment`, and explicit `Placement` metadata.
+  The host-parallelism decision is unchanged: `jax.distributed`
+  remains the baseline. The amendment narrows the storage model so
+  `Field` is not assumed to represent a globally complete domain
+  object. Region and Dispatch interpret whether a Field's placed
+  segments cover the extent an operation needs; single-process
+  whole-domain execution is only the degenerate one-segment,
   one-placement case.

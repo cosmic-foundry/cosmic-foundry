@@ -233,17 +233,20 @@ ambiguous mutation of one timeless field.
 **`__call__` signature — decided.** An Op receives element indices
 plus an array-like field argument. The field argument is *not*
 required to be a raw JAX array; it is required to support
-`__getitem__` with Region-coordinate semantics. The Field carrying the
-payload has Placement metadata, but the Op does not inspect placement
-directly. Dispatch validation checks that the Field placement covers
-the Region extent and access footprint required by the Op. Under
-`FlatPolicy` the argument can be the Field's local payload or a thin
-Field view over that payload. Under `TiledPolicy` the Policy passes a
-`FieldView` wrapper that intercepts `__getitem__` calls and redirects
-them to an SRAM-backed halo-extended tile, translating Region
-coordinates to tile-local offsets transparently. The Op's `__call__`
-code is identical under both policies; the physics author is never
-aware of tile boundaries or process ownership.
+`__getitem__` with Region-coordinate semantics. A Field consists of
+one or more FieldSegments, each pairing a payload with the Extent over
+which that payload is valid; Placement maps SegmentIds to
+process/device owners. The Op does not inspect FieldSegment or
+Placement metadata directly. Dispatch validation checks that the
+Field's placed segments cover the Region extent and access footprint
+required by the Op. Under `FlatPolicy` the argument can be a local
+FieldSegment payload or a thin Field view over one or more local
+segments. Under `TiledPolicy` the Policy passes a `FieldView` wrapper
+that intercepts `__getitem__` calls and redirects them to an
+SRAM-backed halo-extended tile, translating Region coordinates to
+tile-local offsets transparently. The Op's `__call__` code is
+identical under both policies; the physics author is never aware of
+segment boundaries, tile boundaries, or process ownership.
 
 `FieldView` is a JAX pytree (registered via
 `jax.tree_util.register_pytree_node`); JAX traces through its
@@ -395,11 +398,12 @@ Proposed, before the Epoch 1 implementation PR was opened:
 
 1. **`__call__` signature — resolved.** Option A: element indices
    plus an array-like field argument supporting `__getitem__` with
-   Region-coordinate semantics. Field Placement records process/device
-   ownership and local extent, while Dispatch validates coverage before
-   lowering. `TiledPolicy` passes a `FieldView` wrapper that redirects
-   Region-coordinate accesses to a halo-extended SRAM tile; the Op code
-   is unchanged across policies. See Op section above.
+   Region-coordinate semantics. FieldSegments record payload Extents,
+   Placement records SegmentId process/device ownership, and Dispatch
+   validates coverage before lowering. `TiledPolicy` passes a
+   `FieldView` wrapper that redirects Region-coordinate accesses to a
+   halo-extended SRAM tile; the Op code is unchanged across policies.
+   See Op section above.
 
 2. **Non-stencil access patterns — deferred.** `access_pattern:
    AccessPattern` replaces the narrower `stencil: Stencil` attribute,
