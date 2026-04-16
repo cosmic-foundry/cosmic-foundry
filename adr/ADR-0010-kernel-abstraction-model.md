@@ -325,6 +325,22 @@ The physics author writes Ops. The driver assembles Dispatches. Fusion
 experiments are expressed by composing or splitting Ops within a
 Dispatch body, not by modifying Ops.
 
+Separate Dispatches are not an author-facing explicit-fusion unit. A
+future driver or backend may fuse adjacent compatible Dispatches as a
+transparent optimization, provided observable semantics are unchanged.
+Ordinary data dependencies order Dispatches but do not, by themselves,
+force intermediate fields to materialize or prohibit such transparent
+fusion.
+
+When code needs a boundary that optimization must not cross, that
+boundary is expressed as a driver/task-graph fence, not as an Op,
+Region, or Policy feature. Fences are required for communication or
+halo exchange, AMR synchronization, host-visible diagnostics or I/O,
+externally consumed reduction results, profiling/timing boundaries, and
+any case where an intermediate field must be materialized before later
+work. This keeps Dispatch as the local lowering unit while the driver
+owns global ordering, visibility, and synchronization semantics.
+
 ## Naming rationale and alternatives
 
 These names were chosen after rejecting several alternatives with

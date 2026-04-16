@@ -101,7 +101,13 @@ overlap, AMR refinement-boundary synchronization, dynamic load
 balancing — belongs in the Epoch 2 driver. The task graph and Region
 batching solve different problems (latency hiding vs. launch
 amortization) and must remain in separate layers. Epoch 1's kernel
-interface is stateless with respect to task ordering.
+interface is stateless with respect to task ordering. Data dependencies
+between Dispatches order work but do not necessarily prohibit a future
+backend from transparently fusing compatible Dispatches. Explicit
+no-fusion/materialization boundaries are driver/task-graph fences,
+needed for communication, AMR synchronization, host-visible diagnostics
+or I/O, externally consumed reductions, profiling/timing boundaries,
+and any intermediate field that must be materialized before later work.
 
 ## Exit criterion
 
