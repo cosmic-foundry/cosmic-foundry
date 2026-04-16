@@ -37,7 +37,9 @@ ADR wins.
 - **PR review.** The project's adversarial reviewer lives at
   [`pr-review/`](pr-review/README.md) (roles + checklist of
   historical failure modes). Run the reviewer against any non-trivial
-  PR before requesting human review.
+  PR before requesting human review. For ADRs and architecture-changing
+  PRs, also run the architecture stress-review checklist at
+  [`pr-review/architecture-checklist.md`](pr-review/architecture-checklist.md).
 
   **Terminal / automation:**
   ```bash
@@ -52,6 +54,8 @@ ADR wins.
   Inside an active session, treat user requests of the form "Review PR N"
   or "Review N" as a request to run the adversarial reviewer:
   1. Read `pr-review/agent.md` and `pr-review/checklist.md` in full.
+     If the PR is architecture-changing, also read
+     `pr-review/architecture-checklist.md`.
   2. Fetch PR metadata and diff:
      `gh pr view N --repo cosmic-foundry/cosmic-foundry`
      `gh pr diff N --repo cosmic-foundry/cosmic-foundry`
@@ -202,6 +206,14 @@ summary substitute.
 When making a new architectural decision, copy
 `adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md`, mark it
 Proposed, and add a line to `adr/README.md` in the same PR.
+
+Before treating an architectural decision as ready for human review,
+run `pr-review/architecture-checklist.md`. The checklist forces an
+agent or reviewer to map the design space, define concept ownership,
+write realistic usage traces, normalize dependencies and lowering
+boundaries, and identify fences / materialization points. Include the
+stress-review result in the ADR, the PR description, or the review
+report.
 
 Accepted ADRs may be amended in place when a conversation implies
 a change consistent with the existing decision — propose the edit
