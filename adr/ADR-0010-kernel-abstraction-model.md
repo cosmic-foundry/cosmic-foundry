@@ -238,6 +238,25 @@ state or when the operation has a meaningful persistent identity.
 Additional metadata (register pressure estimate, analytic solution for
 test generation) may be added as the interface matures.
 
+`reads` and `writes` are Epoch 1 authoring shorthand, not the final
+granularity of the task graph. Before ordering work, the driver
+normalizes Op metadata together with the Dispatch's Region and
+AccessPattern into dependencies over a field, an iteration extent, an
+access mode (read, write, reduction), and the expanded access footprint.
+Stencil patterns expand read footprints by their halo width;
+gather/scatter patterns expand them by their spatial radius; reductions
+produce explicit reduction results. This avoids both false ordering
+from field-name-only dependencies (for example, independent meshblocks
+of the same field) and missing ordering from halo, neighbor, or
+reduction-result dependencies.
+
+Dispatch composition hides internal temporaries from the task graph.
+Only external reads, externally visible writes, and externally consumed
+reduction results become graph dependencies. In-place-looking updates
+such as `reads=("U",), writes=("U",)` are interpreted by the driver as
+versioned field transitions (for example, `U^n -> U^(n+1)`), not as
+ambiguous mutation of one timeless field.
+
 **`__call__` signature — decided.** An Op receives element indices
 plus an array-like field argument. The field argument is *not*
 required to be a raw JAX array; it is required to support
