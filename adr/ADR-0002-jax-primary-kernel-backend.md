@@ -115,7 +115,7 @@ The primary kernel backend is **JAX + XLA**.
 
 ## Amendments
 
-- **2026-04-14** — Clarified the internal structure of the `@kernel`
+- **2026-04-15** — Clarified the internal structure of the `@kernel`
   descriptor layer using a three-axis decomposition now recorded in
   ADR-0010. The descriptor wraps **Dispatches** (one or more Ops over a
   Region), not individual per-element physics callables.
