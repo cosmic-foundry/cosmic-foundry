@@ -51,14 +51,13 @@ traceable call behavior. Examples: Helmholtz EOS, HLLC Riemann solver,
 PPM reconstruction, Laplacian stencil, CFL computation. An Op is not
 dispatchable on its own. Its call behavior must be traceable in the
 backend's execution context (JAX-jittable for the primary backend).
-The `access_pattern` attribute (a `Stencil`, `GatherScatter`,
-`Reduction`, or `Composite` thereof) is used by the driver to derive
-halo sizes and by the Policy to determine output assembly (element
-field vs. reduced scalar). The reference API provides both an
-`@op(...)` decorator for function-shaped Ops and an optional `Op`
+The `access_pattern` attribute is used by the driver to derive halo
+sizes. Epoch 1 defines `Stencil` only; particle gather/scatter and
+diagnostic reductions are anticipated extensions whose metadata is not
+frozen until those workloads arrive. The reference API provides both
+an `@op(...)` decorator for function-shaped Ops and an optional `Op`
 abstract base class for class-based or parameterized Ops. See ADR-0010
-for the full interface, `AccessPattern` type hierarchy, and metadata
-catalog.
+for the full interface, `AccessPattern` scope, and metadata catalog.
 
 **Spatial / iteration axis — Region.** The set of elements over which
 a Dispatch iterates. May represent a single meshblock, a face array, a

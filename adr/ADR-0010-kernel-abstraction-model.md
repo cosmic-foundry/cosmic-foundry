@@ -52,17 +52,19 @@ the per-element function and its dispatch configuration).
 
 The kernel abstraction layer is structured around four top-level
 concepts, each owning exactly one axis or one composition. Op carries a
-subordinate `AccessPattern` descriptor because data-locality and
-output-assembly metadata are properties of the per-element computation,
-not independent dispatch axes:
+subordinate `AccessPattern` descriptor because locality metadata is a
+property of the per-element computation, not an independent dispatch
+axis:
 
 ### AccessPattern (Op metadata)
 
 Every Op declares an `access_pattern` attribute describing the Op's
-locality and output-assembly contract. This is metadata on the
-computational axis: the Op author declares it, while Region, Policy,
-and Dispatch consume it. Three concrete subtypes are defined; new
-patterns extend `AccessPattern` without changing the Op protocol.
+locality contract. This is metadata on the computational axis: the Op
+author declares it, while Region, Policy, and Dispatch consume it.
+Epoch 1 defines one concrete subtype, `Stencil`, because the Epoch 1
+exit criterion is a 3-D 7-point Laplacian. Non-stencil patterns remain
+anticipated extensions, but their metadata is deliberately not frozen by
+this ADR.
 
 ```python
 class AccessPattern(ABC):
@@ -70,9 +72,6 @@ class AccessPattern(ABC):
     def halo_width(self, axis: int) -> int:
         """Ghost-cell depth the driver must fill on this axis."""
         ...
-
-    def __or__(self, other: "AccessPattern") -> "Composite":
-        return Composite(self, other)
 
 class Stencil(AccessPattern):
     """Fixed-width neighborhood centered on a grid element."""
@@ -82,46 +81,25 @@ class Stencil(AccessPattern):
     def symmetric(cls, order: int) -> "Stencil": ...
 
     def halo_width(self, axis: int) -> int: ...   # returns stencil radius
-
-class GatherScatter(AccessPattern):
-    """Irregular particle-position access within a radius."""
-    def __init__(self, radius: float): ...
-
-    def halo_width(self, axis: int) -> int:
-        return math.ceil(self.radius)
-
-class Reduction(AccessPattern):
-    """Per-element map whose outputs are accumulated to a scalar."""
-    def __init__(self, accum: Callable = jnp.sum): ...
-
-    def halo_width(self, axis: int) -> int:
-        return 0   # per-element read; Policy handles accumulation
-
-class Composite(AccessPattern):
-    """Union of two or more patterns, constructed via |."""
-    def __init__(self, *patterns: AccessPattern):
-        # flatten nested Composites so A | (B | C) == Composite(A, B, C)
-        self.patterns = tuple(
-            p for ap in patterns
-            for p in (ap.patterns if isinstance(ap, Composite) else (ap,))
-        )
-
-    def halo_width(self, axis: int) -> int:
-        return max(p.halo_width(axis) for p in self.patterns)
-```
-
-The `|` operator makes compound access patterns readable:
-
-```python
-access_pattern = Stencil.seven_point() | Reduction(accum=jnp.sum)
 ```
 
 The driver calls `op.access_pattern.halo_width(axis)` uniformly when
-sizing halos; no Op-type special-casing is needed. For a `Reduction`
-Op, the Policy maps `__call__` over the Region and then applies
-`accum` to the per-element results. The Op author writes a per-element
-function and declares accumulation on the `Reduction` pattern, not in
-`__call__`.
+sizing halos; no Op-type special-casing is needed for stencil kernels.
+
+Two non-stencil families are expected later, but they need more
+metadata than the current Epoch 1 stencil contract:
+
+- **Gather/scatter** needs separate read and write footprints, target
+  field information, ownership rules, and write-conflict semantics
+  (deposit vs. gather, combine operation, determinism requirements).
+- **Reductions** need algebraic and visibility metadata: identity,
+  combiner, result name or location, result shape and dtype, reduction
+  scope, finalization behavior, and deterministic/distributed reduction
+  expectations.
+
+Those extensions should be added when particle or diagnostic workloads
+force their concrete API shape. Until then, `access_pattern` means the
+stencil locality contract required by Epoch 1.
 
 ### Op (computational axis)
 
@@ -196,25 +174,18 @@ class Reconstruct(Op):
     def __call__(self, q, i, j, k): ...
 ```
 
-A particle Op and a reduction Op may use either form:
+A diagnostic or particle Op will use the same Op protocol once its
+non-stencil access metadata is specified, but those concrete
+`AccessPattern` subtypes are outside the Epoch 1 contract:
 
 ```python
-@op(
-    access_pattern=GatherScatter(radius=2),
-    reads=("charge",),
-    writes=("charge_density",),
-)
+# Future extension, not Epoch 1 API:
+@op(access_pattern=ParticleDeposit(...), reads=("charge",))
 def deposit_charge(q, i, j, k): ...
 
-@op(access_pattern=Reduction(accum=jnp.min), reads=("velocity",))
-def compute_cfl(q, i, j, k) -> float:
-    return dx / jnp.abs(q[i, j, k])   # per-element; Policy reduces
-
-@op(
-    access_pattern=Stencil.seven_point() | Reduction(accum=jnp.sum),
-    reads=("B",),
-)
-def divergence_norm(q, i, j, k) -> float: ...
+# Future extension, not Epoch 1 API:
+@op(access_pattern=DiagnosticReduction(...), reads=("velocity",))
+def compute_cfl(q, i, j, k) -> float: ...
 ```
 
 Instantiation is specialization: `ppm = Reconstruct(order=2)`. Each
@@ -230,7 +201,7 @@ state or when the operation has a meaningful persistent identity.
 
 | Attribute | Type | Required | Purpose |
 |---|---|---|---|
-| `access_pattern` | `AccessPattern` | Yes | Halo width + output assembly; driver sizes halos and Policy accumulates reductions |
+| `access_pattern` | `AccessPattern` | Yes | Stencil halo width for Epoch 1; future extensions add particle and reduction metadata |
 | `reads` | `tuple[str, ...]` | Epoch 2 | Named fields read; task graph derives data dependencies |
 | `writes` | `tuple[str, ...]` | Epoch 2 | Named fields written; task graph derives data dependencies |
 | `backends` | `frozenset[Backend]` | No | Execution contexts that can lower this Op |
@@ -242,12 +213,14 @@ test generation) may be added as the interface matures.
 granularity of the task graph. Before ordering work, the driver
 normalizes Op metadata together with the Dispatch's Region and
 AccessPattern into dependencies over a field, an iteration extent, an
-access mode (read, write, reduction), and the expanded access footprint.
-Stencil patterns expand read footprints by their halo width;
-gather/scatter patterns expand them by their spatial radius; reductions
-produce explicit reduction results. This avoids both false ordering
-from field-name-only dependencies (for example, independent meshblocks
-of the same field) and missing ordering from halo, neighbor, or
+access mode, and the expanded access footprint. In Epoch 1, stencil
+patterns expand read footprints by their halo width. Future
+gather/scatter and reduction patterns must represent read and write
+footprints, conflict/combiner semantics, and externally visible
+reduction results explicitly enough for the driver to order work
+correctly. This avoids both false ordering from field-name-only
+dependencies (for example, independent meshblocks of the same field)
+and missing ordering from halo, neighbor, write-conflict, or
 reduction-result dependencies.
 
 Dispatch composition hides internal temporaries from the task graph.
@@ -324,10 +297,11 @@ Reductions do not introduce a fourth public Policy. Performance
 portability systems such as Kokkos, RAJA, SYCL, and OpenMP make
 reductions explicit because the backend needs an identity, combiner,
 result location, and sometimes finalization or location-tracking
-semantics. Cosmic Foundry follows that precedent with `Reduction` as
-an `AccessPattern` / output-assembly descriptor. Block-local, tree,
-warp, or multi-stage reduction algorithms are backend lowering
-strategies inside `FlatPolicy`, `TiledPolicy`, or a future Policy, not
+semantics. Cosmic Foundry should follow that precedent when diagnostic
+reductions become an implementation target: reduction metadata belongs
+with the Op's access/output contract, while block-local, tree, warp, or
+multi-stage reduction algorithms remain backend lowering strategies
+inside `FlatPolicy`, `TiledPolicy`, or a future Policy, not
 author-facing execution organizations.
 
 ### Dispatch (dispatch unit)
@@ -396,12 +370,10 @@ solidifies against real workloads in Epoch 1.
 ## Implementation staging
 
 - **Epoch 1:** `Op` declaration with `access_pattern` metadata
-  (`Stencil`, `GatherScatter`, `Reduction`, `Composite`); `Region`
-  with single-block and batched variants; `FlatPolicy` (including
-  reduction accumulation via `Reduction.accum`); `Dispatch` as the
-  dispatch unit. JAX primary backend only. Field arguments to
-  `__call__` are raw JAX arrays (global index semantics; no wrapper
-  needed under `FlatPolicy`).
+  (`Stencil` only); `Region` with single-block and batched variants;
+  `FlatPolicy`; `Dispatch` as the dispatch unit. JAX primary backend
+  only. Field arguments to `__call__` are raw JAX arrays (global index
+  semantics; no wrapper needed under `FlatPolicy`).
 - **Epoch 2–3:** `TiledPolicy` when mesh stencil operations are
   written. Introduce `FieldView` as a JAX-pytree wrapper that
   presents global index semantics over a halo-extended SRAM tile,
@@ -424,28 +396,24 @@ Proposed, before the Epoch 1 implementation PR was opened:
    that redirects global-index accesses to a halo-extended SRAM tile;
    the Op code is unchanged across policies. See Op section above.
 
-2. **Non-stencil access patterns — resolved.** `access_pattern:
-   AccessPattern` replaces the `stencil: Stencil` attribute. `Stencil`
-   is a subclass of `AccessPattern`; `GatherScatter(radius)` covers
-   particle Ops; `Reduction(accum)` covers diagnostic Ops. Compound
-   patterns are expressed via `|` (e.g., `Stencil.seven_point() |
-   Reduction(accum=jnp.sum)`), producing a `Composite` that delegates
-   `halo_width` to the maximum of its children. An Op's `__call__`
-   is always per-element; the Policy maps it over the region and
-   applies the `Reduction.accum` function if a `Reduction` pattern is
-   present. The accumulation function lives on the `Reduction` pattern
-   (not at Dispatch level) so the Op is self-describing. See
-   *AccessPattern* section above.
+2. **Non-stencil access patterns — deferred.** `access_pattern:
+   AccessPattern` replaces the narrower `stencil: Stencil` attribute,
+   but Epoch 1 only defines the `Stencil` concrete subtype required by
+   the Laplacian benchmark. Particle gather/scatter and diagnostic
+   reductions are anticipated extensions, not part of the Epoch 1 API.
+   They must not be added as thin `radius` or `accum` wrappers: scatter
+   needs read/write footprints and write-conflict semantics, while
+   reductions need identity, combiner, result location, result
+   shape/dtype, scope, finalization, and deterministic/distributed
+   reduction expectations. See *AccessPattern* section above.
 
 3. **Policy taxonomy completeness — resolved.** Reductions do not add
-   a public `ReducePolicy`. They remain expressed by
-   `Reduction(accum=...)` in the `AccessPattern` hierarchy because
-   they change output assembly and require algebraic metadata
-   (identity, combiner, result location, and optional finalization),
-   not a separate author-facing execution organization. Block-local,
-   tree, warp, or multi-stage reduction implementations are backend
-   lowering strategies inside `FlatPolicy`, `TiledPolicy`, or a future
-   Policy.
+   a public `ReducePolicy`. They change output assembly and require
+   algebraic metadata (identity, combiner, result location, and
+   optional finalization), not a separate author-facing execution
+   organization. Block-local, tree, warp, or multi-stage reduction
+   implementations are backend lowering strategies inside `FlatPolicy`,
+   `TiledPolicy`, or a future Policy.
 
 4. **Naming in code — resolved, revisit after implementation.** `Op`
    remains the computational-axis concept, but subclassing `Op` is no
@@ -468,8 +436,8 @@ Proposed, before the Epoch 1 implementation PR was opened:
    FlatPolicy/JAX lowering path used by production dispatch. Direct
    element-level `op(...)` calls remain useful for small pure-function
    checks, but they are not sufficient as the default because they
-   bypass access-pattern validation, Region iteration, reduction
-   assembly, and backend tracing.
+   bypass access-pattern validation, Region iteration, future output
+   assembly metadata, and backend tracing.
 
 ## Alternatives considered
 
