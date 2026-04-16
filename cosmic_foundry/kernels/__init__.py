@@ -85,9 +85,20 @@ class Extent:
 
 @dataclass(frozen=True)
 class Region:
-    """Iteration coordinates requested by a Dispatch."""
+    """Iteration coordinates requested by a Dispatch.
+
+    ``n_blocks`` signals a batched region: inputs are expected to carry a
+    leading batch axis of that size, and ``FlatPolicy`` lowers the kernel
+    with ``jax.vmap`` so the Op remains unaware of the batch dimension.
+    """
 
     extent: Extent
+    n_blocks: int = 1
+
+    def __post_init__(self) -> None:
+        if self.n_blocks < 1:
+            msg = "Region.n_blocks must be a positive integer"
+            raise ValueError(msg)
 
 
 class OpLike(Protocol):
@@ -152,9 +163,27 @@ class FlatPolicy:
         region: Region,
         inputs: tuple[Any, ...],
     ) -> Any:
-        """Execute an Op over a Region with JAX/XLA."""
+        """Execute an Op over a Region with JAX/XLA.
+
+        When ``region.n_blocks > 1`` inputs carry a leading batch axis and
+        the kernel is lowered with ``jax.vmap``; the Op is unaware of that
+        dimension.
+        """
         _validate_op(op_like)
         _validate_region_access(region, op_like.access_pattern, inputs)
+
+        if region.n_blocks > 1:
+
+            @jax.jit
+            def apply_batched(*jit_inputs: Any) -> Any:
+                indices = _region_indices(region)
+
+                def single_block(*block_inputs: Any) -> Any:
+                    return op_like(*block_inputs, *indices)
+
+                return jax.vmap(single_block)(*jit_inputs)
+
+            return apply_batched(*inputs)
 
         @jax.jit
         def apply(*jit_inputs: Any) -> Any:
@@ -205,17 +234,28 @@ def _validate_region_access(
     inputs: tuple[Any, ...],
 ) -> None:
     required = region.extent.expand(access_pattern)
+    batched = region.n_blocks > 1
     for input_array in inputs:
         if not hasattr(input_array, "shape"):
             msg = "Dispatch inputs must expose a shape"
             raise TypeError(msg)
         shape = tuple(int(axis_size) for axis_size in input_array.shape)
-        if len(shape) < required.ndim:
+        if batched:
+            if shape[0] != region.n_blocks:
+                msg = (
+                    f"Input batch dimension {shape[0]} does not match "
+                    f"Region.n_blocks={region.n_blocks}"
+                )
+                raise ValueError(msg)
+            block_shape = shape[1:]
+        else:
+            block_shape = shape
+        if len(block_shape) < required.ndim:
             msg = "Dispatch input rank is smaller than the Region rank"
             raise ValueError(msg)
         for axis, axis_slice in enumerate(required.slices):
             start, stop = _checked_bounds(axis_slice)
-            if start < 0 or stop > shape[axis]:
+            if start < 0 or stop > block_shape[axis]:
                 msg = "Dispatch Region plus access pattern exceeds input bounds"
                 raise ValueError(msg)
 
