@@ -114,9 +114,9 @@ running on push and pull-request:
   to whenever GPU runners become available.
 - Multi-host `jax.distributed` tests are scaffolded in the tests
   tree behind a `--multihost` marker (per ADR-0003) and not run in
-  CI in Epoch 0; they will be turned on in Epoch 1 once a
-  `ShardedField` smoke test exists on a two-process
-  `jax.distributed` harness.
+  CI in Epoch 0; they will be turned on in Epoch 1 once a Field
+  placement smoke test exists on a two-process `jax.distributed`
+  harness.
 
 ## 0.5 Documentation scaffolding
 

@@ -233,14 +233,20 @@ ambiguous mutation of one timeless field.
 **`__call__` signature — decided.** An Op receives element indices
 plus an array-like field argument. The field argument is *not*
 required to be a raw JAX array; it is required to support
-`__getitem__` with global index semantics. Under `FlatPolicy` the
-argument is the global field directly. Under `TiledPolicy` the
-Policy passes a `FieldView` wrapper that intercepts `__getitem__`
-calls and redirects them to an SRAM-backed halo-extended tile,
-translating global indices to tile-local offsets transparently.
-The Op's `__call__` code is identical under both policies; the
-index semantics are always global coordinates. The physics author
-is never aware of tile boundaries.
+`__getitem__` with Region-coordinate semantics. A Field consists of
+one or more FieldSegments, each pairing a payload with the Extent over
+which that payload is valid; Placement maps SegmentIds to
+process/device owners. The Op does not inspect FieldSegment or
+Placement metadata directly. Dispatch validation checks that the
+Field's placed segments cover the Region extent and access footprint
+required by the Op. Under `FlatPolicy` the argument can be a local
+FieldSegment payload or a thin Field view over one or more local
+segments. Under `TiledPolicy` the Policy passes a `FieldView` wrapper
+that intercepts `__getitem__` calls and redirects them to an
+SRAM-backed halo-extended tile, translating Region coordinates to
+tile-local offsets transparently. The Op's `__call__` code is
+identical under both policies; the physics author is never aware of
+segment boundaries, tile boundaries, or process ownership.
 
 `FieldView` is a JAX pytree (registered via
 `jax.tree_util.register_pytree_node`); JAX traces through its
@@ -372,11 +378,11 @@ solidifies against real workloads in Epoch 1.
 - **Epoch 1:** `Op` declaration with `access_pattern` metadata
   (`Stencil` only); `Region` with single-block and batched variants;
   `FlatPolicy`; `Dispatch` as the dispatch unit. JAX primary backend
-  only. Field arguments to `__call__` are raw JAX arrays (global index
-  semantics; no wrapper needed under `FlatPolicy`).
+  only. Under `FlatPolicy`, Field arguments to `__call__` may lower to
+  raw JAX arrays with Region-coordinate indexing over the local payload.
 - **Epoch 2–3:** `TiledPolicy` when mesh stencil operations are
   written. Introduce `FieldView` as a JAX-pytree wrapper that
-  presents global index semantics over a halo-extended SRAM tile,
+  presents Region-coordinate semantics over a halo-extended SRAM tile,
   enabling `TiledPolicy` to swap in without changes to any Op.
   Halo-fill coordination between the task graph and the Region's
   declared footprint.
@@ -392,9 +398,12 @@ Proposed, before the Epoch 1 implementation PR was opened:
 
 1. **`__call__` signature — resolved.** Option A: element indices
    plus an array-like field argument supporting `__getitem__` with
-   global index semantics. `TiledPolicy` passes a `FieldView` wrapper
-   that redirects global-index accesses to a halo-extended SRAM tile;
-   the Op code is unchanged across policies. See Op section above.
+   Region-coordinate semantics. FieldSegments record payload Extents,
+   Placement records SegmentId process/device ownership, and Dispatch
+   validates coverage before lowering. `TiledPolicy` passes a
+   `FieldView` wrapper that redirects Region-coordinate accesses to a
+   halo-extended SRAM tile; the Op code is unchanged across policies.
+   See Op section above.
 
 2. **Non-stencil access patterns — deferred.** `access_pattern:
    AccessPattern` replaces the narrower `stencil: Stencil` attribute,
@@ -429,15 +438,15 @@ Proposed, before the Epoch 1 implementation PR was opened:
    reads poorly or collides with driver terminology.
 
 5. **Epoch 1 testing path — resolved.** Physics authors should verify
-   Ops through a thin test helper, provisionally `run(op, region,
-   policy=FlatPolicy())`, rather than constructing `Dispatch` objects
-   directly in ordinary tests. The helper validates the Op protocol,
-   constructs the Dispatch internally, and exercises the same
-   FlatPolicy/JAX lowering path used by production dispatch. Direct
+   Ops by constructing and executing a real `Dispatch`, for example
+   `Dispatch(op, region, policy=FlatPolicy()).execute()`. Direct
    element-level `op(...)` calls remain useful for small pure-function
    checks, but they are not sufficient as the default because they
-   bypass access-pattern validation, Region iteration, future output
-   assembly metadata, and backend tracing.
+   bypass `Dispatch` construction, access-pattern validation, Region
+   iteration, future output assembly metadata, and backend tracing.
+   Epoch 1 should not add a separate `run(...)` helper unless repeated
+   real call sites show that the direct `Dispatch` API creates
+   unnecessary duplication.
 
 ## Alternatives considered
 

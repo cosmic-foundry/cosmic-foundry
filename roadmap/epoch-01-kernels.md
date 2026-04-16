@@ -26,13 +26,83 @@ Four pieces of infrastructure that every later epoch assumes:
   abstraction layer (ADR-0010) plus a JAX adapter implementing
   `FlatPolicy` only. Secondary-backend adapters (Numba, Taichi, Warp,
   Triton) remain stubbed extras per ADR-0002.
-- **`ShardedField`** — a distributed-array primitive built on
+- **Field placement** — a `Field` data object composed from one or more
+  `FieldSegment` payloads plus explicit `Placement` metadata built on
   `jax.distributed` (NCCL / GLOO per ADR-0003) for cross-device /
-  cross-host cases.
+  cross-host cases. A Field is not assumed to be globally complete;
+  Region and Dispatch determine what extent a given operation requires.
 - **HDF5 I/O** via `h5py`, parallel where `jax.distributed` can be
   composed with a parallel-HDF5 build, otherwise per-process writes
   with a post-processing merge step.
 - **Deterministic structured logging** and error-handling conventions.
+
+## Implementation sequence
+
+Epoch 1 should land as a sequence of small, independently reviewable
+PRs. The ordering below keeps correctness checks close to each new
+concept and avoids pulling Epoch 2 driver responsibilities into the
+kernel layer.
+
+1. **Kernel interface nucleus.** Implement `AccessPattern` /
+   `Stencil`, the `@op(...)` decorator, the optional `Op` ABC,
+   single-block `Region`, `FlatPolicy`, and direct
+   `Dispatch(op, region, policy=FlatPolicy()).execute()` execution.
+   The first executable workload is a 3-D 7-point Laplacian over one
+   in-memory JAX array using that public Dispatch API.
+2. **Region batching.** Add the batched-Region path and lower it with
+   JAX `vmap`, proving that the same Laplacian Op runs unchanged over
+   one block or a packed collection of at least two blocks.
+3. **Field placement smoke path.** Introduce the smallest Field /
+   FieldSegment / Placement model needed for the Laplacian exit
+   criterion: a FieldSegment payload, SegmentId, Extent metadata,
+   process/device ownership, a single-process placement whose one
+   segment covers the whole test Region, a two-process placement whose
+   segments cover disjoint extents, and a `jax.distributed`
+   correctness harness. This is not the Epoch 2 mesh hierarchy and
+   should not grow AMR, task-graph, ghost-fill, or refinement-boundary
+   behavior.
+4. **I/O and observability.** Add HDF5 output for the Laplacian result,
+   using parallel HDF5 when available and the per-rank-write /
+   post-processing merge pattern otherwise. Wire deterministic
+   structured logging around dispatch, sharding, and I/O boundaries.
+5. **Benchmark and visual artifact.** Add the CPU roofline benchmark,
+   optional GPU numbers when a runner exists, and the first reference
+   render of one Laplacian slice under the house colormap.
+
+Secondary backend adapters, non-stencil access patterns, `TiledPolicy`,
+`WarpSpecializedPolicy`, AMR, task-graph scheduling, and production
+halo-exchange semantics are explicit non-goals for Epoch 1 unless a
+later ADR changes the boundary.
+
+## Field placement model
+
+Epoch 1 uses `Field`, not `ShardedField`, as the data-bearing concept.
+The design deliberately avoids assuming that every Field is a globally
+complete simulation-domain object. A Field is a collection of
+FieldSegments. Each FieldSegment pairs a payload with the Extent over
+which that payload is valid. Placement maps SegmentIds to
+process/device owners. Region and Dispatch decide whether a Field's
+placed segments cover the operation being requested.
+
+```text
+Concept        Owns                              Does not own
+Field          semantic label, segment set       iteration extent, process topology
+FieldSegment   payload, Extent                   process/device ownership
+Placement      SegmentId -> owner map            physical meaning, kernel lowering
+Region         iteration coordinates             storage, ownership, communication
+Dispatch       Field/Region/Policy binding       global task ordering, ghost fills
+```
+
+Single-process execution is the degenerate case: one Field has one
+FieldSegment whose SegmentId is owned by the only process in Placement
+and whose Extent covers the whole Region needed by the Dispatch.
+Multi-process execution uses the same API with multiple FieldSegments
+whose SegmentIds map to different process owners and whose Extents
+cover disjoint Region extents. Dispatch validation is responsible for
+checking that each Field's placed segments cover the Region plus the
+Op's access footprint before lowering. Epoch 2 may extend this model
+with meshblocks, centering, ghost ownership, AMR levels, and task-graph
+communication, but those are not part of the Epoch 1 Field contract.
 
 ## Design constraints for the kernel interface
 
@@ -121,7 +191,7 @@ A 3-D 7-point Laplacian implemented as an Op under `FlatPolicy`:
   without changes to the Op.
 - Produces documented roofline fractions on CPU; GPU numbers added
   when a GPU runner is available.
-- A multi-rank correctness test verifies that a `ShardedField` Laplacian
-  matches the single-rank result.
+- A multi-rank correctness test verifies that the Field placement
+  Laplacian matches the single-rank result.
 - A reference render of one benchmark slice under the house colormap is
   committed as the first production visual-regression artifact.

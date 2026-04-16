@@ -9,7 +9,7 @@ ADR-0002 commits the primary kernel backend to JAX + XLA, whose
 `pjit` / `shard_map` primitives provide device parallelism within
 the set of devices JAX can address. That covers multi-GPU on a
 single node natively, but it does not answer how multiple nodes are
-composed — a decision that controls the `ShardedField` interface
+composed — a decision that controls the Field placement interface
 landing in Epoch 1, the I/O path, and the deployment shape of every
 physics run.
 
@@ -60,10 +60,15 @@ Host parallelism is delivered by **`jax.distributed`** using
 CPU path (GLOO) as the CPU collective. No MPI layer is in the
 baseline.
 
-- Epoch 1's `ShardedField` is implemented against `jax.distributed`
-  semantics. `pjit` / `shard_map` continue to provide within-node
-  device parallelism, composed with `jax.distributed` for between-
-  host collectives, producing a single-layer programming model.
+- Epoch 1 implements `Field` as one or more `FieldSegment` records
+  plus explicit `Placement` metadata against `jax.distributed`
+  semantics. A Field is not assumed to represent the full simulation
+  domain; its logical extent is interpreted by the Region and Dispatch
+  that use it. Each FieldSegment pairs a payload with the Extent over
+  which that payload is valid. Placement owns the process/device owner
+  map for SegmentIds. `pjit` / `shard_map` continue to provide
+  within-node device parallelism, composed with `jax.distributed` for
+  between-host collectives, producing a single-layer programming model.
 - Parallel I/O is done through HDF5, either via `h5py` built against
   parallel HDF5 when available or via a per-rank-write + post-
   processing merge pattern when it is not. The I/O path does not
@@ -78,19 +83,18 @@ baseline.
   local / global device lists) instead of `mpi4py` rank / size.
 - Multi-host CI is scaffolded in Epoch 0 behind a `--multihost`
   pytest marker (not run) and turned on in Epoch 1 once a
-  `ShardedField` smoke test exists on a two-process `jax.distributed`
-  harness.
+  Field placement smoke test exists on a two-process
+  `jax.distributed` harness.
 
 ## Consequences
 
-- **Positive.** One layer of parallelism rather than two; the
-  `ShardedField` contract, collective semantics, and debugging tools
-  all live under a single API. The engine tracks the trajectory of
-  ML infrastructure investment (NCCL, NVSHMEM, TPU-pod collectives)
-  rather than anchoring to a transport whose investment base is
-  concentrated at HPC facilities. Autodiff and collective
-  communication compose natively within `jax.distributed` — no
-  second interop surface.
+- **Positive.** One layer of parallelism rather than two; Field
+  placement, collective semantics, and debugging tools all live under
+  a single API. The engine tracks the trajectory of ML infrastructure
+  investment (NCCL, NVSHMEM, TPU-pod collectives) rather than anchoring
+  to a transport whose investment base is concentrated at HPC
+  facilities. Autodiff and collective communication compose natively
+  within `jax.distributed` — no second interop surface.
 - **Negative.** Deployment risk at classical HPC facilities that
   lack a turnkey NCCL path over their native interconnect; each
   such facility requires a porting investment or the optional MPI
@@ -126,7 +130,7 @@ baseline.
   ADR-0001. Revisitable via a dedicated ADR if `jax.distributed`
   hits a wall.
 - **Defer host parallelism to Epoch 2 or later.** Would keep
-  Epoch 1 smaller but means `ShardedField` is designed against
+  Epoch 1 smaller but means Field placement is designed against
   single-host semantics and retrofitted with collectives later —
   exactly the refactor a host-parallelism-first decision is trying
   to prevent.
@@ -140,6 +144,18 @@ baseline.
   §0.7 (`cosmic-foundry hello` — requires a follow-up edit to replace
   `mpi4py.MPI.Init()` with `jax.distributed.initialize()`).
 - [`roadmap/epoch-01-kernels.md`](../roadmap/epoch-01-kernels.md)
-  (Epoch 1 `ShardedField` and multi-host CI).
+  (Epoch 1 Field placement and multi-host CI).
 - ADR-0002 (JAX primary backend) — composes with this decision for
   intra-node parallelism.
+
+## Amendments
+
+- **2026-04-16** — Replaced the provisional `ShardedField` concept
+  with `Field`, `FieldSegment`, and explicit `Placement` metadata.
+  The host-parallelism decision is unchanged: `jax.distributed`
+  remains the baseline. The amendment narrows the storage model so
+  `Field` is not assumed to represent a globally complete domain
+  object. Region and Dispatch interpret whether a Field's placed
+  segments cover the extent an operation needs; single-process
+  whole-domain execution is only the degenerate one-segment,
+  one-placement case.
