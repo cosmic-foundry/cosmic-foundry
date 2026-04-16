@@ -439,14 +439,14 @@ Proposed, before the Epoch 1 implementation PR was opened:
 
 5. **Epoch 1 testing path — resolved.** Physics authors should verify
    Ops by constructing and executing a real `Dispatch`, for example
-   `Dispatch(op, region, policy=FlatPolicy()).execute()`. Direct
-   element-level `op(...)` calls remain useful for small pure-function
-   checks, but they are not sufficient as the default because they
-   bypass `Dispatch` construction, access-pattern validation, Region
-   iteration, future output assembly metadata, and backend tracing.
-   Epoch 1 should not add a separate `run(...)` helper unless repeated
-   real call sites show that the direct `Dispatch` API creates
-   unnecessary duplication.
+   `Dispatch(op, region, policy=FlatPolicy(), inputs=(field,)).execute()`.
+   Direct element-level `op(...)` calls remain useful for small
+   pure-function checks, but they are not sufficient as the default
+   because they bypass `Dispatch` construction, access-pattern
+   validation, Region iteration, future output assembly metadata, and
+   backend tracing. Epoch 1 should not add a separate `run(...)` helper
+   unless repeated real call sites show that the direct `Dispatch` API
+   creates unnecessary duplication.
 
 ## Alternatives considered
 
