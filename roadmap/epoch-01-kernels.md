@@ -43,10 +43,10 @@ kernel layer.
 
 1. **Kernel interface nucleus.** Implement `AccessPattern` /
    `Stencil`, the `@op(...)` decorator, the optional `Op` ABC,
-   single-block `Region`, `FlatPolicy`, `Dispatch`, and the thin
-   `run(op, region, policy=FlatPolicy())` test helper from ADR-0010.
+   single-block `Region`, `FlatPolicy`, and direct
+   `Dispatch(op, region, policy=FlatPolicy()).execute()` execution.
    The first executable workload is a 3-D 7-point Laplacian over one
-   in-memory JAX array.
+   in-memory JAX array using that public Dispatch API.
 2. **Region batching.** Add the batched-Region path and lower it with
    JAX `vmap`, proving that the same Laplacian Op runs unchanged over
    one block or a packed collection of at least two blocks.

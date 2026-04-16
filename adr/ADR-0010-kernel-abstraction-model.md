@@ -429,15 +429,15 @@ Proposed, before the Epoch 1 implementation PR was opened:
    reads poorly or collides with driver terminology.
 
 5. **Epoch 1 testing path — resolved.** Physics authors should verify
-   Ops through a thin test helper, provisionally `run(op, region,
-   policy=FlatPolicy())`, rather than constructing `Dispatch` objects
-   directly in ordinary tests. The helper validates the Op protocol,
-   constructs the Dispatch internally, and exercises the same
-   FlatPolicy/JAX lowering path used by production dispatch. Direct
+   Ops by constructing and executing a real `Dispatch`, for example
+   `Dispatch(op, region, policy=FlatPolicy()).execute()`. Direct
    element-level `op(...)` calls remain useful for small pure-function
    checks, but they are not sufficient as the default because they
-   bypass access-pattern validation, Region iteration, future output
-   assembly metadata, and backend tracing.
+   bypass `Dispatch` construction, access-pattern validation, Region
+   iteration, future output assembly metadata, and backend tracing.
+   Epoch 1 should not add a separate `run(...)` helper unless repeated
+   real call sites show that the direct `Dispatch` API creates
+   unnecessary duplication.
 
 ## Alternatives considered
 
