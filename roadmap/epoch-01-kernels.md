@@ -60,13 +60,14 @@ abstract base class for class-based or parameterized Ops. See ADR-0010
 for the full interface, `AccessPattern` type hierarchy, and metadata
 catalog.
 
-**Spatial axis — Region.** A spatial sub-domain over which an Op is
-applied. May represent a single meshblock or a packed collection of
-meshblocks (analogous to Parthenon's `MeshBlockPack`). Region batching
-— packing multiple meshblocks into one contiguous allocation so a
-single kernel launch covers all of them — is a concern of the Region,
-not of the Op or the Policy. In JAX, batching over a stacked Region
-maps to `vmap`; the Op is unaware of the batch dimension.
+**Spatial / iteration axis — Region.** The set of elements over which
+a Dispatch iterates. May represent a single meshblock, a face array, a
+particle array, or a packed collection of meshblocks (analogous to
+Parthenon's `MeshBlockPack`). Region batching — packing multiple
+meshblocks into one contiguous allocation so a single kernel launch
+covers all of them — is a concern of the Region, not of the Op or the
+Policy. In JAX, batching over a stacked Region maps to `vmap`; the Op
+is unaware of the batch dimension.
 
 **Execution axis — Policy.** How threads are organized to process a
 Region. Three policies are anticipated, implemented incrementally:
@@ -85,13 +86,13 @@ so that swapping policies requires no changes to Op implementations.
 
 ### The Dispatch
 
-A **Dispatch** is the dispatch unit: an Op applied to a Region under a
-Policy. One Dispatch equals one kernel launch (one `jit` boundary in
-JAX). The physics author writes Ops. The driver (Epoch 2) assembles Ops
-into Dispatches with an attached Policy. Fusion experiments — grouping
-or splitting operations across kernel launches — are answered by
-changing how Ops are composed into Dispatches, not by touching Op
-implementations.
+A **Dispatch** is the dispatch unit: one or more Ops applied to a
+Region under a Policy. One Dispatch equals one kernel launch (one
+`jit` boundary in JAX). The physics author writes Ops. The driver
+(Epoch 2) assembles Ops into Dispatches with an attached Policy.
+Fusion experiments — grouping or splitting operations across kernel
+launches — are answered by changing how Ops are composed into
+Dispatches, not by touching Op implementations.
 
 ### What is not part of the kernel interface
 

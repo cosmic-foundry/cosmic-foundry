@@ -28,15 +28,16 @@ these foundations:
      kernels written once compile and run across vendor GPUs and
      CPUs. The research survey (§1.2 Kokkos, §1.6 Singe) reveals
      that this abstraction must keep three axes independent: an *Op*
-     (per-element callable with declared stencil footprint, analogous
-     to a Kokkos `__device__` function), a *Region* (spatial
-     sub-domain over which an Op is applied, potentially a packed
-     collection of meshblocks analogous to Parthenon's
-     `MeshBlockPack`), and a *Policy* (execution organization —
-     flat, tiled-with-scratchpad, or warp-specialized — controlling
-     how threads are arranged to process a Region). The dispatch
-     unit, a *Dispatch*, composes these three. Kernel-launch granularity
-     is controlled at the Dispatch/Policy level; Ops are unaware of it.
+     (per-element callable with declared access pattern, analogous to a
+     Kokkos `__device__` function), a *Region* (the set of mesh,
+     particle, or other elements over which a dispatch iterates,
+     potentially a packed collection of meshblocks analogous to
+     Parthenon's `MeshBlockPack`), and a *Policy* (execution
+     organization — flat, tiled-with-scratchpad, or warp-specialized —
+     controlling how threads are arranged to process a Region). The
+     dispatch unit, a *Dispatch*, composes one or more Ops with a
+     Region and Policy. Kernel-launch granularity is controlled by
+     Dispatch composition; Ops are unaware of it.
      This separation allows both fusion experiments and execution
      policy substitution without touching physics code. See ADR-0010.
    - A task-based asynchronous driver with explicit dependency

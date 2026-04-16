@@ -82,8 +82,8 @@ for the authoritative rule.
 - [**ADR-0010**](ADR-0010-kernel-abstraction-model.md) *(Proposed)* —
   Kernel abstraction model: four named concepts (Op, Region, Policy,
   Dispatch) separating the computational, spatial, and execution axes.
-  Op is a per-element callable with stencil footprint; Region is a
-  spatial sub-domain with optional batching; Policy is the execution
+  Op is a per-element callable with declared access pattern; Region is
+  an iteration extent with optional batching; Policy is the execution
   organization (flat / tiled / warp-specialized); Dispatch is the
-  dispatch unit composing the three. Only FlatPolicy is implemented in
-  Epoch 1.
+  dispatch unit composing one or more Ops with a Region and Policy.
+  Only FlatPolicy is implemented in Epoch 1.

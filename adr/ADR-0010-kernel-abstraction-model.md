@@ -50,15 +50,19 @@ the per-element function and its dispatch configuration).
 
 ## Decision
 
-The kernel abstraction layer is structured around four named concepts,
-each owning exactly one axis or one composition:
+The kernel abstraction layer is structured around four top-level
+concepts, each owning exactly one axis or one composition. Op carries a
+subordinate `AccessPattern` descriptor because data-locality and
+output-assembly metadata are properties of the per-element computation,
+not independent dispatch axes:
 
-### AccessPattern (data-access taxonomy)
+### AccessPattern (Op metadata)
 
-Every Op declares an `access_pattern` attribute describing what data
-its `__call__` reads and how the output is assembled. Three concrete
-subtypes are defined; new patterns extend `AccessPattern` without
-touching `Op` or the driver's halo-fill logic.
+Every Op declares an `access_pattern` attribute describing the Op's
+locality and output-assembly contract. This is metadata on the
+computational axis: the Op author declares it, while Region, Policy,
+and Dispatch consume it. Three concrete subtypes are defined; new
+patterns extend `AccessPattern` without changing the Op protocol.
 
 ```python
 class AccessPattern(ABC):
@@ -91,7 +95,7 @@ class Reduction(AccessPattern):
     def __init__(self, accum: Callable = jnp.sum): ...
 
     def halo_width(self, axis: int) -> int:
-        return 0   # whole-region read; no ghost cells required
+        return 0   # per-element read; Policy handles accumulation
 
 class Composite(AccessPattern):
     """Union of two or more patterns, constructed via |."""
@@ -112,11 +116,12 @@ The `|` operator makes compound access patterns readable:
 access_pattern = Stencil.seven_point() | Reduction(accum=jnp.sum)
 ```
 
-The driver calls `op.access_pattern.halo_width(axis)` uniformly; no
-Op-type special-casing is needed. For a `Reduction` Op the Policy maps
-`__call__` over all elements and then applies `accum` to the results;
-the Op author writes a per-element function and declares the
-accumulation on the `Reduction` pattern, not in `__call__`.
+The driver calls `op.access_pattern.halo_width(axis)` uniformly when
+sizing halos; no Op-type special-casing is needed. For a `Reduction`
+Op, the Policy maps `__call__` over the Region and then applies
+`accum` to the per-element results. The Op author writes a per-element
+function and declares accumulation on the `Reduction` pattern, not in
+`__call__`.
 
 ### Op (computational axis)
 
@@ -264,13 +269,15 @@ is not part of the Epoch 1 deliverable.
   reconstruction, 7-point Laplacian stencil, cooling rate per cell,
   CFL computation, divergence norm check.
 
-### Region (spatial axis)
+### Region (spatial / iteration axis)
 
-A spatial sub-domain over which an Op is applied. A Region owns two
-spatial concerns:
+A Region is the set of elements over which a Dispatch iterates. It may
+be geometric (mesh cells, faces, edges, nodes) or non-geometric
+(particles, neighbor-selected particle subsets). A Region owns two
+iteration concerns:
 
 - **Extent**: which elements are iterated over (a meshblock, a face
-  array, a particle array).
+  array, a particle array, or another indexable collection).
 - **Batching**: whether the Region is a single block or a packed
   collection of blocks (analogous to Parthenon's `MeshBlockPack`).
   Region batching determines how many elements enter a single kernel
@@ -306,10 +313,13 @@ author-facing execution organizations.
 
 ### Dispatch (dispatch unit)
 
-A Dispatch is the composition of an Op, a Region, and a Policy. One
-Dispatch equals one kernel launch — one `jit` boundary in JAX. The
-Dispatch is the unit that the driver schedules, the task graph depends
-on, and the profiler attributes.
+A Dispatch is the composition of one or more Ops, a Region, and a
+Policy. One Dispatch equals one kernel launch — one `jit` boundary in
+JAX. The Dispatch is the unit that the driver schedules, the task graph
+depends on, and the profiler attributes. When multiple Ops are fused
+into one Dispatch, Dispatch assembly derives the combined
+AccessPattern and field dependencies from the contained Ops; the Ops
+themselves remain unaware of fusion.
 
 The physics author writes Ops. The driver assembles Dispatches. Fusion
 experiments are expressed by composing or splitting Ops within a
@@ -323,7 +333,7 @@ terminology conflicts in the target domain:
 | Concept | Chosen | Rejected alternatives | Reason for rejection |
 |---|---|---|---|
 | Per-element callable | **Op** | Stage (RK-stage conflict in every astrophysics code), Kernel (CUDA kernel conflict), Func (Halide, unfamiliar in scientific computing) | "Stage" is universally used for RK substages in Athena++, Castro, Parthenon; "Kernel" already means the dispatch unit in GPU programming |
-| Spatial sub-domain | **Region** | Domain (simulation domain conflict), Partition (implies a piece of something; doesn't cover full-domain cases), Pack (Parthenon-specific; implies batching which is a property, not the concept itself) | "Domain" in astrophysics means the simulation volume; "Region" is used in Legion and AMReX without the simulation-domain connotation |
+| Iteration extent | **Region** | Domain (simulation domain conflict), Partition (implies a piece of something; doesn't cover full-domain cases), Pack (Parthenon-specific; implies batching which is a property, not the concept itself), IndexSet (accurate but too low-level for meshblocks and particle collections) | "Domain" in astrophysics means the simulation volume; "Region" is used in Legion and AMReX without the simulation-domain connotation |
 | Execution organization | **Policy** | ExecutionPolicy (verbose), Schedule (Halide schedule conflates algorithm + execution), Strategy (non-standard) | Follows Kokkos's established `RangePolicy` / `TeamPolicy` naming; "Schedule" in Halide means more than just execution organization |
 | Dispatch unit | **Dispatch** | Sweep (operator-split direction-sweep conflict), Kernel (CUDA kernel conflict), Pass (compiler/render-pipeline jargon), Loop (implies CPU) | "Sweep" in astrophysics means iterating in one spatial direction (x-sweep, y-sweep); "Kernel" already means the dispatch unit in GPU programming; `Dispatch(op, region, policy)` reads more directly than `Pass(op, region, policy)` in Python code |
 
