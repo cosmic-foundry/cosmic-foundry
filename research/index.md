@@ -27,7 +27,7 @@ of these framework design patterns.
 
 | § | File | Scope |
 |---|------|-------|
-| 1 | [01-frameworks.md](01-frameworks.md) | AMReX, Kokkos, Parthenon, Charm++, and supporting libraries. |
+| 1 | [01-frameworks.md](01-frameworks.md) | AMReX, Kokkos, Parthenon, Charm++, supporting libraries, and GPU kernel DSLs (Singe, PyJac, TChem, Legion/Regent). |
 | 2 | [02-grid-codes.md](02-grid-codes.md) | Structured-grid / AMR finite-volume codes (Castro, Nyx, FLASH-X, GAMER, Athena++, AthenaK, Enzo, RAMSES, PLUTO, MPI-AMRVAC, ZEUS, Dedalus, …). |
 | 3 | [03-particle-codes.md](03-particle-codes.md) | Particle-based and meshless codes (Arepo, GADGET-4, GIZMO, ChaNGa, SWIFT). |
 | 4 | [04-relativistic-codes.md](04-relativistic-codes.md) | Relativistic / GRMHD / numerical-relativity codes (Phoebus, Einstein Toolkit, SpECTRE, BHAC, KORAL, HARM, KHARMA, GRChombo, Spritz, WhiskyTHC). |

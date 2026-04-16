@@ -167,6 +167,33 @@ the following:
 - Dynamic mesh/work redistribution with fault-tolerance hooks
   (Charm++).
 
+"Performance portability" in the codes above covers two distinct
+programming models, and the distinction matters for how physics kernels
+are authored:
+
+**Hierarchical model (Kokkos + downstream: Parthenon, AthenaK, KHARMA,
+Phoebus, AthenaPK).** The programming model exposes three execution
+levels — a grid of thread teams, threads within each team, and vector
+lanes within each thread — plus a corresponding scratchpad memory
+hierarchy (HBM → team SRAM → per-thread registers). The physics author
+chooses the execution policy, declares scratchpad size, issues explicit
+barriers, and writes cooperative load / compute phases. The framework
+compiles each concept to the hardware primitive: team → CUDA block /
+OpenMP region; team scratchpad → `__shared__` / stack; barrier →
+`__syncthreads()` / no-op. GPU performance for bandwidth-bound stencil
+operations (reconstruction, divergence, Laplacian) depends on correct
+use of this hierarchy by the physics author.
+
+**Flat model (AMReX + downstream: Castro, Quokka, Flash-X, WarpX,
+MAESTROeX).** The programming model exposes only flat per-element
+iteration (`ParallelFor`). Physics authors write per-cell lambdas with
+no awareness of thread teams, scratchpad, or barriers. GPU performance
+on memory-hierarchy-sensitive paths comes from AMReX's own pre-tuned
+framework kernels and from vendor library calls (cuFFT, cuSolver,
+Hypre), not from physics-author-controlled tiling. The tradeoff is
+a simpler authoring model at the cost of less direct control over
+the memory hierarchy in user-written physics code.
+
 ## 6.10 I/O, diagnostics, and ecosystem
 
 - Parallel HDF5 and PnetCDF; AMReX plotfiles; ADIOS2; VTK/yt-

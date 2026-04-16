@@ -28,7 +28,8 @@ repos:
         args:
           - --builtin=clear,rare,en-GB_to_en-US
           # fof: Friends-Of-Friends, halo-finder algorithm (astrophysics term).
-          - --ignore-words-list=fof
+          # singe: proper noun — Singe DSL (Bauer, Treichler, Aiken, PPoPP 2014).
+          - --ignore-words-list=fof,singe
         files: \.(md|py|rst)$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
