@@ -19,6 +19,10 @@ per-agent entry points.
 - [`checklist.md`](checklist.md) — catalog of historical
   failure modes on this repository, grouped by theme. The
   reviewer walks this on every PR.
+- [`architecture-checklist.md`](architecture-checklist.md) —
+  deeper stress-review protocol for ADRs and architecture-changing
+  PRs. Use it when a PR introduces or reshapes an abstraction,
+  boundary, driver/backend interface, or architectural vocabulary.
 
 ## Architecture
 
@@ -38,6 +42,9 @@ Mechanical pattern-matching checks belong in `scripts/ci/` and
 `.pre-commit-config.yaml`, not in this reviewer. The checklist
 covers judgment-heavy items that CI cannot catch, plus a few
 items that are not yet automated (marked *pending pre-commit*).
+Architecture stress review is deliberately judgment-heavy: it asks
+the reviewer to build realistic usage traces, map the design space,
+and look for responsibility leaks between abstraction layers.
 
 Reviewer blind spots depend on the tool/model doing the review. A
 same-tool review is a known limitation when the author used the same
@@ -65,7 +72,8 @@ Review <pr-number>
 ```
 
 The agent should read `pr-review/agent.md` and `pr-review/checklist.md`,
-fetch PR metadata and diff with
+plus `pr-review/architecture-checklist.md` when the PR is
+architecture-changing. Fetch PR metadata and diff with
 `gh pr view <pr-number> --repo cosmic-foundry/cosmic-foundry` and
 `gh pr diff <pr-number> --repo cosmic-foundry/cosmic-foundry`, then
 return the exact report format required by `pr-review/agent.md`.

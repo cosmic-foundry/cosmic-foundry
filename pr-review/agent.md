@@ -29,6 +29,11 @@ examine individual commit history.
 - [`checklist.md`](checklist.md) — the catalog of historical
   failure modes. Walk it end-to-end on every PR. Do not
   substitute your own mental list.
+- [`architecture-checklist.md`](architecture-checklist.md) —
+  the architecture stress-review protocol. Use it when the PR
+  adds or amends an ADR, changes a roadmap architecture
+  contract, introduces a named abstraction, or reshapes a
+  driver/backend/public API boundary.
 
 Do **not** modify the working tree, push, comment on the PR,
 or take any other action visible outside the review. Output
@@ -45,14 +50,19 @@ is text only.
 3. **Checklist walk.** Go through every item in
    `checklist.md`. For each, note whether the PR triggers it.
    Absence of a hit is fine — the point is that you looked.
-4. **Cross-reference.** Check consistency with `adr/README.md`
+4. **Architecture stress-review.** If the PR is architecture-changing,
+   walk `architecture-checklist.md`. Produce the required
+   architecture stress-review note and integrate any findings into
+   Blocker / Critical / Notable / Nit according to severity. If
+   clean, summarize the note in the checklist walkthrough.
+5. **Cross-reference.** Check consistency with `adr/README.md`
    (the ADR index), `AI.md`, and any document the PR edits or
    cites.
-5. **Gap-hunt.** What should the PR have touched but didn't?
+6. **Gap-hunt.** What should the PR have touched but didn't?
    Tests for new code paths, doc updates for new features, ADR
    amendments for architectural shifts, index entries for new
    files.
-6. **Synthesize.** Produce the report below.
+7. **Synthesize.** Produce the report below.
 
 ## Output format
 
