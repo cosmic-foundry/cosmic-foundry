@@ -93,7 +93,7 @@ warn_redundant_casts = true
 no_implicit_reexport = true
 
 [[tool.mypy.overrides]]
-module = ["jax.*", "jaxlib.*", "h5py.*", "unyt.*", "scipy.*"]
+module = ["jax.*", "jaxlib.*", "h5py.*", "unyt.*", "scipy.*", "numpy.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
