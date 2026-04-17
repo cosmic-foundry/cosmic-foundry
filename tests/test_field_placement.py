@@ -3,11 +3,10 @@
 Non-distributed tests cover the SegmentId / FieldSegment / Placement / Field
 API and the Field.covers() validation.
 
-The ``multihost`` test at the bottom spawns two subprocesses, each
-initializing jax.distributed and running the Laplacian on its half-domain,
-then checks every rank returned 6.0.  Run it with::
-
-    pytest --multihost tests/test_field_placement.py
+The multi-rank test at the bottom spawns two subprocesses that initialize
+``jax.distributed`` and run the Laplacian on disjoint half-domains, then
+checks that every rank returned 6.0.  It runs in the standard test suite;
+no special flags are required.
 """
 
 from __future__ import annotations

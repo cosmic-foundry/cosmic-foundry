@@ -1,7 +1,8 @@
 # ADR-0010 — Kernel abstraction model: Op / Region / Policy / Dispatch
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-04-15
+- **Accepted:** 2026-04-16 (Epoch 1 exit criterion met; implementation complete)
 
 ## Context
 

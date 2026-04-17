@@ -7,5 +7,54 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
+from cosmic_foundry.fields import (  # noqa: E402
+    Field,
+    FieldSegment,
+    Placement,
+    SegmentId,
+)
+from cosmic_foundry.io import (  # noqa: E402
+    HAS_PARALLEL_HDF5,
+    merge_rank_files,
+    write_array,
+)
+from cosmic_foundry.kernels import (  # noqa: E402
+    AccessPattern,
+    Backend,
+    Dispatch,
+    Extent,
+    FlatPolicy,
+    Op,
+    OpLike,
+    Region,
+    Stencil,
+    op,
+)
+from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    # fields
+    "Field",
+    "FieldSegment",
+    "Placement",
+    "SegmentId",
+    # io
+    "HAS_PARALLEL_HDF5",
+    "merge_rank_files",
+    "write_array",
+    # kernels
+    "AccessPattern",
+    "Backend",
+    "Dispatch",
+    "Extent",
+    "FlatPolicy",
+    "Op",
+    "OpLike",
+    "Region",
+    "Stencil",
+    "op",
+    # observability
+    "configure",
+    "get_logger",
+]
