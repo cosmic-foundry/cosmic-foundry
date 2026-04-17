@@ -122,10 +122,9 @@ the platform and to each other.
 - [**ADR-0014**](ADR-0014-platform-application-architecture.md) —
   Platform / application repository architecture: cosmic-foundry is the
   organizational platform providing computation infrastructure and manifest
-  tooling; application repos (stellar-foundry, cosmological-foundry, etc.)
-  provide domain physics and domain-specific observational data. Dissolves
-  `cosmic-observables`; introduces `cosmic_foundry.manifests` as the shared
-  data-pipeline infrastructure.
+  tooling; domain-specific application repos provide physics implementations
+  and observational validation data. Introduces `cosmic_foundry.manifests`
+  as the shared data-pipeline infrastructure.
 
 ### Documentation and visualization
 

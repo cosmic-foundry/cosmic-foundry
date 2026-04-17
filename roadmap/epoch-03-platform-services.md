@@ -8,12 +8,13 @@ Epoch 3 delivers the non-physics platform infrastructure that
 application repositories depend on before they can produce or compare
 simulation outputs against observational data. It also executes the
 organizational transitions that the platform/application architecture
-requires: dissolving `cosmic-observables` and bootstrapping
-`stellar-foundry` as the first real application repo.
+requires: bootstrapping the first application repository and migrating
+any observational pipeline content that was accumulated in predecessor
+repositories into its proper home.
 
 This epoch runs concurrently with the tail of Epoch 2 (multi-rank halo
 fill and I/O work) and must close before the first application-side
-physics PR opens in stellar-foundry.
+physics PR opens.
 
 ---
 
@@ -27,8 +28,7 @@ simulation artifacts.
 
 - **HTTP client** (`http_client.py`). Dual-identity fetch (research vs.
   bot) with `robots.txt` enforcement. Used by application-repo adapters
-  to fetch upstream observational data. Migrated from `cosmic-observables`
-  and generalized.
+  to fetch upstream observational data.
 - **`ValidationAdapter` protocol**. The interface that every
   domain-repo adapter implements: fetch upstream source, normalize to
   platform-defined artifact schema, write artifact + provenance sidecar.
@@ -38,7 +38,7 @@ simulation artifacts.
   outputs. General across both sides of the comparison contract.
 - **Bibliography generator** (`bibliography.py`). Aggregates provenance
   records across a collection of artifacts into a human-readable
-  bibliography. Migrated from `cosmic-observables`.
+  bibliography.
 - **Base JSON schemas** (`schemas/`). Three domain-neutral schemas that
   application repos extend with domain-specific fields:
   - `catalog.schema.json` — upstream data source metadata (authority,
@@ -76,50 +76,22 @@ manifests), and the validation products it intends to compare against.
 
 Deliver a base `sim-spec.schema.json` and document the convention.
 Record the decision as an ADR. The first concrete sim-spec manifests
-will be written in stellar-foundry, not here.
+will be written in application repos, not here.
 
-### 4. cosmic-observables dissolution
+### 4. Application repository bootstrapping
 
-- Migrate `http_client.py` and `bibliography.py` to
-  `cosmic_foundry.manifests` (above).
-- Migrate base JSON schemas to `cosmic_foundry/schemas/`.
-- Replace the `cosmic-observables` README with an archive notice
-  pointing to stellar-foundry (observational data) and cosmic-foundry
-  (platform infrastructure).
-- Archive the repo on GitHub.
+The platform-side work in deliverables 1–3 defines the contracts that
+application repos implement. Alongside those platform PRs:
 
-### 5. stellar-foundry bootstrap
+- Confirm the `ValidationAdapter` protocol, base schemas, and
+  `[observational]` install surface are stable enough that an application
+  repo can pin a version and build on them.
+- Document the expected application repo layout (directory structure,
+  `AI.md` delegation pattern, CI conventions) in the platform so that
+  new application repos can be bootstrapped consistently.
 
-- `pyproject.toml`, CI, pre-commit configuration matching platform
-  conventions.
-- `AI.md` delegating to cosmic-foundry's rules with stellar-specific
-  additions (fork/PR targets, environment notes).
-- Package skeleton: `src/stellar_foundry/__init__.py`.
-- `adr/README.md` stub.
-- `STATUS.md`.
-- Directory scaffold for `src/stellar_foundry/physics/` (empty —
-  placeholder for future stellar physics implementations) and
-  `src/stellar_foundry/validation/sne_ia/` (receives the SNIa
-  observational content).
-
-### 6. SNIa observational content migration to stellar-foundry
-
-- Migrate `adapters/` (pantheon_plus, csp_dr3, foundation, tns) to
-  `src/stellar_foundry/validation/sne_ia/adapters/`, updating imports
-  and implementing the `ValidationAdapter` protocol from
-  `cosmic_foundry.manifests`.
-- Migrate `alias_table.py` and `cross_match.py` to
-  `src/stellar_foundry/validation/sne_ia/`.
-- Migrate `observables/sne-ia/` YAML manifests (catalogs,
-  validation-sets, objects, filters, filter-matches) to
-  `stellar-foundry/observables/sne-ia/`.
-- Migrate domain-specific JSON schemas (`photometry`, `filter`,
-  `filter-match`, `object`) to `stellar-foundry/schemas/`.
-- Migrate artifacts to `stellar-foundry/artifacts/sne-ia/`.
-- Adapt and migrate ADR-0001, ADR-0002, ADR-0003 from
-  `cosmic-observables/adr/` to `stellar-foundry/adr/`,
-  recontextualized for their new home.
-- Migrate and update tests.
+The actual bootstrapping and domain-specific content migration happen
+in the application repositories, not here.
 
 ---
 
@@ -137,9 +109,6 @@ split as an ADR in cosmic-foundry:
 - The pattern for cross-scale workflows (separate repo depending on
   multiple application repos and the platform).
 
-This ADR also records the dissolution of `cosmic-observables` and the
-reasoning behind the split.
-
 ### Comparison-result schema design
 
 The comparison-result schema must be agreed before the migration PRs
@@ -155,24 +124,22 @@ PR.
   any application repo via `pip install cosmic-foundry[observational]`.
 - The comparison-result and sim-spec schemas are defined and recorded in
   ADRs.
-- `cosmic-observables` is archived on GitHub.
-- stellar-foundry CI is green; the SNIa observational content is present,
-  tested, and the adapters implement the `ValidationAdapter` protocol.
-- A reviewer can trace a Pantheon+ distance modulus from the upstream
-  source through the stellar-foundry adapter to the artifact provenance
-  sidecar, using only cosmic-foundry manifest infrastructure.
+- The expected application repo layout and delegation pattern are
+  documented in the platform.
+- At least one application repo has been bootstrapped using the platform
+  manifest infrastructure and its adapters implement `ValidationAdapter`.
 
 ---
 
 ## Sequencing notes
 
 Deliverables 1–3 (platform side) should land first as cosmic-foundry
-PRs, so that stellar-foundry bootstrap (4–6) can depend on a released
-or locally-installed version of the new `[observational]` extra. In
+PRs, so that application repo bootstrap can depend on a released or
+locally-installed version of the new `[observational]` extra. In
 practice, editable installs make the ordering flexible, but the
-`ValidationAdapter` protocol must be defined before the migrated adapters
+`ValidationAdapter` protocol must be defined before domain adapters
 are written.
 
-Deliverable 5 (stellar-foundry bootstrap) can proceed in parallel with
-Deliverable 1 once the protocol interface is sketched, even before the
-full platform-side implementation is merged.
+Application repo bootstrapping (deliverable 4, application side) can
+proceed in parallel with deliverable 1 once the protocol interface is
+sketched, even before the full platform-side implementation is merged.

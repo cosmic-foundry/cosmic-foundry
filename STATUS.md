@@ -61,9 +61,8 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 Complete Epoch 2 (items #3–#6: halo fill, diagnostics, task-graph driver,
 multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
-infrastructure in cosmic-foundry, cosmic-observables dissolution,
-stellar-foundry bootstrap, and SNIa observational content migration.
-See `roadmap/epoch-03-platform-services.md` for the full Epoch 3 plan.
+infrastructure, comparison-result schema, and simulation specification
+format. See `roadmap/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 

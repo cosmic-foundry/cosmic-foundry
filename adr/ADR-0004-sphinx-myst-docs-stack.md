@@ -66,8 +66,7 @@ below) and lands with the first substantial docs PR.
 
   > `https://cosmic-foundry.github.io/cosmic-foundry/`
 
-  Each sibling repo (`stellar-foundry`, and any future additions)
-  deploys its own docs independently to
+  Each sibling repo deploys its own docs independently to
   `cosmic-foundry.github.io/<repo-name>/` via the same workflow
   pattern. Repos cross-reference each other via `intersphinx`;
   entries are added to each repo's `conf.py` once the target has a

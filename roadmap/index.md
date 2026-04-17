@@ -26,9 +26,9 @@ infrastructure, provenance, simulation specifications, comparison-result
 contracts) are reusable by every downstream application repository.
 
 **Platform and application roles.** Cosmic Foundry is the organizational
-platform. Application repositories — stellar-foundry,
-cosmological-foundry, galactic-foundry, planetary-foundry, and others
-— build on top of it. The platform is intentionally heavy: general-purpose
+platform. Application repositories — covering stellar physics, cosmology,
+galactic dynamics, planetary formation, and other domains — build on top
+of it. The platform is intentionally heavy: general-purpose
 infrastructure lives here even when a single application would not need
 all of it. Application repos are thin on infrastructure and may be rich
 on physics. Cross-scale workflows that compose two or more application
@@ -80,7 +80,8 @@ should make it plausible to eventually simulate the full lifecycle of a
 star — molecular-cloud collapse, protostellar accretion, main-sequence
 and post-main-sequence evolution, through core-collapse supernova — by
 composing platform primitives with the physics implementations in
-stellar-foundry, without hard-coded seams between regimes.
+the stellar application repository, without hard-coded seams between
+regimes.
 
 ---
 
@@ -142,7 +143,7 @@ enter the schedule only once the baseline sequence is stable.
 | 0 | [epoch-00-bootstrap.md](epoch-00-bootstrap.md) | Project scaffolding, packaging, CI, docs, ADR process, visualization scaffolding, `cosmic-foundry hello`. |
 | 1 | [epoch-01-kernels.md](epoch-01-kernels.md) | Op / Region / Policy / Dispatch kernel interface, JAX `FlatPolicy`, Field placement, parallel HDF5. |
 | 2 | [epoch-02-mesh.md](epoch-02-mesh.md) | Uniform grid, block-structured AMR, task-graph driver, plotfile + Zarr writers. |
-| 3 | [epoch-03-platform-services.md](epoch-03-platform-services.md) | Manifest and specification infrastructure, provenance, comparison-result schema, problem-setup surface; cosmic-observables dissolution; stellar-foundry bootstrap. |
+| 3 | [epoch-03-platform-services.md](epoch-03-platform-services.md) | Manifest and specification infrastructure, provenance, comparison-result schema, problem-setup surface; application repository bootstrapping. |
 | 4 | [epoch-04-visualization.md](epoch-04-visualization.md) | Unit-aware plotting, in-engine JAX renderer, WebGPU viewer, visual-regression harness, public gallery. |
 | 5 | [epoch-05-newtonian-hydro.md](epoch-05-newtonian-hydro.md) | Finite-volume Godunov, Riemann solvers, hydro test battery, first physics explainer. |
 | 6 | [epoch-06-gravity-nbody.md](epoch-06-gravity-nbody.md) | Multigrid Poisson, particle infrastructure, tree gravity, FMM prototype. |
@@ -152,7 +153,7 @@ enter the schedule only once the baseline sequence is stable.
 | 10 | [epoch-10-relativistic.md](epoch-10-relativistic.md) | SR, GR, GRMHD, dynamical-spacetime NR; BBH inspiral cinematic. |
 | 11 | [epoch-11-particle-cosmology.md](epoch-11-particle-cosmology.md) | SPH / meshless methods, cosmology, halo finders, light-cones. |
 | 12 | [epoch-12-moving-mesh.md](epoch-12-moving-mesh.md) | Stretch — Arepo-class moving Voronoi mesh. |
-| 13 | [epoch-13-stellar-evolution.md](epoch-13-stellar-evolution.md) | Stretch — 1-D Lagrangian solver infrastructure; stellar-foundry houses the physics application layer. |
+| 13 | [epoch-13-stellar-evolution.md](epoch-13-stellar-evolution.md) | Stretch — 1-D Lagrangian solver infrastructure; stellar-physics application repo houses the physics application layer. |
 | 14 | [epoch-14-subgrid-observables.md](epoch-14-subgrid-observables.md) | Stretch — subgrid plugin interface, synthetic observable hooks; application repos provide domain-specific implementations. |
 
 ---
@@ -179,8 +180,8 @@ These grow every epoch; they are not tied to a single phase.
   changes to Op/Region/Policy/Dispatch, Field, the mesh model, or the
   manifest infrastructure require coordinated PRs across all dependent
   repos. The comparison-result schema is the sharpest boundary:
-  once stellar-foundry or another application repo produces comparison
-  outputs against it, changes require a migration path.
+  once any application repo produces comparison outputs against it,
+  changes require a migration path.
 - **Visualization and communication.** Excellence at visualization is a
   core platform requirement, not a downstream concern. Every physics epoch
   from Epoch 5 onward ships a canonical live demo (interactive WebGPU
@@ -273,7 +274,7 @@ infrastructure rather than a physics capability and does not map to §6.
 | 10 | §6.2 (SR / GR / NR), §6.8 (primitive recovery) |
 | 11 | §6.1 (SPH / meshless), §6.4 (cosmology) |
 | 12 | §6.1 (moving mesh) |
-| 13 | §6.7 (stellar evolution) — platform delivers 1-D solver infrastructure; stellar-foundry houses the physics application |
+| 13 | §6.7 (stellar evolution) — platform delivers 1-D solver infrastructure; stellar-physics application repo houses the physics application |
 | 14 | §6.6 (subgrid), §6.10 (diagnostics) — platform delivers plugin interface; application repos provide implementations |
 
 No physics epoch covers a capability not named in RESEARCH.md §6, and

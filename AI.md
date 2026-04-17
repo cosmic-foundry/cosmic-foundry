@@ -6,8 +6,8 @@ regardless of platform (Claude Code, Codex, Gemini, or others).
 ## Platform role
 
 Cosmic Foundry is the **organizational platform** for the simulation
-ecosystem. Application repositories — stellar-foundry,
-cosmological-foundry, galactic-foundry, planetary-foundry, and others
+ecosystem. Application repositories — covering stellar physics,
+cosmology, galactic dynamics, planetary formation, and other domains
 — build on top of it. See
 [ADR-0014](adr/ADR-0014-platform-application-architecture.md) for the
 authoritative split.

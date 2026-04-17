@@ -12,10 +12,9 @@ an explicit decision:
 2. Where does observational validation data live, and how does it relate
    to simulation code?
 
-A parallel organizational decision dissolved `cosmic-observables` (a
-separate repository that had accumulated SNIa observational data and
-data-pipeline infrastructure). The dissolution forced a clean answer to
-both questions.
+A parallel organizational decision to consolidate observational data pipeline
+infrastructure into the platform (rather than keeping it in a separate
+data-only repository) forced a clean answer to both questions.
 
 ## Decision
 
@@ -34,11 +33,11 @@ categories of capability:
    generator, base JSON schemas (catalog, validation-set, artifact-provenance),
    and schema validation utilities.
 
-**Application repositories** (stellar-foundry, cosmological-foundry,
-galactic-foundry, planetary-foundry, …) build on the platform. They are
-thin on infrastructure — they do not reimplement mesh topology, dispatch,
-I/O, provenance tracking, or schema validation — and may be rich on
-physics. Each application repo provides:
+**Application repositories** (one per simulation domain: stellar physics,
+cosmology, galactic dynamics, planetary formation, and others) build on
+the platform. They are thin on infrastructure — they do not reimplement
+mesh topology, dispatch, I/O, provenance tracking, or schema validation —
+and may be rich on physics. Each application repo provides:
 
 - Physics implementations as cosmic-foundry Op / Policy instances.
 - Domain-specific observational data: YAML manifests, adapters that
@@ -86,17 +85,18 @@ because it conflates computation infrastructure (which every domain
 shares) with domain physics (which is specific), making the codebase
 harder to review and the dependency graph harder to manage.
 
-**cosmic-observables as a permanent shared data repo.** Keep
-`cosmic-observables` alongside `cosmic-foundry` as a sibling repo
-serving all application repos. Rejected because the data-pipeline
-infrastructure (HTTP client, provenance, adapter protocol) is platform
-infrastructure that belongs with the platform, while domain-specific
-observational data belongs with the application repo that uses it. A
-separate data repo adds a coordination layer without a clear benefit
-once the multi-repo application architecture is committed to.
+**Data-only shared repository.** Keep observational data in a separate
+repository alongside cosmic-foundry, serving all application repos.
+Rejected because the data-pipeline infrastructure (HTTP client,
+provenance, adapter protocol) is platform infrastructure that belongs
+with the platform, while domain-specific observational data belongs with
+the application repo that uses it. A separate data repo adds a
+coordination layer without a clear benefit once the multi-repo
+application architecture is committed to.
 
 **Thin platform, physics in applications only.** Platform provides only
 computation primitives; all physics implementations live in application
 repos. Rejected because it prevents cross-domain physics reuse (e.g.,
-Newtonian hydrodynamics is needed by stellar-foundry, cosmological-foundry,
-and galactic-foundry; implementing it three times would be incorrect).
+Newtonian hydrodynamics is needed by stellar, cosmological, and galactic
+application repos; implementing it independently in each would be
+incorrect).
