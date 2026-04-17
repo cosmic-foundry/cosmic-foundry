@@ -38,14 +38,13 @@ prerequisites are being resolved before the task-graph driver is implemented.
 | Item | PR | Status |
 |------|----|--------|
 | Field name → Dispatch input binding (`BoundOp` protocol, ADR-0010 amendment) | #74, #75 | Merged |
-| Halo fill fence (`HaloFillFence` + `HaloFillPolicy`, ADR-0011) | #76 | Open |
-| Global reduction primitive for simulation diagnostics (ADR-0012) | #77 | Open |
+| Halo fill fence (`HaloFillFence` + `HaloFillPolicy`, ADR-0011) | #76 | Merged |
+| Global reduction primitive for simulation diagnostics (ADR-0012) | #77 | Merged |
 
 ## Next planned work
 
-1. Merge global reduction ADR (PR #77).
-2. All three Epoch 2 design prerequisites resolved — begin
-   **Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md`.
+All three Epoch 2 design prerequisites are resolved. Begin
+**Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md`.
 
 ## Reference
 
