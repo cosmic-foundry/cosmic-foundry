@@ -47,8 +47,8 @@ Per the implementation plan in `roadmap/epoch-02-mesh.md`:
 
 | # | Item | PR | Status |
 |---|------|----|--------|
-| 1 | Uniform mesh data model (`Block`, `UniformGrid`) | #85 | Open |
-| 2 | Field allocation from blocks | — | Planned |
+| 1 | Uniform mesh data model (`Block`, `UniformGrid`) | #85 | Merged |
+| 2 | Field allocation from blocks | #88 | Open |
 | 3 | `HaloFillPolicy` — single-rank | — | Planned |
 | 4 | `DiagnosticReducer` + `DiagnosticSink` | — | Planned |
 | 5 | Task-graph driver — single-rank | — | Planned |
@@ -59,7 +59,9 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 ## Next planned work
 
-Merge #85, then proceed with item #2 (field allocation from blocks).
+Merge #88 (field allocation from blocks), then proceed with items #3
+(`HaloFillPolicy` — single-rank) and #4 (`DiagnosticReducer` +
+`DiagnosticSink`) which can proceed in parallel.
 
 ## Reference
 

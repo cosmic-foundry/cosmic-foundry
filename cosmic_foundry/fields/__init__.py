@@ -25,7 +25,7 @@ from typing import Any, NewType
 
 import numpy as np
 
-from cosmic_foundry.kernels import Extent
+from cosmic_foundry.kernels import AccessPattern, Extent
 
 SegmentId = NewType("SegmentId", int)
 
@@ -142,6 +142,34 @@ class Field:
         return bool(covered.all())
 
 
+def allocate_field(
+    name: str,
+    grid: Any,  # UniformGrid — imported lazily to keep mesh ↔ fields decoupled
+    access_pattern: AccessPattern,
+) -> Field:
+    """Allocate a Field over a UniformGrid with halo-padded payloads.
+
+    Each block in *grid* becomes one FieldSegment whose extent is the block's
+    ``index_extent`` expanded by *access_pattern* and whose payload is a
+    zero-initialised float64 JAX array of that expanded shape.  The returned
+    Field's Placement mirrors *grid*'s rank assignment.
+    """
+    import jax.numpy as jnp
+
+    segments: list[FieldSegment] = []
+    owners: dict[SegmentId, int] = {}
+    for block in grid.blocks:
+        seg_id = SegmentId(int(block.block_id))
+        halo_extent = block.index_extent.expand(access_pattern)
+        payload = jnp.zeros(halo_extent.shape, dtype=jnp.float64)
+        segments.append(
+            FieldSegment(segment_id=seg_id, payload=payload, extent=halo_extent)
+        )
+        owners[seg_id] = grid.owner(block.block_id)
+
+    return Field(name=name, segments=tuple(segments), placement=Placement(owners))
+
+
 def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
     """Return the intersection of two Extents, or None if the intersection is empty."""
     if a.ndim != b.ndim:
@@ -162,4 +190,5 @@ __all__ = [
     "FieldSegment",
     "Placement",
     "SegmentId",
+    "allocate_field",
 ]

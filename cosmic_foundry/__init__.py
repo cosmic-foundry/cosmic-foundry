@@ -12,6 +12,7 @@ from cosmic_foundry.fields import (  # noqa: E402
     FieldSegment,
     Placement,
     SegmentId,
+    allocate_field,
 )
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
@@ -41,6 +42,7 @@ __all__ = [
     "FieldSegment",
     "Placement",
     "SegmentId",
+    "allocate_field",
     # io
     "HAS_PARALLEL_HDF5",
     "merge_rank_files",
