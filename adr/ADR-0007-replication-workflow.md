@@ -1,6 +1,6 @@
 ## ADR-0007 — Replication workflow: bounded-increment, verification-first
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-04-14
 
 ## Context
@@ -187,3 +187,14 @@ by ADR-0006 for visual-regression assets.
   satisfies the intent: the expected value of 6.0 is
   derived analytically from ∇²(x²+y²+z²) = 6, not from a
   golden file; this is the model for future physics tests.
+
+- **2026-04-17 — Promoted Proposed → Accepted.** The workflow
+  has been in force since adoption: Epoch 1 landed under it
+  (infrastructure-exempt per the 2026-04-16 amendment), the
+  formula register (`replication/formulas.md`) and verification
+  helpers (`tests/utils/convergence.py`, `tests/utils/stencils.py`)
+  were built to serve it, and the two Epoch 2 design-prerequisite
+  ADRs (0011 HaloFillFence, 0012 DiagnosticReducer) both cite it
+  as the framing for their verification obligations. Surfaced as
+  a status correction by the Epoch 1 → Epoch 2 ADR-family review
+  (2026-04-17); no change to the decision itself.
