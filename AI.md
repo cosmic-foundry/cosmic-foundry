@@ -18,6 +18,26 @@ ADR wins.
 - Create topic branches from `origin/main` (the fork's main), not
   from `upstream/main` directly. Syncing `origin/main` to
   `upstream/main` is an explicit separate step.
+- **Syncing `origin/main` after a merge.** There is no named
+  `upstream` remote in this repo (omitted to prevent accidental
+  pushes). Use `gh repo sync` instead:
+  ```bash
+  gh repo sync cosmic-foundry-development/cosmic-foundry \
+    --source cosmic-foundry/cosmic-foundry --branch main
+  git checkout main && git pull origin main
+  ```
+- **Check PR state before pushing follow-up commits.** The user
+  sometimes merges a PR without telling the agent, and sometimes
+  forgets to sync `origin/main` afterward. Before pushing additional
+  commits to a branch that already has a PR, verify the PR is still
+  open:
+  ```bash
+  gh pr view --repo cosmic-foundry/cosmic-foundry \
+    --json state --jq .state
+  ```
+  If the result is `MERGED` or `CLOSED`, do not push to that branch.
+  Instead: sync `origin/main` (see above), check out `main`, and
+  create a new topic branch for the new work.
 - **Open pull requests against `upstream/main`**, not against the
   fork. Push the topic branch to `origin`, then open the PR so it
   merges into the upstream repository's `main`. Do not rely on
