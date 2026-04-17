@@ -79,7 +79,7 @@ for the authoritative rule.
   precision flag. Expected to be amended in place — not
   superseded — when mixed-precision experimentation begins, to
   add an explicit per-kernel opt-in for lower dtypes.
-- [**ADR-0010**](ADR-0010-kernel-abstraction-model.md) *(Proposed)* —
+- [**ADR-0010**](ADR-0010-kernel-abstraction-model.md) —
   Kernel abstraction model: four named concepts (Op, Region, Policy,
   Dispatch) separating the computational, spatial, and execution axes.
   Op is a per-element callable with declared access pattern; Region is

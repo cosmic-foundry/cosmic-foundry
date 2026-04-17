@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -61,6 +62,10 @@ class Extent:
     """Half-open integer index extent."""
 
     slices: tuple[slice, ...]
+
+    def __hash__(self) -> int:
+        # slice objects are not hashable; derive the hash from their bounds.
+        return hash(tuple((s.start, s.stop) for s in self.slices))
 
     @classmethod
     def from_shape(cls, shape: Sequence[int]) -> Extent:
@@ -184,31 +189,16 @@ class FlatPolicy:
             },
         )
 
-        if region.n_blocks > 1:
-
-            @jax.jit
-            def apply_batched(*jit_inputs: Any) -> Any:
-                indices = _region_indices(region)
-
-                def single_block(*block_inputs: Any) -> Any:
-                    return op_like(*block_inputs, *indices)
-
-                return jax.vmap(single_block)(*jit_inputs)
-
-            return apply_batched(*inputs)
-
-        @jax.jit
-        def apply(*jit_inputs: Any) -> Any:
-            indices = _region_indices(region)
-            return op_like(*jit_inputs, *indices)
-
-        return apply(*inputs)
+        return _make_jit_kernel(cast(Any, op_like), region)(*inputs)
 
 
 @dataclass(frozen=True)
 class Dispatch:
     """One local lowering unit: an Op over a Region under a Policy."""
 
+    # One Op per Dispatch in Epoch 1; multi-Op fusion is deferred to the
+    # Epoch 2 task-graph driver, which will compose compatible Ops before
+    # lowering rather than requiring changes here.
     op: OpLike
     region: Region
     policy: FlatPolicy = field(default_factory=FlatPolicy)
@@ -221,6 +211,42 @@ class Dispatch:
             msg = "Dispatch.execute requires at least one input array"
             raise ValueError(msg)
         return self.policy.execute(self.op, self.region, effective_inputs)
+
+
+@functools.lru_cache(maxsize=256)
+def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
+    """Return a cached JIT-compiled kernel for *(op_like, region)*.
+
+    Both arguments must be hashable.  Function-shaped Ops (decorated with
+    ``@op``) satisfy this by Python's default function identity hash.
+    Class-based ``Op`` subclasses satisfy it via object identity unless they
+    define ``__eq__`` without a matching ``__hash__``.  ``Region`` satisfies
+    it as a frozen dataclass (with ``Extent.__hash__`` converting slice bounds
+    to a tuple).
+
+    Caching here ensures that repeated ``FlatPolicy.execute`` calls with the
+    same Op and Region reuse the same compiled XLA computation rather than
+    re-tracing on every invocation.
+    """
+    if region.n_blocks > 1:
+
+        @jax.jit
+        def apply_batched(*jit_inputs: Any) -> Any:
+            indices = _region_indices(region)
+
+            def single_block(*block_inputs: Any) -> Any:
+                return op_like(*block_inputs, *indices)
+
+            return jax.vmap(single_block)(*jit_inputs)
+
+        return cast(Callable[..., Any], apply_batched)
+
+    @jax.jit
+    def apply(*jit_inputs: Any) -> Any:
+        indices = _region_indices(region)
+        return op_like(*jit_inputs, *indices)
+
+    return cast(Callable[..., Any], apply)
 
 
 def _region_indices(region: Region) -> tuple[jax.Array, ...]:
