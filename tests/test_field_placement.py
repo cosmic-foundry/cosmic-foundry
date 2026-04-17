@@ -1,4 +1,4 @@
-"""Tests for the Epoch 1 Field placement data model (step 3).
+"""Tests for the Field placement data model.
 
 Non-distributed tests cover the SegmentId / FieldSegment / Placement / Field
 API and the Field.covers() validation.

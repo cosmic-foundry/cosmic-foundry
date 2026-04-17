@@ -1,4 +1,4 @@
-"""Tests for the Epoch 1 kernel interface nucleus."""
+"""Tests for kernel interface primitives."""
 
 from __future__ import annotations
 

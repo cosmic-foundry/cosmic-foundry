@@ -1,6 +1,6 @@
-"""HDF5 I/O helpers for Cosmic Foundry (Epoch 1).
+"""HDF5 I/O helpers for Cosmic Foundry.
 
-Two functions cover the Epoch 1 write path:
+Two functions cover the current write path:
 
 - :func:`write_array` — write a single array (JAX or NumPy) to a new HDF5
   file.  When parallel HDF5 is available this can be called collectively; on

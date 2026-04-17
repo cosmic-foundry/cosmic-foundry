@@ -1,7 +1,7 @@
 """Visual regression test: sinusoid rendered with the house colormap.
 
-This is the seed test for the pytest-mpl harness. Later epochs add cards
-to the docs gallery and corresponding tests here.
+This is the seed test for the pytest-mpl harness. Later physics modules add
+cards to the docs gallery and corresponding tests here.
 
 Run with image comparison:
     pytest --mpl tests/visual/
@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 # House colormap: viridis is colorblind-safe and ships with matplotlib.
-# cmasher / cmocean are added to the house palette in Epoch 3; swap here then.
+# Swap to cmasher / cmocean once those dependencies are added to the palette.
 HOUSE_CMAP = "viridis"
 
 

@@ -46,6 +46,12 @@ def pressure(rho: float, gamma: float) -> float:
     return (gamma - 1.0) * rho
 ```
 
+Keep code, tests, configuration, and live documentation independent of the
+project's current roadmap epoch. Epoch labels belong in roadmap and ADR
+planning text; they should not appear in module docstrings, pytest marker
+descriptions, API notes, or overview copy as a statement of current project
+state.
+
 ## Testing
 
 - Tests live under `tests/`, mirroring the package layout.

@@ -1,4 +1,4 @@
-"""Field, FieldSegment, Placement, and SegmentId — Epoch 1 data model.
+"""Field, FieldSegment, Placement, and SegmentId data model.
 
 The four concepts here correspond to the *storage* axis of the kernel
 abstraction (ADR-0010):

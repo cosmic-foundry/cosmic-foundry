@@ -1,4 +1,4 @@
-"""Tests for Epoch 1 I/O and observability (step 4)."""
+"""Tests for I/O and observability."""
 
 from __future__ import annotations
 

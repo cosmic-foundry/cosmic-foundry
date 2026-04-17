@@ -47,8 +47,8 @@ the capability set surveyed in
 [`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
 — hydrodynamics through numerical relativity, radiation transport, gravity,
 N-body, microphysics, and cosmology. It is being built incrementally through
-a series of epochs, starting from this bootstrap (Epoch 0) and growing toward
-a code that can replicate published astrophysics results.
+a roadmap of staged capabilities toward a code that can replicate published
+astrophysics results.
 
 For the full design survey and development plan, see
 [`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)

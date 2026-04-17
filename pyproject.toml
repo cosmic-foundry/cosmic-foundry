@@ -104,6 +104,6 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 addopts = "-q"
 markers = [
-    "multihost: requires jax.distributed multi-process setup (deferred to Epoch 1)",
+    "multihost: requires jax.distributed multi-process setup",
     "visual: pytest-mpl image-comparison tests",
 ]
