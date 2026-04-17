@@ -87,3 +87,9 @@ for the authoritative rule.
   organization (flat / tiled / warp-specialized); Dispatch is the
   dispatch unit composing one or more Ops with a Region and Policy.
   Only FlatPolicy is implemented in Epoch 1.
+- [**ADR-0011**](ADR-0011-halo-fill-fence.md) *(Proposed)* —
+  Halo fill fence: `HaloFillFence` descriptor + `HaloFillPolicy`
+  execution split for ghost-cell exchange. The driver inserts fences
+  before dispatches whose required footprint extends beyond the local
+  segment interior; `HaloFillPolicy` executes the exchange via
+  `jax.distributed`.

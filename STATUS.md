@@ -9,10 +9,10 @@
 
 ## Current position
 
-**Between Epoch 1 and Epoch 2.**
+**Epoch 2 — design prerequisites in progress.**
 
-Epoch 1 (kernel abstraction layer + infrastructure) is complete. Verification
-infrastructure is being added before Epoch 2 begins. Epoch 2 has not started.
+Epoch 1 complete. Verification infrastructure merged. Epoch 2 design
+prerequisites are being resolved before the task-graph driver is implemented.
 
 ## Completed epochs
 
@@ -21,10 +21,9 @@ infrastructure is being added before Epoch 2 begins. Epoch 2 has not started.
 | 0 | Project scaffolding, packaging, CI, docs, ADR process, visualization scaffolding, `hello` | PR #30 area |
 | 1 | Op / Region / Policy / Dispatch kernel interface; JAX `FlatPolicy`; Field placement; parallel HDF5 I/O | PR #62 (close-out sweep) |
 
-## In progress
+## Completed (pre-Epoch 2)
 
-**Verification infrastructure** (no epoch number; these are cross-cutting
-tools that all subsequent epochs depend on):
+**Verification infrastructure:**
 
 | Item | PR | Status |
 |------|----|--------|
@@ -34,13 +33,20 @@ tools that all subsequent epochs depend on):
 | SymPy stencil coefficient verification (`tests/utils/stencils.py`) | #70 | Merged |
 | Epoch 2 design prerequisites: global reduction + diagnostics | #68 | Merged |
 
+**Epoch 2 design prerequisites:**
+
+| Item | PR | Status |
+|------|----|--------|
+| Field name → Dispatch input binding (`BoundOp` protocol, ADR-0010 amendment) | #74, #75 | Merged |
+| Halo fill fence (`HaloFillFence` + `HaloFillPolicy`, ADR-0011) | #76 | Open |
+| Global reduction primitive for simulation diagnostics | — | Not started |
+
 ## Next planned work
 
-1. Begin **Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md`.
-   Design prerequisites (read that file before starting):
-   - Field name → Dispatch input binding protocol
-   - Halo fill fence mechanism
-   - Global reduction primitive for simulation diagnostics
+1. Merge halo fill fence ADR (PR #76).
+2. Design and document the global reduction primitive (ADR or ADR-0010/0011 amendment).
+3. Begin **Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md` once all
+   three design prerequisites are resolved.
 
 ## Reference
 
