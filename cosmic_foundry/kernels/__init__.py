@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -118,8 +118,23 @@ class OpLike(Protocol):
     writes: tuple[str, ...]
     backends: frozenset[Backend]
 
-    def __call__(self, *args: Any) -> Any:
-        """Evaluate the Op."""
+    def __call__(self, *args: Any) -> BoundOp:
+        """Bind field inputs to this Op, returning a BoundOp."""
+
+
+@dataclass
+class BoundOp:
+    """An Op with its field inputs bound, ready for dispatch.
+
+    Created by calling an Op with its field arrays::
+
+        bound = laplacian(phi_array)          # positional
+        bound = flux(rho=rho_arr, v=v_arr)    # keyword
+        Dispatch(bound, region).execute()
+    """
+
+    op: Any  # OpLike — Any avoids circular-protocol issues
+    fields: dict[str, Any]  # name → array, ordered by op.reads
 
 
 class Op(ABC):
@@ -135,11 +150,55 @@ class Op(ABC):
         """Return the Op locality metadata."""
 
     @abstractmethod
-    def __call__(self, *args: Any) -> Any:
-        """Evaluate the Op."""
+    def __call__(self, *args: Any) -> BoundOp:
+        """Bind field inputs to this Op, returning a BoundOp."""
 
 
-OpFunc = TypeVar("OpFunc", bound=Callable[..., Any])
+class _FuncOp:
+    """Function-shaped Op created by the ``@op`` decorator.
+
+    Stores the raw kernel as ``_fn`` for use by the dispatch machinery.
+    Calling an instance binds positional or keyword field arguments by
+    name (via ``reads``) and returns a :class:`BoundOp`.
+    """
+
+    def __init__(
+        self,
+        fn: Callable[..., Any],
+        access_pattern: AccessPattern,
+        reads: tuple[str, ...],
+        writes: tuple[str, ...],
+        backends: frozenset[Backend],
+    ) -> None:
+        self._fn = fn
+        self.access_pattern = access_pattern
+        self.reads = reads
+        self.writes = writes
+        self.backends = backends
+        functools.update_wrapper(self, fn)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> BoundOp:
+        """Bind positional and keyword field arrays to this Op."""
+        if len(args) > len(self.reads):
+            n_reads = len(self.reads)
+            name = getattr(self, "__name__", "?")
+            msg = (
+                f"Op {name!r} reads {self.reads!r} ({n_reads} fields) "
+                f"but received {len(args)} positional arguments"
+            )
+            raise TypeError(msg)
+        fields: dict[str, Any] = {self.reads[i]: arg for i, arg in enumerate(args)}
+        fields.update(kwargs)
+        return BoundOp(op=self, fields=fields)
+
+    def __hash__(self) -> int:
+        return hash(self._fn)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _FuncOp) and self._fn is other._fn
+
+    def __repr__(self) -> str:
+        return f"<Op {getattr(self, '__name__', '?')!r}>"
 
 
 def op(
@@ -148,16 +207,16 @@ def op(
     reads: tuple[str, ...] = (),
     writes: tuple[str, ...] = (),
     backends: frozenset[Backend] = frozenset({Backend.JAX}),
-) -> Callable[[OpFunc], OpFunc]:
-    """Attach Op metadata to a function-shaped callable."""
+) -> Callable[[Callable[..., Any]], _FuncOp]:
+    """Attach Op metadata to a function-shaped callable.
 
-    def decorate(func: OpFunc) -> OpFunc:
-        metadata_target = cast(Any, func)
-        metadata_target.access_pattern = access_pattern
-        metadata_target.reads = reads
-        metadata_target.writes = writes
-        metadata_target.backends = backends
-        return func
+    Returns a :class:`_FuncOp` that stores the raw function as ``_fn``
+    and whose ``__call__`` binds field arrays by name, returning a
+    :class:`BoundOp`.
+    """
+
+    def decorate(func: Callable[..., Any]) -> _FuncOp:
+        return _FuncOp(func, access_pattern, reads, writes, backends)
 
     return decorate
 
@@ -168,16 +227,17 @@ class FlatPolicy:
 
     def execute(
         self,
-        op_like: OpLike,
+        bound: BoundOp,
         region: Region,
-        inputs: tuple[Any, ...],
     ) -> Any:
-        """Execute an Op over a Region with JAX/XLA.
+        """Execute a BoundOp over a Region with JAX/XLA.
 
         When ``region.n_blocks > 1`` inputs carry a leading batch axis and
         the kernel is lowered with ``jax.vmap``; the Op is unaware of that
         dimension.
         """
+        op_like = bound.op
+        inputs = tuple(bound.fields.values())
         _validate_op(op_like)
         _validate_region_access(region, op_like.access_pattern, inputs)
 
@@ -194,38 +254,31 @@ class FlatPolicy:
 
 @dataclass(frozen=True)
 class Dispatch:
-    """One local lowering unit: an Op over a Region under a Policy."""
+    """One local lowering unit: a BoundOp over a Region under a Policy."""
 
-    # One Op per Dispatch in Epoch 1; multi-Op fusion is deferred to the
-    # Epoch 2 task-graph driver, which will compose compatible Ops before
-    # lowering rather than requiring changes here.
-    op: OpLike
+    # One Op per Dispatch; multi-Op fusion is deferred to the Epoch 2
+    # task-graph driver, which will compose compatible Ops before lowering.
+    bound: BoundOp
     region: Region
     policy: FlatPolicy = field(default_factory=FlatPolicy)
-    inputs: tuple[Any, ...] = ()
 
-    def execute(self, inputs: tuple[Any, ...] | None = None) -> Any:
+    def execute(self) -> Any:
         """Execute this Dispatch."""
-        effective_inputs = self.inputs if inputs is None else inputs
-        if not effective_inputs:
-            msg = "Dispatch.execute requires at least one input array"
-            raise ValueError(msg)
-        return self.policy.execute(self.op, self.region, effective_inputs)
+        return self.policy.execute(self.bound, self.region)
 
 
 @functools.lru_cache(maxsize=256)
 def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
     """Return a cached JIT-compiled kernel for *(op_like, region)*.
 
-    Both arguments must be hashable.  Function-shaped Ops (decorated with
-    ``@op``) satisfy this by Python's default function identity hash.
-    Class-based ``Op`` subclasses satisfy it via object identity unless they
-    define ``__eq__`` without a matching ``__hash__``.  ``Region`` satisfies
-    it as a frozen dataclass (with ``Extent.__hash__`` converting slice bounds
-    to a tuple).
+    Both arguments must be hashable.  ``_FuncOp`` instances satisfy this via
+    ``__hash__`` / ``__eq__`` defined on the wrapper.  Class-based ``Op``
+    subclasses satisfy it via object identity unless they define ``__eq__``
+    without a matching ``__hash__``.  ``Region`` satisfies it as a frozen
+    dataclass (with ``Extent.__hash__`` converting slice bounds to a tuple).
 
-    Caching here ensures that repeated ``FlatPolicy.execute`` calls with the
-    same Op and Region reuse the same compiled XLA computation rather than
+    Caching ensures that repeated ``FlatPolicy.execute`` calls with the same
+    Op and Region reuse the same compiled XLA computation rather than
     re-tracing on every invocation.
     """
     if region.n_blocks > 1:
@@ -235,7 +288,7 @@ def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
             indices = _region_indices(region)
 
             def single_block(*block_inputs: Any) -> Any:
-                return op_like(*block_inputs, *indices)
+                return op_like._fn(*block_inputs, *indices)
 
             return jax.vmap(single_block)(*jit_inputs)
 
@@ -244,7 +297,7 @@ def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
     @jax.jit
     def apply(*jit_inputs: Any) -> Any:
         indices = _region_indices(region)
-        return op_like(*jit_inputs, *indices)
+        return op_like._fn(*jit_inputs, *indices)
 
     return cast(Callable[..., Any], apply)
 
@@ -257,7 +310,7 @@ def _region_indices(region: Region) -> tuple[jax.Array, ...]:
     return tuple(jnp.meshgrid(*axes, indexing="ij"))
 
 
-def _validate_op(op_like: OpLike) -> None:
+def _validate_op(op_like: Any) -> None:
     if not hasattr(op_like, "access_pattern"):
         msg = "Op must declare access_pattern metadata"
         raise TypeError(msg)
@@ -320,6 +373,7 @@ def _slice_length(axis_slice: slice) -> int:
 __all__ = [
     "AccessPattern",
     "Backend",
+    "BoundOp",
     "Dispatch",
     "Extent",
     "FlatPolicy",
