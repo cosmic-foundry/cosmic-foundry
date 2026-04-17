@@ -26,6 +26,15 @@ In practice this means:
   depends on it.
 - Cross-scale workflows that compose two or more application domains
   belong in their own repository, not here.
+- **This file is the authoritative source for all software design
+  direction across the organization.** Application repo `AI.md` files
+  are intentionally thin: they delegate here for development rules,
+  commit discipline, ADR process, physics capability lanes, code quality
+  standards, and architectural weighing criteria. They add only what
+  genuinely differs for that repo (fork/PR targets, environment setup,
+  domain-specific data rules). If a software design rule or agent
+  guideline belongs to both the platform and an application repo,
+  it belongs here — not in both places.
 
 ## Development Rules
 
