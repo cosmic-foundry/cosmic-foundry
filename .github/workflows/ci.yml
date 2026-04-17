@@ -28,7 +28,7 @@ jobs:
           cache-downloads: true
       - name: Install package
         run: pip install -e .[dev,docs]
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -93,7 +93,7 @@ jobs:
       - name: Upload pages artifact
         # Upload on every successful build so the deploy job can consume it
         # on pushes to main.  The artifact is ignored (but harmless) on PRs.
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs/_build/html
 
@@ -111,7 +111,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   docs-integrity:
     runs-on: ubuntu-latest
