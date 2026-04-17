@@ -77,6 +77,13 @@ choice is load-bearing.
 - Expected convergence order(s).
 - Conservation / symmetry invariants and their tolerances.
 - Interface contract with other capabilities it couples to.
+- **External reference:** (required for physics capabilities before
+  status advances past Implementing) — one of:
+  - Analytical solution with derivation or citation.
+  - Published benchmark value: paper, equation or table number, value.
+  - Symbolic derivation: continuous operator → discrete stencil via
+    SymPy or equivalent, with the derivation committed alongside.
+  See ADR-0007 §Amendments for the definition of "externally grounded."
 
 ## Dependents
 
@@ -155,6 +162,13 @@ before further work in the area.
 - **Tolerances are explicit.** The manifest carries a default
   tolerance per fixture; tests may tighten but should not
   silently loosen it.
+- **Regression detection, not correctness grounding.** Golden
+  files catch drift after a correct baseline is established.
+  They do not establish correctness on their own: a fixture
+  generated from a wrong implementation encodes a wrong answer.
+  Every physics capability must also have at least one
+  externally grounded test (see ADR-0007 §Amendments and the
+  External reference field in the capability spec template).
 
 ## Exceptions to the bounded-increment rule
 
