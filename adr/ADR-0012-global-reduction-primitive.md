@@ -1,9 +1,5 @@
 # ADR-0012 — Global Reduction Primitive
 
-- **Status:** Proposed
-- **Date:** 2026-04-17
-- **Deciders:** Cosmic Foundry core team
-
 ## Context
 
 Physics simulations need timestep-by-timestep records of domain-wide

@@ -1,8 +1,5 @@
 # ADR-0006 — Visualization and science-communication stack
 
-- **Status:** Proposed
-- **Date:** 2026-04-13
-
 ## Context
 
 Cosmic Foundry treats excellence at visualization as a core

@@ -320,7 +320,7 @@ asks: *what did we learn during this epoch that should update our plans?*
 The retrospective covers:
 
 1. **ADRs in force** (`adr/README.md` and each linked file). Did the
-   implementation reveal that any decision needs amending? Were any
+   implementation reveal that any decision needs updating? Were any
    "anticipated extensions" or "deferred" items resolved in practice?
    Were any stated consequences wrong?
 
@@ -351,7 +351,7 @@ The retrospective covers:
 
 6. **Surprises and pain points**. What was harder than expected? What
    design decisions caused rework? What would have been better to decide
-   earlier? Capture these as ADR amendments, roadmap notes, or additions
+   earlier? Capture these as ADR edits, roadmap notes, or additions
    to `AI.md` — wherever the lesson is most actionable for the next epoch.
 
 The output is one or more PRs amending affected documents before Epoch N+1
@@ -369,8 +369,8 @@ full ADR before making changes; the index is a pointer, not a
 summary substitute.
 
 When making a new architectural decision, copy
-`adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md`, mark it
-Proposed, and add a line to `adr/README.md` in the same PR.
+`adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md` and add
+a line to `adr/README.md` in the same PR.
 
 Before treating an architectural decision as ready for human review,
 run `pr-review/architecture-checklist.md`. The checklist forces an
@@ -380,19 +380,17 @@ boundaries, and identify fences / materialization points. Include the
 stress-review result in the ADR, the PR description, or the review
 report.
 
-Accepted ADRs may be amended in place when a conversation implies
-a change consistent with the existing decision — propose the edit
-directly rather than routing clarifications through AI.md. Each
-amendment appends a dated bullet to the ADR's *Amendments*
-section. Reversing a decision still goes via supersession (a new
-ADR). See
-[ADR-0005 §Decision → ADR amendment policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-amendment-policy).
+ADRs describe current architecture. When a conversation implies an
+ADR should change, propose the edit directly — edit the document in
+place rather than appending amendment logs. Reversing a decision
+entirely requires a new ADR. See
+[ADR-0005 §Decision → ADR editing policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
 
 ## Physics capability implementation paths
 
 Per [ADR-0013](adr/ADR-0013-derivation-first-lane.md), every PR that
 adds or changes a *physics capability* (as defined in ADR-0007
-Amendments) is in one of three lanes:
+§Decision) is in one of three lanes:
 
 - **Lane A — Port-and-verify.** Adapt from a permissively-licensed
   reference code with attribution. Default for permissive references.

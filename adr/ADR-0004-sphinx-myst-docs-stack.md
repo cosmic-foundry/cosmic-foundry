@@ -1,15 +1,5 @@
 # ADR-0004 — Sphinx + MyST-NB documentation stack
 
-- **Status:** Proposed
-- **Date:** 2026-04-14
-
-> **Note on status.** Of the five Epoch-0 seed ADRs, the
-> documentation stack is the one expected to iterate the most as
-> real content lands. The decision below is Proposed, not Accepted:
-> the Sphinx + MyST-NB foundation is firm, but theme, styling, and
-> the interactive-embed path are open to revision in follow-up ADRs
-> without disrupting prose, notebooks, or the API reference.
-
 ## Context
 
 Cosmic Foundry's roadmap ([`roadmap/index.md`](../roadmap/index.md) §4,
@@ -66,11 +56,24 @@ below) and lands with the first substantial docs PR.
 - **Build command.** `sphinx-build -W docs docs/_build/html` —
   warnings are errors. This is a required step in the Epoch-0
   exit criteria and in CI once the docs tree lands.
-- **Publishing.** Local `sphinx-build` only in Epoch 0. Read the
-  Docs / GitHub Pages publishing is deferred until there is real
-  content to host; the decision to adopt one or the other is left
-  to a future ADR so that neither the hosting surface nor the URL
-  shape is frozen prematurely.
+- **Publishing.** **GitHub Pages**, deployed via GitHub Actions
+  using `actions/upload-pages-artifact` + `actions/deploy-pages`
+  with the built-in `GITHUB_TOKEN` permissions — no PAT or deploy
+  key required. Triggered on push to `main` only; PRs build and
+  linkcheck but never deploy. One "latest" build tracks `main`;
+  versioned docs are deferred until the project cuts a stable
+  release. Engine docs live at:
+
+  > `https://cosmic-foundry.github.io/cosmic-foundry/`
+
+  Each sibling repo (`stellar-foundry`, and any future additions)
+  deploys its own docs independently to
+  `cosmic-foundry.github.io/<repo-name>/` via the same workflow
+  pattern. Repos cross-reference each other via `intersphinx`;
+  entries are added to each repo's `conf.py` once the target has a
+  published build. No central portal repo is created at this time.
+  `html_baseurl` is set in `conf.py` for correct canonical URLs and
+  sitemap entries under the `/cosmic-foundry/` subpath.
 - **Interactivity model.** Interactive content is **parameter-
   driven**, not code-driven: the reader manipulates sliders,
   dropdowns, or similar controls, and live simulation outputs are
@@ -134,13 +137,12 @@ directory.
   between the two surfaces is one-way: the docs tree can reference
   repo-root files by relative path; the repo-root files do not
   reach into `docs/_build/`.
-- **Neutral — open follow-ups.** The ADR is Proposed; three
-  sub-decisions land alongside the first substantial docs PR:
-  exact theme (`furo` vs `pydata-sphinx-theme` vs a heavier
-  custom skin), the CSS treatment that delivers the "not
-  notebook-looking" aesthetic, and the widget layout conventions
-  that keep parameter-driven simulation pages consistent across
-  physics modules.
+- **Neutral — open follow-ups.** Three sub-decisions land alongside
+  the first substantial docs PR: exact theme (`furo` vs
+  `pydata-sphinx-theme` vs a heavier custom skin), the CSS treatment
+  that delivers the "not notebook-looking" aesthetic, and the widget
+  layout conventions that keep parameter-driven simulation pages
+  consistent across physics modules.
 
 ## Alternatives considered
 
@@ -182,46 +184,6 @@ directory.
   documentation; notebook-cell chrome is explicitly hidden by
   default.
 
-## Amendments
-
-- **2026-04-16 — Hosting and multi-repo URL strategy.** The original
-  decision deferred "Read the Docs / GitHub Pages publishing … until
-  there is real content to host." The docs tree has now been seeded
-  (Epoch 0) and CI validates it on every PR; the deferred decision
-  is resolved here.
-
-  **Hosting platform:** GitHub Pages, deployed via GitHub Actions
-  using `actions/upload-pages-artifact` + `actions/deploy-pages`
-  with the built-in `GITHUB_TOKEN` permissions — no PAT or deploy
-  key required.
-
-  **Trigger:** Push to `main` only. PRs continue to build and
-  linkcheck but never deploy. There is one "latest" build tracking
-  `main`; versioned docs are deferred until the project cuts a
-  stable release (consistent with the "no stable APIs yet" policy in
-  AI.md).
-
-  **URL structure:** GitHub Pages serves `cosmic-foundry.github.io/`
-  only from a repo named `cosmic-foundry.github.io`; all other repos
-  are served under their repo name as a subpath. Engine docs
-  therefore live at:
-
-  > `https://cosmic-foundry.github.io/cosmic-foundry/`
-
-  **Multi-repo strategy:** each sibling repo (`cosmic-observables`,
-  `stellar-foundry`, and any future additions) deploys its own docs
-  independently to `cosmic-foundry.github.io/<repo-name>/` via the
-  same workflow pattern. Repos cross-reference each other via
-  `intersphinx`; entries are added to each repo's `conf.py` once
-  the target has a published build. No central portal repo
-  (`cosmic-foundry.github.io`) is created at this time — the
-  overhead is not warranted while the sibling repos are early-stage.
-  The portal is a natural follow-up once all three repos have
-  substantial published docs.
-
-  **`html_baseurl`:** set in `conf.py` so Sphinx generates correct
-  canonical URLs and sitemap entries for the `/cosmic-foundry/`
-  subpath.
 
 ## Cross-references
 

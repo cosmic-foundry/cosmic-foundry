@@ -1,15 +1,12 @@
 # Architectural Decision Records
 
 Each ADR captures one architectural decision: the context that
-forced it, the choice made, the consequences, and the
-alternatives considered. Accepted ADRs may be amended in place
-when the change is consistent with the existing decision —
-clarifications, rewordings, narrowing of scope, and corrections
-are all fair game, provided each amendment is logged in a
-trailing *Amendments* section on the ADR. Reversing a decision
-still requires superseding the ADR with a new one, not editing
-it. See
-[ADR-0005 §Decision → ADR amendment policy](ADR-0005-branch-pr-attribution-discipline.md#adr-amendment-policy)
+forced it, the choice made, the consequences, and the alternatives
+considered. ADRs describe current architecture. When a decision
+changes, edit the ADR in place — git history records what changed
+and when. Reversing a decision entirely requires a new ADR; the old
+one may be marked superseded in its title or removed from the index.
+See [ADR-0005 §Decision → ADR editing policy](ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy)
 for the authoritative rule.
 
 ## How to use this index
@@ -20,8 +17,8 @@ for the authoritative rule.
   before making changes. The index is a pointer, not a summary
   you can rely on for nuance.
 - **When making a new architectural decision**, copy
-  `adr-template.md` to `ADR-NNNN-<short-title>.md`, mark it
-  Proposed, and add a line to this index in the same PR.
+  `adr-template.md` to `ADR-NNNN-<short-title>.md` and add a
+  line to this index in the same PR.
 
 ## Index
 
@@ -53,9 +50,9 @@ numerical precision — the load-bearing choices every later ADR builds on.
   Float64 is the default and only supported precision for all
   kernels and public APIs. `jax_enable_x64` is set at package
   import; no `dtype=` on public signatures yet; no ambient
-  precision flag. Expected to be amended in place — not
-  superseded — when mixed-precision experimentation begins, to
-  add an explicit per-kernel opt-in for lower dtypes.
+  precision flag. Expected to be edited in place when
+  mixed-precision experimentation begins, to add an explicit
+  per-kernel opt-in for lower dtypes.
 
 ### Kernel model
 
@@ -70,13 +67,13 @@ extend it (halo exchange, global reductions).
   organization (flat / tiled / warp-specialized); Dispatch is the
   dispatch unit composing one or more Ops with a Region and Policy.
   Only FlatPolicy is implemented in Epoch 1.
-- [**ADR-0011**](ADR-0011-halo-fill-fence.md) *(Proposed)* —
+- [**ADR-0011**](ADR-0011-halo-fill-fence.md) —
   Halo fill fence: `HaloFillFence` descriptor + `HaloFillPolicy`
   execution split for ghost-cell exchange. The driver inserts fences
   before dispatches whose required footprint extends beyond the local
   segment interior; `HaloFillPolicy` executes the exchange via
   `jax.distributed`.
-- [**ADR-0012**](ADR-0012-global-reduction-primitive.md) *(Proposed)* —
+- [**ADR-0012**](ADR-0012-global-reduction-primitive.md) —
   Global reduction primitive: `DiagnosticReducer` protocol,
   `DiagnosticRecord` container, `DiagnosticSink` writer, and
   `global_sum` helper. Tab-separated `.diag` file per run; includes
@@ -100,12 +97,12 @@ physics capabilities.
   exceptions for integration-time debugging are enumerated in
   `replication/README.md`.
 - [**ADR-0008**](ADR-0008-numerical-transcription-discipline.md)
-  *(Proposed — stub)* — Numerical-transcription discipline for
+  *(stub)* — Numerical-transcription discipline for
   files like `aprox_rates.H` where the ~100-LOC guideline is
   ill-fitted and ADR-0007's verification-first discipline is
   what actually catches defects. Reserves the number and records
-  the problem framing; final decision deferred to before Epoch 6.
-- [**ADR-0013**](ADR-0013-derivation-first-lane.md) *(Proposed)* —
+  the problem framing; final decision deferred to before Epoch 7.
+- [**ADR-0013**](ADR-0013-derivation-first-lane.md) —
   Derivation-first lane for physics capabilities. Three named paths:
   Lane A (port-and-verify from a permissive reference), Lane B
   (clean-room from paper; required when the reference is
@@ -135,17 +132,17 @@ the platform and to each other.
 Authoring and presentation of engine output — docs toolchain and
 visualization stack.
 
-- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) *(Proposed)* —
+- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) —
   Sphinx + MyST-NB documentation stack with `sphinx-design`;
   `sphinx-autodoc2` for API reference; `sphinx-build -W` in CI.
-  Interactivity is parameter-driven: sliders feed **live** simulation
-  outputs computed in the browser by engine-authored WebGPU / WASM
-  artifacts (per ADR-0006), not by a browser-side Python runtime.
-  The distinction is who authors the code, not when it runs.
-  Rendered pages hide notebook-cell chrome by default. Theme
-  (furo vs pydata-sphinx-theme), CSS polish, and hosting
-  (RTD / Pages) deferred to follow-up ADRs alongside the first
-  substantial docs PR.
+  Hosted on GitHub Pages at
+  `cosmic-foundry.github.io/cosmic-foundry/`. Interactivity is
+  parameter-driven: sliders feed **live** simulation outputs computed
+  in the browser by engine-authored WebGPU / WASM artifacts (per
+  ADR-0006), not by a browser-side Python runtime. Rendered pages
+  hide notebook-cell chrome by default. Theme (furo vs
+  pydata-sphinx-theme) and CSS polish land with the first substantial
+  docs PR.
 - [**ADR-0006**](ADR-0006-visualization-stack.md) — Visualization
   and science-communication stack: Zarr v3 alongside HDF5;
   WebGPU-first browser target with WebGL2 fallback; perceptual

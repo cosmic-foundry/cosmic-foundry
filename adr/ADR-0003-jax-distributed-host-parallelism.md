@@ -1,8 +1,5 @@
 # ADR-0003 — jax.distributed + NCCL as the host-parallelism baseline
 
-- **Status:** Accepted
-- **Date:** 2026-04-14
-
 ## Context
 
 ADR-0002 commits the primary kernel backend to JAX + XLA, whose
@@ -147,15 +144,3 @@ baseline.
   (Epoch 1 Field placement and multi-host CI).
 - ADR-0002 (JAX primary backend) — composes with this decision for
   intra-node parallelism.
-
-## Amendments
-
-- **2026-04-16** — Replaced the provisional `ShardedField` concept
-  with `Field`, `FieldSegment`, and explicit `Placement` metadata.
-  The host-parallelism decision is unchanged: `jax.distributed`
-  remains the baseline. The amendment narrows the storage model so
-  `Field` is not assumed to represent a globally complete domain
-  object. Region and Dispatch interpret whether a Field's placed
-  segments cover the extent an operation needs; single-process
-  whole-domain execution is only the degenerate one-segment,
-  one-placement case.

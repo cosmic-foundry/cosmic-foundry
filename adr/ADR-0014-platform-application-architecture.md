@@ -1,9 +1,5 @@
 # ADR-0014 — Platform / Application Repository Architecture
 
-- **Status:** Accepted
-- **Date:** 2026-04-17
-- **Deciders:** project lead
-
 ## Context
 
 Cosmic Foundry was originally scoped as a self-contained computational
@@ -104,7 +100,3 @@ computation primitives; all physics implementations live in application
 repos. Rejected because it prevents cross-domain physics reuse (e.g.,
 Newtonian hydrodynamics is needed by stellar-foundry, cosmological-foundry,
 and galactic-foundry; implementing it three times would be incorrect).
-
-## Amendments
-
-<!-- Append dated bullets here when this ADR is amended in place. -->
