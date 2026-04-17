@@ -104,3 +104,89 @@ Bring up the mesh hierarchy the physics modules will live on:
 design order on AMR, runs identically on CPU and GPU, produces
 rank-invariant output, and writes a matching Zarr pyramid that
 the Epoch 3 viewer MVP consumes without hand editing.
+
+---
+
+## Implementation plan
+
+Proposed PR sequence. Items marked ✓ are merged; open items are
+ordered by dependency. Re-examine the next 3–5 entries after each
+merge and update this list when the picture changes.
+
+### Uniform grid and ghost-cell exchange
+
+1. ✓ **Uniform mesh data model** (PR #85) — `Block`, `BlockId`,
+   `UniformGrid`; domain decomposition; round-robin rank
+   assignment; `cell_centers` coordinate arrays.
+
+2. **Field allocation from blocks** — given a `UniformGrid`,
+   produce a `Field` whose `FieldSegment` payloads are JAX arrays
+   sized for the block interior plus a ghost-cell halo (width
+   determined by the caller's `AccessPattern`). Establishes the
+   connection between mesh topology and field storage.
+   *Depends on: #1.*
+
+3. **`HaloFillPolicy` — single-rank** (implements ADR-0011) —
+   fill ghost cells for blocks on the same rank by copying from
+   the neighbor block's payload. Includes `Field.covers` checks
+   and the basic `HaloFillFence` → `HaloFillPolicy.execute` path.
+   *Depends on: #2.*
+
+4. **`DiagnosticReducer` + `DiagnosticSink`** (implements
+   ADR-0012) — `global_sum` helper, `DiagnosticRecord` container,
+   tab-separated `.diag` file writer. Independent of the halo
+   exchange path; can proceed in parallel with #3.
+   *Depends on: #2.*
+
+5. **Task-graph driver — single-rank** — ordered sequence of
+   `(HaloFillFence | Dispatch)` steps; driver inspects
+   `Op.reads`/`writes` and inserts fences before dispatches
+   whose footprint exceeds the local segment interior. Connects
+   `UniformGrid`, `Field`, `Dispatch`, and `HaloFillPolicy`.
+   *Depends on: #3.*
+
+6. **`HaloFillPolicy` — multi-rank** — extend the single-rank
+   implementation to cross-rank ghost-cell exchange via
+   `jax.distributed` point-to-point collectives. Requires a
+   multi-process test harness (subprocess or `jax.distributed`
+   initializer).
+   *Depends on: #3.*
+
+### AMR hierarchy
+
+7. **AMR block hierarchy** — `RefinedBlock` with refinement
+   ratio, parent/child relationships, and level-aware
+   `cell_centers`. Extends `UniformGrid` to a multi-level
+   `AMRGrid`. Data model only; no time integration yet.
+   *Depends on: #1.*
+
+8. **Flux registers + coarse/fine correction** — accumulate
+   fine-level face fluxes into a register and apply the
+   correction to the coarse level at synchronization points.
+   *Depends on: #7.*
+
+9. **Task-graph driver — multi-rank** — extend the single-rank
+   driver to schedule across ranks and call multi-rank
+   `HaloFillPolicy`.
+   *Depends on: #5, #6.*
+
+10. **AMR subcycling** — advance refined levels at a smaller
+    timestep than the coarse level; synchronize at coarse
+    timestep boundaries.
+    *Depends on: #8, #9.*
+
+### I/O and exit criterion
+
+11. **Plotfile writer** — HDF5 plotfile with AMR level metadata
+    and yt-compatible layout.
+    *Depends on: #7.*
+
+12. **Zarr v3 writer** — OME-Zarr-style multiscale pyramid
+    emitted alongside the plotfile.
+    *Depends on: #7.*
+
+13. **Second-order advection convergence test** — meets exit
+    criterion: converges at design order on AMR, CPU/GPU
+    identical, rank-invariant, Zarr pyramid readable by the
+    Epoch 3 viewer.
+    *Depends on: #10, #12.*
