@@ -307,6 +307,60 @@ section. Reversing a decision still goes via supersession (a new
 ADR). See
 [ADR-0005 §Decision → ADR amendment policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-amendment-policy).
 
+## Physics capability implementation paths
+
+Per [ADR-0013](adr/ADR-0013-derivation-first-lane.md), every PR that
+adds or changes a *physics capability* (as defined in ADR-0007
+Amendments) is in one of three lanes:
+
+- **Lane A — Port-and-verify.** Adapt from a permissively-licensed
+  reference code with attribution. Default for permissive references.
+  No derivation document required.
+- **Lane B — Clean-room from paper.** Mandatory when the only
+  reference is copyleft-licensed (per
+  [`research/06-12-licensing.md`](research/06-12-licensing.md):
+  GADGET-4, RAMSES, MESA, SWIFT, PLUTO, Arepo, ChaNGa, GIZMO-public,
+  MPI-AMRVAC, BHAC, koral_lite, Dedalus, ...). The reference source
+  tree **must not be opened** — no `git clone`, no source browsing,
+  no cached previews with source content. Papers and vendor
+  documentation only. A derivation document is required.
+- **Lane C — First-principles origination.** For generalizations,
+  extensions, and novel work where the goal is to *understand* the
+  formalism rather than reproduce a specific reference. A derivation
+  document is required; principled disagreements with the literature
+  are recorded inside it.
+
+Lanes B and C require a derivation document under `derivations/`
+with executable SymPy checks on load-bearing algebraic steps.
+Infrastructure capabilities (dispatch, mesh topology, I/O, field
+placement) are out of scope.
+
+### Agent responsibility per task
+
+For any task that touches a physics capability:
+
+1. **Classify the lane.** Look up the reference code's license in
+   `research/06-12-licensing.md`. If no reference code exists, or
+   the user's framing implies generalization or novel work
+   (phrases like "extend," "generalize," "we might need to break
+   new ground," "give us our own version of X"), Lane C applies.
+2. **Propose the derivation-first lane when it appears to apply.**
+   If the default would be Lane A but the task framing suggests
+   Lane C, propose Lane C to the user before writing code. If the
+   reference is copyleft, Lane B is not a proposal — state it as
+   the required lane and confirm the user agrees before
+   proceeding.
+3. **Record the lane in the PR description** in the first
+   paragraph, e.g. `Lane C (origination). Reference papers: [...]`.
+   For Lane B, explicitly record that reference source was not
+   consulted.
+4. **When uncertain, propose the derivation-first lane (B or C,
+   whichever fits) and ask the user to confirm** rather than
+   defaulting silently to Lane A.
+
+The lane choice is the user's decision; the agent's job is to
+surface the decision transparently, not to make it silently.
+
 ## Code Quality
 
 - Write code that is:

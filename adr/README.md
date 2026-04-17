@@ -99,3 +99,13 @@ for the authoritative rule.
   `global_sum` helper. Tab-separated `.diag` file per run; includes
   the boundary-flux balance test pattern for outflow BCs and a
   documentation requirement for conservation-law validity conditions.
+- [**ADR-0013**](ADR-0013-derivation-first-lane.md) *(Proposed)* —
+  Derivation-first lane for physics capabilities. Three named paths:
+  Lane A (port-and-verify from a permissive reference), Lane B
+  (clean-room from paper; required when the reference is
+  copyleft-licensed), Lane C (first-principles origination for
+  generalizations and novel work). Lanes B and C require a
+  derivation document under `derivations/` with executable SymPy
+  checks on load-bearing algebraic steps; Lean is available but
+  not a required dependency. Operationalizes the licensing principle
+  in `research/06-12-licensing.md` and `roadmap/index.md`.
