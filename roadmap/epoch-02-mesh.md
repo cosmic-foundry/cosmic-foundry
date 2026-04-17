@@ -37,6 +37,39 @@ interior.  This is where `jax.distributed` collectives live.  The
 `Field`/`Placement`/`Region` metadata model has all the information needed;
 the orchestration layer does not yet exist.
 
+### Global reduction primitive for simulation diagnostics
+
+Physics simulations need timestep-by-timestep records of global derived
+quantities — total mass, momentum, energy, etc. — both for production
+monitoring and as a basis for conservation-law tests.  This is the pattern
+Castro uses: a `.diag` file written every step that records these integrals,
+useful for spotting non-physical behavior mid-run and for replicating against
+reference code output.
+
+Epoch 2 mesh operators must expose a primitive — something like
+`global_sum(field, region)` — that the future simulation driver can call to
+accumulate domain-wide integrals across ranks.  Design this interface
+alongside the domain-decomposition work so that physics modules added in later
+epochs can register diagnostics against a stable contract.
+
+**Conservation tests must document their validity conditions.**  Not all
+global quantities are conserved by all schemes under all boundary conditions:
+
+- *Conservative scheme + periodic or reflecting BCs:* mass, momentum, and
+  energy are conserved to machine precision.  Asserting exact conservation
+  is a valid test.
+- *Outflow BCs:* quantities leak through the boundary by design; the domain
+  is not a closed system.  The diagnostic records the *rate* of change, but
+  asserting global conservation will always fail and should not be attempted.
+- *Intentionally dissipative schemes* (PPM with limiting, entropy fixes,
+  artificial viscosity): energy dissipation is a feature.  The diagnostic
+  tracks dissipation rate; tests should assert the *form* of dissipation
+  (e.g. entropy non-decreasing) rather than total energy conservation.
+
+Tests that assert conservation must state in their docstring which of these
+conditions hold.  A conservation test without this documentation is incomplete
+and should be treated as a review finding.
+
 ---
 
 ## What this epoch delivers
