@@ -237,7 +237,10 @@ what work is next. This is the fastest way to orient without reading
 the full roadmap.
 
 When a PR completes a milestone or starts a new epoch, update `STATUS.md`
-as part of that PR. Maintenance and tooling PRs that do not advance the
+as part of that PR — including marking the PR's own row `Merged` and
+updating *Next planned work*. Because the `STATUS.md` edit is committed
+inside the PR, it lands atomically on merge, so the file is correct the
+moment the PR closes. Maintenance and tooling PRs that do not advance the
 roadmap should note "No change to roadmap position" in both the PR
 description and `STATUS.md` (or omit the `STATUS.md` edit entirely if
 nothing changed).
