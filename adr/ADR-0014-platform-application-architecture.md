@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-04-17
-- **Deciders:** Max Katz
+- **Deciders:** project lead
 
 ## Context
 
