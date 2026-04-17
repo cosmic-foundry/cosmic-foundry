@@ -11,6 +11,10 @@ from typing import Any, Protocol, TypeVar, cast
 import jax
 import jax.numpy as jnp
 
+from cosmic_foundry.observability import get_logger
+
+_log = get_logger(__name__)
+
 
 class Backend(Enum):
     """Kernel backend identifiers."""
@@ -171,6 +175,14 @@ class FlatPolicy:
         """
         _validate_op(op_like)
         _validate_region_access(region, op_like.access_pattern, inputs)
+
+        _log.debug(
+            "dispatch.execute",
+            extra={
+                "region_shape": list(region.extent.shape),
+                "n_blocks": region.n_blocks,
+            },
+        )
 
         if region.n_blocks > 1:
 
