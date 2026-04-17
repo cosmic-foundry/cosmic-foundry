@@ -15,7 +15,9 @@ quantities.  These serve two distinct purposes:
 2. **Verification testing** — conservation-law tests that replicate against
    reference code output and enforce stated validity conditions.
 
-Castro uses a `.diag` file written every step for exactly this purpose.
+Many production astrophysics codes write a small text file every step
+recording these scalars — a lightweight, human-readable record that is easy
+to monitor in a terminal and diff against reference output.
 
 The `Field`/`Region`/`Dispatch` model provides the computational substrate,
 but there is no current primitive for summing a field quantity across all
@@ -88,8 +90,7 @@ class DiagnosticRecord:
 
 **`DiagnosticSink`** writes records.  The baseline implementation appends
 a tab-separated row to a `.diag` text file (one column per registered
-reducer), mirroring the Castro convention.  A null sink for unit tests
-discards records without I/O.
+reducer).  A null sink for unit tests discards records without I/O.
 
 **Driver usage pattern:**
 
@@ -172,8 +173,8 @@ built has historically been costly.
 - **Positive:** `validity` strings on every reducer make the conservation-law
   assumptions machine-readable; a reviewer or linter can flag undocumented
   reducers.
-- **Positive:** The Castro `.diag` convention is familiar to astrophysics
-  code developers; the file format is human-readable and diff-friendly.
+- **Positive:** The `.diag` text format is a common convention in
+  astrophysics codes; it is human-readable and diff-friendly.
 - **Positive:** `DiagnosticSink` is swappable; tests use a null sink; the
   real sink writes to disk without modifying test code.
 - **Negative:** Every registered reducer runs a cross-rank collective each
@@ -194,9 +195,8 @@ stateful.  Ruled out; violates the stateless-Op contract from ADR-0010.
 **Single `global_sum` free function, no protocol** — Expose only the
 primitive helper and require callers to manage their own records.  Simpler
 initially, but leaves the registration / write-every-step pattern
-unspecified, so each physics module would invent its own diagnostic loop.
-The Castro experience is that an unspecified diagnostic contract leads to
-duplicated, inconsistent integration logic.  Ruled out.
+unspecified, so each physics module would invent its own diagnostic loop,
+leading to duplicated and inconsistent integration logic.  Ruled out.
 
 **Structured array output (HDF5 per-step diagnostic group)** — Write
 diagnostics as HDF5 datasets rather than a text file.  More structured,
