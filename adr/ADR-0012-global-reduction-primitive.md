@@ -61,7 +61,6 @@ written to a `.diag`-style output file.
 ```python
 class DiagnosticReducer(Protocol):
     name: str               # e.g. "total_mass", "total_energy"
-    validity: str           # one of: "closed", "outflow", "dissipative"
     includes_boundary_flux: bool
 
     def reduce(
@@ -170,9 +169,9 @@ built has historically been costly.
 - **Positive:** The same diagnostic write path serves both production
   monitoring and conservation tests — there is no separate reimplementation
   of domain integrals for tests.
-- **Positive:** `validity` strings on every reducer make the conservation-law
-  assumptions machine-readable; a reviewer or linter can flag undocumented
-  reducers.
+- **Positive:** The docstring requirement on conservation tests makes validity
+  conditions explicit and reviewable at the point where the assertion is made,
+  rather than on the reducer (which is indifferent to the simulation setup).
 - **Positive:** The `.diag` text format is a common convention in
   astrophysics codes; it is human-readable and diff-friendly.
 - **Positive:** `DiagnosticSink` is swappable; tests use a null sink; the
