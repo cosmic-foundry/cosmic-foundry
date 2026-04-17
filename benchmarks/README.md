@@ -6,7 +6,7 @@ environment.
 ## Pointwise Triad Roofline
 
 ```bash
-python benchmarks/laplacian_roofline.py --n 128 --repeats 10
+python benchmarks/pointwise_roofline.py --n 128 --repeats 10
 ```
 
 The roofline benchmark times a pointwise triad through the public `Dispatch`
