@@ -1,4 +1,4 @@
-"""Kernel interface nucleus for Epoch 1."""
+"""Kernel interface primitives."""
 
 from __future__ import annotations
 

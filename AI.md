@@ -128,6 +128,11 @@ because ambition is cheap to type.
 - This project has not started versioning or published stable APIs
   yet. Do not preserve backwards compatibility by default during
   structural refactors.
+- Do not encode the repository's current roadmap epoch in code,
+  tests, configuration, or live documentation. Epoch labels belong
+  in roadmap and ADR planning text, not in module docstrings,
+  pytest marker descriptions, API notes, or overview copy as a
+  statement of current project state.
 
 ## Environment
 

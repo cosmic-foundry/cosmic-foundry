@@ -1,4 +1,1 @@
-"""Mesh primitives.
-
-Stub namespace reserved for Epoch 2.
-"""
+"""Mesh primitives."""

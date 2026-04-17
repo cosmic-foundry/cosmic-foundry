@@ -1,7 +1,7 @@
 # Accessibility and performance targets
 
 This page records the targets the public gallery will enforce once it carries
-real simulation outputs. The targets are set now so later epochs cannot drift
+real simulation outputs. The targets are set now so later work cannot drift
 from them silently.
 
 ## Accessibility
@@ -19,6 +19,6 @@ from them silently.
 
 - **LCP:** under 2.5 s on a 4G network profile (mobile).
 - **Bytes on wire:** tiled datasets served via Zarr v3; per-tile budget TBD
-  once the first dataset is wired up (Epoch 3+).
+  once the first dataset is wired up.
 - **WebGPU / WebGL2:** volume renders target 60 fps on a mid-range GPU;
   WebGL2 fallback required.
