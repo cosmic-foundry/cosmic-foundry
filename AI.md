@@ -240,7 +240,9 @@ When a PR completes a milestone or starts a new epoch, update `STATUS.md`
 as part of that PR — including marking the PR's own row `Merged` and
 updating *Next planned work*. Because the `STATUS.md` edit is committed
 inside the PR, it lands atomically on merge, so the file is correct the
-moment the PR closes. Maintenance and tooling PRs that do not advance the
+moment the PR closes. The only valid status values in the progress table
+are `Planned` and `Merged`; `Open` is never correct to write, since a PR
+marks itself `Merged` before it can be merged. Maintenance and tooling PRs that do not advance the
 roadmap should note "No change to roadmap position" in both the PR
 description and `STATUS.md` (or omit the `STATUS.md` edit entirely if
 nothing changed).
