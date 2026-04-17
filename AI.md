@@ -36,7 +36,8 @@ ADR wins.
     --json state --jq .state
   ```
   If the result is `MERGED` or `CLOSED`, do not push to that branch.
-  Instead: sync `origin/main` (see above), check out `main`, and
+  Instead: delete the local branch if it exists (`git branch -D
+  <branch>`), sync `origin/main` (see above), check out `main`, and
   create a new topic branch for the new work.
 - **Open pull requests against `upstream/main`**, not against the
   fork. Push the topic branch to `origin`, then open the PR so it
