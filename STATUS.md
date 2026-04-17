@@ -9,10 +9,10 @@
 
 ## Current position
 
-**Epoch 2 — design prerequisites in progress.**
+**Epoch 2 — Mesh and AMR — in progress.**
 
-Epoch 1 complete. Verification infrastructure merged. Epoch 2 design
-prerequisites are being resolved before the task-graph driver is implemented.
+All design prerequisites resolved. Implementation underway per the
+sequencing plan in `roadmap/epoch-02-mesh.md`.
 
 ## Completed epochs
 
@@ -41,10 +41,25 @@ prerequisites are being resolved before the task-graph driver is implemented.
 | Halo fill fence (`HaloFillFence` + `HaloFillPolicy`, ADR-0011) | #76 | Merged |
 | Global reduction primitive for simulation diagnostics (ADR-0012) | #77 | Merged |
 
+## Epoch 2 progress
+
+Per the implementation plan in `roadmap/epoch-02-mesh.md`:
+
+| # | Item | PR | Status |
+|---|------|----|--------|
+| 1 | Uniform mesh data model (`Block`, `UniformGrid`) | #85 | Open |
+| 2 | Field allocation from blocks | — | Planned |
+| 3 | `HaloFillPolicy` — single-rank | — | Planned |
+| 4 | `DiagnosticReducer` + `DiagnosticSink` | — | Planned |
+| 5 | Task-graph driver — single-rank | — | Planned |
+| 6 | `HaloFillPolicy` — multi-rank | — | Planned |
+
+Items 7–13 (AMR hierarchy, I/O, exit criterion) in
+`roadmap/epoch-02-mesh.md`.
+
 ## Next planned work
 
-All three Epoch 2 design prerequisites are resolved. Begin
-**Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md`.
+Merge #85, then proceed with item #2 (field allocation from blocks).
 
 ## Reference
 
