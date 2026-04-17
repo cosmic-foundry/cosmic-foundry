@@ -182,6 +182,47 @@ directory.
   documentation; notebook-cell chrome is explicitly hidden by
   default.
 
+## Amendments
+
+- **2026-04-16 — Hosting and multi-repo URL strategy.** The original
+  decision deferred "Read the Docs / GitHub Pages publishing … until
+  there is real content to host." The docs tree has now been seeded
+  (Epoch 0) and CI validates it on every PR; the deferred decision
+  is resolved here.
+
+  **Hosting platform:** GitHub Pages, deployed via GitHub Actions
+  using `actions/upload-pages-artifact` + `actions/deploy-pages`
+  with the built-in `GITHUB_TOKEN` permissions — no PAT or deploy
+  key required.
+
+  **Trigger:** Push to `main` only. PRs continue to build and
+  linkcheck but never deploy. There is one "latest" build tracking
+  `main`; versioned docs are deferred until the project cuts a
+  stable release (consistent with the "no stable APIs yet" policy in
+  AI.md).
+
+  **URL structure:** GitHub Pages serves `cosmic-foundry.github.io/`
+  only from a repo named `cosmic-foundry.github.io`; all other repos
+  are served under their repo name as a subpath. Engine docs
+  therefore live at:
+
+  > `https://cosmic-foundry.github.io/cosmic-foundry/`
+
+  **Multi-repo strategy:** each sibling repo (`cosmic-observables`,
+  `stellar-foundry`, and any future additions) deploys its own docs
+  independently to `cosmic-foundry.github.io/<repo-name>/` via the
+  same workflow pattern. Repos cross-reference each other via
+  `intersphinx`; entries are added to each repo's `conf.py` once
+  the target has a published build. No central portal repo
+  (`cosmic-foundry.github.io`) is created at this time — the
+  overhead is not warranted while the sibling repos are early-stage.
+  The portal is a natural follow-up once all three repos have
+  substantial published docs.
+
+  **`html_baseurl`:** set in `conf.py` so Sphinx generates correct
+  canonical URLs and sitemap entries for the `/cosmic-foundry/`
+  subpath.
+
 ## Cross-references
 
 - [`roadmap/index.md`](../roadmap/index.md) §2, §4 (Documentation).

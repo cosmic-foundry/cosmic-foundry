@@ -90,6 +90,28 @@ jobs:
         run: sphinx-build -W docs docs/_build/html
       - name: Check external links
         run: sphinx-build -b linkcheck -W docs docs/_build/linkcheck
+      - name: Upload pages artifact
+        # Upload on every successful build so the deploy job can consume it
+        # on pushes to main.  The artifact is ignored (but harmless) on PRs.
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
+  deploy-docs:
+    needs: docs
+    runs-on: ubuntu-latest
+    # Deploy only when changes land on main, not on PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
 
   docs-integrity:
     runs-on: ubuntu-latest
