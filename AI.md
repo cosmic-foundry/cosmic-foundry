@@ -61,6 +61,12 @@ ADR wins.
   PRs, also run the architecture stress-review checklist at
   [`pr-review/architecture-checklist.md`](pr-review/architecture-checklist.md).
 
+  **For ADR PRs the architecture stress-review note is required, not
+  optional.** Include it in the PR description before opening. A PR
+  that adds or amends an ADR without a stress-review note should not
+  be opened for human review — the note is evidence that the review
+  was actually done, not a post-hoc summary.
+
   **Terminal / automation:**
   ```bash
   ./scripts/review_pr_with_claude.sh <n>   # Claude Code
