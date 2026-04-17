@@ -242,6 +242,36 @@ roadmap should note "No change to roadmap position" in both the PR
 description and `STATUS.md` (or omit the `STATUS.md` edit entirely if
 nothing changed).
 
+After each PR merges, re-examine the epoch implementation plan (see
+*Epoch implementation plan* below). If the merged work changes the
+sequence — new ordering constraints discovered, a planned PR split or
+merged, scope added or dropped — update the plan in the same PR that
+closes the milestone. If the resequencing is cross-cutting and
+independent of the code change, open a standalone `docs(roadmap):`
+PR instead. Simple tick-offs (marking an item complete) can travel
+with the `STATUS.md` update.
+
+## Epoch implementation plan
+
+**At the start of a new epoch** (after retrospective PRs land and
+before the first code PR opens), open one documentation PR that
+appends an **Implementation plan** section to the epoch's roadmap
+file (`roadmap/epoch-NN-*.md`). The plan is a numbered list of
+proposed PRs with:
+
+- One-line scope per entry
+- Explicit "depends on" notes for ordering constraints
+- No detailed spec — enough to unblock the next 3–5 sessions
+
+The plan is a living document. After each PR merges, re-examine
+the next 3–5 entries and update the plan if the merged work changed
+the picture (see *Roadmap position* above for when to do this inline
+vs. as a standalone PR).
+
+Mark completed items with ✓ and the PR number. Do not delete them
+— the completed list is the running record of what was actually
+built, and it feeds the next epoch retrospective.
+
 ## Epoch retrospective
 
 **When an epoch is declared complete**, before opening any code PR for
