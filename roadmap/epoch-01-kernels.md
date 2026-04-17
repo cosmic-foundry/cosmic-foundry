@@ -65,9 +65,10 @@ kernel layer.
    using parallel HDF5 when available and the per-rank-write /
    post-processing merge pattern otherwise. Wire deterministic
    structured logging around dispatch, sharding, and I/O boundaries.
-5. **Benchmark and visual artifact.** Add the CPU roofline benchmark,
-   optional GPU numbers when a runner exists, and the first reference
-   render of one Laplacian slice under the house colormap.
+5. **Benchmark and visual artifact.** Add a CPU roofline benchmark for
+   the Dispatch path using a pointwise triad, optional GPU numbers when
+   a runner exists, and the first reference render of one Laplacian
+   slice under the house colormap.
 
 Secondary backend adapters, non-stencil access patterns, `TiledPolicy`,
 `WarpSpecializedPolicy`, AMR, task-graph scheduling, and production
@@ -189,8 +190,9 @@ A 3-D 7-point Laplacian implemented as an Op under `FlatPolicy`:
 - Runs over a single-meshblock Region and a batched Region (at least
   two meshblocks packed), demonstrating that Region batching works
   without changes to the Op.
-- Produces documented roofline fractions on CPU; GPU numbers added
-  when a GPU runner is available.
+- Provides a CPU roofline sanity benchmark for the Dispatch path using
+  a pointwise triad; GPU numbers are added when a GPU runner is
+  available.
 - A multi-rank correctness test verifies that the Field placement
   Laplacian matches the single-rank result.
 - A reference render of one benchmark slice under the house colormap is
