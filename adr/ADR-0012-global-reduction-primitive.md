@@ -161,8 +161,27 @@ assert abs(Q_new - Q_old + boundary_flux * dt) < tol
 This is the more demanding check: it verifies that numerical fluxes are
 self-consistent with the cell-average updates, not merely that a scalar
 appears conserved coincidentally.  Exposing boundary fluxes as first-class
-diagnostics is required from the start; retrofitting it after the driver is
-built has historically been costly.
+driver outputs is required from the start; retrofitting it after the driver
+is built has historically been costly.
+
+### Relationship to AMR flux correction
+
+`BoundaryFluxReducer` and AMR flux correction (refluxing) share the same
+data dependency: face fluxes must be first-class driver outputs rather than
+temporaries discarded after the cell-average update.
+
+The operations diverge after that.  `BoundaryFluxReducer.reduce` returns a
+`float` — a scalar for the diagnostic record.  AMR flux correction returns
+an *array* — a correction to coarse cell averages at coarse-fine interfaces,
+needed to make block-structured AMR globally conservative.  The
+`DiagnosticReducer` protocol (which bottoms out at `-> float`) is too narrow
+to express flux correction; that is a separate interface (a flux register)
+to be designed in the AMR sub-epoch.
+
+The implication for this ADR: the face-flux accessibility requirement is
+motivated by *two* downstream uses, not one.  Designing the driver to expose
+face fluxes from the start satisfies both the outflow-BC diagnostic use case
+and the future refluxing requirement without interface changes.
 
 ## Consequences
 
