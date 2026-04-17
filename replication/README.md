@@ -12,6 +12,7 @@ each replication target.
 ```text
 replication/
   README.md                      # this file (the workflow)
+  formulas.md                    # flat register of individual physics formulas
   capabilities/                  # shared engine specs (one per capability)
     CNNNN-<capability>.md
   targets/
@@ -25,6 +26,13 @@ replication/
         fixtures/                # the reference outputs themselves (or LFS pointers)
       conftest.py                # exposes load_golden(fixture_id) → array + metadata
 ```
+
+**`formulas.md`** is a flat cross-reference of individual physics
+formulas: one entry per equation, stencil, rate, or fit coefficient
+whose implementation could silently encode a wrong answer. It is
+finer-grained than a capability spec — a single capability may
+generate several formula entries. See `formulas.md` for the entry
+criteria and the current register.
 
 **Capabilities** are engine features (a PPM solver, a reaction
 network, a passive-tracer advector). Each capability has one
