@@ -34,6 +34,7 @@ dependencies:
   # CI helpers
   - pyyaml
   - jsonschema
+  - jq
   # compilers / build tools
   - gcc
   - gxx
