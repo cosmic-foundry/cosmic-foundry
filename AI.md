@@ -220,6 +220,19 @@ locally before pushing (see *Branches and PRs*).
 If the session starts from a parent organization workspace, run the
 script from the `cosmic-foundry` checkout directory.
 
+## Roadmap position
+
+**At the start of every session**, read `STATUS.md` in the repository
+root. It records the current epoch, recently completed milestones, and
+what work is next. This is the fastest way to orient without reading
+the full roadmap.
+
+When a PR completes a milestone or starts a new epoch, update `STATUS.md`
+as part of that PR. Maintenance and tooling PRs that do not advance the
+roadmap should note "No change to roadmap position" in both the PR
+description and `STATUS.md` (or omit the `STATUS.md` edit entirely if
+nothing changed).
+
 ## Architectural Decisions
 
 Architectural decisions are recorded as ADRs in `adr/`. **At the
