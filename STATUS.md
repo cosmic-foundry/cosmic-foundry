@@ -31,13 +31,12 @@ tools that all subsequent epochs depend on):
 | ADR-0007 amendment: external grounding for physics capability tests | #63 | Merged |
 | Formula register (`replication/formulas.md`) | #64 | Merged |
 | Convergence-order measurement helper (`tests/utils/convergence.py`) | #69 | Merged |
-| SymPy stencil coefficient verification (`tests/utils/stencils.py`) | #70 | Open |
+| SymPy stencil coefficient verification (`tests/utils/stencils.py`) | #70 | Merged |
 | Epoch 2 design prerequisites: global reduction + diagnostics | #68 | Merged |
 
 ## Next planned work
 
-1. Merge open verification infrastructure PRs (#70).
-2. Begin **Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md`.
+1. Begin **Epoch 2 — Mesh and AMR** per `roadmap/epoch-02-mesh.md`.
    Design prerequisites (read that file before starting):
    - Field name → Dispatch input binding protocol
    - Halo fill fence mechanism
