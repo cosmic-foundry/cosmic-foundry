@@ -256,19 +256,32 @@ The retrospective covers:
    "anticipated extensions" or "deferred" items resolved in practice?
    Were any stated consequences wrong?
 
-2. **Roadmap files** (`roadmap/index.md` and the per-epoch files for the
+2. **ADR set as a whole.** Beyond reviewing each ADR individually,
+   examine the set itself. Are any two ADRs covering the same concern
+   and worth combining? Has an ADR's scope drifted so it now overlaps
+   with a newer one, and should be narrowed or superseded? Are there
+   numbering or ordering choices that would read more coherently if
+   restructured? The goal is to keep the ADR family close to an
+   *orthogonal basis* — each ADR covering one independent
+   architectural concern, and the set as a whole the minimum number
+   of decisions needed to explain the architecture. Propose
+   reorganizations (combine, split, supersede, renumber) as follow-up
+   PRs rather than inline retrospective edits; the retrospective
+   surfaces the need, the PR executes the change.
+
+3. **Roadmap files** (`roadmap/index.md` and the per-epoch files for the
    upcoming epoch and one beyond). Does the upcoming epoch's scope still
    make sense given what we built? Are the design prerequisites still the
    right ones? Are the exit criteria still well-defined?
 
-3. **`replication/` specs and formulas register**. Do the capability
+4. **`replication/` specs and formulas register**. Do the capability
    specs reflect what was actually implemented? Are there formula entries
    or capability stubs that should be updated now rather than left stale?
 
-4. **`AI.md` and process documents**. Did any development rules prove
+5. **`AI.md` and process documents**. Did any development rules prove
    unworkable, insufficient, or in need of precision?
 
-5. **Surprises and pain points**. What was harder than expected? What
+6. **Surprises and pain points**. What was harder than expected? What
    design decisions caused rework? What would have been better to decide
    earlier? Capture these as ADR amendments, roadmap notes, or additions
    to `AI.md` — wherever the lesson is most actionable for the next epoch.
