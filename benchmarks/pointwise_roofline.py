@@ -1,9 +1,10 @@
-"""CPU roofline benchmark for the 3-D seven-point Laplacian dispatch."""
+"""CPU roofline benchmark for a pointwise Dispatch triad."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import time
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -14,7 +15,6 @@ import jax.numpy as jnp
 from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
 
 FLOAT64_BYTES = 8
-LAPLACIAN_BYTES_PER_CELL = 8 * FLOAT64_BYTES  # seven reads, one write
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
 
 
@@ -43,11 +43,13 @@ class RooflineResult:
     backend: str
     device: str
     n: int
-    interior_cells: int
+    cells: int
     repeats: int
-    laplacian_seconds_best: float
-    laplacian_effective_gb_s: float
+    dispatch_triad_seconds_best: float
+    dispatch_triad_seconds_median: float
+    dispatch_triad_gb_s: float
     stream_triad_seconds_best: float
+    stream_triad_seconds_median: float
     stream_triad_gb_s: float
     memory_roofline_fraction: float
 
@@ -69,35 +71,69 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
     ).execute()
 
 
+@op(
+    access_pattern=Stencil((0, 0, 0)),
+    reads=("a", "b"),
+    writes=("c",),
+)
+def pointwise_triad(
+    a: jax.Array,
+    b: jax.Array,
+    i: jax.Array,
+    j: jax.Array,
+    k: jax.Array,
+) -> jax.Array:
+    """Evaluate a STREAM-like triad through the Dispatch path."""
+    return a[i, j, k] + 0.5 * b[i, j, k]
+
+
+def run_dispatch_triad(a: jax.Array, b: jax.Array) -> jax.Array:
+    """Run a pointwise triad through the public Dispatch path."""
+    n = int(a.shape[0])
+    extent = Extent.from_shape((n, n, n))
+    return Dispatch(
+        pointwise_triad,
+        Region(extent),
+        inputs=(a, b),
+    ).execute()
+
+
 def benchmark(n: int, repeats: int) -> RooflineResult:
-    """Benchmark Laplacian throughput against a local STREAM-like triad."""
-    phi = make_phi(n)
-    laplacian = jax.jit(run_laplacian)
-    triad = jax.jit(lambda a, b, scalar: a + scalar * b)
+    """Benchmark Dispatch triad throughput against a direct JAX triad."""
+    a = make_phi(n)
+    b = make_phi(n) + 1.0
+    dispatch_triad = jax.jit(run_dispatch_triad)
+    triad = jax.jit(lambda a, b: a + 0.5 * b)
 
-    laplacian(phi).block_until_ready()
-    triad(phi, phi, 0.5).block_until_ready()
+    dispatch_triad(a, b).block_until_ready()
+    triad(a, b).block_until_ready()
 
-    laplacian_seconds = min(_time_call(lambda: laplacian(phi), repeats))
-    triad_seconds = min(_time_call(lambda: triad(phi, phi, 0.5), repeats))
+    dispatch_timings = _time_call(lambda: dispatch_triad(a, b), repeats)
+    triad_timings = _time_call(lambda: triad(a, b), repeats)
+    dispatch_seconds_best = min(dispatch_timings)
+    dispatch_seconds_median = statistics.median(dispatch_timings)
+    triad_seconds_best = min(triad_timings)
+    triad_seconds_median = statistics.median(triad_timings)
 
-    interior_cells = (n - 2) ** 3
-    laplacian_gb = interior_cells * LAPLACIAN_BYTES_PER_CELL / 1.0e9
+    cells = n**3
+    dispatch_gb = cells * TRIAD_BYTES_PER_CELL / 1.0e9
     triad_gb = n**3 * TRIAD_BYTES_PER_CELL / 1.0e9
-    laplacian_gb_s = laplacian_gb / laplacian_seconds
-    triad_gb_s = triad_gb / triad_seconds
+    dispatch_gb_s = dispatch_gb / dispatch_seconds_median
+    triad_gb_s = triad_gb / triad_seconds_median
 
     return RooflineResult(
         backend=jax.default_backend(),
         device=str(jax.devices()[0]),
         n=n,
-        interior_cells=interior_cells,
+        cells=cells,
         repeats=repeats,
-        laplacian_seconds_best=laplacian_seconds,
-        laplacian_effective_gb_s=laplacian_gb_s,
-        stream_triad_seconds_best=triad_seconds,
+        dispatch_triad_seconds_best=dispatch_seconds_best,
+        dispatch_triad_seconds_median=dispatch_seconds_median,
+        dispatch_triad_gb_s=dispatch_gb_s,
+        stream_triad_seconds_best=triad_seconds_best,
+        stream_triad_seconds_median=triad_seconds_median,
         stream_triad_gb_s=triad_gb_s,
-        memory_roofline_fraction=laplacian_gb_s / triad_gb_s,
+        memory_roofline_fraction=dispatch_gb_s / triad_gb_s,
     )
 
 

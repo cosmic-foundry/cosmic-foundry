@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from benchmarks.laplacian_roofline import make_phi, run_laplacian
+from benchmarks.pointwise_roofline import make_phi, run_laplacian
 
 HOUSE_CMAP = "viridis"
 
