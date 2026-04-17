@@ -143,11 +143,11 @@ def probe_operator_weights(
 
     Notes
     -----
-    This function calls ``kernel_fn`` directly at the center index using
-    a plain NumPy-backed probe array — it does not go through
+    This function calls ``kernel_fn._fn`` directly at the center index
+    using a plain NumPy-backed probe array — it does not go through
     ``Dispatch`` / ``Region``.  This keeps the probe independent of the
     dispatch machinery and works for any kernel with the pointwise
-    signature.
+    signature decorated with ``@op``.
     """
     center = n // 2
     weights: dict[tuple[int, int, int], float] = {}
@@ -156,7 +156,7 @@ def probe_operator_weights(
         di, dj, dk = offset
         phi = jnp.zeros((n, n, n), dtype=jnp.float64)
         phi = phi.at[center + di, center + dj, center + dk].set(1.0)
-        result = kernel_fn(phi, center, center, center)
+        result = kernel_fn._fn(phi, center, center, center)
         weights[offset] = float(result)
 
     return weights

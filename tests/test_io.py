@@ -48,7 +48,7 @@ def phi() -> jnp.ndarray:
 @pytest.fixture()
 def laplacian_result(phi: jnp.ndarray) -> jnp.ndarray:
     region = Region(Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1))))
-    return Dispatch(seven_point_laplacian, region, inputs=(phi,)).execute()
+    return Dispatch(seven_point_laplacian(phi), region).execute()
 
 
 # ---------------------------------------------------------------------------
@@ -101,9 +101,7 @@ def test_merge_rank_files_concatenates_along_axis0(tmp_path: Path) -> None:
 
     # Simulate two ranks computing their interior half.
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
-    full_result = Dispatch(
-        seven_point_laplacian, Region(interior), inputs=(phi,)
-    ).execute()
+    full_result = Dispatch(seven_point_laplacian(phi), Region(interior)).execute()
 
     rank0_result = full_result[:half]
     rank1_result = full_result[half:]
@@ -167,7 +165,7 @@ def test_dispatch_emits_log_record(caplog: pytest.LogCaptureFixture) -> None:
     region = Region(Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1))))
 
     with caplog.at_level(logging.DEBUG, logger="cosmic_foundry.kernels"):
-        Dispatch(seven_point_laplacian, region, inputs=(phi,)).execute()
+        Dispatch(seven_point_laplacian(phi), region).execute()
 
     events = [r.message for r in caplog.records]
     assert "dispatch.execute" in events

@@ -21,6 +21,7 @@ from cosmic_foundry.io import (  # noqa: E402
 from cosmic_foundry.kernels import (  # noqa: E402
     AccessPattern,
     Backend,
+    BoundOp,
     Dispatch,
     Extent,
     FlatPolicy,
@@ -46,6 +47,7 @@ __all__ = [
     # kernels
     "AccessPattern",
     "Backend",
+    "BoundOp",
     "Dispatch",
     "Extent",
     "FlatPolicy",

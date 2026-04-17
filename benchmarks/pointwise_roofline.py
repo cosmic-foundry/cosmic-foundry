@@ -65,9 +65,8 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
     n = int(phi.shape[0])
     extent = Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1)))
     return Dispatch(
-        seven_point_laplacian,
+        seven_point_laplacian(phi),
         Region(extent),
-        inputs=(phi,),
     ).execute()
 
 
@@ -92,9 +91,8 @@ def run_dispatch_triad(a: jax.Array, b: jax.Array) -> jax.Array:
     n = int(a.shape[0])
     extent = Extent.from_shape((n, n, n))
     return Dispatch(
-        pointwise_triad,
+        pointwise_triad(a, b),
         Region(extent),
-        inputs=(a, b),
     ).execute()
 
 

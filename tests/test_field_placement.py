@@ -171,9 +171,8 @@ def test_single_process_field_dispatch_laplacian(phi: jnp.ndarray) -> None:
     assert field.covers(required)
 
     result = Dispatch(
-        seven_point_laplacian,
+        seven_point_laplacian(seg.payload),
         Region(interior),
-        inputs=(seg.payload,),
     ).execute()
     assert jnp.allclose(result, 6.0)
 
