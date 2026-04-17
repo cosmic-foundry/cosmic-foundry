@@ -38,7 +38,9 @@ ADR wins.
   If the result is `MERGED` or `CLOSED`, do not push to that branch.
   Instead: delete the local branch if it exists (`git branch -D
   <branch>`), sync `origin/main` (see above), check out `main`, and
-  create a new topic branch for the new work.
+  create a new topic branch for the new work. Also check whether
+  `STATUS.md` lists this PR as `Open` and update the entry to
+  `Merged` if so.
 - **Open pull requests against `upstream/main`**, not against the
   fork. Push the topic branch to `origin`, then open the PR so it
   merges into the upstream repository's `main`. Do not rely on
