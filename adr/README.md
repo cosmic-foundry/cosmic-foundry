@@ -4,9 +4,9 @@ Each ADR captures one architectural decision: the context that
 forced it, the choice made, the consequences, and the alternatives
 considered. ADRs describe current architecture. When a decision
 changes, edit the ADR in place — git history records what changed
-and when. Reversing a decision entirely requires a new ADR; the old
-one may be marked superseded in its title or removed from the index.
-See [ADR-0005 §Decision → ADR editing policy](ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy)
+and when. If a decision is entirely withdrawn, remove or archive the
+ADR from the index. See
+[ADR-0005 §Decision → ADR editing policy](ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy)
 for the authoritative rule.
 
 ## How to use this index

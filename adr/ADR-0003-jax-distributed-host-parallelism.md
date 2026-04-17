@@ -74,7 +74,7 @@ baseline.
   dependencies. They remain available as optional extras for sites
   where `jax.distributed` cannot initialize over the native
   interconnect. Adopting MPI as a required transport for any epoch
-  in the baseline would require a new ADR superseding this one.
+  in the baseline would require editing this ADR to reflect the changed decision.
 - The `cosmic-foundry hello` entrypoint in Epoch 0 reports
   `jax.distributed` state (`process_index`, `process_count`,
   local / global device lists) instead of `mpi4py` rank / size.

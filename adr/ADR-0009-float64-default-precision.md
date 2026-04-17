@@ -1,10 +1,9 @@
 # ADR-0009 — Float64 as the default precision
 
-> **Anticipated extension.** This ADR is expected to be edited in
-> place — not superseded — once the project is ready to experiment
-> with mixed precision. The edit will add an explicit per-kernel
-> opt-in mechanism for lower dtypes without reversing the default
-> (float64 stays the default; opt-in is the narrowing).
+> **Anticipated extension.** This ADR will be edited in place once
+> the project is ready to experiment with mixed precision, adding an
+> explicit per-kernel opt-in mechanism for lower dtypes. Float64
+> stays the default; opt-in is the narrowing.
 
 ## Context
 

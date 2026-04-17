@@ -327,13 +327,13 @@ The retrospective covers:
 2. **ADR set as a whole.** Beyond reviewing each ADR individually,
    examine the set itself. Are any two ADRs covering the same concern
    and worth combining? Has an ADR's scope drifted so it now overlaps
-   with a newer one, and should be narrowed or superseded? Are there
-   numbering or ordering choices that would read more coherently if
-   restructured? The goal is to keep the ADR family close to an
+   with a newer one, and should be narrowed or merged into it? Are
+   there numbering or ordering choices that would read more coherently
+   if restructured? The goal is to keep the ADR family close to an
    *orthogonal basis* — each ADR covering one independent
    architectural concern, and the set as a whole the minimum number
    of decisions needed to explain the architecture. Propose
-   reorganizations (combine, split, supersede, renumber) as follow-up
+   reorganizations (combine, split, renumber, retire) as follow-up
    PRs rather than inline retrospective edits; the retrospective
    surfaces the need, the PR executes the change.
 
@@ -381,9 +381,8 @@ stress-review result in the ADR, the PR description, or the review
 report.
 
 ADRs describe current architecture. When a conversation implies an
-ADR should change, propose the edit directly — edit the document in
-place rather than appending amendment logs. Reversing a decision
-entirely requires a new ADR. See
+ADR should change, propose the edit directly. If a decision is
+entirely withdrawn, remove or archive the ADR from the index. See
 [ADR-0005 §Decision → ADR editing policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
 
 ## Physics capability implementation paths

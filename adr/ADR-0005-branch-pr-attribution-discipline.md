@@ -122,11 +122,6 @@ Applies to every ADR in this repository.
   the existing decision. No dated amendment log is maintained;
   the document describes current architecture and git history
   preserves the record of what changed and when.
-- **Reversals require a new ADR.** Changing the decision itself
-  (reversing direction, replacing the technology choice,
-  withdrawing the rule) lands as a new ADR. The old ADR may be
-  marked superseded in its title or removed from the index at
-  the same time.
 - **Agents propose edits proactively.** When a conversation
   implies an ADR should change, the agent should propose the
   edit directly rather than routing the clarification through
