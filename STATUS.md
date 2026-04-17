@@ -59,9 +59,11 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 ## Next planned work
 
-Merge #88 (field allocation from blocks), then proceed with items #3
-(`HaloFillPolicy` — single-rank) and #4 (`DiagnosticReducer` +
-`DiagnosticSink`) which can proceed in parallel.
+Complete Epoch 2 (items #3–#6: halo fill, diagnostics, task-graph driver,
+multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
+infrastructure in cosmic-foundry, cosmic-observables dissolution,
+stellar-foundry bootstrap, and SNIa observational content migration.
+See `roadmap/epoch-03-platform-services.md` for the full Epoch 3 plan.
 
 ## Reference
 

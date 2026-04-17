@@ -116,6 +116,20 @@ physics capabilities.
   not a required dependency. Operationalizes the licensing principle
   in `research/06-12-licensing.md` and `roadmap/index.md`.
 
+### Organization and multi-repo architecture
+
+How the project is structured across repositories — the platform/application
+split, where observational data lives, and how application repos relate to
+the platform and to each other.
+
+- [**ADR-0014**](ADR-0014-platform-application-architecture.md) —
+  Platform / application repository architecture: cosmic-foundry is the
+  organizational platform providing computation infrastructure and manifest
+  tooling; application repos (stellar-foundry, cosmological-foundry, etc.)
+  provide domain physics and domain-specific observational data. Dissolves
+  `cosmic-observables`; introduces `cosmic_foundry.manifests` as the shared
+  data-pipeline infrastructure.
+
 ### Documentation and visualization
 
 Authoring and presentation of engine output — docs toolchain and

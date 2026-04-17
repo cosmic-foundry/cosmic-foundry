@@ -3,6 +3,30 @@
 These guidelines apply to all AI agents working on this repository,
 regardless of platform (Claude Code, Codex, Gemini, or others).
 
+## Platform role
+
+Cosmic Foundry is the **organizational platform** for the simulation
+ecosystem. Application repositories — stellar-foundry,
+cosmological-foundry, galactic-foundry, planetary-foundry, and others
+— build on top of it. See
+[ADR-0014](adr/ADR-0014-platform-application-architecture.md) for the
+authoritative split.
+
+In practice this means:
+
+- Reusable computation infrastructure (kernels, mesh, fields, I/O,
+  diagnostics) and manifest infrastructure (`cosmic_foundry.manifests`:
+  HTTP client, `ValidationAdapter`, `Provenance`, base schemas) belong
+  here.
+- Domain-specific physics implementations and observational validation
+  data belong in the relevant application repo.
+- If a task spans the platform and an application repo, use separate
+  branches and pull requests for each repository. Keep the platform
+  change minimal and self-contained; the application repo change
+  depends on it.
+- Cross-scale workflows that compose two or more application domains
+  belong in their own repository, not here.
+
 ## Development Rules
 
 The authoritative source is

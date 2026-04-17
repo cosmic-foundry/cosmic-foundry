@@ -21,6 +21,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+observational = [
+    "requests",
+    "jsonschema",
+    "pyyaml",
+]
 dev = [
     "pytest",
     "pytest-cov",
@@ -30,6 +35,9 @@ dev = [
     "ruff",
     "mypy",
     "hypothesis",
+    "requests",
+    "jsonschema",
+    "pyyaml",
 ]
 mpi = [
     "mpi4py",

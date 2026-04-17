@@ -124,5 +124,5 @@ begins — see `roadmap/index.md` §5 for the crossroad.
   first discipline this ADR will extend.
 - [`roadmap/index.md`](../roadmap/index.md) §5 — records the
   crossroad for discoverability.
-- [`roadmap/epoch-06-microphysics.md`](../roadmap/epoch-06-microphysics.md)
+- [`roadmap/epoch-07-microphysics.md`](../roadmap/epoch-07-microphysics.md)
   — the epoch where this decision becomes concrete.
