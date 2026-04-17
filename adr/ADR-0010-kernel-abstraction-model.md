@@ -484,6 +484,65 @@ structural: function-shaped Ops use `@op(...)`, class-shaped Ops may
 subclass `Op`, and `Dispatch` accepts any object satisfying the
 protocol.
 
+## Amendments
+
+- **2026-04-17 — Field-binding protocol: `Op.__call__` returns `BoundOp`.**
+
+  The Epoch 1 `Dispatch` API accepted raw arrays through a positional
+  `inputs` tuple: `Dispatch(op, region, inputs=(phi_array,)).execute()`.
+  The ordering convention — `inputs[i]` maps to `op.reads[i]` — was
+  implicit and unenforced.  As Epoch 2 introduces a task-graph driver
+  that constructs `Dispatch` objects programmatically from a field
+  registry, this silent contract becomes a maintenance liability.
+
+  **Decision.**  `Op.__call__` becomes the field-binding interface,
+  returning a `BoundOp` that carries the op and its resolved field
+  mapping.  `Dispatch` takes a `BoundOp` as its first argument.  The
+  positional `inputs` keyword is removed.
+
+  ```python
+  # Positional — matched in order of op.reads:
+  Dispatch(laplacian(phi_array), region).execute()
+
+  # Keyword — matched by name, order-independent:
+  Dispatch(advection_flux(rho=rho_arr, v_x=v_x_arr), region).execute()
+
+  # Driver / programmatic:
+  Dispatch(op(**{name: registry[name].local_array()
+                 for name in op.reads}), region).execute()
+  ```
+
+  `BoundOp` is a frozen dataclass:
+
+  ```python
+  @dataclass(frozen=True)
+  class BoundOp:
+      op: Op
+      fields: dict[str, Any]   # name → array, ordered by op.reads
+  ```
+
+  **Internal machinery.**  `apply` and `apply_batched` call `op._fn`
+  (the raw kernel function) directly rather than going through
+  `Op.__call__`.  This frees `Op.__call__` for the user-facing binding
+  role without a call-site ambiguity.  Code that probes a kernel
+  directly (e.g. `tests/utils/stencils.probe_operator_weights`) calls
+  `kernel._fn` to bypass the binding interface.
+
+  **Rationale.**  The `op(fields…)` spelling reads naturally as
+  "apply op to these fields" — the same way ∇²φ is written
+  mathematically — and is consistent regardless of whether a human or
+  a driver constructs the `Dispatch`.  Validation (all names in
+  `op.reads` present; no extraneous names) moves to `BoundOp`
+  construction, where errors surface at call time rather than silently
+  producing wrong inputs.
+
+  **Resolved design question 5 update.**  The Epoch 1 guidance
+  "Direct element-level `op(...)` calls remain useful for small
+  pure-function checks" no longer applies: `op(arr)` now returns a
+  `BoundOp`, not a scalar.  Low-level pointwise checks should call
+  `op._fn(arr, i, j, k)` directly, or construct a minimal `Dispatch`
+  as before.
+
 ## Cross-references
 
 - `research/01-frameworks.md` §1.2 (Kokkos hierarchical execution
