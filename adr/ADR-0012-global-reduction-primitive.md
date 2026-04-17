@@ -69,13 +69,31 @@ class DiagnosticReducer(Protocol):
         region: Region,
         rank: int,
         n_ranks: int,
-    ) -> float:
-        """Compute the global scalar value for the current timestep."""
+    ) -> jax.Array:
+        """Compute the global scalar value for the current timestep.
+
+        Returns a 0-d JAX array (not a Python float) so that all
+        registered reducers can be collected inside a single
+        ``jax.jit`` call, enabling XLA to fuse their ``psum``
+        collectives into one cross-rank round-trip.
+        """
 ```
 
-`reduce` returns a Python `float`.  Implementations call
-`jax.lax.psum` (or equivalent) for the cross-rank sum, `jax.block_until_ready`
-to force synchronization, and `float(...)` to extract the value.
+`reduce` returns a 0-d `jax.Array`.  Implementations call
+`jax.lax.psum` (or equivalent) for the cross-rank sum and return
+the result without materializing a Python `float`.  The driver
+extracts Python floats after the full collection step completes.
+
+**Reduction fusion:** XLA has an all-reduce fusion pass that
+combines multiple `psum` calls within the same JIT-compiled
+computation into a single collective over a vector.  This is the
+key reason `reduce` returns a `jax.Array` rather than a `float`:
+if the driver wraps `collect_diagnostics` in `jax.jit`, XLA sees
+all N reductions together and fuses them into one round-trip at the
+cost of N scalars of bandwidth — essentially free for any realistic
+N of registered reducers.  Returning `float` inside each reducer
+would force N independent device-to-host transfers and break the
+JIT boundary, defeating fusion.
 
 **`DiagnosticRecord`** is a named tuple row emitted each step:
 
@@ -115,8 +133,12 @@ For the common case of summing a cell-averaged quantity over a region,
 provide a free function:
 
 ```python
-def global_sum(field: Field, region: Region, rank: int) -> float:
-    """Sum field values over the local segment interior and reduce across ranks."""
+def global_sum(field: Field, region: Region, rank: int) -> jax.Array:
+    """Sum field values over the local segment interior and reduce across ranks.
+
+    Returns a 0-d JAX array so the result participates in XLA fusion
+    when called from within a jax.jit-compiled collection step.
+    """
 ```
 
 `global_sum` sums `field.local_segments(rank)` restricted to
@@ -195,10 +217,11 @@ and the future refluxing requirement without interface changes.
   astrophysics codes; it is human-readable and diff-friendly.
 - **Positive:** `DiagnosticSink` is swappable; tests use a null sink; the
   real sink writes to disk without modifying test code.
-- **Negative:** Every registered reducer runs a cross-rank collective each
-  step.  For large step counts this matters; reducers should be cheap and
-  collective overhead must be profiled before enabling them at high cadence
-  in production.
+- **Neutral:** N registered reducers produce N `psum` calls per step, but
+  XLA's all-reduce fusion combines them into one collective when
+  `collect_diagnostics` is JIT-compiled — collective overhead scales with
+  bandwidth (N scalars), not with latency (N round-trips).  Reducers should
+  still be cheap to evaluate locally; the cross-rank cost is fused away.
 - **Neutral:** `DiagnosticReducer` is a protocol, not a base class.
   Implementations may be functions, lambdas, or class instances; the
   driver does not care which.
