@@ -233,6 +233,43 @@ roadmap should note "No change to roadmap position" in both the PR
 description and `STATUS.md` (or omit the `STATUS.md` edit entirely if
 nothing changed).
 
+## Epoch retrospective
+
+**When an epoch is declared complete**, before opening any code PR for
+the next epoch, perform a retrospective review. This is a read-only
+survey of the whole repository — no code changes, no new features — that
+asks: *what did we learn during this epoch that should update our plans?*
+
+The retrospective covers:
+
+1. **ADRs in force** (`adr/README.md` and each linked file). Did the
+   implementation reveal that any decision needs amending? Were any
+   "anticipated extensions" or "deferred" items resolved in practice?
+   Were any stated consequences wrong?
+
+2. **Roadmap files** (`roadmap/index.md` and the per-epoch files for the
+   upcoming epoch and one beyond). Does the upcoming epoch's scope still
+   make sense given what we built? Are the design prerequisites still the
+   right ones? Are the exit criteria still well-defined?
+
+3. **`replication/` specs and formulas register**. Do the capability
+   specs reflect what was actually implemented? Are there formula entries
+   or capability stubs that should be updated now rather than left stale?
+
+4. **`AI.md` and process documents**. Did any development rules prove
+   unworkable, insufficient, or in need of precision?
+
+5. **Surprises and pain points**. What was harder than expected? What
+   design decisions caused rework? What would have been better to decide
+   earlier? Capture these as ADR amendments, roadmap notes, or additions
+   to `AI.md` — wherever the lesson is most actionable for the next epoch.
+
+The output is one or more PRs amending affected documents before Epoch N+1
+code begins. These are documentation-only PRs; the retrospective itself
+does not introduce code. If a surprise reveals a design mistake that
+requires changing existing code, that is a separate PR with its own
+spec and tests, not part of the retrospective sweep.
+
 ## Architectural Decisions
 
 Architectural decisions are recorded as ADRs in `adr/`. **At the
