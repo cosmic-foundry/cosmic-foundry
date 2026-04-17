@@ -48,7 +48,7 @@ Per the implementation plan in `roadmap/epoch-02-mesh.md`:
 | # | Item | PR | Status |
 |---|------|----|--------|
 | 1 | Uniform mesh data model (`Block`, `UniformGrid`) | #85 | Merged |
-| 2 | Field allocation from blocks | #88 | Open |
+| 2 | Field allocation from blocks | #88 | Merged |
 | 3 | `HaloFillPolicy` — single-rank | — | Planned |
 | 4 | `DiagnosticReducer` + `DiagnosticSink` | — | Planned |
 | 5 | Task-graph driver — single-rank | — | Planned |
