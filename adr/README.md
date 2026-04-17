@@ -93,3 +93,9 @@ for the authoritative rule.
   before dispatches whose required footprint extends beyond the local
   segment interior; `HaloFillPolicy` executes the exchange via
   `jax.distributed`.
+- [**ADR-0012**](ADR-0012-global-reduction-primitive.md) *(Proposed)* —
+  Global reduction primitive: `DiagnosticReducer` protocol,
+  `DiagnosticRecord` container, `DiagnosticSink` writer, and
+  `global_sum` helper. Tab-separated `.diag` file per run; includes
+  the boundary-flux balance test pattern for outflow BCs and a
+  documentation requirement for conservation-law validity conditions.

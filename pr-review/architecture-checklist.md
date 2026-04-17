@@ -162,7 +162,12 @@ Check:
 
 - What can be reordered?
 - What can be transparently fused?
-- What must materialize?
+- What must materialize? For JAX/GPU designs, pay particular
+  attention to device-to-host transfers (e.g. `float(jax_array)`,
+  `.item()`, `np.asarray()`): each one is a materialization point
+  that breaks the JIT boundary and prevents the compiler from fusing
+  across it. Ask whether materialization belongs in the protocol
+  return type or in the caller after a batch of operations completes.
 - What requires communication, AMR synchronization, host visibility,
   reduction-result visibility, or a profiling/timing boundary?
 - Is the no-fusion/materialization boundary owned by the correct layer?
