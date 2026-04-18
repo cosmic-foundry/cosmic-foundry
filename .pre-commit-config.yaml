@@ -32,18 +32,14 @@ repos:
           - --ignore-words-list=fof,singe
         files: \.(md|py|rst)$
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - types-setuptools
-          - click
-        args: [--config-file=pyproject.toml]
-        files: ^cosmic_foundry/
-
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy cosmic_foundry
+        language: system
+        pass_filenames: false
+        files: ^cosmic_foundry/
       - id: markdown-link-integrity
         name: Markdown link integrity
         entry: python scripts/ci/check_markdown_links.py

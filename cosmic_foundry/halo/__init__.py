@@ -41,7 +41,7 @@ class HaloFillPolicy:
         }
         updated_payloads: dict[SegmentId, Any] = {}
         for target in fence.field.local_segments(rank):
-            target_interior = _shrink_extent(target.extent, fence.access_pattern)
+            target_interior = _segment_interior(target, fence.access_pattern)
             if _intersect_extents(target_interior, fence.region.extent) is None:
                 continue
             updated_payloads[target.segment_id] = _fill_segment_halo(
@@ -123,11 +123,17 @@ def _source_candidates(
     for source in field.segments:
         if source.segment_id == target.segment_id:
             continue
-        source_interior = _shrink_extent(source.extent, access_pattern)
+        source_interior = _segment_interior(source, access_pattern)
         overlap = _intersect_extents(source_interior, halo_piece)
         if overlap is not None:
             candidates.append((source, overlap))
     return candidates
+
+
+def _segment_interior(segment: FieldSegment, access_pattern: AccessPattern) -> Extent:
+    if segment.interior_extent is not None:
+        return segment.interior_extent
+    return _shrink_extent(segment.extent, access_pattern)
 
 
 def _shrink_extent(extent: Extent, access_pattern: AccessPattern) -> Extent:

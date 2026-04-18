@@ -140,8 +140,8 @@ merge and update this list when the picture changes.
    and the basic `HaloFillFence` → `HaloFillPolicy.execute` path.
    *Depends on: #2.*
 
-4. **`DiagnosticReducer` + `DiagnosticSink`** (implements
-   ADR-0012) — `global_sum` helper, `DiagnosticRecord` container,
+4. ✓ **`DiagnosticReducer` + `DiagnosticSink`** (PR #92) —
+   `global_sum` helper, `DiagnosticRecord` container,
    tab-separated `.diag` file writer. Include the runtime-health-check
    materialization rule: value checks return JAX arrays until the driver
    reaches an explicit fence. Independent of the halo exchange path; can

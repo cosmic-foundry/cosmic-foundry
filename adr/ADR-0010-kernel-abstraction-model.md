@@ -266,10 +266,13 @@ directly (e.g. `tests/utils/stencils.probe_operator_weights`) calls
 Field arguments are array-like objects supporting `__getitem__` with
 Region-coordinate semantics. A Field consists of one or more
 FieldSegments, each pairing a payload with the Extent over which
-that payload is valid; Placement maps SegmentIds to process/device
-owners. The Op does not inspect FieldSegment or Placement metadata
-directly. Dispatch validation checks that the Field's placed segments
-cover the Region extent and access footprint required by the Op.
+that payload is valid; halo-padded segments also carry an optional
+`interior_extent` identifying the owned cells that diagnostics and
+ownership-sensitive copies should count. Placement maps SegmentIds to
+process/device owners. The Op does not inspect FieldSegment or
+Placement metadata directly. Dispatch validation checks that the Field's
+placed segments cover the Region extent and access footprint required
+by the Op.
 Under `FlatPolicy` the argument can be a local FieldSegment payload
 or a thin Field view over one or more local segments. Under
 `TiledPolicy` the Policy passes a `FieldView` wrapper that intercepts
