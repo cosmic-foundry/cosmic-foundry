@@ -36,6 +36,7 @@ of these framework design patterns.
 | 6.11 | [06-11-visualization.md](06-11-visualization.md) | §6.11 — visualization and science-communication landscape (broken out because the section is long and evolves faster than the code survey). |
 | 6.12 | [06-12-licensing.md](06-12-licensing.md) | §6.12 — licensing and openness landscape for the surveyed codes. |
 | 7 | [07-implications.md](07-implications.md) | §7 — implications for Cosmic Foundry. |
+| 8 | [08-vv-methodology.md](08-vv-methodology.md) | §8 — V&V and specification methodology: Roache, Oberkampf & Roy, MMS, PCMM, and what exists (and doesn't) for specification-first code development. |
 
 ## Splitting discipline
 
