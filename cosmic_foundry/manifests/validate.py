@@ -1,26 +1,35 @@
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import jsonschema  # type: ignore
 
+from cosmic_foundry.kernels import Source
+
 _SCHEMAS_DIR = Path(__file__).parent.parent / "schemas"
 
 
-def load_schema(name: str) -> dict[str, Any]:
-    """Load a base schema by name (without the .schema.json suffix).
+@dataclass(frozen=True)
+class LoadSchema(Source):
+    """Load a base schema by name from the schemas directory.
 
     Source:
         origin   — JSON schema file at schemas/{name}.schema.json
         produces — schema dict suitable for jsonschema.validate
     """
-    path = _SCHEMAS_DIR / f"{name}.schema.json"
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Base schema not found: {name} (looked in {_SCHEMAS_DIR})"
-        )
-    with open(path) as f:
-        return json.load(f)  # type: ignore[no-any-return]
+
+    def execute(self, name: str) -> dict[str, Any]:
+        path = _SCHEMAS_DIR / f"{name}.schema.json"
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Base schema not found: {name} (looked in {_SCHEMAS_DIR})"
+            )
+        with open(path) as f:
+            return json.load(f)  # type: ignore[no-any-return]
+
+
+load_schema = LoadSchema()
 
 
 def validate_manifest(manifest: dict[str, Any], schema_name: str) -> None:

@@ -11,7 +11,6 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
     CollectDiagnostics,
     DiagnosticRecord,
     DiagnosticReducer,
-    DiagnosticSink,
     GlobalSum,
     NullDiagnosticSink,
     TabSeparatedDiagnosticSink,
@@ -29,6 +28,8 @@ from cosmic_foundry.fields import (  # noqa: E402
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
+    MergeRankFiles,
+    WriteArray,
     merge_rank_files,
     write_array,
 )
@@ -42,6 +43,8 @@ from cosmic_foundry.kernels import (  # noqa: E402
     Map,
     Op,
     Region,
+    Sink,
+    Source,
     Stencil,
 )
 from cosmic_foundry.mesh import Block, BlockId, UniformGrid  # noqa: E402
@@ -53,7 +56,6 @@ __all__ = [
     "CollectDiagnostics",
     "DiagnosticRecord",
     "DiagnosticReducer",
-    "DiagnosticSink",
     "GlobalSum",
     "NullDiagnosticSink",
     "TabSeparatedDiagnosticSink",
@@ -71,6 +73,8 @@ __all__ = [
     "HaloFillPolicy",
     # io
     "HAS_PARALLEL_HDF5",
+    "MergeRankFiles",
+    "WriteArray",
     "merge_rank_files",
     "write_array",
     # kernels
@@ -83,6 +87,8 @@ __all__ = [
     "Map",
     "Op",
     "Region",
+    "Sink",
+    "Source",
     "Stencil",
     # mesh
     "Block",

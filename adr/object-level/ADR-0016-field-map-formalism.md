@@ -117,12 +117,15 @@ or reducing a field to a scalar — must be describable precisely as a map.
 If a class cannot be given a well-defined domain, codomain, and operator,
 it should be redesigned until it can.
 
-`Map` is an abstract base class in `cosmic_foundry.kernels`.  Every
-concrete map class inherits from it and implements `execute()`.  `Map`
-provides a default `__call__` that delegates to `execute()`, so map
-instances are callable.  Stateless maps (those with Θ = ∅ and no
-constructor parameters) expose a module-level singleton for convenience:
-`collect_diagnostics = CollectDiagnostics()`, `global_sum = GlobalSum()`.
+`Map`, `Source`, and `Sink` are abstract base classes in
+`cosmic_foundry.kernels`.  Every concrete map/source/sink class inherits
+from the appropriate ABC and implements `execute()`.  All three ABCs
+provide a default `__call__` that delegates to `execute()`, so instances
+are directly callable.  Stateless instances (Θ = ∅, no constructor
+parameters) expose a module-level singleton for convenience:
+`collect_diagnostics = CollectDiagnostics()`, `global_sum = GlobalSum()`,
+`write_array = WriteArray()`, `merge_rank_files = MergeRankFiles()`,
+`load_schema = LoadSchema()`.
 
 Desiderata are not map parameters. A consumer's requirement on a map's
 output (e.g. "I need N ghost cells") is a constraint on which map to call,

@@ -143,6 +143,42 @@ class Map(ABC):
         return self.execute(*args, **kwargs)
 
 
+class Source(ABC):
+    """Abstract base for all source classes: R: external state → B.
+
+    Every concrete Source subclass carries a ``Source:`` block in its class
+    docstring specifying the external state consumed (origin) and the value
+    produced.  Subclasses that carry no parameters should use
+    ``@dataclass(frozen=True)`` so that instances are hashable.
+    """
+
+    @abstractmethod
+    def execute(self, *args: Any, **kwargs: Any) -> Any:
+        """Read from external state and return the result."""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate to execute()."""
+        return self.execute(*args, **kwargs)
+
+
+class Sink(ABC):
+    """Abstract base for all sink classes: S: A → external state.
+
+    Every concrete Sink subclass carries a ``Sink:`` block in its class
+    docstring specifying the domain consumed and the external effect produced.
+    Subclasses that carry no parameters should use
+    ``@dataclass(frozen=True)`` so that instances are hashable.
+    """
+
+    @abstractmethod
+    def execute(self, *args: Any, **kwargs: Any) -> Any:
+        """Consume input and materialise it into external state."""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate to execute()."""
+        return self.execute(*args, **kwargs)
+
+
 class Op(ABC):
     """Nominal base class for class-shaped Ops.
 
@@ -368,5 +404,7 @@ __all__ = [
     "Map",
     "Op",
     "Region",
+    "Sink",
+    "Source",
     "Stencil",
 ]
