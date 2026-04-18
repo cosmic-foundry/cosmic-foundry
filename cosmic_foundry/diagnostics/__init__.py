@@ -158,13 +158,14 @@ def global_sum(
     """
     local = jnp.asarray(0.0, dtype=jnp.float64)
     for segment in field.local_segments(rank):
-        interior = segment.interior_extent or segment.extent
+        extent = segment.extent
+        payload = segment.payload
+        assert extent is not None and payload is not None  # segment is a leaf
+        interior: Extent = segment.interior_extent or extent
         overlap = _intersect_extents(interior, region.extent)
         if overlap is None:
             continue
-        local = local + jnp.sum(
-            segment.payload[_payload_slices(segment.extent, overlap)]
-        )
+        local = local + jnp.sum(payload[_payload_slices(extent, overlap)])
 
     if axis_name is None:
         return local

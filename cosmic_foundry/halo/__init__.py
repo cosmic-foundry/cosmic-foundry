@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from cosmic_foundry.fields import DiscreteField, FieldSegment, SegmentId
+from cosmic_foundry.fields import DiscreteField, SegmentId
 from cosmic_foundry.kernels import AccessPattern, Extent, Region
 
 
@@ -44,10 +44,13 @@ class HaloFillPolicy:
             raise ValueError(msg)
 
         local_ids: set[SegmentId] = {
-            seg.segment_id for seg in fence.field.local_segments(rank)
+            seg.segment_id
+            for seg in fence.field.local_segments(rank)
+            if seg.segment_id is not None  # always true for leaves; narrows type
         }
         updated_payloads: dict[SegmentId, Any] = {}
         for target in fence.field.local_segments(rank):
+            assert target.segment_id is not None  # target is a leaf
             target_interior = _segment_interior(target, fence.access_pattern)
             if _intersect_extents(target_interior, fence.region.extent) is None:
                 continue
@@ -61,20 +64,29 @@ class HaloFillPolicy:
                 local_ids=local_ids,
             )
 
-        segments = tuple(
-            FieldSegment(
-                segment_id=seg.segment_id,
-                payload=updated_payloads.get(seg.segment_id, seg.payload),
-                extent=seg.extent,
+        new_segments_list: list[DiscreteField] = []
+        for seg in fence.field.segments:
+            assert seg.segment_id is not None and seg.extent is not None  # leaf
+            new_segments_list.append(
+                DiscreteField(
+                    name=seg.name,
+                    segment_id=seg.segment_id,
+                    payload=updated_payloads.get(seg.segment_id, seg.payload),
+                    extent=seg.extent,
+                    interior_extent=seg.interior_extent,
+                )
             )
-            for seg in fence.field.segments
+        new_segments = tuple(new_segments_list)
+        return DiscreteField(
+            name=fence.field.name,
+            segments=new_segments,
+            placement=fence.field.placement,
         )
-        return DiscreteField(fence.field.name, segments, fence.field.placement)
 
 
 def _fill_segment_halo(
     *,
-    target: FieldSegment,
+    target: DiscreteField,
     field: DiscreteField,
     rank: int,
     required: Extent,
@@ -82,6 +94,7 @@ def _fill_segment_halo(
     access_pattern: AccessPattern,
     local_ids: set[SegmentId],
 ) -> Any:
+    assert target.payload is not None and target.extent is not None  # target is a leaf
     target_payload = target.payload
     target_work = _intersect_extents(target.extent, required)
     if target_work is None:
@@ -97,7 +110,7 @@ def _fill_segment_halo(
         local_candidates = [
             (source, overlap)
             for source, overlap in candidates
-            if source.segment_id in local_ids
+            if source.segment_id is not None and source.segment_id in local_ids
         ]
         if len(local_candidates) > 1:
             msg = "Multiple same-rank source segments overlap one halo region"
@@ -112,6 +125,9 @@ def _fill_segment_halo(
             continue
 
         source, overlap = local_candidates[0]
+        assert (
+            source.extent is not None and source.payload is not None
+        )  # source is a leaf
         target_payload = target_payload.at[_payload_slices(target.extent, overlap)].set(
             source.payload[_payload_slices(source.extent, overlap)]
         )
@@ -122,11 +138,11 @@ def _fill_segment_halo(
 def _source_candidates(
     *,
     field: DiscreteField,
-    target: FieldSegment,
+    target: DiscreteField,
     halo_piece: Extent,
     access_pattern: AccessPattern,
-) -> list[tuple[FieldSegment, Extent]]:
-    candidates: list[tuple[FieldSegment, Extent]] = []
+) -> list[tuple[DiscreteField, Extent]]:
+    candidates: list[tuple[DiscreteField, Extent]] = []
     for source in field.segments:
         if source.segment_id == target.segment_id:
             continue
@@ -137,9 +153,10 @@ def _source_candidates(
     return candidates
 
 
-def _segment_interior(segment: FieldSegment, access_pattern: AccessPattern) -> Extent:
+def _segment_interior(segment: DiscreteField, access_pattern: AccessPattern) -> Extent:
     if segment.interior_extent is not None:
         return segment.interior_extent
+    assert segment.extent is not None  # segment is always a leaf at this call site
     return _shrink_extent(segment.extent, access_pattern)
 
 

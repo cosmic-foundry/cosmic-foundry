@@ -1,18 +1,16 @@
-"""Field hierarchy, FieldSegment, Placement, SegmentId, and FieldDiscretization.
+"""Field hierarchy, Placement, SegmentId, and FieldDiscretization.
 
-- ``SegmentId``          — opaque identifier for one contiguous array segment.
-- ``FieldSegment``       — a payload array paired with the Extent over which it
-                           is valid.  Carries no ownership information.
+- ``SegmentId``          — opaque identifier for one contiguous block segment.
 - ``Placement``          — maps each SegmentId to the process rank that owns it.
                            Carries no physical meaning or kernel-lowering logic.
 - ``Field``              — abstract base for all field parameterizations: f: D → ℝ.
 - ``ContinuousField``    — Θ = ∅: f: Ω → ℝ represented by an analytic callable.
-- ``DiscreteField``      — Θ = {h}: f_h: Ω_h → ℝ stored as per-block array segments.
+- ``DiscreteField``      — Θ = {h}: f_h: Ω_h → ℝ.  Leaf nodes (single block)
+                           carry payload/extent/segment_id directly.  Composite
+                           nodes (multi-block) carry segments and placement.
+                           Both are the same kind of mathematical object — a
+                           field on a discrete domain.
 - ``FieldDiscretization``— map from ContinuousField × UniformGrid to DiscreteField.
-
-Single-process execution is the degenerate case: one DiscreteField, one
-FieldSegment, one Placement whose sole segment maps to rank 0.
-Multi-process execution uses the same API with disjoint extents.
 """
 
 from __future__ import annotations
@@ -29,36 +27,12 @@ from cosmic_foundry.kernels import Extent
 SegmentId = NewType("SegmentId", int)
 
 
-@dataclass(frozen=True)
-class FieldSegment:
-    """A payload array paired with the Extent over which it is valid.
-
-    The payload is typically a ``jax.Array``.  ``FieldSegment`` does not
-    own process/device information; that lives in ``Placement``.
-    ``interior_extent`` identifies the owned cells inside halo-padded
-    storage; when omitted, the whole segment extent is treated as interior.
-    """
-
-    segment_id: SegmentId
-    payload: Any
-    extent: Extent
-    interior_extent: Extent | None = None
-
-    def __post_init__(self) -> None:
-        if self.interior_extent is None:
-            return
-        intersection = _intersect_extents(self.extent, self.interior_extent)
-        if intersection != self.interior_extent:
-            msg = "FieldSegment interior_extent must be contained in extent"
-            raise ValueError(msg)
-
-
 class Placement:
     """Maps each ``SegmentId`` to the process rank that owns it.
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
     It is the sole authoritative source for process/device ownership within
-    a ``DiscreteField``.
+    a composite ``DiscreteField``.
     """
 
     def __init__(self, owners: Mapping[SegmentId, int]) -> None:
@@ -130,52 +104,114 @@ class ContinuousField(Field):
 
 @dataclass(frozen=True)
 class DiscreteField(Field):
-    """A discrete scalar field f_h: Ω_h → ℝ stored as per-block array segments.
+    """A discrete scalar field f_h: Ω_h → ℝ. Θ = {h}.
 
-    Θ = {h} — the discrete representation approximates the underlying continuous
-    field to O(h) in the L∞ norm for smooth fields under piecewise-constant
-    interpolation.  Produced by ``FieldDiscretization``; consumed by halo-fill,
-    kernel dispatch, and diagnostic reduction maps.
+    Represents f_h on either a single block (leaf) or the full domain
+    (composite).  Both are the same mathematical object — a field on a
+    discrete domain — differing only in the extent of their domain D.
+
+    Leaf (single block):
+        ``segments = ()``.  ``segment_id``, ``payload``, and ``extent``
+        are set.  ``interior_extent`` is optional and identifies the
+        owned cells inside halo-padded storage.
+
+    Composite (multi-block):
+        ``segments`` is non-empty; each element is a leaf ``DiscreteField``.
+        ``placement`` records which rank owns each segment.
+        ``payload``, ``extent``, ``segment_id``, and ``interior_extent``
+        are all ``None``.
+
+    Approximation error is O(h^p) for smooth fields; p depends on the
+    discretization scheme that produced this field.
     """
 
     name: str
-    segments: tuple[FieldSegment, ...]
-    placement: Placement
+    segments: tuple[DiscreteField, ...] = ()
+    placement: Placement | None = None
+    segment_id: SegmentId | None = None
+    payload: Any | None = None
+    extent: Extent | None = None
+    interior_extent: Extent | None = None
 
     def __post_init__(self) -> None:
-        for seg in self.segments:
-            try:
-                self.placement.owner(seg.segment_id)
-            except KeyError:
+        if self.segments:
+            # Composite node
+            if self.placement is None:
+                msg = f"composite DiscreteField {self.name!r} requires placement"
+                raise ValueError(msg)
+            if (
+                self.payload is not None
+                or self.extent is not None
+                or self.segment_id is not None
+            ):
                 msg = (
-                    f"FieldSegment {seg.segment_id!r} is not registered "
-                    f"in the Placement for DiscreteField {self.name!r}"
+                    f"composite DiscreteField {self.name!r} must not carry "
+                    "payload, extent, or segment_id"
                 )
-                raise ValueError(msg) from None
+                raise ValueError(msg)
+            for seg in self.segments:
+                try:
+                    self.placement.owner(seg.segment_id)  # type: ignore[arg-type]
+                except KeyError:
+                    msg = (
+                        f"DiscreteField segment {seg.segment_id!r} is not "
+                        f"registered in the Placement for {self.name!r}"
+                    )
+                    raise ValueError(msg) from None
+        else:
+            # Leaf node
+            if self.payload is None or self.extent is None or self.segment_id is None:
+                msg = (
+                    f"leaf DiscreteField {self.name!r} requires "
+                    "payload, extent, and segment_id"
+                )
+                raise ValueError(msg)
+            if self.placement is not None:
+                msg = f"leaf DiscreteField {self.name!r} must not carry placement"
+                raise ValueError(msg)
+            if self.interior_extent is not None:
+                intersection = _intersect_extents(self.extent, self.interior_extent)
+                if intersection != self.interior_extent:
+                    msg = "DiscreteField interior_extent must be contained in extent"
+                    raise ValueError(msg)
 
-    def segment(self, segment_id: SegmentId) -> FieldSegment:
-        """Return the FieldSegment with the given *segment_id*."""
+    @property
+    def is_leaf(self) -> bool:
+        """True for a single-block (leaf) field."""
+        return len(self.segments) == 0
+
+    def segment(self, segment_id: SegmentId) -> DiscreteField:
+        """Return the leaf DiscreteField with the given *segment_id*."""
+        if self.is_leaf:
+            if self.segment_id == segment_id:
+                return self
+            msg = f"SegmentId {segment_id!r} not found in DiscreteField {self.name!r}"
+            raise KeyError(msg)
         for seg in self.segments:
             if seg.segment_id == segment_id:
                 return seg
         msg = f"SegmentId {segment_id!r} not found in DiscreteField {self.name!r}"
         raise KeyError(msg)
 
-    def local_segments(self, rank: int) -> tuple[FieldSegment, ...]:
-        """Return the FieldSegments owned by *rank* according to the Placement."""
-        local_ids = self.placement.segments_for_rank(rank)
+    def local_segments(self, rank: int) -> tuple[DiscreteField, ...]:
+        """Return the leaf segments owned by *rank* according to the Placement."""
+        if self.is_leaf:
+            msg = "local_segments requires a composite DiscreteField with a Placement"
+            raise ValueError(msg)
+        local_ids = self.placement.segments_for_rank(rank)  # type: ignore[union-attr]
         return tuple(seg for seg in self.segments if seg.segment_id in local_ids)
 
     def covers(self, required_extent: Extent) -> bool:
-        """Return True iff the union of all segment extents covers *required_extent*.
+        """Return True iff the union of segment extents covers *required_extent*.
 
         Uses a boolean coverage mask; intended for validation, not hot paths.
         """
+        segs: tuple[DiscreteField, ...] = (self,) if self.is_leaf else self.segments
         shape = required_extent.shape
         origin = tuple(s.start for s in required_extent.slices)
         covered = np.zeros(shape, dtype=bool)
-        for seg in self.segments:
-            intersection = _intersect_extents(seg.extent, required_extent)
+        for seg in segs:
+            intersection = _intersect_extents(seg.extent, required_extent)  # type: ignore[arg-type]
             if intersection is None:
                 continue
             local_idx = tuple(
@@ -195,8 +231,9 @@ class FieldDiscretization:
                    field and a uniform grid partitioning Ω into blocks B_i with
                    grid spacing h; f.evaluate is called with one JAX coordinate
                    array per spatial axis, broadcast-compatible with block shape
-        codomain — f_h: DiscreteField on Ω_h^int(B_i) — one FieldSegment per
-                   block with extent = block.index_extent and no ghost cells
+        codomain — f_h: DiscreteField — one leaf DiscreteField per block with
+                   extent = block.index_extent and no ghost cells; collected
+                   into a composite DiscreteField over the full grid
         operator — (f, G) ↦ f_h where f_h(x_i) = f(x_i) for x_i ∈ Ω_h^int
 
     Θ = {h}, p = 1 — piecewise-constant representation has L∞ error O(h)
@@ -207,15 +244,16 @@ class FieldDiscretization:
         """Return a DiscreteField with payloads equal to f evaluated at cell centers."""
         import jax.numpy as jnp
 
-        segments: list[FieldSegment] = []
+        leaves: list[DiscreteField] = []
         owners: dict[SegmentId, int] = {}
         for block in grid.blocks:
             axes = [block.cell_centers(axis) for axis in range(block.ndim)]
             coords = jnp.meshgrid(*axes, indexing="ij")
             payload = jnp.asarray(f.evaluate(*coords), dtype=jnp.float64)
             seg_id = SegmentId(int(block.block_id))
-            segments.append(
-                FieldSegment(
+            leaves.append(
+                DiscreteField(
+                    name=f.name,
                     segment_id=seg_id,
                     payload=payload,
                     extent=block.index_extent,
@@ -225,7 +263,7 @@ class FieldDiscretization:
 
         return DiscreteField(
             name=f.name,
-            segments=tuple(segments),
+            segments=tuple(leaves),
             placement=Placement(owners),
         )
 
@@ -250,7 +288,6 @@ __all__ = [
     "DiscreteField",
     "Field",
     "FieldDiscretization",
-    "FieldSegment",
     "Placement",
     "SegmentId",
 ]

@@ -21,7 +21,6 @@ from cosmic_foundry.fields import (  # noqa: E402
     DiscreteField,
     Field,
     FieldDiscretization,
-    FieldSegment,
     Placement,
     SegmentId,
 )
@@ -62,7 +61,6 @@ __all__ = [
     "DiscreteField",
     "Field",
     "FieldDiscretization",
-    "FieldSegment",
     "Placement",
     "SegmentId",
     # halo
