@@ -14,12 +14,13 @@ that story.
   golden-data harnesses, and externally-grounded tests. It governs
   *whether* an implementation is correct once written, not *which path*
   produced it.
-- [`replication/formulas.md`](../replication/formulas.md) is a flat
+- [`replication/formulas.md`](../../replication/formulas.md) is a flat
   register of individual physics formulas, catching coefficient-, sign-,
   and variant-level transcription drift. Its grain is one equation per
   entry — too fine for capability-level narrative.
-- [`research/06-12-licensing.md`](../research/06-12-licensing.md) and
-  [`roadmap/index.md`](../roadmap/index.md) state a licensing principle:
+- [`research/06-12-licensing.md`](../../research/06-12-licensing.md) and
+  [`roadmap/object-level/README.md`](../../roadmap/object-level/README.md) state a
+  licensing principle:
   copyleft references (GADGET-4, RAMSES, MESA, SWIFT, PLUTO, Arepo, ...)
   are consulted *through published papers only*; any reimplementation is
   clean-room.

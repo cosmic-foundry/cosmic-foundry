@@ -1,6 +1,6 @@
 # Epoch 6 — Self-gravity and N-body
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 Close the loop with gravitational dynamics:
 

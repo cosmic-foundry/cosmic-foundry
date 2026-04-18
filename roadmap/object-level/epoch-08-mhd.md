@@ -1,6 +1,6 @@
 # Epoch 8 — Magnetohydrodynamics and non-ideal transport
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 Extend the hydro module into the MHD regime:
 

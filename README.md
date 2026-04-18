@@ -8,7 +8,7 @@ through numerical relativity, radiation transport, gravity, N-body,
 microphysics, and cosmology. It is being built incrementally toward a
 code that can replicate published astrophysics results. JAX powers the
 numerical kernels; see
-[ADR-0002](adr/ADR-0002-jax-primary-kernel-backend.md).
+[ADR-0002](adr/object-level/ADR-0002-jax-primary-kernel-backend.md).
 
 ## Quick start
 

@@ -1,6 +1,6 @@
 # Epoch 9 — Radiation transport
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 Close the radiation-hydrodynamics loop:
 

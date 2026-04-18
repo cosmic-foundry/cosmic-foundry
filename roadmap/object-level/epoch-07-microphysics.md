@@ -1,6 +1,6 @@
 # Epoch 7 — Microphysics sub-layer
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 Bring up the equations of state and reaction networks that later
 physics modules depend on:
@@ -26,7 +26,7 @@ Before starting Epoch 6 work, complete the following:
   the problem but defers the final decision. Microphysics capabilities
   (EOS, reaction networks) will be the first major code bodies large
   enough and numeric-heavy enough to fully stress the
-  question. Reread [ADR-0008](../adr/ADR-0008-numerical-transcription-discipline.md),
+  question. Reread [ADR-0008](../../adr/meta-level/ADR-0008-numerical-transcription-discipline.md),
   review how Epochs 2–5 physics landed (especially dense numeric
   tables and formula derivations), and either finalize the decision
   via an amendment or supersede it with a full ADR. The outcome is

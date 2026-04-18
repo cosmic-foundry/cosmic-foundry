@@ -1,12 +1,16 @@
-# Cosmic Foundry — Implementation Roadmap
+# Cosmic Foundry — Roadmap
 
-The roadmap has been split into per-epoch files so that each epoch
-can be iterated on in isolation as its entry criteria approach.
+The roadmap is split across two planes:
 
-- [`roadmap/index.md`](roadmap/index.md) — framing, technology
-  baseline, cross-cutting concerns, crossroads, and the §6
-  relationship table with a TOC of per-epoch files.
-- `roadmap/epoch-NN-*.md` — one file per epoch (0 through 13).
+- [`roadmap/object-level/README.md`](roadmap/object-level/README.md) — what platform
+  and simulation capabilities the codebase is building.
+- [`roadmap/meta-level/README.md`](roadmap/meta-level/README.md) — how the project
+  verifies, validates, regenerates, and audits object-level claims.
+- [`roadmap/index.md`](roadmap/index.md) — routing index and current
+  track positions.
+- `roadmap/object-level/epoch-NN-*.md` — one file per object-level epoch.
+- [`roadmap/meta-level/reproducibility-meta-generator.md`](roadmap/meta-level/reproducibility-meta-generator.md)
+  — the current M3 meta-level implementation plan.
 
 See also [`RESEARCH.md`](RESEARCH.md) for the capability survey the
 roadmap is derived from, and [`adr/`](adr/) for architectural

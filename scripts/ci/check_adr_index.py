@@ -2,8 +2,8 @@
 """Verify adr/README.md links every ADR file and only existing ADR files.
 
 Reserved ADR numbers (e.g. ADR-0001 through ADR-0005 per
-roadmap/epoch-00-bootstrap.md) are exempt from the "must be linked"
-rule if no corresponding file exists yet.
+roadmap/object-level/epoch-00-bootstrap.md) are exempt from the
+"must be linked" rule if no corresponding file exists yet.
 """
 from __future__ import annotations
 
@@ -24,15 +24,23 @@ def main() -> int:
         print("adr/README.md: missing", file=sys.stderr)
         return 1
 
-    adr_files = {p.name for p in adr_dir.iterdir() if ADR_FILE_RE.match(p.name)}
+    adr_files = {
+        p.relative_to(adr_dir).as_posix()
+        for p in adr_dir.rglob("*.md")
+        if ADR_FILE_RE.match(p.name)
+    }
     index_text = index.read_text(encoding="utf-8")
-    linked = {Path(m).name for m in LINK_RE.findall(index_text)}
+    linked = {
+        Path(m).as_posix()
+        for m in LINK_RE.findall(index_text)
+        if ADR_FILE_RE.match(Path(m).name)
+    }
 
     errors: list[str] = []
     for name in sorted(adr_files - linked):
         errors.append(f"adr/{name}: exists but is not linked from adr/README.md")
     for name in sorted(linked - adr_files):
-        errors.append(f"adr/README.md: links to missing {name}")
+        errors.append(f"adr/README.md: links to missing adr/{name}")
 
     for err in errors:
         print(err, file=sys.stderr)

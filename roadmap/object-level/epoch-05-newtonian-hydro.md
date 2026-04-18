@@ -1,6 +1,6 @@
 # Epoch 5 — Newtonian hydrodynamics
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 The first physics module and the template for every subsequent
 one:

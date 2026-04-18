@@ -7,9 +7,9 @@ agents interchangeably. Several forms of discipline — branch
 hygiene, commit size, PR workflow, attribution, and metadata
 cleanliness — are the difference between a repository that stays
 reviewable and one that becomes unreviewable at even modest scale.
-Those rules already appear informally in [`AI.md`](../AI.md) and
+Those rules already appear informally in [`AI.md`](../../AI.md) and
 were reserved for formalization in
-[`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md)
+[`roadmap/object-level/epoch-00-bootstrap.md`](../../roadmap/object-level/epoch-00-bootstrap.md)
 §0.6 as ADR-0005.
 
 This ADR codifies the rules and resolves minor drift between AI.md
@@ -172,10 +172,10 @@ Applies to every ADR in this repository.
 
 ## Cross-references
 
-- [`AI.md`](../AI.md) — informal quick-reference; kept aligned with
+- [`AI.md`](../../AI.md) — informal quick-reference; kept aligned with
   this ADR and may be edited without a new ADR to match rewordings
   here.
-- [`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md)
+- [`roadmap/object-level/epoch-00-bootstrap.md`](../../roadmap/object-level/epoch-00-bootstrap.md)
   §0.6 (reservation), §0.8 (CONTRIBUTING.md ramp-down).
 - ADR-0007 (Replication workflow) — depends on attribution honesty
   for the citation-backed verification trail.

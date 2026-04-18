@@ -20,5 +20,6 @@ integrator.
 
 Populated when this capability is first tackled. The "symbolic
 vs hand-written microphysics" crossroad in
-`roadmap/index.md` §5 governs the Jacobian-provisioning
+`roadmap/object-level/README.md` §Crossroads / Open Decisions governs the
+Jacobian-provisioning
 decision.

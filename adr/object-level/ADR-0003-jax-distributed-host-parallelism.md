@@ -101,13 +101,14 @@ baseline.
   XLA version on a fixed device; collective reductions over floats
   are not associative, so cross-topology bitwise reproducibility is
   not claimed.
-- **Neutral.** `roadmap/index.md` §2 currently lists `mpi4py`,
+- **Neutral.** `roadmap/object-level/README.md` §Technology Baseline currently
+  lists `mpi4py`,
   `mpi4jax`, and parallel HDF5 as baseline dependencies — a
   follow-up roadmap edit is required to align §2 with this ADR.
   `environment/cosmic_foundry.yml` includes `openmpi` as a conda
   dependency; this becomes optional under the revised baseline and
   can be dropped in a later cleanup PR. The §0.7 `cosmic-foundry
-  hello` description in `roadmap/epoch-00-bootstrap.md` also refers
+  hello` description in `roadmap/object-level/epoch-00-bootstrap.md` also refers
   to `MPI.Init()` and will need a small edit to match the
   `jax.distributed` path.
 
@@ -134,13 +135,13 @@ baseline.
 
 ## Cross-references
 
-- [`roadmap/index.md`](../roadmap/index.md) §2 (Technology baseline
-  — requires a follow-up edit to align with this ADR), §5
-  (crossroads: host-parallelism model, now resolved).
-- [`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md)
+- [`roadmap/object-level/README.md`](../../roadmap/object-level/README.md) §Technology
+  Baseline (requires a follow-up edit to align with this ADR) and
+  §Crossroads / Open Decisions (host-parallelism model, now resolved).
+- [`roadmap/object-level/epoch-00-bootstrap.md`](../../roadmap/object-level/epoch-00-bootstrap.md)
   §0.7 (`cosmic-foundry hello` — requires a follow-up edit to replace
   `mpi4py.MPI.Init()` with `jax.distributed.initialize()`).
-- [`roadmap/epoch-01-kernels.md`](../roadmap/epoch-01-kernels.md)
+- [`roadmap/object-level/epoch-01-kernels.md`](../../roadmap/object-level/epoch-01-kernels.md)
   (Epoch 1 Field placement and multi-host CI).
 - ADR-0002 (JAX primary backend) — composes with this decision for
   intra-node parallelism.

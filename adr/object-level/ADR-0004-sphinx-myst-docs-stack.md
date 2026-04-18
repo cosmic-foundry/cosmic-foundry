@@ -2,8 +2,8 @@
 
 ## Context
 
-Cosmic Foundry's roadmap ([`roadmap/index.md`](../roadmap/index.md) §4,
-["Documentation"](../roadmap/epoch-00-bootstrap.md) §0.5) commits to
+Cosmic Foundry's object-level roadmap ([`roadmap/object-level/README.md`](../../roadmap/object-level/README.md),
+["Documentation"](../../roadmap/object-level/epoch-00-bootstrap.md) §0.5) commits to
 documentation that advances alongside code rather than lagging behind
 it: a user guide, theory manual, and API reference built from the
 same repository. ADR-0006 (visualization stack) additionally relies
@@ -186,8 +186,9 @@ directory.
 
 ## Cross-references
 
-- [`roadmap/index.md`](../roadmap/index.md) §2, §4 (Documentation).
-- [`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md)
+- [`roadmap/object-level/README.md`](../../roadmap/object-level/README.md) §Technology
+  Baseline and §Epochs.
+- [`roadmap/object-level/epoch-00-bootstrap.md`](../../roadmap/object-level/epoch-00-bootstrap.md)
   §0.5 (Documentation scaffolding).
 - ADR-0001 (Python-only engine) — constrains the authoring stack
   to stay Python-native.

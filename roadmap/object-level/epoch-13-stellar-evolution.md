@@ -1,6 +1,6 @@
 # Stretch Epoch 13 — Stellar evolution
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 1-D Lagrangian stellar structure with an implicit solver (JAX
 autodiff for the block-tridiagonal Jacobian), adaptive mesh and

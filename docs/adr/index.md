@@ -7,6 +7,6 @@ in the repository. Individual ADRs live alongside it under
 
 ADRs are authored as GitHub-rendered markdown and are not mirrored into
 these docs. See
-[ADR-0005](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0005-branch-pr-attribution-discipline.md)
+[ADR-0005](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/meta-level/ADR-0005-branch-pr-attribution-discipline.md)
 for the amendment policy and the rules on when an accepted ADR may be
 edited in place versus superseded.

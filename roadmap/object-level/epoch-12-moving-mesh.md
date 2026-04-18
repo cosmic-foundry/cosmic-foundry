@@ -1,6 +1,6 @@
 # Stretch Epoch 12 — Moving Voronoi mesh
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 The Arepo-class replication target. Deferred until the above are
 stable so the engine can absorb the complexity. Likely implemented

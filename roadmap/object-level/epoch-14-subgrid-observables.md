@@ -1,6 +1,6 @@
 # Stretch Epoch 14 — Subgrid physics and observables
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 - Plugin interface for cooling / star formation / stellar and SN
   feedback / AGN seeding and feedback / chemical enrichment, so

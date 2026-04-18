@@ -1,6 +1,6 @@
 # Epoch 1 — Kernel abstraction and multi-backend core
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 ## Required reading
 

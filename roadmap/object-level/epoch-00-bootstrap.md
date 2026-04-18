@@ -1,6 +1,6 @@
 # Epoch 0 — Project bootstrap
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 Epoch 0 delivers the project scaffolding every later epoch
 assumes: a Python package, a tooling and CI stack, a documentation

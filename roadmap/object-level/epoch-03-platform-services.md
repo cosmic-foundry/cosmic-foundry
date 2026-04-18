@@ -1,6 +1,6 @@
 # Epoch 3 — Platform Services
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 ## Scope
 

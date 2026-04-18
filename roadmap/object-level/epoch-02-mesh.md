@@ -1,6 +1,6 @@
 # Epoch 2 — Mesh and AMR
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 ## Design prerequisites
 

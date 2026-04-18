@@ -1,6 +1,6 @@
 # Epoch 4 — Visualization and science communication
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 The visualization stack that every physics epoch will feed into —
 and the public-facing science-communication surface. Promoted out

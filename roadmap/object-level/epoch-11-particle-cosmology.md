@@ -1,6 +1,6 @@
 # Epoch 11 — Particle / meshless hydrodynamics and cosmology
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 The second mesh paradigm and the cosmological stack:
 

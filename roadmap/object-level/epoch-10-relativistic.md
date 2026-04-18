@@ -1,6 +1,6 @@
 # Epoch 10 — Relativistic physics
 
-> Part of the [Cosmic Foundry roadmap](index.md).
+> Part of the [Cosmic Foundry roadmap](../index.md).
 
 The hardest grid-based physics target:
 

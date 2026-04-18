@@ -20,7 +20,7 @@ writers are designed — otherwise the engine ships web-hostile
 outputs or duplicates its I/O paths.
 
 ADR-0001..0005 (the five Epoch-0 seed ADRs reserved in
-`roadmap/epoch-00-bootstrap.md` §0.6) codify commitments this ADR
+`roadmap/object-level/epoch-00-bootstrap.md` §0.6) codify commitments this ADR
 builds on. This ADR uses number 0006 to preserve that reservation.
 
 ## Decision
