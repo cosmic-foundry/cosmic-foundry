@@ -71,7 +71,7 @@ Per the meta-level roadmap in `roadmap/verification/README.md`:
 | M0 | Branch / PR / attribution discipline | #8 area | Merged |
 | M1 | Replication workflow and externally grounded tests | #63, #64, #69, #70 | Merged |
 | M2 | Derivation-first lane | #81 area | Merged |
-| M3 | Map: block coverage — every implemented physics map carries a complete `Map:` block with domain, codomain, operator, Θ, and p | — | Current focus |
+| M3 | Convergence coverage — for each implemented physics map with a stated p in its `Map:` block, at least one convergence test confirms that order against an externally grounded solution | — | Current focus |
 | M3b | Reproducibility meta-generator architecture and convergence plan | #93 | Planned; depends on M3 |
 | M4 | Platform validation manifests, provenance, comparison-result schema, sim-spec format | — | Planned |
 
@@ -79,11 +79,11 @@ Per the meta-level roadmap in `roadmap/verification/README.md`:
 
 Next selected PRs should explicitly state which track they advance.
 
-Meta-level next work: M3 — for each existing platform capability, write a
-spec that states what it computes and how an independent actor would verify
-it. The test: could someone read the spec, implement it themselves, and know
-whether they got it right? Capsule tooling (M3b) follows once claims are
-clearly documented.
+Meta-level next work: M3 — for each implemented physics map with a stated
+approximation order p, add a convergence test that confirms that order
+against an externally grounded solution. The first target is
+`FieldDiscretization` (p = 1). Capsule tooling (M3b) follows once this
+coverage exists.
 
 Object-level next work: formalism sweep follow-up PR — add Map: to
 `Placement`, audit `io/` and `manifests/` modules, add MMS tests for

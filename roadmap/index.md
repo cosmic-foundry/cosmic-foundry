@@ -32,9 +32,9 @@ and status update.
 
 - **Implementation:** Epoch 2 — Mesh and AMR — in progress. Next item is
   task-graph driver — single-rank.
-- **Verification:** M3 — Map: block coverage — ensure every implemented
-  physics map carries a complete `Map:` block with domain, codomain,
-  operator, Θ, and p.
+- **Verification:** M3 — Convergence coverage — for each implemented
+  physics map with a stated p, confirm that order with a convergence
+  test against an externally grounded solution.
 
 See [STATUS.md](../STATUS.md) for the session-start summary.
 
