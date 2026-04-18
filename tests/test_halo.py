@@ -5,9 +5,10 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import DiscreteField, Placement
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy
 from cosmic_foundry.kernels import AccessPattern, ComponentId, Extent, Region
+from cosmic_foundry.mesh import DistributedField, FieldSegment
+from cosmic_foundry.record import Placement
 
 
 def _segment_with_interior_values(
@@ -17,7 +18,7 @@ def _segment_with_interior_values(
     *,
     fill_value: float,
     offset: float,
-) -> DiscreteField:
+) -> FieldSegment:
     payload = jnp.full(extent.shape, fill_value, dtype=jnp.float64)
     interior_slices = tuple(
         slice(axis.start - parent.start, axis.stop - parent.start)
@@ -26,7 +27,7 @@ def _segment_with_interior_values(
     local_shape = tuple(axis.stop - axis.start for axis in interior.slices)
     values = jnp.arange(local_shape[0], dtype=jnp.float64) + offset
     payload = payload.at[interior_slices].set(values)
-    return DiscreteField(
+    return FieldSegment(
         name="phi", segment_id=ComponentId(segment_id), payload=payload, extent=extent
     )
 
@@ -48,7 +49,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
         fill_value=-20.0,
         offset=200.0,
     )
-    field = DiscreteField(
+    field = DistributedField(
         "phi",
         (left, right),
         Placement({ComponentId(0): 0, ComponentId(1): 0}),
@@ -81,16 +82,16 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
     top_payload = top_payload.at[1:3, 1:4].set(
         jnp.array([[30.0, 31.0, 32.0], [40.0, 41.0, 42.0]])
     )
-    field = DiscreteField(
+    field = DistributedField(
         name="phi",
         segments=(
-            DiscreteField(
+            FieldSegment(
                 name="phi",
                 segment_id=ComponentId(0),
                 payload=bottom_payload,
                 extent=Extent((slice(-1, 3), slice(-1, 4))),
             ),
-            DiscreteField(
+            FieldSegment(
                 name="phi",
                 segment_id=ComponentId(1),
                 payload=top_payload,
@@ -127,7 +128,7 @@ def test_execute_returns_new_field_without_mutating_original() -> None:
         fill_value=-20.0,
         offset=200.0,
     )
-    field = DiscreteField(
+    field = DistributedField(
         "phi",
         (left, right),
         Placement({ComponentId(0): 0, ComponentId(1): 0}),
@@ -145,13 +146,13 @@ def test_execute_returns_new_field_without_mutating_original() -> None:
 
 def test_execute_rejects_required_extent_not_covered() -> None:
     access = AccessPattern((1,))
-    segment = DiscreteField(
+    segment = FieldSegment(
         name="phi",
         segment_id=ComponentId(0),
         payload=jnp.zeros((4,), dtype=jnp.float64),
         extent=Extent((slice(0, 4),)),
     )
-    field = DiscreteField(
+    field = DistributedField(
         name="phi", segments=(segment,), placement=Placement({ComponentId(0): 0})
     )
 
@@ -178,7 +179,7 @@ def test_execute_rejects_off_rank_neighbor_until_multi_rank_policy_exists() -> N
         fill_value=-20.0,
         offset=200.0,
     )
-    field = DiscreteField(
+    field = DistributedField(
         "phi",
         (left, right),
         Placement({ComponentId(0): 0, ComponentId(1): 1}),

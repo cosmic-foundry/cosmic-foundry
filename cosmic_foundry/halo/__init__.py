@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from cosmic_foundry.fields import DiscreteField
 from cosmic_foundry.kernels import (
     AccessPattern,
     ComponentId,
@@ -15,13 +14,14 @@ from cosmic_foundry.kernels import (
     Map,
     Region,
 )
+from cosmic_foundry.mesh import DistributedField, FieldSegment
 
 
 @dataclass(frozen=True)
 class HaloFillFence(Descriptor):
     """Communication intent for one field before a Map execution."""
 
-    field: DiscreteField
+    field: DistributedField
     region: Region
     access_pattern: AccessPattern
 
@@ -49,21 +49,18 @@ class HaloFillPolicy(Map):
     Exact: Θ = ∅ — domain extension by direct copy; no approximation.
     """
 
-    def execute(self, fence: HaloFillFence, rank: int) -> DiscreteField:
-        """Return a new Field with ghost cells filled for *rank*."""
+    def execute(self, fence: HaloFillFence, rank: int) -> DistributedField:
+        """Return a new DistributedField with ghost cells filled for *rank*."""
         required = fence.region.extent.expand(fence.access_pattern)
         if not fence.field.covers(required):
             msg = "Field does not cover the Region plus halo required by the fence"
             raise ValueError(msg)
 
         local_ids: set[ComponentId] = {
-            seg.segment_id
-            for seg in fence.field.local_segments(rank)
-            if seg.segment_id is not None  # always true for leaves; narrows type
+            seg.segment_id for seg in fence.field.local_segments(rank)
         }
         updated_payloads: dict[ComponentId, Any] = {}
         for target in fence.field.local_segments(rank):
-            assert target.segment_id is not None  # target is a leaf
             target_interior = _segment_interior(target, fence.access_pattern)
             if _intersect_extents(target_interior, fence.region.extent) is None:
                 continue
@@ -77,20 +74,17 @@ class HaloFillPolicy(Map):
                 local_ids=local_ids,
             )
 
-        new_segments_list: list[DiscreteField] = []
-        for seg in fence.field.segments:
-            assert seg.segment_id is not None and seg.extent is not None  # leaf
-            new_segments_list.append(
-                DiscreteField(
-                    name=seg.name,
-                    segment_id=seg.segment_id,
-                    payload=updated_payloads.get(seg.segment_id, seg.payload),
-                    extent=seg.extent,
-                    interior_extent=seg.interior_extent,
-                )
+        new_segments = tuple(
+            FieldSegment(
+                name=seg.name,
+                segment_id=seg.segment_id,
+                payload=updated_payloads.get(seg.segment_id, seg.payload),
+                extent=seg.extent,
+                interior_extent=seg.interior_extent,
             )
-        new_segments = tuple(new_segments_list)
-        return DiscreteField(
+            for seg in fence.field.segments
+        )
+        return DistributedField(
             name=fence.field.name,
             segments=new_segments,
             placement=fence.field.placement,
@@ -99,15 +93,14 @@ class HaloFillPolicy(Map):
 
 def _fill_segment_halo(
     *,
-    target: DiscreteField,
-    field: DiscreteField,
+    target: FieldSegment,
+    field: DistributedField,
     rank: int,
     required: Extent,
     interior: Extent,
     access_pattern: AccessPattern,
     local_ids: set[ComponentId],
 ) -> Any:
-    assert target.payload is not None and target.extent is not None  # target is a leaf
     target_payload = target.payload
     target_work = _intersect_extents(target.extent, required)
     if target_work is None:
@@ -123,7 +116,7 @@ def _fill_segment_halo(
         local_candidates = [
             (source, overlap)
             for source, overlap in candidates
-            if source.segment_id is not None and source.segment_id in local_ids
+            if source.segment_id in local_ids
         ]
         if len(local_candidates) > 1:
             msg = "Multiple same-rank source segments overlap one halo region"
@@ -138,9 +131,6 @@ def _fill_segment_halo(
             continue
 
         source, overlap = local_candidates[0]
-        assert (
-            source.extent is not None and source.payload is not None
-        )  # source is a leaf
         target_payload = target_payload.at[_payload_slices(target.extent, overlap)].set(
             source.payload[_payload_slices(source.extent, overlap)]
         )
@@ -150,12 +140,12 @@ def _fill_segment_halo(
 
 def _source_candidates(
     *,
-    field: DiscreteField,
-    target: DiscreteField,
+    field: DistributedField,
+    target: FieldSegment,
     halo_piece: Extent,
     access_pattern: AccessPattern,
-) -> list[tuple[DiscreteField, Extent]]:
-    candidates: list[tuple[DiscreteField, Extent]] = []
+) -> list[tuple[FieldSegment, Extent]]:
+    candidates: list[tuple[FieldSegment, Extent]] = []
     for source in field.segments:
         if source.segment_id == target.segment_id:
             continue
@@ -166,10 +156,9 @@ def _source_candidates(
     return candidates
 
 
-def _segment_interior(segment: DiscreteField, access_pattern: AccessPattern) -> Extent:
+def _segment_interior(segment: FieldSegment, access_pattern: AccessPattern) -> Extent:
     if segment.interior_extent is not None:
         return segment.interior_extent
-    assert segment.extent is not None  # segment is always a leaf at this call site
     return _shrink_extent(segment.extent, access_pattern)
 
 

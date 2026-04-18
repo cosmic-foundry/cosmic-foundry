@@ -6,7 +6,9 @@ import itertools
 from dataclasses import dataclass
 from typing import Any
 
-from cosmic_foundry.kernels import ComponentId, Domain, Extent, Map
+import numpy as np
+
+from cosmic_foundry.kernels import ComponentId, Domain, Extent, Map, Placement
 
 
 @dataclass(frozen=True)
@@ -136,8 +138,104 @@ class PartitionDomain(Map):
 
 partition_domain = PartitionDomain()
 
+
+@dataclass(frozen=True)
+class FieldSegment:
+    """A discrete scalar field on one spatial block: f_h: B_h → ℝ.
+
+    Carries the array payload together with the spatial metadata that
+    locates it within the global domain.  ``interior_extent`` is set
+    only when ghost cells are present; without it the full ``extent``
+    is the interior.
+    """
+
+    name: str
+    segment_id: ComponentId
+    payload: Any
+    extent: Extent
+    interior_extent: Extent | None = None
+
+    def __post_init__(self) -> None:
+        if self.interior_extent is not None:
+            intersection = _intersect_extents(self.extent, self.interior_extent)
+            if intersection != self.interior_extent:
+                msg = "FieldSegment interior_extent must be contained in extent"
+                raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class DistributedField:
+    """A discrete scalar field over the full domain, partitioned into blocks.
+
+    Each segment is a ``FieldSegment`` owned by exactly one rank according
+    to ``placement``.  ``DistributedField`` is the spatial-level counterpart
+    of a ``DiscreteField``; it carries ownership and topology metadata that
+    the pure ``DiscreteField`` deliberately omits.
+    """
+
+    name: str
+    segments: tuple[FieldSegment, ...]
+    placement: Placement
+
+    def __post_init__(self) -> None:
+        for seg in self.segments:
+            try:
+                self.placement.owner(seg.segment_id)
+            except KeyError:
+                msg = (
+                    f"DistributedField segment {seg.segment_id!r} is not "
+                    f"registered in the Placement for {self.name!r}"
+                )
+                raise ValueError(msg) from None
+
+    def segment(self, segment_id: ComponentId) -> FieldSegment:
+        """Return the segment with the given *segment_id*."""
+        for seg in self.segments:
+            if seg.segment_id == segment_id:
+                return seg
+        msg = f"ComponentId {segment_id!r} not found in DistributedField {self.name!r}"
+        raise KeyError(msg)
+
+    def local_segments(self, rank: int) -> tuple[FieldSegment, ...]:
+        """Return the segments owned by *rank* according to the placement."""
+        local_ids = self.placement.segments_for_rank(rank)
+        return tuple(seg for seg in self.segments if seg.segment_id in local_ids)
+
+    def covers(self, required_extent: Extent) -> bool:
+        """Return True iff the union of segment extents covers *required_extent*."""
+        shape = required_extent.shape
+        origin = tuple(s.start for s in required_extent.slices)
+        covered = np.zeros(shape, dtype=bool)
+        for seg in self.segments:
+            intersection = _intersect_extents(seg.extent, required_extent)
+            if intersection is None:
+                continue
+            local_idx = tuple(
+                slice(s.start - o, s.stop - o)
+                for s, o in zip(intersection.slices, origin, strict=False)
+            )
+            covered[local_idx] = True
+        return bool(covered.all())
+
+
+def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
+    if a.ndim != b.ndim:
+        msg = "Cannot intersect Extents with different ndim"
+        raise ValueError(msg)
+    slices: list[slice] = []
+    for sa, sb in zip(a.slices, b.slices, strict=False):
+        start = max(sa.start, sb.start)
+        stop = min(sa.stop, sb.stop)
+        if start >= stop:
+            return None
+        slices.append(slice(start, stop))
+    return Extent(tuple(slices))
+
+
 __all__ = [
     "Block",
+    "DistributedField",
+    "FieldSegment",
     "PartitionDomain",
     "UniformGrid",
     "partition_domain",

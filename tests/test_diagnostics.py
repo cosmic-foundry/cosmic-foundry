@@ -17,11 +17,9 @@ from cosmic_foundry.diagnostics import (
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.fields import (
-    DiscreteField,
-    Placement,
-)
 from cosmic_foundry.kernels import ComponentId, Extent, Region
+from cosmic_foundry.mesh import DistributedField, FieldSegment
+from cosmic_foundry.record import Placement
 
 
 @dataclass(frozen=True)
@@ -32,7 +30,7 @@ class SumReducer(DiagnosticReducer):
 
     def execute(
         self,
-        fields: dict[str, DiscreteField],
+        fields: dict[str, DistributedField],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -47,7 +45,7 @@ class VectorReducer(DiagnosticReducer):
 
     def execute(
         self,
-        fields: dict[str, DiscreteField],
+        fields: dict[str, DistributedField],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -55,21 +53,21 @@ class VectorReducer(DiagnosticReducer):
         return jnp.array([1.0, 2.0])
 
 
-def _field_with_payloads(values: tuple[jax.Array, ...]) -> DiscreteField:
+def _field_with_payloads(values: tuple[jax.Array, ...]) -> DistributedField:
     """Build a halo-padded 2-block 1D field for testing interior-only reductions.
 
     Block 0: interior [0, 4), halo extent [-1, 5).
     Block 1: interior [4, 8), halo extent [3, 9).
     """
     segments = (
-        DiscreteField(
+        FieldSegment(
             name="rho",
             segment_id=ComponentId(0),
             payload=values[0],
             extent=Extent((slice(-1, 5),)),
             interior_extent=Extent((slice(0, 4),)),
         ),
-        DiscreteField(
+        FieldSegment(
             name="rho",
             segment_id=ComponentId(1),
             payload=values[1],
@@ -77,7 +75,7 @@ def _field_with_payloads(values: tuple[jax.Array, ...]) -> DiscreteField:
             interior_extent=Extent((slice(4, 8),)),
         ),
     )
-    return DiscreteField(
+    return DistributedField(
         name="rho",
         segments=segments,
         placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
@@ -85,13 +83,13 @@ def _field_with_payloads(values: tuple[jax.Array, ...]) -> DiscreteField:
 
 
 def test_global_sum_returns_jax_scalar_without_host_materialization() -> None:
-    segment = DiscreteField(
+    segment = FieldSegment(
         name="rho",
         segment_id=ComponentId(0),
         payload=jnp.arange(6.0, dtype=jnp.float64),
         extent=Extent((slice(0, 6),)),
     )
-    field = DiscreteField(
+    field = DistributedField(
         name="rho", segments=(segment,), placement=Placement({ComponentId(0): 0})
     )
 
@@ -122,13 +120,13 @@ def test_global_sum_restricts_to_region() -> None:
 
 
 def test_collect_diagnostics_materializes_one_record() -> None:
-    segment = DiscreteField(
+    segment = FieldSegment(
         name="rho",
         segment_id=ComponentId(0),
         payload=jnp.arange(4.0, dtype=jnp.float64),
         extent=Extent((slice(0, 4),)),
     )
-    field = DiscreteField(
+    field = DistributedField(
         name="rho", segments=(segment,), placement=Placement({ComponentId(0): 0})
     )
 

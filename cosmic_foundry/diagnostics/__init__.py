@@ -12,8 +12,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from cosmic_foundry.fields import DiscreteField
 from cosmic_foundry.kernels import Extent, Map, Record, Region, Sink
+from cosmic_foundry.mesh import DistributedField
 
 
 class DiagnosticReducer(Map):
@@ -32,7 +32,7 @@ class DiagnosticReducer(Map):
     @abstractmethod
     def execute(
         self,
-        fields: Mapping[str, DiscreteField],
+        fields: Mapping[str, DistributedField],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -121,7 +121,7 @@ class CollectDiagnostics(Map):
     def execute(
         self,
         reducers: Sequence[DiagnosticReducer],
-        fields: Mapping[str, DiscreteField],
+        fields: Mapping[str, DistributedField],
         region: Region,
         *,
         step: int,
@@ -180,7 +180,7 @@ class GlobalSum(Map):
 
     def execute(
         self,
-        field: DiscreteField,
+        field: DistributedField,
         region: Region,
         rank: int,
         *,
@@ -190,7 +190,6 @@ class GlobalSum(Map):
         for segment in field.local_segments(rank):
             extent = segment.extent
             payload = segment.payload
-            assert extent is not None and payload is not None  # segment is a leaf
             interior: Extent = segment.interior_extent or extent
             overlap = _intersect_extents(interior, region.extent)
             if overlap is None:
