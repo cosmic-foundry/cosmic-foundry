@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.fields import DiscreteField
-from cosmic_foundry.kernels import Extent, Map, Region
+from cosmic_foundry.kernels import Extent, Map, Region, Sink
 
 
 class DiagnosticReducer(Protocol):
@@ -40,15 +40,8 @@ class DiagnosticRecord:
     values: dict[str, float]
 
 
-class DiagnosticSink(Protocol):
-    """Host-visible destination for diagnostic records."""
-
-    def write(self, record: DiagnosticRecord) -> None:
-        """Write one diagnostic record."""
-
-
 @dataclass(frozen=True)
-class NullDiagnosticSink:
+class NullDiagnosticSink(Sink):
     """Diagnostic sink that discards records.
 
     Sink:
@@ -56,12 +49,12 @@ class NullDiagnosticSink:
         effect — none; record is silently discarded
     """
 
-    def write(self, record: DiagnosticRecord) -> None:
+    def execute(self, record: DiagnosticRecord) -> None:
         """Discard *record*."""
 
 
 @dataclass(frozen=True)
-class TabSeparatedDiagnosticSink:
+class TabSeparatedDiagnosticSink(Sink):
     """Append diagnostic records to a tab-separated text file.
 
     Sink:
@@ -75,12 +68,12 @@ class TabSeparatedDiagnosticSink:
 
     def __init__(self, path: str | Path, columns: Sequence[str]) -> None:
         if not columns:
-            msg = "DiagnosticSink requires at least one value column"
+            msg = "TabSeparatedDiagnosticSink requires at least one value column"
             raise ValueError(msg)
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "columns", tuple(columns))
 
-    def write(self, record: DiagnosticRecord) -> None:
+    def execute(self, record: DiagnosticRecord) -> None:
         """Append *record* using stable column order."""
         missing = [name for name in self.columns if name not in record.values]
         if missing:
@@ -232,7 +225,6 @@ __all__ = [
     "CollectDiagnostics",
     "DiagnosticRecord",
     "DiagnosticReducer",
-    "DiagnosticSink",
     "GlobalSum",
     "NullDiagnosticSink",
     "TabSeparatedDiagnosticSink",

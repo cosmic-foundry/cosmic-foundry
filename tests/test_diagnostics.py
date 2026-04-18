@@ -179,8 +179,8 @@ def test_tab_separated_sink_writes_header_and_rows(tmp_path: Path) -> None:
     path = tmp_path / "run.diag"
     sink = TabSeparatedDiagnosticSink(path, ("total_mass", "cfl_max"))
 
-    sink.write(DiagnosticRecord(0, 0.0, {"total_mass": 1.25, "cfl_max": 0.4}))
-    sink.write(DiagnosticRecord(1, 0.5, {"total_mass": 1.5, "cfl_max": 0.45}))
+    sink.execute(DiagnosticRecord(0, 0.0, {"total_mass": 1.25, "cfl_max": 0.4}))
+    sink.execute(DiagnosticRecord(1, 0.5, {"total_mass": 1.5, "cfl_max": 0.45}))
 
     assert path.read_text(encoding="utf-8").splitlines() == [
         "step\ttime\ttotal_mass\tcfl_max",
@@ -193,8 +193,8 @@ def test_tab_separated_sink_rejects_missing_column(tmp_path: Path) -> None:
     sink = TabSeparatedDiagnosticSink(tmp_path / "run.diag", ("total_mass",))
 
     with pytest.raises(ValueError, match="missing"):
-        sink.write(DiagnosticRecord(0, 0.0, {}))
+        sink.execute(DiagnosticRecord(0, 0.0, {}))
 
 
 def test_null_sink_discards_records() -> None:
-    NullDiagnosticSink().write(DiagnosticRecord(0, 0.0, {"total_mass": 1.0}))
+    NullDiagnosticSink().execute(DiagnosticRecord(0, 0.0, {"total_mass": 1.0}))
