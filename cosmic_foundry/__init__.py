@@ -7,6 +7,12 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
+from cosmic_foundry.descriptor import (  # noqa: E402
+    AccessPattern,
+    Descriptor,
+    Extent,
+    Region,
+)
 from cosmic_foundry.diagnostics import (  # noqa: E402
     CollectDiagnostics,
     DiagnosticRecord,
@@ -17,7 +23,8 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.fields import (  # noqa: E402
+from cosmic_foundry.domain import Domain  # noqa: E402
+from cosmic_foundry.field import (  # noqa: E402
     ContinuousField,
     DiscreteField,
     Field,
@@ -31,19 +38,7 @@ from cosmic_foundry.io import (  # noqa: E402
     merge_rank_files,
     write_array,
 )
-from cosmic_foundry.kernels import (  # noqa: E402
-    AccessPattern,
-    ComponentId,
-    Descriptor,
-    Domain,
-    Extent,
-    Map,
-    Record,
-    Region,
-    Sink,
-    Source,
-    execute_pointwise,
-)
+from cosmic_foundry.map import Map, execute_pointwise  # noqa: E402
 from cosmic_foundry.mesh import (  # noqa: E402
     Block,
     DistributedField,
@@ -55,6 +50,9 @@ from cosmic_foundry.mesh import (  # noqa: E402
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
+from cosmic_foundry.record import ComponentId, Record  # noqa: E402
+from cosmic_foundry.sink import Sink  # noqa: E402
+from cosmic_foundry.source import Source  # noqa: E402
 
 __all__ = [
     "__version__",

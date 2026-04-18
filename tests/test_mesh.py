@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cosmic_foundry.kernels import ComponentId, Extent
+from cosmic_foundry.descriptor import Extent
 from cosmic_foundry.mesh import Block, UniformGrid, partition_domain
+from cosmic_foundry.record import ComponentId
 
 
 class TestBlock:

@@ -12,7 +12,8 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.kernels import AccessPattern, Extent, Map, Region, execute_pointwise
+from cosmic_foundry.descriptor import AccessPattern, Extent, Region
+from cosmic_foundry.map import Map, execute_pointwise
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write

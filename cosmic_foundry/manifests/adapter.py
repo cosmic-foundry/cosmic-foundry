@@ -1,8 +1,8 @@
 from abc import abstractmethod
 from pathlib import Path
 
-from cosmic_foundry.kernels import Map
 from cosmic_foundry.manifests.provenance import Provenance
+from cosmic_foundry.map import Map
 
 
 class ValidationAdapter(Map):

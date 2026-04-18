@@ -5,10 +5,10 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
+from cosmic_foundry.descriptor import AccessPattern, Extent, Region
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy
-from cosmic_foundry.kernels import AccessPattern, ComponentId, Extent, Region
 from cosmic_foundry.mesh import DistributedField, FieldSegment
-from cosmic_foundry.record import Placement
+from cosmic_foundry.record import ComponentId, Placement
 
 
 def _segment_with_interior_values(

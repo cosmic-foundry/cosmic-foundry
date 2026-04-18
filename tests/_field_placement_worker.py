@@ -41,16 +41,10 @@ def main() -> None:
 
         import jax.numpy as jnp
 
-        from cosmic_foundry.kernels import (
-            AccessPattern,
-            ComponentId,
-            Extent,
-            Map,
-            Region,
-            execute_pointwise,
-        )
+        from cosmic_foundry.descriptor import AccessPattern, Extent, Region
+        from cosmic_foundry.map import Map, execute_pointwise
         from cosmic_foundry.mesh import DistributedField, FieldSegment
-        from cosmic_foundry.record import Placement
+        from cosmic_foundry.record import ComponentId, Placement
 
         n = 8
         half = n // 2  # 4

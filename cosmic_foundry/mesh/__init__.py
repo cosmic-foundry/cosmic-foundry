@@ -8,7 +8,10 @@ from typing import Any
 
 import numpy as np
 
-from cosmic_foundry.kernels import ComponentId, Domain, Extent, Map, Placement
+from cosmic_foundry.descriptor import Extent
+from cosmic_foundry.domain import Domain
+from cosmic_foundry.map import Map
+from cosmic_foundry.record import ComponentId, Placement
 
 
 @dataclass(frozen=True)

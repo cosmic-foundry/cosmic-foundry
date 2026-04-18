@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from cosmic_foundry.descriptor import Extent, Region
 from cosmic_foundry.diagnostics import (
     DiagnosticRecord,
     DiagnosticReducer,
@@ -17,9 +18,8 @@ from cosmic_foundry.diagnostics import (
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.kernels import ComponentId, Extent, Region
 from cosmic_foundry.mesh import DistributedField, FieldSegment
-from cosmic_foundry.record import Placement
+from cosmic_foundry.record import ComponentId, Placement
 
 
 @dataclass(frozen=True)
