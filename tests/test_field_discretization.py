@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.fields import ContinuousField, FieldDiscretization
-from cosmic_foundry.mesh import UniformGrid, partition_domain
+from cosmic_foundry.mesh import DistributedField, UniformGrid, partition_domain
 
 
 def _grid_1d(n_cells: int, n_blocks: int, n_ranks: int = 1) -> UniformGrid:
@@ -110,12 +110,10 @@ class TestFieldDiscretizationCodomain:
         for seg in field.segments:
             assert seg.interior_extent is None
 
-    def test_result_is_discrete_field(self) -> None:
-        from cosmic_foundry.fields import DiscreteField
-
+    def test_result_is_distributed_field(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = FieldDiscretization().execute(f, _grid_1d(8, 1))
-        assert isinstance(field, DiscreteField)
+        assert isinstance(field, DistributedField)
 
 
 class TestFieldDiscretizationIdentity:
