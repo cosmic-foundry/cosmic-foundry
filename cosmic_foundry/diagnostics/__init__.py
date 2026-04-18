@@ -5,14 +5,14 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.fields import DiscreteField
-from cosmic_foundry.kernels import Extent, Map, Region, Sink
+from cosmic_foundry.kernels import Extent, Map, Record, Region, Sink
 
 
 class DiagnosticReducer(Protocol):
@@ -32,12 +32,15 @@ class DiagnosticReducer(Protocol):
 
 
 @dataclass(frozen=True)
-class DiagnosticRecord:
+class DiagnosticRecord(Record):
     """One host-visible diagnostic row emitted at a named fence."""
 
     step: int
     time: float
     values: dict[str, float]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"step": self.step, "time": self.time, "values": dict(self.values)}
 
 
 @dataclass(frozen=True)

@@ -2,12 +2,15 @@ import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml  # type: ignore
 
+from cosmic_foundry.kernels import Record
+
 
 @dataclass(frozen=True)
-class Hash:
+class Hash(Record):
     algorithm: str
     value: str
 
@@ -16,7 +19,7 @@ class Hash:
 
 
 @dataclass(frozen=True)
-class Provenance:
+class Provenance(Record):
     """Immutable record of how one validation artifact was produced.
 
     Matches the structure of artifact-provenance.schema.json so that
@@ -34,16 +37,8 @@ class Provenance:
     artifact_hash: Hash
     artifact_row_count: int
 
-    def write_sidecar(self, path: Path) -> None:
-        """Write provenance as a YAML sidecar next to the artifact.
-
-        Sink:
-            domain — (self: Provenance, path: Path)
-            effect — YAML file written at path containing the full
-                     provenance record; schema-valid against
-                     artifact-provenance.schema.json
-        """
-        doc = {
+    def as_dict(self) -> dict[str, Any]:
+        return {
             "validation_set_id": self.validation_set_id,
             "built_at": self.built_at.isoformat(),
             "adapter": {
@@ -61,8 +56,18 @@ class Provenance:
                 "row_count": self.artifact_row_count,
             },
         }
+
+    def write_sidecar(self, path: Path) -> None:
+        """Write provenance as a YAML sidecar next to the artifact.
+
+        Sink:
+            domain — (self: Provenance, path: Path)
+            effect — YAML file written at path containing the full
+                     provenance record; schema-valid against
+                     artifact-provenance.schema.json
+        """
         with open(path, "w") as f:
-            yaml.safe_dump(doc, f, sort_keys=False)
+            yaml.safe_dump(self.as_dict(), f, sort_keys=False)
 
     @staticmethod
     def now() -> datetime:
