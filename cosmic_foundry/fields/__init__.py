@@ -1,7 +1,5 @@
-"""Field hierarchy, Placement, and FieldDiscretization.
+"""Field hierarchy and FieldDiscretization.
 
-- ``Placement``          — maps each ComponentId to the process rank that owns it.
-                           Carries no physical meaning or kernel-lowering logic.
 - ``Field``              — abstract base for all field parameterizations: f: D → ℝ.
 - ``ContinuousField``    — Θ = ∅: f: D → ℝ represented by an analytic callable.
 - ``DiscreteField``      — Θ = {h}: f_h: Ω_h → ℝ.  Leaf nodes (single block)
@@ -16,58 +14,15 @@
 from __future__ import annotations
 
 from abc import ABC
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
-from cosmic_foundry.kernels import ComponentId, Descriptor, Extent, Map
-
-
-class Placement(Descriptor):
-    """Maps each ``ComponentId`` to the process rank that owns it.
-
-    ``Placement`` carries no physical meaning and no kernel-lowering logic.
-    It is the sole authoritative source for process/device ownership within
-    a composite ``DiscreteField``.
-    """
-
-    def __init__(self, owners: Mapping[ComponentId, int]) -> None:
-        if not owners:
-            msg = "Placement must register at least one segment"
-            raise ValueError(msg)
-        for sid, rank in owners.items():
-            if rank < 0:
-                msg = f"Process rank must be non-negative; got rank={rank} for {sid!r}"
-                raise ValueError(msg)
-        self._owners: dict[ComponentId, int] = dict(owners)
-
-    def owner(self, segment_id: ComponentId) -> int:
-        """Return the rank that owns *segment_id*."""
-        try:
-            return self._owners[segment_id]
-        except KeyError:
-            msg = f"ComponentId {segment_id!r} is not registered in this Placement"
-            raise KeyError(msg) from None
-
-    def segments_for_rank(self, rank: int) -> frozenset[ComponentId]:
-        """Return the set of ComponentIds owned by *rank*."""
-        return frozenset(sid for sid, r in self._owners.items() if r == rank)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {str(k): v for k, v in self._owners.items()}
-
-    def __repr__(self) -> str:
-        return f"Placement({dict(self._owners)!r})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Placement):
-            return NotImplemented
-        return self._owners == other._owners
-
-    def __hash__(self) -> int:
-        return hash(tuple(sorted(self._owners.items())))
+from cosmic_foundry.descriptor import Extent
+from cosmic_foundry.kernels import ComponentId, Map
+from cosmic_foundry.record import Placement
 
 
 class Field(ABC):
