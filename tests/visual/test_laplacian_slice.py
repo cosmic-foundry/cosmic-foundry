@@ -18,7 +18,7 @@ HOUSE_CMAP = "viridis"
     style="default",
 )
 def test_laplacian_slice_house_colormap() -> object:  # returns Figure
-    """Central z-slice of the Dispatch-computed Laplacian."""
+    """Central z-slice of the Laplacian computed via Op.execute."""
     import matplotlib.pyplot as plt
 
     laplacian = np.asarray(run_laplacian(make_phi(32)))

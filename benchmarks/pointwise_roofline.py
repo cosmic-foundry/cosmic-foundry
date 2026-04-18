@@ -1,4 +1,4 @@
-"""CPU roofline benchmark for a pointwise Dispatch triad."""
+"""CPU roofline benchmark for a pointwise Op triad."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.kernels import AccessPattern, Dispatch, Extent, Op, Region, Stencil
+from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region, Stencil
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
@@ -64,9 +64,9 @@ class RooflineResult:
     n: int
     cells: int
     repeats: int
-    dispatch_triad_seconds_best: float
-    dispatch_triad_seconds_median: float
-    dispatch_triad_gb_s: float
+    op_triad_seconds_best: float
+    op_triad_seconds_median: float
+    op_triad_gb_s: float
     stream_triad_seconds_best: float
     stream_triad_seconds_median: float
     stream_triad_gb_s: float
@@ -80,14 +80,10 @@ def make_phi(n: int) -> jax.Array:
 
 
 def run_laplacian(phi: jax.Array) -> jax.Array:
-    """Run the public Dispatch path used by the benchmark."""
+    """Run the Laplacian Op over the interior of *phi*."""
     n = int(phi.shape[0])
     extent = Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1)))
-    return Dispatch(
-        op=seven_point_laplacian,
-        fields={"phi": phi},
-        region=Region(extent),
-    ).execute()
+    return seven_point_laplacian.execute(phi, region=Region(extent))
 
 
 @dataclass(frozen=True)
@@ -116,38 +112,34 @@ class PointwiseTriad(Op):
 pointwise_triad = PointwiseTriad()
 
 
-def run_dispatch_triad(a: jax.Array, b: jax.Array) -> jax.Array:
-    """Run a pointwise triad through the public Dispatch path."""
+def run_op_triad(a: jax.Array, b: jax.Array) -> jax.Array:
+    """Run a pointwise triad through the Op path."""
     n = int(a.shape[0])
     extent = Extent.from_shape((n, n, n))
-    return Dispatch(
-        op=pointwise_triad,
-        fields={"a": a, "b": b},
-        region=Region(extent),
-    ).execute()
+    return pointwise_triad.execute(a, b, region=Region(extent))
 
 
 def benchmark(n: int, repeats: int) -> RooflineResult:
-    """Benchmark Dispatch triad throughput against a direct JAX triad."""
+    """Benchmark Op triad throughput against a direct JAX triad."""
     a = make_phi(n)
     b = make_phi(n) + 1.0
-    dispatch_triad = jax.jit(run_dispatch_triad)
+    op_triad = jax.jit(run_op_triad)
     triad = jax.jit(lambda a, b: a + 0.5 * b)
 
-    dispatch_triad(a, b).block_until_ready()
+    op_triad(a, b).block_until_ready()
     triad(a, b).block_until_ready()
 
-    dispatch_timings = _time_call(lambda: dispatch_triad(a, b), repeats)
+    op_timings = _time_call(lambda: op_triad(a, b), repeats)
     triad_timings = _time_call(lambda: triad(a, b), repeats)
-    dispatch_seconds_best = min(dispatch_timings)
-    dispatch_seconds_median = statistics.median(dispatch_timings)
+    op_seconds_best = min(op_timings)
+    op_seconds_median = statistics.median(op_timings)
     triad_seconds_best = min(triad_timings)
     triad_seconds_median = statistics.median(triad_timings)
 
     cells = n**3
-    dispatch_gb = cells * TRIAD_BYTES_PER_CELL / 1.0e9
+    op_gb = cells * TRIAD_BYTES_PER_CELL / 1.0e9
     triad_gb = n**3 * TRIAD_BYTES_PER_CELL / 1.0e9
-    dispatch_gb_s = dispatch_gb / dispatch_seconds_median
+    op_gb_s = op_gb / op_seconds_median
     triad_gb_s = triad_gb / triad_seconds_median
 
     return RooflineResult(
@@ -156,13 +148,13 @@ def benchmark(n: int, repeats: int) -> RooflineResult:
         n=n,
         cells=cells,
         repeats=repeats,
-        dispatch_triad_seconds_best=dispatch_seconds_best,
-        dispatch_triad_seconds_median=dispatch_seconds_median,
-        dispatch_triad_gb_s=dispatch_gb_s,
+        op_triad_seconds_best=op_seconds_best,
+        op_triad_seconds_median=op_seconds_median,
+        op_triad_gb_s=op_gb_s,
         stream_triad_seconds_best=triad_seconds_best,
         stream_triad_seconds_median=triad_seconds_median,
         stream_triad_gb_s=triad_gb_s,
-        memory_roofline_fraction=dispatch_gb_s / triad_gb_s,
+        memory_roofline_fraction=op_gb_s / triad_gb_s,
     )
 
 

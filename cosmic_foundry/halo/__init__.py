@@ -19,7 +19,7 @@ from cosmic_foundry.kernels import (
 
 @dataclass(frozen=True)
 class HaloFillFence(Descriptor):
-    """Communication intent for one field before a Dispatch."""
+    """Communication intent for one field before an Op execution."""
 
     field: DiscreteField
     region: Region

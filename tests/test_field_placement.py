@@ -26,7 +26,6 @@ from cosmic_foundry.fields import DiscreteField, Placement
 from cosmic_foundry.kernels import (
     AccessPattern,
     ComponentId,
-    Dispatch,
     Extent,
     Op,
     Region,
@@ -243,11 +242,11 @@ def test_covers_checks_halo_expansion(phi: jnp.ndarray) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Single-process Field → Dispatch integration (degenerate case)
+# Single-process Field → Op integration (degenerate case)
 # ---------------------------------------------------------------------------
 
 
-def test_single_process_field_dispatch_laplacian(phi: jnp.ndarray) -> None:
+def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
     """One Field, one segment, full domain — the degenerate single-rank case."""
     full = Extent.from_shape(phi.shape)
     seg = DiscreteField(name="phi", segment_id=ComponentId(0), payload=phi, extent=full)
@@ -259,11 +258,7 @@ def test_single_process_field_dispatch_laplacian(phi: jnp.ndarray) -> None:
     required = interior.expand(seven_point_laplacian.access_pattern)
     assert field.covers(required)
 
-    result = Dispatch(
-        op=seven_point_laplacian,
-        fields={"phi": seg.payload},
-        region=Region(interior),
-    ).execute()
+    result = seven_point_laplacian.execute(seg.payload, region=Region(interior))
     assert jnp.allclose(result, 6.0)
 
 

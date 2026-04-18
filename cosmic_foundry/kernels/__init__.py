@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, ClassVar, cast
 
 import jax
@@ -113,7 +113,7 @@ class Extent(Descriptor):
 
 @dataclass(frozen=True)
 class Region(Descriptor):
-    """Iteration coordinates requested by a Dispatch.
+    """Iteration coordinates for an Op execution.
 
     ``n_blocks`` signals a batched region: inputs are expected to carry a
     leading batch axis of that size, and ``FlatPolicy`` lowers the kernel
@@ -305,7 +305,7 @@ class FlatPolicy(Map):
         _validate_region_access(region, op.access_pattern, field_arrays)
 
         _log.debug(
-            "dispatch.execute",
+            "op.execute",
             extra={
                 "region_shape": list(region.extent.shape),
                 "n_blocks": region.n_blocks,
@@ -313,48 +313,6 @@ class FlatPolicy(Map):
         )
 
         return _make_jit_kernel(cast(Any, op), region)(*field_arrays)
-
-
-@dataclass
-class Dispatch(Map, Descriptor):
-    """One local execution unit: an Op over a Region under a Policy.
-
-    Carries the full execution plan as an inspectable record. A future
-    task-graph driver can collect a sequence of Dispatches, analyze
-    reads/writes for fusion compatibility, and lower fused kernels before
-    calling execute(). One Op per Dispatch; multi-Op fusion is the
-    driver's responsibility.
-
-    Map:
-        domain   — (k: Op, {f_i}, Ω_h^int: Region, π: FlatPolicy) — a
-                   kernel, its field inputs, an iteration region, and a
-                   policy
-        codomain — π(k, {f_i}, Ω_h^int) — the kernel evaluated over
-                   the interior
-        operator — execute() ↦ op.execute(*fields.values(), region,
-                   policy=policy)
-
-    Exact: Θ = ∅ — Dispatch introduces no approximation.
-    """
-
-    op: Any  # Op instance
-    fields: dict[str, Any]  # name → array, ordered by op.reads
-    region: Region
-    policy: FlatPolicy = field(default_factory=FlatPolicy)
-
-    def execute(self) -> Any:
-        """Execute this Dispatch."""
-        return self.op.execute(
-            *self.fields.values(), region=self.region, policy=self.policy
-        )
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "op": self.op.as_dict(),
-            "fields": list(self.fields.keys()),
-            "region": self.region.as_dict(),
-            "policy": type(self.policy).__name__,
-        }
 
 
 @functools.lru_cache(maxsize=256)
@@ -415,7 +373,7 @@ def _validate_region_access(
     batched = region.n_blocks > 1
     for input_array in inputs:
         if not hasattr(input_array, "shape"):
-            msg = "Dispatch inputs must expose a shape"
+            msg = "Op inputs must expose a shape"
             raise TypeError(msg)
         shape = tuple(int(axis_size) for axis_size in input_array.shape)
         if batched:
@@ -429,12 +387,12 @@ def _validate_region_access(
         else:
             block_shape = shape
         if len(block_shape) < required.ndim:
-            msg = "Dispatch input rank is smaller than the Region rank"
+            msg = "Op input rank is smaller than the Region rank"
             raise ValueError(msg)
         for axis, axis_slice in enumerate(required.slices):
             start, stop = _checked_bounds(axis_slice)
             if start < 0 or stop > block_shape[axis]:
-                msg = "Dispatch Region plus access pattern exceeds input bounds"
+                msg = "Op Region plus access pattern exceeds input bounds"
                 raise ValueError(msg)
 
 
@@ -461,7 +419,6 @@ __all__ = [
     "AccessPattern",
     "ComponentId",
     "Descriptor",
-    "Dispatch",
     "Domain",
     "Extent",
     "FlatPolicy",

@@ -145,8 +145,8 @@ def probe_operator_weights(
     -----
     This function calls ``kernel_fn._fn`` directly at the center index
     using a plain NumPy-backed probe array — it does not go through
-    ``Dispatch`` / ``Region``.  This keeps the probe independent of the
-    dispatch machinery and works for any kernel with the pointwise
+    ``Region``.  This keeps the probe independent of the
+    execution machinery and works for any kernel with the pointwise
     signature of a class-based ``Op``.
     """
     center = n // 2
