@@ -12,8 +12,8 @@ BlockId = NewType("BlockId", int)
 
 
 @dataclass(frozen=True)
-class Block:
-    """One contiguous patch of uniformly-spaced cells.
+class Block(Domain):
+    """One contiguous patch of uniformly-spaced cells — a spatial sub-domain.
 
     Owns topology and coordinate metadata only; array payloads live in Field.
     """
