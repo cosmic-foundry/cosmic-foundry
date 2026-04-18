@@ -4,12 +4,14 @@
 
 This section surveys the V&V literature across CFD, aerospace, nuclear, and
 computational astrophysics. The research notes previously had no coverage of
-V&V methodology — the gap this section fills. The key finding is that while
-the field has well-developed verification techniques (especially MMS), the
-specific idea of writing a formal capability specification *before* the
-implementation — and treating that specification as the primary correctness
-reference — has no established name in the literature and is only partially
-approached in a few institutional contexts.
+V&V methodology — the gap this section fills. The key question is not whether
+anyone wrote capability specs before implementation, but whether anyone has
+aimed, at any point in their development workflow, for the level of rigor
+Cosmic Foundry is trying to achieve: externally grounded correctness claims
+for every physics capability, convergence verification for every discretization,
+and verification as an ongoing integrated discipline rather than a one-time
+or regulatory exercise. The answer is: partially, in a few places, and never
+consistently in an open-source astrophysics code.
 
 ---
 
@@ -141,48 +143,61 @@ the natural extension.
 
 ---
 
-## 8.5 Specification-First Approaches: What Exists
+## 8.5 Who Has Aimed for This Level of Rigor
 
-No paper in the literature is explicitly titled "write the capability spec
-before the solver" or describes specification-first code development as a
-named discipline. The closest approaches come from three directions:
+The best-practice floor recommended by the Oberkampf & Roy framework — MMS
+for code verification, Richardson extrapolation for solution verification,
+externally grounded validation experiments — is well understood but rarely
+fully applied. The following are the closest examples in the literature.
 
-**Requirements-before-V&V (Oberkampf, Trucano & Hirsch 2004).**
-*Applied Mechanics Reviews*, 57(5):345–384, 2004.
-<https://doi.org/10.1115/1.1767847>
-Explicitly states that requirements for a computational-physics capability
-must be defined first, that V&V activities must be designed against those
-requirements, and that validation experiments must be matched to the
-application domain of interest. This is philosophically specification-first,
-framed as "V&V planning."
+**FLASH / Flash-X** (see §8.6) applied the CFD V&V framework explicitly and
+is the best example from computational astrophysics. The Calder et al. (2002)
+paper is the only astrophysics code paper that reads like a V&V document
+rather than a capability announcement. The ongoing Dubey et al. work on
+verification as a continuous process is also notable. However, the test suite
+was built alongside or after the code, not as a prior specification of
+correctness claims.
 
-**ASC Implementation Plans (DOE/NNSA, annually).**
-<https://www.osti.gov/biblio/2475271> (FY2025 example)
-The NNSA Advanced Simulation and Computing program defines the physics
-capabilities needed by the stockpile stewardship program, then maps those
-to simulation development tasks. Requirements flow from application need to
-code development, not the reverse. This is institutionalized
-specification-first at the program level. These plans are the closest
-existing operational analog to Cosmic Foundry's capability-first approach.
+**AMReX-Astro / Castro** (see §8.6) has the most systematic ongoing
+verification infrastructure in comp-astro: nightly regression tests,
+manufactured solution tests, and known-answer convergence problems. The
+Castro verification documentation is unusually detailed for the field. Still
+falls short of the level we are targeting: the verification tests are
+defined by what the code does, not by an independent statement of what it
+should do.
+
+**Trilinos** (see §8.6) applied the most rigorous software engineering
+discipline to scientific computing infrastructure: mandatory unit tests,
+continuous integration, defined dependency contracts, and a formal maturity
+lifecycle. The rigor is architectural and process-level. Physics correctness
+(in the sense of externally grounded claims about what the code computes) is
+not within Trilinos's scope.
+
+**NRC thermal-hydraulics codes** (see §8.6) achieved the highest operational
+rigor through regulatory requirement: codes cannot be used for nuclear safety
+licensing without documented V&V. This is the closest any simulation code
+community has come to a mandatory, sustained, externally auditable correctness
+discipline. The context is very different (regulatory, industrial, narrow
+physical scope) but the principle is the same.
 
 **Goal-oriented error estimation (Oden & Prudhomme 2001).**
 *Computers and Mathematics with Applications*, 41(5–6):735–756, 2001.
 <https://doi.org/10.1016/S0898122100003175>
 Provides a mathematically rigorous path to verified error bounds on specific
-output quantities using adjoint-based estimation. Specifying "compute drag
-coefficient to 1% accuracy" before building the solver and then verifying
-the code meets that spec is specification-first at the output-quantity level.
-Rigorous but uncommon in practice outside finite-element structural
-mechanics.
+output quantities using adjoint-based estimation. This is the most rigorous
+approach in the academic literature: the correctness claim ("compute drag
+coefficient to 1% accuracy") is stated precisely, and the verification is a
+mathematical proof that the code meets it. Uncommon in practice outside
+finite-element structural mechanics.
 
-**The gap.** A 2015 survey of software use in astronomy found that 90% of
-astronomers write their own code but only 8% received substantial software
-training; no example of specification-first development was found in the
-astrophysics community. NIST IR 8298 (2020) and a 2025 testing survey both
-find that the dominant practice across scientific computing is ad hoc: code
-is written first, then tested against available exact solutions, with no
-prior specification of what the code is supposed to compute and how its
-correctness will be demonstrated.
+**The honest summary.** No open-source astrophysics code has applied
+externally grounded verification consistently across its physics capabilities
+as an ongoing development discipline. FLASH and AMReX-Astro come closest but
+are still primarily regression-testing frameworks: they detect drift from a
+previously established baseline, which is not the same as verifying against
+an external correctness claim. NIST IR 8298 (2020) and a 2025 testing survey
+confirm this is the norm across scientific computing, not an astrophysics
+peculiarity.
 
 ---
 
@@ -282,21 +297,19 @@ funding-agency level.
 
 **What the field lacks that we are building:**
 
-The literature has no established name or practice for what we are doing:
-writing a capability specification before implementation, with the external
-grounding source identified in advance, as a first-class development
-discipline. The closest things are the ASC Implementation Plans
-(institutional, classified context) and the PCMM used prospectively.
-
-This means we are not re-implementing something well-understood — we are
-filling a gap. The three-track roadmap (capabilities, implementation,
-verification) and the object/map framing in `capabilities/README.md` have
-no direct precedent in the published literature, though they are
-philosophically consistent with Oberkampf et al.'s requirements-before-V&V
-principle and with the PCMM maturity framework.
+No open-source physics simulation code has applied externally grounded
+verification consistently across all its capabilities as an ongoing
+development discipline. The existing V&V frameworks (Oberkampf & Roy,
+PCMM, MMS) describe what rigorous verification looks like and provide the
+tools, but they have not been applied consistently in any astrophysics code
+and only partially in the best CFD codes. The distinction that matters: most
+codes detect drift from a previously established baseline. Cosmic Foundry
+aims to verify against an external correctness claim — an answer that exists
+independently of the code. That is what MMS and the Oberkampf & Roy framework
+call for, and what almost no code sustains in practice.
 
 **The absence from astrophysics is striking.** The comp-astro community has
-not applied CFD V&V methodology systematically. FLASH and AMReX-Astro are
-the best examples, but even these built the code first and the test suite
-second. No astrophysics code project appears to have written formal
-capability specifications before implementation.
+not applied the CFD V&V framework systematically. A 2015 survey found that
+90% of astronomers write their own code but only 8% received substantial
+software training. FLASH and AMReX-Astro are the best examples of systematic
+V&V in the field, and even they fall short of the level described in §8.5.
