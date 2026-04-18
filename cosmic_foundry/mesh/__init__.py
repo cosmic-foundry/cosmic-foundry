@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass
-from typing import Any, NewType
+from typing import Any
 
-from cosmic_foundry.kernels import Domain, Extent, Map
-
-BlockId = NewType("BlockId", int)
+from cosmic_foundry.kernels import ComponentId, Domain, Extent, Map
 
 
 @dataclass(frozen=True)
@@ -18,7 +16,7 @@ class Block(Domain):
     Owns topology and coordinate metadata only; array payloads live in Field.
     """
 
-    block_id: BlockId
+    block_id: ComponentId
     index_extent: Extent
     origin: tuple[float, ...]  # physical coord of first cell center
     cell_spacing: tuple[float, ...]  # h_i along each axis
@@ -50,20 +48,20 @@ class UniformGrid(Domain):
     """
 
     blocks: tuple[Block, ...]
-    rank_map: tuple[int, ...]  # rank_map[block_id] → owning rank
+    rank_map: tuple[int, ...]  # rank_map[block_id.value] → owning rank
 
     @property
     def ndim(self) -> int:
         return self.blocks[0].ndim
 
-    def block(self, block_id: BlockId) -> Block:
-        return self.blocks[block_id]
+    def block(self, block_id: ComponentId) -> Block:
+        return self.blocks[block_id.value]
 
-    def owner(self, block_id: BlockId) -> int:
-        return self.rank_map[block_id]
+    def owner(self, block_id: ComponentId) -> int:
+        return self.rank_map[block_id.value]
 
     def blocks_for_rank(self, rank: int) -> tuple[Block, ...]:
-        return tuple(b for b in self.blocks if self.rank_map[b.block_id] == rank)
+        return tuple(b for b in self.blocks if self.rank_map[b.block_id.value] == rank)
 
 
 @dataclass(frozen=True)
@@ -125,7 +123,7 @@ class PartitionDomain(Map):
             )
             blocks.append(
                 Block(
-                    block_id=BlockId(flat_id),
+                    block_id=ComponentId(flat_id),
                     index_extent=index_extent,
                     origin=origin,
                     cell_spacing=h,
@@ -140,7 +138,6 @@ partition_domain = PartitionDomain()
 
 __all__ = [
     "Block",
-    "BlockId",
     "PartitionDomain",
     "UniformGrid",
     "partition_domain",

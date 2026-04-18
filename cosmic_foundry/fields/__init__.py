@@ -1,7 +1,6 @@
-"""Field hierarchy, Placement, SegmentId, and FieldDiscretization.
+"""Field hierarchy, Placement, and FieldDiscretization.
 
-- ``SegmentId``          — opaque identifier for one contiguous block segment.
-- ``Placement``          — maps each SegmentId to the process rank that owns it.
+- ``Placement``          — maps each ComponentId to the process rank that owns it.
                            Carries no physical meaning or kernel-lowering logic.
 - ``Field``              — abstract base for all field parameterizations: f: D → ℝ.
 - ``ContinuousField``    — Θ = ∅: f: D → ℝ represented by an analytic callable.
@@ -23,28 +22,18 @@ from typing import Any
 
 import numpy as np
 
-from cosmic_foundry.kernels import Descriptor, Extent, Map
-
-
-@dataclass(frozen=True)
-class SegmentId(Descriptor):
-    """Opaque identifier for one contiguous block segment within a DiscreteField."""
-
-    value: int
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"value": self.value}
+from cosmic_foundry.kernels import ComponentId, Descriptor, Extent, Map
 
 
 class Placement(Descriptor):
-    """Maps each ``SegmentId`` to the process rank that owns it.
+    """Maps each ``ComponentId`` to the process rank that owns it.
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
     It is the sole authoritative source for process/device ownership within
     a composite ``DiscreteField``.
     """
 
-    def __init__(self, owners: Mapping[SegmentId, int]) -> None:
+    def __init__(self, owners: Mapping[ComponentId, int]) -> None:
         if not owners:
             msg = "Placement must register at least one segment"
             raise ValueError(msg)
@@ -52,18 +41,18 @@ class Placement(Descriptor):
             if rank < 0:
                 msg = f"Process rank must be non-negative; got rank={rank} for {sid!r}"
                 raise ValueError(msg)
-        self._owners: dict[SegmentId, int] = dict(owners)
+        self._owners: dict[ComponentId, int] = dict(owners)
 
-    def owner(self, segment_id: SegmentId) -> int:
+    def owner(self, segment_id: ComponentId) -> int:
         """Return the rank that owns *segment_id*."""
         try:
             return self._owners[segment_id]
         except KeyError:
-            msg = f"SegmentId {segment_id!r} is not registered in this Placement"
+            msg = f"ComponentId {segment_id!r} is not registered in this Placement"
             raise KeyError(msg) from None
 
-    def segments_for_rank(self, rank: int) -> frozenset[SegmentId]:
-        """Return the set of SegmentIds owned by *rank*."""
+    def segments_for_rank(self, rank: int) -> frozenset[ComponentId]:
+        """Return the set of ComponentIds owned by *rank*."""
         return frozenset(sid for sid, r in self._owners.items() if r == rank)
 
     def as_dict(self) -> dict[str, Any]:
@@ -141,7 +130,7 @@ class DiscreteField(Field):
     name: str
     segments: tuple[DiscreteField, ...] = ()
     placement: Placement | None = None
-    segment_id: SegmentId | None = None
+    segment_id: ComponentId | None = None
     payload: Any | None = None
     extent: Extent | None = None
     interior_extent: Extent | None = None
@@ -193,17 +182,17 @@ class DiscreteField(Field):
         """True for a single-block (leaf) field."""
         return len(self.segments) == 0
 
-    def segment(self, segment_id: SegmentId) -> DiscreteField:
+    def segment(self, segment_id: ComponentId) -> DiscreteField:
         """Return the leaf DiscreteField with the given *segment_id*."""
         if self.is_leaf:
             if self.segment_id == segment_id:
                 return self
-            msg = f"SegmentId {segment_id!r} not found in DiscreteField {self.name!r}"
+            msg = f"ComponentId {segment_id!r} not found in DiscreteField {self.name!r}"
             raise KeyError(msg)
         for seg in self.segments:
             if seg.segment_id == segment_id:
                 return seg
-        msg = f"SegmentId {segment_id!r} not found in DiscreteField {self.name!r}"
+        msg = f"ComponentId {segment_id!r} not found in DiscreteField {self.name!r}"
         raise KeyError(msg)
 
     def local_segments(self, rank: int) -> tuple[DiscreteField, ...]:
@@ -263,21 +252,20 @@ class FieldDiscretization(Map):
         import jax.numpy as jnp
 
         leaves: list[DiscreteField] = []
-        owners: dict[SegmentId, int] = {}
+        owners: dict[ComponentId, int] = {}
         for block in grid.blocks:
             axes = [block.cell_centers(axis) for axis in range(block.ndim)]
             coords = jnp.meshgrid(*axes, indexing="ij")
             payload = jnp.asarray(f.evaluate(*coords), dtype=jnp.float64)
-            seg_id = SegmentId(int(block.block_id))
             leaves.append(
                 DiscreteField(
                     name=f.name,
-                    segment_id=seg_id,
+                    segment_id=block.block_id,
                     payload=payload,
                     extent=block.index_extent,
                 )
             )
-            owners[seg_id] = grid.owner(block.block_id)
+            owners[block.block_id] = grid.owner(block.block_id)
 
         return DiscreteField(
             name=f.name,
@@ -307,5 +295,4 @@ __all__ = [
     "Field",
     "FieldDiscretization",
     "Placement",
-    "SegmentId",
 ]

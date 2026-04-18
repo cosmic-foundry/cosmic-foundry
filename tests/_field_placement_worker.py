@@ -44,10 +44,10 @@ def main() -> None:
         from cosmic_foundry.fields import (
             DiscreteField,
             Placement,
-            SegmentId,
         )
         from cosmic_foundry.kernels import (
             AccessPattern,
+            ComponentId,
             Dispatch,
             Extent,
             Op,
@@ -72,11 +72,11 @@ def main() -> None:
 
         # Extents and region are expressed in local (0-based) coordinates.
         local_extent = Extent.from_shape(local_phi.shape)
-        seg_id = SegmentId(rank)
+        seg_id = ComponentId(rank)
         seg = DiscreteField(
             name="phi", segment_id=seg_id, payload=local_phi, extent=local_extent
         )
-        placement = Placement({SegmentId(0): 0, SegmentId(1): 1})
+        placement = Placement({ComponentId(0): 0, ComponentId(1): 1})
         field = DiscreteField(name="phi", segments=(seg,), placement=placement)
 
         # Owned interior: local x in [1, half) avoids the boundary rows.

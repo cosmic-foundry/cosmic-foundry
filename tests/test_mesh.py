@@ -5,14 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cosmic_foundry.kernels import Extent
-from cosmic_foundry.mesh import Block, BlockId, UniformGrid, partition_domain
+from cosmic_foundry.kernels import ComponentId, Extent
+from cosmic_foundry.mesh import Block, UniformGrid, partition_domain
 
 
 class TestBlock:
     def _make_block(self) -> Block:
         return Block(
-            block_id=BlockId(0),
+            block_id=ComponentId(0),
             index_extent=Extent((slice(0, 8), slice(0, 8), slice(0, 8))),
             origin=(0.0625, 0.0625, 0.0625),
             cell_spacing=(0.125, 0.125, 0.125),
@@ -26,7 +26,7 @@ class TestBlock:
     def test_cell_centers_values(self):
         h = 0.25
         block = Block(
-            block_id=BlockId(0),
+            block_id=ComponentId(0),
             index_extent=Extent((slice(0, 4),)),
             origin=(0.5 * h,),
             cell_spacing=(h,),
@@ -115,10 +115,10 @@ class TestUniformGrid:
             blocks_per_axis=(4,),
             n_ranks=2,
         )
-        assert grid.owner(BlockId(0)) == 0
-        assert grid.owner(BlockId(1)) == 1
-        assert grid.owner(BlockId(2)) == 0
-        assert grid.owner(BlockId(3)) == 1
+        assert grid.owner(ComponentId(0)) == 0
+        assert grid.owner(ComponentId(1)) == 1
+        assert grid.owner(ComponentId(2)) == 0
+        assert grid.owner(ComponentId(3)) == 1
 
     def test_blocks_for_rank_partition(self):
         grid = self._make_2d(n_ranks=2)
