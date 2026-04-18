@@ -23,12 +23,12 @@ from typing import Any, NewType
 
 import numpy as np
 
-from cosmic_foundry.kernels import Extent, Map
+from cosmic_foundry.kernels import Descriptor, Extent, Map
 
 SegmentId = NewType("SegmentId", int)
 
 
-class Placement:
+class Placement(Descriptor):
     """Maps each ``SegmentId`` to the process rank that owns it.
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
@@ -57,6 +57,9 @@ class Placement:
     def segments_for_rank(self, rank: int) -> frozenset[SegmentId]:
         """Return the set of SegmentIds owned by *rank*."""
         return frozenset(sid for sid, r in self._owners.items() if r == rank)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {str(k): v for k, v in self._owners.items()}
 
     def __repr__(self) -> str:
         return f"Placement({dict(self._owners)!r})"
