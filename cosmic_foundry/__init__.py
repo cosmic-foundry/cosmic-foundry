@@ -7,6 +7,15 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
+from cosmic_foundry.diagnostics import (  # noqa: E402
+    DiagnosticRecord,
+    DiagnosticReducer,
+    DiagnosticSink,
+    NullDiagnosticSink,
+    TabSeparatedDiagnosticSink,
+    collect_diagnostics,
+    global_sum,
+)
 from cosmic_foundry.fields import (  # noqa: E402
     Field,
     FieldSegment,
@@ -38,6 +47,14 @@ from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 
 __all__ = [
     "__version__",
+    # diagnostics
+    "DiagnosticRecord",
+    "DiagnosticReducer",
+    "DiagnosticSink",
+    "NullDiagnosticSink",
+    "TabSeparatedDiagnosticSink",
+    "collect_diagnostics",
+    "global_sum",
     # fields
     "Field",
     "FieldSegment",

@@ -98,11 +98,14 @@ primitives:
 | Local segments and their extents | `fence.field.local_segments(rank)` |
 | Which rank owns each neighboring segment | `fence.field.placement.owner(segment_id)` |
 | Neighboring segment extents | `fence.field.segment(segment_id).extent` |
+| Neighboring owned interiors | `fence.field.segment(segment_id).interior_extent` |
 | JAX array to pull from | `fence.field.segment(segment_id).payload` |
 
-No new metadata is required.  The `Field`/`Placement`/`FieldSegment` model
-already carries everything needed; the fence is purely an orchestration
-primitive.
+The `Field`/`Placement`/`FieldSegment` model carries everything needed;
+the fence is purely an orchestration primitive.  When `interior_extent` is
+absent for hand-built legacy segments, a policy may recover the interior by
+shrinking the payload extent by the access pattern, but fields allocated from
+mesh blocks provide explicit interiors.
 
 ### Non-goals of this ADR
 

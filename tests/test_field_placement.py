@@ -98,6 +98,16 @@ def test_field_rejects_segment_not_in_placement(phi: jnp.ndarray) -> None:
         Field("phi", (seg,), Placement({SegmentId(0): 0}))
 
 
+def test_field_segment_rejects_interior_outside_extent(phi: jnp.ndarray) -> None:
+    with pytest.raises(ValueError, match="interior_extent"):
+        FieldSegment(
+            SegmentId(0),
+            phi,
+            Extent((slice(0, 4), slice(0, N), slice(0, N))),
+            interior_extent=Extent((slice(3, 5), slice(0, N), slice(0, N))),
+        )
+
+
 def test_field_local_segments_single_process(phi: jnp.ndarray) -> None:
     seg = FieldSegment(SegmentId(0), phi, Extent.from_shape(phi.shape))
     field = Field("phi", (seg,), Placement({SegmentId(0): 0}))

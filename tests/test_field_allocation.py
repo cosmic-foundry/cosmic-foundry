@@ -68,6 +68,13 @@ class TestAllocateFieldExtent:
             expected = block.index_extent.expand(access)
             assert seg.extent == expected
 
+    def test_segment_interior_extent_matches_block_index_extent(self) -> None:
+        grid = _grid_1d(8, 2)
+        field = allocate_field("phi", grid, Stencil((1,)))
+        for block in grid.blocks:
+            seg = field.segment(SegmentId(int(block.block_id)))
+            assert seg.interior_extent == block.index_extent
+
     def test_zero_halo_extent_matches_block_index_extent(self) -> None:
         grid = _grid_1d(8, 2)
         field = allocate_field("phi", grid, Stencil((0,)))

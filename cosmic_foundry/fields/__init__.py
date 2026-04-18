@@ -36,11 +36,22 @@ class FieldSegment:
 
     The payload is typically a ``jax.Array``.  ``FieldSegment`` does not
     own process/device information; that lives in ``Placement``.
+    ``interior_extent`` identifies the owned cells inside halo-padded
+    storage; when omitted, the whole segment extent is treated as interior.
     """
 
     segment_id: SegmentId
     payload: Any
     extent: Extent
+    interior_extent: Extent | None = None
+
+    def __post_init__(self) -> None:
+        if self.interior_extent is None:
+            return
+        intersection = _intersect_extents(self.extent, self.interior_extent)
+        if intersection != self.interior_extent:
+            msg = "FieldSegment interior_extent must be contained in extent"
+            raise ValueError(msg)
 
 
 class Placement:
@@ -163,7 +174,12 @@ def allocate_field(
         halo_extent = block.index_extent.expand(access_pattern)
         payload = jnp.zeros(halo_extent.shape, dtype=jnp.float64)
         segments.append(
-            FieldSegment(segment_id=seg_id, payload=payload, extent=halo_extent)
+            FieldSegment(
+                segment_id=seg_id,
+                payload=payload,
+                extent=halo_extent,
+                interior_extent=block.index_extent,
+            )
         )
         owners[seg_id] = grid.owner(block.block_id)
 
