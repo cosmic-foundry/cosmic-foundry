@@ -20,9 +20,8 @@ from cosmic_foundry.diagnostics import (
 from cosmic_foundry.fields import (
     DiscreteField,
     Placement,
-    SegmentId,
 )
-from cosmic_foundry.kernels import Extent, Region
+from cosmic_foundry.kernels import ComponentId, Extent, Region
 
 
 @dataclass(frozen=True)
@@ -65,14 +64,14 @@ def _field_with_payloads(values: tuple[jax.Array, ...]) -> DiscreteField:
     segments = (
         DiscreteField(
             name="rho",
-            segment_id=SegmentId(0),
+            segment_id=ComponentId(0),
             payload=values[0],
             extent=Extent((slice(-1, 5),)),
             interior_extent=Extent((slice(0, 4),)),
         ),
         DiscreteField(
             name="rho",
-            segment_id=SegmentId(1),
+            segment_id=ComponentId(1),
             payload=values[1],
             extent=Extent((slice(3, 9),)),
             interior_extent=Extent((slice(4, 8),)),
@@ -81,19 +80,19 @@ def _field_with_payloads(values: tuple[jax.Array, ...]) -> DiscreteField:
     return DiscreteField(
         name="rho",
         segments=segments,
-        placement=Placement({SegmentId(0): 0, SegmentId(1): 0}),
+        placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
     )
 
 
 def test_global_sum_returns_jax_scalar_without_host_materialization() -> None:
     segment = DiscreteField(
         name="rho",
-        segment_id=SegmentId(0),
+        segment_id=ComponentId(0),
         payload=jnp.arange(6.0, dtype=jnp.float64),
         extent=Extent((slice(0, 6),)),
     )
     field = DiscreteField(
-        name="rho", segments=(segment,), placement=Placement({SegmentId(0): 0})
+        name="rho", segments=(segment,), placement=Placement({ComponentId(0): 0})
     )
 
     result = global_sum(field, Region(Extent((slice(1, 5),))), rank=0)
@@ -125,12 +124,12 @@ def test_global_sum_restricts_to_region() -> None:
 def test_collect_diagnostics_materializes_one_record() -> None:
     segment = DiscreteField(
         name="rho",
-        segment_id=SegmentId(0),
+        segment_id=ComponentId(0),
         payload=jnp.arange(4.0, dtype=jnp.float64),
         extent=Extent((slice(0, 4),)),
     )
     field = DiscreteField(
-        name="rho", segments=(segment,), placement=Placement({SegmentId(0): 0})
+        name="rho", segments=(segment,), placement=Placement({ComponentId(0): 0})
     )
 
     record = collect_diagnostics(

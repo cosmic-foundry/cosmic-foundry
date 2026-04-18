@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import ContinuousField, FieldDiscretization, SegmentId
+from cosmic_foundry.fields import ContinuousField, FieldDiscretization
 from cosmic_foundry.mesh import UniformGrid, partition_domain
 
 
@@ -59,7 +59,7 @@ class TestFieldDiscretizationOperator:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = FieldDiscretization().execute(f, grid)
         for block in grid.blocks:
-            seg = field.segment(SegmentId(int(block.block_id)))
+            seg = field.segment(block.block_id)
             assert jnp.allclose(seg.payload, block.cell_centers(0))
 
     def test_2d_function_evaluated_at_cell_center_meshgrid(self) -> None:
@@ -81,7 +81,7 @@ class TestFieldDiscretizationCodomain:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = FieldDiscretization().execute(f, grid)
         for block in grid.blocks:
-            seg = field.segment(SegmentId(int(block.block_id)))
+            seg = field.segment(block.block_id)
             assert seg.payload.shape == block.shape
 
     def test_payload_dtype_is_float64(self) -> None:
@@ -101,7 +101,7 @@ class TestFieldDiscretizationCodomain:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = FieldDiscretization().execute(f, grid)
         for block in grid.blocks:
-            seg = field.segment(SegmentId(int(block.block_id)))
+            seg = field.segment(block.block_id)
             assert seg.extent == block.index_extent
 
     def test_no_ghost_cells(self) -> None:
@@ -130,7 +130,7 @@ class TestFieldDiscretizationIdentity:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = FieldDiscretization().execute(f, grid)
         seg_ids = {seg.segment_id for seg in field.segments}
-        block_ids = {SegmentId(int(b.block_id)) for b in grid.blocks}
+        block_ids = {b.block_id for b in grid.blocks}
         assert seg_ids == block_ids
 
     def test_field_name_inherited_from_continuous_field(self) -> None:
@@ -143,5 +143,4 @@ class TestFieldDiscretizationIdentity:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = FieldDiscretization().execute(f, grid)
         for block in grid.blocks:
-            seg_id = SegmentId(int(block.block_id))
-            assert field.placement.owner(seg_id) == grid.owner(block.block_id)
+            assert field.placement.owner(block.block_id) == grid.owner(block.block_id)

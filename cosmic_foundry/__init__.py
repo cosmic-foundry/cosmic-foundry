@@ -23,7 +23,6 @@ from cosmic_foundry.fields import (  # noqa: E402
     Field,
     FieldDiscretization,
     Placement,
-    SegmentId,
 )
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
@@ -35,6 +34,7 @@ from cosmic_foundry.io import (  # noqa: E402
 )
 from cosmic_foundry.kernels import (  # noqa: E402
     AccessPattern,
+    ComponentId,
     Descriptor,
     Dispatch,
     Domain,
@@ -50,7 +50,6 @@ from cosmic_foundry.kernels import (  # noqa: E402
 )
 from cosmic_foundry.mesh import (  # noqa: E402
     Block,
-    BlockId,
     PartitionDomain,
     UniformGrid,
     partition_domain,
@@ -74,7 +73,6 @@ __all__ = [
     "Field",
     "FieldDiscretization",
     "Placement",
-    "SegmentId",
     # halo
     "HaloFillFence",
     "HaloFillPolicy",
@@ -86,6 +84,7 @@ __all__ = [
     "write_array",
     # kernels
     "AccessPattern",
+    "ComponentId",
     "Descriptor",
     "Dispatch",
     "Domain",
@@ -100,7 +99,6 @@ __all__ = [
     "Stencil",
     # mesh
     "Block",
-    "BlockId",
     "PartitionDomain",
     "UniformGrid",
     "partition_domain",

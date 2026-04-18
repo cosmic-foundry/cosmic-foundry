@@ -149,6 +149,21 @@ class Record(ABC):
         """Return a plain-dict representation of this record."""
 
 
+@dataclass(frozen=True)
+class ComponentId(Record):
+    """Opaque integer identifier for a named simulation component.
+
+    Used wherever a typed, hashable, serializable integer key is needed —
+    mesh blocks, field segments, and any future entity type.  A single class
+    avoids redundant id types for concepts that are structurally identical.
+    """
+
+    value: int
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"value": self.value}
+
+
 class Domain(ABC):
     """Abstract base for all domain types: the set D over which fields are defined.
 
@@ -444,6 +459,7 @@ def _slice_length(axis_slice: slice) -> int:
 
 __all__ = [
     "AccessPattern",
+    "ComponentId",
     "Descriptor",
     "Dispatch",
     "Domain",

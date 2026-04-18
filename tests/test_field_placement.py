@@ -1,6 +1,6 @@
 """Tests for the Field placement data model.
 
-Non-distributed tests cover the SegmentId / DiscreteField / Placement / Field
+Non-distributed tests cover the ComponentId / DiscreteField / Placement / Field
 API and the Field.covers() validation.
 
 The multi-rank test at the bottom spawns two subprocesses that initialize
@@ -22,8 +22,16 @@ from typing import Any, ClassVar
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import DiscreteField, Placement, SegmentId
-from cosmic_foundry.kernels import AccessPattern, Dispatch, Extent, Op, Region, Stencil
+from cosmic_foundry.fields import DiscreteField, Placement
+from cosmic_foundry.kernels import (
+    AccessPattern,
+    ComponentId,
+    Dispatch,
+    Extent,
+    Op,
+    Region,
+    Stencil,
+)
 
 # ---------------------------------------------------------------------------
 # Shared Op (mirrors test_kernels.py; defined here to keep tests independent)
@@ -81,27 +89,27 @@ def phi() -> jnp.ndarray:
 
 
 def test_placement_owner_lookup() -> None:
-    p = Placement({SegmentId(0): 0, SegmentId(1): 1})
-    assert p.owner(SegmentId(0)) == 0
-    assert p.owner(SegmentId(1)) == 1
+    p = Placement({ComponentId(0): 0, ComponentId(1): 1})
+    assert p.owner(ComponentId(0)) == 0
+    assert p.owner(ComponentId(1)) == 1
 
 
 def test_placement_segments_for_rank() -> None:
-    p = Placement({SegmentId(0): 0, SegmentId(1): 0, SegmentId(2): 1})
-    assert p.segments_for_rank(0) == {SegmentId(0), SegmentId(1)}
-    assert p.segments_for_rank(1) == {SegmentId(2)}
+    p = Placement({ComponentId(0): 0, ComponentId(1): 0, ComponentId(2): 1})
+    assert p.segments_for_rank(0) == {ComponentId(0), ComponentId(1)}
+    assert p.segments_for_rank(1) == {ComponentId(2)}
     assert p.segments_for_rank(99) == frozenset()
 
 
 def test_placement_rejects_unknown_segment() -> None:
-    p = Placement({SegmentId(0): 0})
+    p = Placement({ComponentId(0): 0})
     with pytest.raises(KeyError):
-        p.owner(SegmentId(99))
+        p.owner(ComponentId(99))
 
 
 def test_placement_rejects_negative_rank() -> None:
     with pytest.raises(ValueError, match="non-negative"):
-        Placement({SegmentId(0): -1})
+        Placement({ComponentId(0): -1})
 
 
 def test_placement_rejects_empty() -> None:
@@ -117,13 +125,13 @@ def test_placement_rejects_empty() -> None:
 def test_field_rejects_segment_not_in_placement(phi: jnp.ndarray) -> None:
     seg = DiscreteField(
         name="phi",
-        segment_id=SegmentId(99),
+        segment_id=ComponentId(99),
         payload=phi,
         extent=Extent.from_shape(phi.shape),
     )
     with pytest.raises(ValueError, match="not registered"):
         DiscreteField(
-            name="phi", segments=(seg,), placement=Placement({SegmentId(0): 0})
+            name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
         )
 
 
@@ -131,7 +139,7 @@ def test_field_segment_rejects_interior_outside_extent(phi: jnp.ndarray) -> None
     with pytest.raises(ValueError, match="interior_extent"):
         DiscreteField(
             name="phi",
-            segment_id=SegmentId(0),
+            segment_id=ComponentId(0),
             payload=phi,
             extent=Extent((slice(0, 4), slice(0, N), slice(0, N))),
             interior_extent=Extent((slice(3, 5), slice(0, N), slice(0, N))),
@@ -141,12 +149,12 @@ def test_field_segment_rejects_interior_outside_extent(phi: jnp.ndarray) -> None
 def test_field_local_segments_single_process(phi: jnp.ndarray) -> None:
     seg = DiscreteField(
         name="phi",
-        segment_id=SegmentId(0),
+        segment_id=ComponentId(0),
         payload=phi,
         extent=Extent.from_shape(phi.shape),
     )
     field = DiscreteField(
-        name="phi", segments=(seg,), placement=Placement({SegmentId(0): 0})
+        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
     )
     assert field.local_segments(0) == (seg,)
     assert field.local_segments(1) == ()
@@ -155,16 +163,16 @@ def test_field_local_segments_single_process(phi: jnp.ndarray) -> None:
 def test_field_segment_lookup(phi: jnp.ndarray) -> None:
     seg = DiscreteField(
         name="phi",
-        segment_id=SegmentId(0),
+        segment_id=ComponentId(0),
         payload=phi,
         extent=Extent.from_shape(phi.shape),
     )
     field = DiscreteField(
-        name="phi", segments=(seg,), placement=Placement({SegmentId(0): 0})
+        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
     )
-    assert field.segment(SegmentId(0)) is seg
+    assert field.segment(ComponentId(0)) is seg
     with pytest.raises(KeyError):
-        field.segment(SegmentId(99))
+        field.segment(ComponentId(99))
 
 
 # ---------------------------------------------------------------------------
@@ -174,9 +182,9 @@ def test_field_segment_lookup(phi: jnp.ndarray) -> None:
 
 def test_single_segment_covers_full_extent(phi: jnp.ndarray) -> None:
     full = Extent.from_shape(phi.shape)
-    seg = DiscreteField(name="phi", segment_id=SegmentId(0), payload=phi, extent=full)
+    seg = DiscreteField(name="phi", segment_id=ComponentId(0), payload=phi, extent=full)
     field = DiscreteField(
-        name="phi", segments=(seg,), placement=Placement({SegmentId(0): 0})
+        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
     )
     assert field.covers(full)
 
@@ -186,15 +194,15 @@ def test_two_disjoint_segments_cover_split_domain(phi: jnp.ndarray) -> None:
     ext0 = Extent((slice(0, half), slice(0, N), slice(0, N)))
     ext1 = Extent((slice(half, N), slice(0, N), slice(0, N)))
     seg0 = DiscreteField(
-        name="phi", segment_id=SegmentId(0), payload=phi[:half], extent=ext0
+        name="phi", segment_id=ComponentId(0), payload=phi[:half], extent=ext0
     )
     seg1 = DiscreteField(
-        name="phi", segment_id=SegmentId(1), payload=phi[half:], extent=ext1
+        name="phi", segment_id=ComponentId(1), payload=phi[half:], extent=ext1
     )
     field = DiscreteField(
         name="phi",
         segments=(seg0, seg1),
-        placement=Placement({SegmentId(0): 0, SegmentId(1): 1}),
+        placement=Placement({ComponentId(0): 0, ComponentId(1): 1}),
     )
     assert field.covers(Extent.from_shape(phi.shape))
 
@@ -204,15 +212,15 @@ def test_gap_in_coverage_is_detected(phi: jnp.ndarray) -> None:
     ext0 = Extent((slice(0, 3), slice(0, N), slice(0, N)))
     ext1 = Extent((slice(4, N), slice(0, N), slice(0, N)))
     seg0 = DiscreteField(
-        name="phi", segment_id=SegmentId(0), payload=phi[:3], extent=ext0
+        name="phi", segment_id=ComponentId(0), payload=phi[:3], extent=ext0
     )
     seg1 = DiscreteField(
-        name="phi", segment_id=SegmentId(1), payload=phi[4:], extent=ext1
+        name="phi", segment_id=ComponentId(1), payload=phi[4:], extent=ext1
     )
     field = DiscreteField(
         name="phi",
         segments=(seg0, seg1),
-        placement=Placement({SegmentId(0): 0, SegmentId(1): 1}),
+        placement=Placement({ComponentId(0): 0, ComponentId(1): 1}),
     )
     assert not field.covers(Extent.from_shape(phi.shape))
 
@@ -223,12 +231,12 @@ def test_covers_checks_halo_expansion(phi: jnp.ndarray) -> None:
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
     seg = DiscreteField(
         name="phi",
-        segment_id=SegmentId(0),
+        segment_id=ComponentId(0),
         payload=phi[1 : N - 1, 1 : N - 1, 1 : N - 1],
         extent=interior,
     )
     field = DiscreteField(
-        name="phi", segments=(seg,), placement=Placement({SegmentId(0): 0})
+        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
     )
     required = interior.expand(seven_point_laplacian.access_pattern)
     assert not field.covers(required)
@@ -242,9 +250,9 @@ def test_covers_checks_halo_expansion(phi: jnp.ndarray) -> None:
 def test_single_process_field_dispatch_laplacian(phi: jnp.ndarray) -> None:
     """One Field, one segment, full domain — the degenerate single-rank case."""
     full = Extent.from_shape(phi.shape)
-    seg = DiscreteField(name="phi", segment_id=SegmentId(0), payload=phi, extent=full)
+    seg = DiscreteField(name="phi", segment_id=ComponentId(0), payload=phi, extent=full)
     field = DiscreteField(
-        name="phi", segments=(seg,), placement=Placement({SegmentId(0): 0})
+        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
     )
 
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))

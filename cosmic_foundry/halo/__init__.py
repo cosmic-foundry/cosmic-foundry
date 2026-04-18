@@ -6,8 +6,15 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from cosmic_foundry.fields import DiscreteField, SegmentId
-from cosmic_foundry.kernels import AccessPattern, Descriptor, Extent, Map, Region
+from cosmic_foundry.fields import DiscreteField
+from cosmic_foundry.kernels import (
+    AccessPattern,
+    ComponentId,
+    Descriptor,
+    Extent,
+    Map,
+    Region,
+)
 
 
 @dataclass(frozen=True)
@@ -49,12 +56,12 @@ class HaloFillPolicy(Map):
             msg = "Field does not cover the Region plus halo required by the fence"
             raise ValueError(msg)
 
-        local_ids: set[SegmentId] = {
+        local_ids: set[ComponentId] = {
             seg.segment_id
             for seg in fence.field.local_segments(rank)
             if seg.segment_id is not None  # always true for leaves; narrows type
         }
-        updated_payloads: dict[SegmentId, Any] = {}
+        updated_payloads: dict[ComponentId, Any] = {}
         for target in fence.field.local_segments(rank):
             assert target.segment_id is not None  # target is a leaf
             target_interior = _segment_interior(target, fence.access_pattern)
@@ -98,7 +105,7 @@ def _fill_segment_halo(
     required: Extent,
     interior: Extent,
     access_pattern: AccessPattern,
-    local_ids: set[SegmentId],
+    local_ids: set[ComponentId],
 ) -> Any:
     assert target.payload is not None and target.extent is not None  # target is a leaf
     target_payload = target.payload
