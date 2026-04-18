@@ -91,6 +91,15 @@ N of registered reducers.  Returning `float` inside each reducer
 would force N independent device-to-host transfers and break the
 JIT boundary, defeating fusion.
 
+**Runtime health checks:** value-dependent error checks follow the same
+rule. A check for non-finite values, negative density or pressure,
+CFL violation, or another simulation health condition should reduce to a
+0-d JAX array or a small JAX vector. The driver materializes those results
+only at an explicit diagnostic or health-check fence, then raises any
+host-visible warning or exception. Structural checks that inspect only
+metadata — extents, ranks, field names, and dependency ordering — remain
+ordinary Python validation before launch.
+
 **`DiagnosticRecord`** is a named tuple row emitted each step:
 
 ```python
@@ -189,12 +198,14 @@ data dependency: face fluxes must be first-class driver outputs rather than
 temporaries discarded after the cell-average update.
 
 The operations diverge after that.  `BoundaryFluxReducer.reduce` returns a
-`float` — a scalar for the diagnostic record.  AMR flux correction returns
-an *array* — a correction to coarse cell averages at coarse-fine interfaces,
-needed to make block-structured AMR globally conservative.  The
-`DiagnosticReducer` protocol (which bottoms out at `-> float`) is too narrow
-to express flux correction; that is a separate interface (a flux register)
-to be designed in the AMR sub-epoch.
+0-d `jax.Array` like every other `DiagnosticReducer`; the driver converts it
+to a Python `float` only after the batched diagnostic collection step
+completes and it is building a host-visible `DiagnosticRecord`.  AMR flux
+correction returns an *array* — a correction to coarse cell averages at
+coarse-fine interfaces, needed to make block-structured AMR globally
+conservative.  The `DiagnosticReducer` protocol, which produces scalar
+diagnostic values, is too narrow to express flux correction; that is a
+separate interface (a flux register) to be designed in the AMR sub-epoch.
 
 The implication for this ADR: the face-flux accessibility requirement is
 motivated by *two* downstream uses, not one.  Designing the driver to expose
