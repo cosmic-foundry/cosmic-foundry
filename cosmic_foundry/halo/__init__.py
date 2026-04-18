@@ -7,16 +7,22 @@ from itertools import product
 from typing import Any
 
 from cosmic_foundry.fields import DiscreteField, SegmentId
-from cosmic_foundry.kernels import AccessPattern, Extent, Map, Region
+from cosmic_foundry.kernels import AccessPattern, Descriptor, Extent, Map, Region
 
 
 @dataclass(frozen=True)
-class HaloFillFence:
+class HaloFillFence(Descriptor):
     """Communication intent for one field before a Dispatch."""
 
     field: DiscreteField
     region: Region
     access_pattern: AccessPattern
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "region": self.region.as_dict(),
+            "access_pattern": self.access_pattern.as_dict(),
+        }
 
 
 @dataclass(frozen=True)

@@ -23,12 +23,32 @@ class Backend(Enum):
     JAX = "jax"
 
 
-class AccessPattern(ABC):
+class Descriptor(ABC):
+    """Abstract base for all computation-configuring value objects.
+
+    A Descriptor is an immutable object that specifies *how* computation is
+    performed — coordinate extents, iteration regions, access patterns, field
+    bindings, data placement. Descriptors are distinct from Records (which are
+    *about* the simulation) and from Maps (which *perform* computation).
+
+    Every Descriptor must be serializable to a plain dict.
+    """
+
+    @abstractmethod
+    def as_dict(self) -> dict[str, Any]:
+        """Return a plain-dict representation of this descriptor."""
+
+
+class AccessPattern(Descriptor):
     """Metadata describing the locality contract for an Op."""
 
     @abstractmethod
     def halo_width(self, axis: int) -> int:
         """Return the ghost-cell depth required on one axis."""
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a plain-dict representation of this access pattern."""
+        return {"type": type(self).__name__}
 
 
 @dataclass(frozen=True)
@@ -56,9 +76,12 @@ class Stencil(AccessPattern):
     def halo_width(self, axis: int) -> int:
         return self.radii[axis]
 
+    def as_dict(self) -> dict[str, Any]:
+        return {"type": "Stencil", "radii": list(self.radii)}
+
 
 @dataclass(frozen=True)
-class Extent:
+class Extent(Descriptor):
     """Half-open integer index extent."""
 
     slices: tuple[slice, ...]
@@ -91,9 +114,12 @@ class Extent:
             expanded.append(slice(start - halo, stop + halo))
         return Extent(tuple(expanded))
 
+    def as_dict(self) -> dict[str, Any]:
+        return {"slices": [(s.start, s.stop) for s in self.slices]}
+
 
 @dataclass(frozen=True)
-class Region:
+class Region(Descriptor):
     """Iteration coordinates requested by a Dispatch.
 
     ``n_blocks`` signals a batched region: inputs are expected to carry a
@@ -109,9 +135,12 @@ class Region:
             msg = "Region.n_blocks must be a positive integer"
             raise ValueError(msg)
 
+    def as_dict(self) -> dict[str, Any]:
+        return {"extent": self.extent.as_dict(), "n_blocks": self.n_blocks}
+
 
 @dataclass
-class BoundOp:
+class BoundOp(Descriptor):
     """An Op with its field inputs bound, ready for dispatch.
 
     Created by calling an Op with its field arrays::
@@ -123,6 +152,9 @@ class BoundOp:
 
     op: Any  # Op instance — Any avoids forward-reference issues
     fields: dict[str, Any]  # name → array, ordered by op.reads
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"op": type(self.op).__name__, "fields": list(self.fields.keys())}
 
 
 class Record(ABC):
@@ -432,6 +464,7 @@ __all__ = [
     "AccessPattern",
     "Backend",
     "BoundOp",
+    "Descriptor",
     "Dispatch",
     "Domain",
     "Extent",
