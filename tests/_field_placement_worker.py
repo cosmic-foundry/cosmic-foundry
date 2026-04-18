@@ -114,7 +114,9 @@ def main() -> None:
         if not field.covers(required):
             raise RuntimeError("local segment does not cover owned region + halo")
 
-        result = Dispatch(laplacian(local_phi), owned_region).execute()
+        result = Dispatch(
+            op=laplacian, fields={"phi": local_phi}, region=owned_region
+        ).execute()
         all_close = bool(jnp.allclose(result, 6.0))
         print(json.dumps({"rank": rank, "ok": True, "all_close_6": all_close}))
 
