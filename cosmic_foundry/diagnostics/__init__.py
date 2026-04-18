@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -147,7 +147,7 @@ def global_sum(
 
     if axis_name is None:
         return local
-    return jax.lax.psum(local, axis_name)
+    return cast(jax.Array, jax.lax.psum(local, axis_name))
 
 
 def _format_float(value: float) -> str:
