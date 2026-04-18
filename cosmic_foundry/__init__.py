@@ -30,7 +30,6 @@ from cosmic_foundry.field import (  # noqa: E402
     Field,
     Placement,
 )
-from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
@@ -71,9 +70,6 @@ __all__ = [
     "Field",
     "FieldDiscretization",
     "Placement",
-    # halo
-    "HaloFillFence",
-    "HaloFillPolicy",
     # io
     "HAS_PARALLEL_HDF5",
     "MergeRankFiles",
