@@ -1,11 +1,11 @@
-"""Tests for discretize: (ContinuousField, Array[Patch]) → Array[DiscreteField]."""
+"""Tests for discretize: (ContinuousField, Array[Patch]) → Array[PatchFunction]."""
 
 from __future__ import annotations
 
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.field import ContinuousField, DiscreteField
+from cosmic_foundry.field import ContinuousField, PatchFunction
 from cosmic_foundry.mesh import discretize, partition_domain
 from cosmic_foundry.record import Array, ComponentId
 
@@ -102,7 +102,7 @@ class TestDiscretizeCodomain:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, _mesh_1d(8, 1))
         assert isinstance(field, Array)
-        assert all(isinstance(df, DiscreteField) for df in field.elements)
+        assert all(isinstance(df, PatchFunction) for df in field.elements)
 
 
 class TestDiscretizeIdentity:

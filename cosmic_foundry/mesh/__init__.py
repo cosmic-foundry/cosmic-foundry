@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 from cosmic_foundry.descriptor import AccessPattern, Extent
-from cosmic_foundry.field import ContinuousField, DiscreteField
+from cosmic_foundry.field import ContinuousField, PatchFunction
 from cosmic_foundry.function import Function
 from cosmic_foundry.located_discretization import LocatedDiscretization
 from cosmic_foundry.record import Array, ComponentId, Placement
@@ -21,7 +21,7 @@ class Patch(LocatedDiscretization):
     LocatedDiscretization.
 
     Owns topology and coordinate metadata only; array payloads live in
-    Array[DiscreteField].  The coordinate function φ(i) = origin + i·h
+    Array[PatchFunction].  The coordinate function φ(i) = origin + i·h
     maps each cell index to its center position in physical space.
     """
 
@@ -118,21 +118,21 @@ class PartitionDomain(Function):
 partition_domain = PartitionDomain()
 
 
-def discretize(f: ContinuousField, mesh: Array[Patch]) -> Array[DiscreteField]:
-    """Sample *f* at each patch's node positions, returning Array[DiscreteField].
+def discretize(f: ContinuousField, mesh: Array[Patch]) -> Array[PatchFunction]:
+    """Sample *f* at each patch's node positions, returning Array[PatchFunction].
 
     The returned Array has the same Placement as the mesh: element i is the
-    DiscreteField on patch i.  Each payload has shape equal to the patch's
+    PatchFunction on patch i.  Each payload has shape equal to the patch's
     index_extent.shape and no ghost cells.
     """
     import jax.numpy as jnp
 
-    elements: list[DiscreteField] = []
+    elements: list[PatchFunction] = []
     for patch in mesh.elements:
         axes = [patch.node_positions(axis) for axis in range(patch.ndim)]
         coords = jnp.meshgrid(*axes, indexing="ij")
         payload = f.sample(*coords).payload
-        elements.append(DiscreteField(name=f.name, payload=payload))
+        elements.append(PatchFunction(name=f.name, payload=payload))
     return Array(elements=tuple(elements), placement=mesh.placement)
 
 
@@ -155,11 +155,11 @@ def covers(mesh: Array[Patch], extent: Extent) -> bool:
 
 def fill_halo(
     mesh: Array[Patch],
-    field: Array[DiscreteField],
+    field: Array[PatchFunction],
     access_pattern: AccessPattern,
     rank: int,
-) -> Array[DiscreteField]:
-    """Return a new Array[DiscreteField] with halo-expanded payloads.
+) -> Array[PatchFunction]:
+    """Return a new Array[PatchFunction] with halo-expanded payloads.
 
     Ghost cells are filled from same-rank neighbor interiors.
     Each element of *field* must have a payload whose shape equals
@@ -173,7 +173,7 @@ def fill_halo(
     import jax.numpy as jnp
 
     local_ids = mesh.placement.segments_for_rank(rank)
-    updated: dict[ComponentId, DiscreteField] = {}
+    updated: dict[ComponentId, PatchFunction] = {}
     for cid in local_ids:
         patch = mesh[cid]
         interior = patch.index_extent
@@ -194,7 +194,7 @@ def fill_halo(
             rank=rank,
             local_ids=local_ids,
         )
-        updated[cid] = DiscreteField(name=field[cid].name, payload=updated_payload)
+        updated[cid] = PatchFunction(name=field[cid].name, payload=updated_payload)
     new_elements = tuple(
         updated.get(ComponentId(i), field[ComponentId(i)])
         for i in range(len(field.elements))
@@ -209,7 +209,7 @@ def _fill_patch_halo(
     target_halo_extent: Extent,
     expanded_payload: Any,
     mesh: Array[Patch],
-    field: Array[DiscreteField],
+    field: Array[PatchFunction],
     rank: int,
     local_ids: frozenset[ComponentId],
 ) -> Any:

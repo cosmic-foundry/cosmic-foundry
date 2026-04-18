@@ -47,7 +47,7 @@ class Placement(Record):
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
     It is the sole authoritative source for process/device ownership within
-    a composite ``DiscreteField``.
+    a composite ``PatchFunction``.
     """
 
     def __init__(self, owners: Mapping[ComponentId, int]) -> None:
@@ -101,7 +101,7 @@ class Array(Record, Generic[T]):
 
     This is the general container for structured collections across the
     simulation: Array[Patch] represents a partitioned spatial domain;
-    Array[DiscreteField] represents a distributed discrete field.
+    Array[PatchFunction] represents a distributed discrete field.
     """
 
     elements: tuple[T, ...]

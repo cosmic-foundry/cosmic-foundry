@@ -24,7 +24,7 @@ class Discretization(IndexedSet):  # noqa: B024
 
     A Discretization carries no metric, no geometry beyond what is needed
     to define the approximation, and no payload — payloads live in
-    DiscreteField.
+    PatchFunction.
     """
 
 

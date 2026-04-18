@@ -127,11 +127,10 @@ merge and update this list when the picture changes.
    `UniformGrid`; domain decomposition; round-robin rank
    assignment; `cell_centers` coordinate arrays.
 
-2. ✓ **Field discretization from blocks** (PR #88, PR #98) — given a
-   `UniformGrid` and a `ContinuousField`, produce a `DiscreteField`
-   whose `FieldSegment` payloads are JAX arrays evaluated at the
-   block interior cell centers. `FieldDiscretization` is the map
-   `ContinuousField × UniformGrid → DiscreteField`.
+2. ✓ **Field discretization from blocks** (PR #88, PR #98, PR #132) — given
+   an `Array[Patch]` and a `ContinuousField`, produce an `Array[PatchFunction]`
+   whose payloads are JAX arrays evaluated at the patch node positions.
+   `discretize` is the function `ContinuousField × Array[Patch] → Array[PatchFunction]`.
    *Depends on: #1.*
 
 3. ✓ **`HaloFillPolicy` — single-rank** (PR #90) —

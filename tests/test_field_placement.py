@@ -32,8 +32,8 @@ class SevenPointLaplacian(Function):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Function:
-        domain   — φ: DiscreteField on Ω_h ⊆ ℝ³
-        codomain — ∇²φ: DiscreteField on Ω_h^int ⊆ Ω_h
+        domain   — φ: PatchFunction on Ω_h ⊆ ℝ³
+        codomain — ∇²φ: PatchFunction on Ω_h^int ⊆ Ω_h
         operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
                                 + φ_{i,j+1,k} + φ_{ij,k-1} + φ_{ij,k+1}
                                 - 6 φ_{ijk}

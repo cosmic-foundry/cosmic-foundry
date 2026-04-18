@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.descriptor import Extent, Region
-from cosmic_foundry.field import DiscreteField
+from cosmic_foundry.field import PatchFunction
 from cosmic_foundry.function import Function
 from cosmic_foundry.mesh import Patch
 from cosmic_foundry.record import Array, ComponentId, Record
@@ -38,7 +38,7 @@ class DiagnosticReducer(Function):
     def execute(
         self,
         mesh: Array[Patch],
-        fields: Mapping[str, Array[DiscreteField]],
+        fields: Mapping[str, Array[PatchFunction]],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -129,7 +129,7 @@ class CollectDiagnostics(Function):
         self,
         reducers: Sequence[DiagnosticReducer],
         mesh: Array[Patch],
-        fields: Mapping[str, Array[DiscreteField]],
+        fields: Mapping[str, Array[PatchFunction]],
         region: Region,
         *,
         step: int,
@@ -191,7 +191,7 @@ class GlobalSum(Function):
     def execute(
         self,
         mesh: Array[Patch],
-        field: Array[DiscreteField],
+        field: Array[PatchFunction],
         region: Region,
         rank: int,
         *,
