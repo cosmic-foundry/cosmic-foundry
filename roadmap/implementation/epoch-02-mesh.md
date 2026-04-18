@@ -133,6 +133,9 @@ merge and update this list when the picture changes.
    determined by the caller's `AccessPattern`). Establishes the
    connection between mesh topology and field storage.
    *Depends on: #1.*
+   *Superseded by #98: `allocate_field` replaced by `FieldDiscretization`
+   (a map from `ContinuousField × UniformGrid` → `DiscreteField`);
+   `AccessPattern` removed from the discretization path.*
 
 3. ✓ **`HaloFillPolicy` — single-rank** (PR #90) —
    fill ghost cells for blocks on the same rank by copying from

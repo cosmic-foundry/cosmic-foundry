@@ -268,7 +268,18 @@ class FlatPolicy:
 
 @dataclass(frozen=True)
 class Dispatch:
-    """One local lowering unit: a BoundOp over a Region under a Policy."""
+    """One local lowering unit: a BoundOp over a Region under a Policy.
+
+    Map:
+        domain   — (k: BoundOp, Ω_h^int: Region, π: FlatPolicy) — a kernel
+                   with bound field inputs, an iteration region, and an
+                   execution policy
+        codomain — π(k, Ω_h^int) — the kernel evaluated over the interior
+        operator — execute() ↦ policy.execute(bound, region)
+
+    Exact: Θ = ∅ — Dispatch introduces no approximation; that lives in the
+    policy and Op.
+    """
 
     # One Op per Dispatch; multi-Op fusion is deferred to the Epoch 2
     # task-graph driver, which will compose compatible Ops before lowering.

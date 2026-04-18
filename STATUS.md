@@ -55,6 +55,7 @@ Per the implementation plan in `roadmap/implementation/epoch-02-mesh.md`:
 | 2 | Field allocation from blocks | #88 | Merged |
 | 3 | `HaloFillPolicy` — single-rank | #90 | Merged |
 | 4 | `DiagnosticReducer` + `DiagnosticSink` | #92 | Merged |
+| 2b | Fields/maps formalism — `Field` ABC, `ContinuousField`, `DiscreteField`, `FieldDiscretization`; Map: on all operator classes; replaces `allocate_field` | #98 | Merged |
 | 5 | Task-graph driver — single-rank | — | Planned |
 | 6 | `HaloFillPolicy` — multi-rank | — | Planned |
 
@@ -84,10 +85,13 @@ it. The test: could someone read the spec, implement it themselves, and know
 whether they got it right? Capsule tooling (M3b) follows once claims are
 clearly documented.
 
-Object-level next work: continue Epoch 2 items #5–#6 (task-graph driver,
-multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
-infrastructure, comparison-result schema, and simulation specification
-format. See `roadmap/implementation/epoch-03-platform-services.md` for the full plan.
+Object-level next work: formalism sweep follow-up PR — add Map: to
+`Placement`, audit `io/` and `manifests/` modules, add MMS tests for
+`FieldDiscretization`, and design the ghost-cell stencil map. Then
+continue Epoch 2 items #5–#6 (task-graph driver, multi-rank halo fill),
+followed by Epoch 3 (Platform Services): manifest infrastructure,
+comparison-result schema, and simulation specification format. See
+`roadmap/implementation/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 
