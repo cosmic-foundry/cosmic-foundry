@@ -50,7 +50,7 @@ Per the implementation plan in `roadmap/epoch-02-mesh.md`:
 | 1 | Uniform mesh data model (`Block`, `UniformGrid`) | #85 | Merged |
 | 2 | Field allocation from blocks | #88 | Merged |
 | 3 | `HaloFillPolicy` — single-rank | #90 | Merged |
-| 4 | `DiagnosticReducer` + `DiagnosticSink` | — | Planned |
+| 4 | `DiagnosticReducer` + `DiagnosticSink` | #92 | Merged |
 | 5 | Task-graph driver — single-rank | — | Planned |
 | 6 | `HaloFillPolicy` — multi-rank | — | Planned |
 
@@ -59,8 +59,8 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 ## Next planned work
 
-Complete Epoch 2 (items #4–#6: diagnostics, task-graph driver,
-multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
+Complete Epoch 2 (items #5–#6: task-graph driver, multi-rank halo fill),
+then begin Epoch 3 (Platform Services): manifest
 infrastructure, comparison-result schema, and simulation specification
 format. See `roadmap/epoch-03-platform-services.md` for the full plan.
 
