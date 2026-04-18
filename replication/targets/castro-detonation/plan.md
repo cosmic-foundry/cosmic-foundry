@@ -20,12 +20,12 @@ In order:
 
 Union across the problems above:
 
-- [C0001 — compressible Euler (Cartesian)](../../capabilities/C0001-compressible-euler-cartesian.md)
-- [C0005 — constant acceleration source](../../capabilities/C0005-constant-acceleration-source.md)
-- [C0006 — Helmholtz-family EOS](../../capabilities/C0006-helmholtz-eos.md)
-- [C0007 — aprox reaction network](../../capabilities/C0007-aprox-reaction-network.md)
-- [C0008 — Strang hydro–burn coupling](../../capabilities/C0008-strang-burn-hydro-coupling.md)
-- [C0009 — ignition-event diagnostic](../../capabilities/C0009-ignition-event-diagnostic.md)
+- [C0001 — compressible Euler (Cartesian)](../../../capabilities/C0001-compressible-euler-cartesian.md)
+- [C0005 — constant acceleration source](../../../capabilities/C0005-constant-acceleration-source.md)
+- [C0006 — Helmholtz-family EOS](../../../capabilities/C0006-helmholtz-eos.md)
+- [C0007 — aprox reaction network](../../../capabilities/C0007-aprox-reaction-network.md)
+- [C0008 — Strang hydro–burn coupling](../../../capabilities/C0008-strang-burn-hydro-coupling.md)
+- [C0009 — ignition-event diagnostic](../../../capabilities/C0009-ignition-event-diagnostic.md)
 
 ## Roadmap interaction
 

@@ -107,10 +107,10 @@ The primary kernel backend is **JAX + XLA**.
 
 ## Cross-references
 
-- [`roadmap/object-level/README.md`](../../roadmap/object-level/README.md) §Technology
+- [`roadmap/implementation/README.md`](../../roadmap/implementation/README.md) §Technology
   Baseline.
-- [`roadmap/object-level/epoch-00-bootstrap.md`](../../roadmap/object-level/epoch-00-bootstrap.md) §0.2, §0.6.
-- [`roadmap/object-level/epoch-01-kernels.md`](../../roadmap/object-level/epoch-01-kernels.md)
+- [`roadmap/implementation/epoch-00-bootstrap.md`](../../roadmap/implementation/epoch-00-bootstrap.md) §0.2, §0.6.
+- [`roadmap/implementation/epoch-01-kernels.md`](../../roadmap/implementation/epoch-01-kernels.md)
   (kernel descriptor, where the interface solidifies).
 - ADR-0001 (Python-only engine with runtime codegen) — this ADR depends on it.
 - ADR-0003 (`jax.distributed` + NCCL host-parallelism baseline) —

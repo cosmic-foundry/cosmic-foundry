@@ -1,16 +1,17 @@
 # Cosmic Foundry — Roadmap
 
-The roadmap is split across two planes:
+The roadmap is organized into three tracks:
 
-- [`roadmap/object-level/README.md`](roadmap/object-level/README.md) — what platform
-  and simulation capabilities the codebase is building.
-- [`roadmap/meta-level/README.md`](roadmap/meta-level/README.md) — how the project
-  verifies, validates, regenerates, and audits object-level claims.
+- [`capabilities/README.md`](capabilities/README.md) — **Track 1:** what
+  we want to compute. Capability specs organized by the object/map framing.
+  Individual specs are in [`capabilities/`](capabilities/).
+- [`roadmap/implementation/README.md`](roadmap/implementation/README.md) — **Track 2:**
+  how the codebase delivers those capabilities. Epoch sequencing and platform
+  delivery. One file per epoch: `roadmap/implementation/epoch-NN-*.md`.
+- [`roadmap/verification/README.md`](roadmap/verification/README.md) — **Track 3:**
+  how Track 1 claims are verified to be correctly realized in Track 2.
 - [`roadmap/index.md`](roadmap/index.md) — routing index and current
   track positions.
-- `roadmap/object-level/epoch-NN-*.md` — one file per object-level epoch.
-- [`roadmap/meta-level/reproducibility-meta-generator.md`](roadmap/meta-level/reproducibility-meta-generator.md)
-  — the current M3 meta-level implementation plan.
 
 See also [`RESEARCH.md`](RESEARCH.md) for the capability survey the
 roadmap is derived from, and [`adr/`](adr/) for architectural

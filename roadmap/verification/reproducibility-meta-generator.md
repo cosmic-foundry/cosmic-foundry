@@ -145,4 +145,4 @@ The current object-level roadmap remains:
 1. task-graph driver - single-rank;
 2. multi-rank halo fill;
 3. AMR hierarchy and I/O items already listed in
-   [epoch-02-mesh.md](../object-level/epoch-02-mesh.md).
+   [epoch-02-mesh.md](../implementation/epoch-02-mesh.md).

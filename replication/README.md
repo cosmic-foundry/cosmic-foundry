@@ -10,11 +10,12 @@ each replication target.
 ## Layout
 
 ```text
+capabilities/                    # first-class capability specs (Track 1)
+  CNNNN-<capability>.md
+
 replication/
   README.md                      # this file (the workflow)
   formulas.md                    # flat register of individual physics formulas
-  capabilities/                  # shared engine specs (one per capability)
-    CNNNN-<capability>.md
   targets/
     <target-code>/
       plan.md                    # ordered problem list + capability dependencies
@@ -57,7 +58,7 @@ name the capabilities they consume.
 
 ### Capability spec
 
-Copy into `replication/capabilities/CNNNN-<capability>.md`.
+Copy into `capabilities/CNNNN-<capability>.md`.
 
 ```markdown
 # Capability: <name>
