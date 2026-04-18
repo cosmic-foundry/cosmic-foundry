@@ -97,11 +97,11 @@ class Extent(Descriptor):
 
 @dataclass(frozen=True)
 class Region(Descriptor):
-    """Iteration coordinates for a Map execution.
+    """Iteration coordinates for a Function execution.
 
     ``n_blocks`` signals a batched region: inputs are expected to carry a
     leading batch axis of that size, and ``execute_pointwise`` lowers the
-    kernel with ``jax.vmap`` so the Map remains unaware of the batch dimension.
+    kernel with ``jax.vmap`` so the Function remains unaware of the batch dimension.
     """
 
     extent: Extent

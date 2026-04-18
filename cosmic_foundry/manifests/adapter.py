@@ -1,14 +1,14 @@
 from abc import abstractmethod
 from pathlib import Path
 
+from cosmic_foundry.function import Function
 from cosmic_foundry.manifests.provenance import Provenance
-from cosmic_foundry.map import Map
 
 
-class ValidationAdapter(Map):
+class ValidationAdapter(Function):
     """Abstract base for application-repo observational adapters.
 
-    Map:
+    Function:
         domain   — artifact_dir: Path — directory where the normalized
                    artifact and provenance sidecar will be written
         codomain — Provenance — record of how the artifact was produced

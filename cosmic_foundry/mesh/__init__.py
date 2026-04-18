@@ -11,7 +11,7 @@ import numpy as np
 from cosmic_foundry.descriptor import AccessPattern, Extent
 from cosmic_foundry.domain import Domain
 from cosmic_foundry.field import ContinuousField, DiscreteField
-from cosmic_foundry.map import Map
+from cosmic_foundry.function import Function
 from cosmic_foundry.record import Array, ComponentId, Placement
 
 
@@ -46,10 +46,10 @@ class Block(Domain):
 
 
 @dataclass(frozen=True)
-class PartitionDomain(Map):
+class PartitionDomain(Function):
     """Partition a continuous domain into a discrete block grid.
 
-    Map:
+    Function:
         domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
                    blocks_per_axis ∈ ℤⁿ, n_ranks ∈ ℤ) — a continuous
                    domain specification and discretization parameters
