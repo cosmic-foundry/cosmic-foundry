@@ -41,7 +41,6 @@ from cosmic_foundry.kernels import (  # noqa: E402
     OpLike,
     Region,
     Stencil,
-    op,
 )
 from cosmic_foundry.mesh import Block, BlockId, UniformGrid  # noqa: E402
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
@@ -81,7 +80,6 @@ __all__ = [
     "OpLike",
     "Region",
     "Stencil",
-    "op",
     # mesh
     "Block",
     "BlockId",

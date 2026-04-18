@@ -7,33 +7,52 @@ import json
 import statistics
 import time
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
+from cosmic_foundry.kernels import AccessPattern, Dispatch, Extent, Op, Region, Stencil
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
 
 
-@op(
-    access_pattern=Stencil.seven_point(),
-    reads=("phi",),
-    writes=("laplacian_phi",),
-)
-def seven_point_laplacian(phi: jax.Array, i: jax.Array, j: jax.Array, k: jax.Array):
-    """Evaluate the 3-D nearest-neighbor Laplacian at indexed cells."""
-    return (
-        phi[i - 1, j, k]
-        + phi[i + 1, j, k]
-        + phi[i, j - 1, k]
-        + phi[i, j + 1, k]
-        + phi[i, j, k - 1]
-        + phi[i, j, k + 1]
-        - 6.0 * phi[i, j, k]
-    )
+@dataclass(frozen=True)
+class SevenPointLaplacian(Op):
+    """Seven-point finite-difference Laplacian on a 3-D grid.
+
+    Map:
+        domain   — φ: DiscreteField on Ω_h ⊆ ℝ³
+        codomain — ∇²φ: DiscreteField on Ω_h^int ⊆ Ω_h
+        operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
+                                + φ_{i,j+1,k} + φ_{ij,k-1} + φ_{ij,k+1}
+                                - 6 φ_{ijk}
+
+    Θ = {h}, p = 2 — second-order finite-difference approximation of ∇².
+    Exact for polynomials of degree ≤ 2.
+    """
+
+    reads: ClassVar[tuple[str, ...]] = ("phi",)
+    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
+
+    @property
+    def access_pattern(self) -> AccessPattern:
+        return Stencil.seven_point()
+
+    def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
+        return (
+            phi[i - 1, j, k]
+            + phi[i + 1, j, k]
+            + phi[i, j - 1, k]
+            + phi[i, j + 1, k]
+            + phi[i, j, k - 1]
+            + phi[i, j, k + 1]
+            - 6.0 * phi[i, j, k]
+        )
+
+
+seven_point_laplacian = SevenPointLaplacian()
 
 
 @dataclass(frozen=True)
@@ -70,20 +89,30 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
     ).execute()
 
 
-@op(
-    access_pattern=Stencil((0, 0, 0)),
-    reads=("a", "b"),
-    writes=("c",),
-)
-def pointwise_triad(
-    a: jax.Array,
-    b: jax.Array,
-    i: jax.Array,
-    j: jax.Array,
-    k: jax.Array,
-) -> jax.Array:
-    """Evaluate a STREAM-like triad through the Dispatch path."""
-    return a[i, j, k] + 0.5 * b[i, j, k]
+@dataclass(frozen=True)
+class PointwiseTriad(Op):
+    """STREAM-like pointwise triad: c = a + 0.5 * b.
+
+    Map:
+        domain   — (a, b): two DiscreteFields on Ω_h
+        codomain — c: DiscreteField on Ω_h
+        operator — c_{ijk} = a_{ijk} + 0.5 * b_{ijk}
+
+    Exact: Θ = ∅ — pointwise arithmetic; no approximation.
+    """
+
+    reads: ClassVar[tuple[str, ...]] = ("a", "b")
+    writes: ClassVar[tuple[str, ...]] = ("c",)
+
+    @property
+    def access_pattern(self) -> AccessPattern:
+        return Stencil((0, 0, 0))
+
+    def _fn(self, a: Any, b: Any, i: Any, j: Any, k: Any) -> Any:
+        return a[i, j, k] + 0.5 * b[i, j, k]
+
+
+pointwise_triad = PointwiseTriad()
 
 
 def run_dispatch_triad(a: jax.Array, b: jax.Array) -> jax.Array:

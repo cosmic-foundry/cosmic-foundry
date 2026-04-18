@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, cast
+from typing import Any, ClassVar, Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -121,6 +121,9 @@ class OpLike(Protocol):
     def __call__(self, *args: Any) -> BoundOp:
         """Bind field inputs to this Op, returning a BoundOp."""
 
+    def _fn(self, *args: Any) -> Any:
+        """Pointwise kernel: field arrays followed by index meshgrids."""
+
 
 @dataclass
 class BoundOp:
@@ -138,11 +141,21 @@ class BoundOp:
 
 
 class Op(ABC):
-    """Optional nominal base class for class-shaped Ops."""
+    """Nominal base class for class-shaped Ops.
 
-    reads: tuple[str, ...] = ()
-    writes: tuple[str, ...] = ()
-    backends: frozenset[Backend] = frozenset({Backend.JAX})
+    Every concrete Op defines its kernel logic in ``_fn`` and declares
+    ``access_pattern``, ``reads``, and ``writes`` as class attributes.
+    ``__call__`` is provided here: it binds field arrays by name and
+    returns a :class:`BoundOp` ready for :class:`Dispatch`.
+
+    Subclasses that carry no parameters should use
+    ``@dataclass(frozen=True)`` so that instances are hashable and the
+    JIT cache in :func:`_make_jit_kernel` can deduplicate compilations.
+    """
+
+    reads: ClassVar[tuple[str, ...]] = ()
+    writes: ClassVar[tuple[str, ...]] = ()
+    backends: ClassVar[frozenset[Backend]] = frozenset({Backend.JAX})
 
     @property
     @abstractmethod
@@ -150,38 +163,14 @@ class Op(ABC):
         """Return the Op locality metadata."""
 
     @abstractmethod
-    def __call__(self, *args: Any) -> BoundOp:
-        """Bind field inputs to this Op, returning a BoundOp."""
-
-
-class _FuncOp:
-    """Function-shaped Op created by the ``@op`` decorator.
-
-    Stores the raw kernel as ``_fn`` for use by the dispatch machinery.
-    Calling an instance binds positional or keyword field arguments by
-    name (via ``reads``) and returns a :class:`BoundOp`.
-    """
-
-    def __init__(
-        self,
-        fn: Callable[..., Any],
-        access_pattern: AccessPattern,
-        reads: tuple[str, ...],
-        writes: tuple[str, ...],
-        backends: frozenset[Backend],
-    ) -> None:
-        self._fn = fn
-        self.access_pattern = access_pattern
-        self.reads = reads
-        self.writes = writes
-        self.backends = backends
-        functools.update_wrapper(self, fn)
+    def _fn(self, *args: Any) -> Any:
+        """Pointwise kernel: field arrays followed by index meshgrids."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> BoundOp:
         """Bind positional and keyword field arrays to this Op."""
         if len(args) > len(self.reads):
             n_reads = len(self.reads)
-            name = getattr(self, "__name__", "?")
+            name = type(self).__name__
             msg = (
                 f"Op {name!r} reads {self.reads!r} ({n_reads} fields) "
                 f"but received {len(args)} positional arguments"
@@ -190,35 +179,6 @@ class _FuncOp:
         fields: dict[str, Any] = {self.reads[i]: arg for i, arg in enumerate(args)}
         fields.update(kwargs)
         return BoundOp(op=self, fields=fields)
-
-    def __hash__(self) -> int:
-        return hash(self._fn)
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, _FuncOp) and self._fn is other._fn
-
-    def __repr__(self) -> str:
-        return f"<Op {getattr(self, '__name__', '?')!r}>"
-
-
-def op(
-    *,
-    access_pattern: AccessPattern,
-    reads: tuple[str, ...] = (),
-    writes: tuple[str, ...] = (),
-    backends: frozenset[Backend] = frozenset({Backend.JAX}),
-) -> Callable[[Callable[..., Any]], _FuncOp]:
-    """Attach Op metadata to a function-shaped callable.
-
-    Returns a :class:`_FuncOp` that stores the raw function as ``_fn``
-    and whose ``__call__`` binds field arrays by name, returning a
-    :class:`BoundOp`.
-    """
-
-    def decorate(func: Callable[..., Any]) -> _FuncOp:
-        return _FuncOp(func, access_pattern, reads, writes, backends)
-
-    return decorate
 
 
 @dataclass(frozen=True)
@@ -406,5 +366,4 @@ __all__ = [
     "OpLike",
     "Region",
     "Stencil",
-    "op",
 ]
