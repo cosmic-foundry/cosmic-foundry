@@ -1,4 +1,4 @@
-"""CPU roofline benchmark for a pointwise Op triad."""
+"""CPU roofline benchmark for a pointwise Map triad."""
 
 from __future__ import annotations
 
@@ -7,19 +7,19 @@ import json
 import statistics
 import time
 from dataclasses import asdict, dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region
+from cosmic_foundry.kernels import AccessPattern, Extent, Map, Region, execute_pointwise
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Op):
+class SevenPointLaplacian(Map):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Map:
@@ -33,12 +33,12 @@ class SevenPointLaplacian(Op):
     Exact for polynomials of degree ≤ 2.
     """
 
-    reads: ClassVar[tuple[str, ...]] = ("phi",)
-    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
-
     @property
     def access_pattern(self) -> AccessPattern:
         return AccessPattern.seven_point()
+
+    def execute(self, phi: Any, *, region: Region) -> Any:
+        return execute_pointwise(self, region, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -87,7 +87,7 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
 
 
 @dataclass(frozen=True)
-class PointwiseTriad(Op):
+class PointwiseTriad(Map):
     """STREAM-like pointwise triad: c = a + 0.5 * b.
 
     Map:
@@ -98,12 +98,12 @@ class PointwiseTriad(Op):
     Exact: Θ = ∅ — pointwise arithmetic; no approximation.
     """
 
-    reads: ClassVar[tuple[str, ...]] = ("a", "b")
-    writes: ClassVar[tuple[str, ...]] = ("c",)
-
     @property
     def access_pattern(self) -> AccessPattern:
         return AccessPattern((0, 0, 0))
+
+    def execute(self, a: Any, b: Any, *, region: Region) -> Any:
+        return execute_pointwise(self, region, a, b)
 
     def _fn(self, a: Any, b: Any, i: Any, j: Any, k: Any) -> Any:
         return a[i, j, k] + 0.5 * b[i, j, k]

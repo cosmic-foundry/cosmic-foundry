@@ -6,14 +6,10 @@ import functools
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
-
-from cosmic_foundry.observability import get_logger
-
-_log = get_logger(__name__)
 
 
 class Descriptor(ABC):
@@ -105,11 +101,11 @@ class Extent(Descriptor):
 
 @dataclass(frozen=True)
 class Region(Descriptor):
-    """Iteration coordinates for an Op execution.
+    """Iteration coordinates for a Map execution.
 
     ``n_blocks`` signals a batched region: inputs are expected to carry a
-    leading batch axis of that size, and ``FlatPolicy`` lowers the kernel
-    with ``jax.vmap`` so the Op remains unaware of the batch dimension.
+    leading batch axis of that size, and ``execute_pointwise`` lowers the
+    kernel with ``jax.vmap`` so the Map remains unaware of the batch dimension.
     """
 
     extent: Extent
@@ -227,99 +223,35 @@ class Sink(ABC):
         return self.execute(*args, **kwargs)
 
 
-class Op(Map, Descriptor):
-    """Abstract base for class-shaped kernels.
+def execute_pointwise(
+    map_like: Any,
+    region: Region,
+    *field_arrays: Any,
+) -> Any:
+    """Apply map_like._fn over region with JAX JIT and input validation.
 
-    Every concrete Op defines its pointwise kernel logic in ``_fn`` and
-    declares ``access_pattern``, ``reads``, and ``writes`` as class
-    attributes. ``execute`` (and thus ``__call__``) runs the kernel
-    directly over the supplied field arrays and region via a Policy.
+    ``map_like`` must be hashable (for JIT caching) and expose:
 
-    Subclasses that carry no parameters should use
-    ``@dataclass(frozen=True)`` so that instances are hashable and the
-    JIT cache in :func:`_make_jit_kernel` can deduplicate compilations.
+    - ``_fn(*field_arrays, *index_meshgrids) -> scalar``
+    - ``access_pattern: AccessPattern``
 
-    Map:
-        domain   — (*field_arrays, region: Region) — field arrays in
-                   reads order, covering region expanded by access_pattern
-        codomain — pointwise kernel result over region.extent
-        operator — execute(*field_arrays, region) ↦ policy(self, region)
+    When ``region.n_blocks > 1`` the kernel is lifted with ``jax.vmap``
+    so ``_fn`` remains unaware of the batch dimension.
     """
-
-    reads: ClassVar[tuple[str, ...]] = ()
-    writes: ClassVar[tuple[str, ...]] = ()
-
-    @property
-    @abstractmethod
-    def access_pattern(self) -> AccessPattern:
-        """Return the Op locality metadata."""
-
-    @abstractmethod
-    def _fn(self, *args: Any) -> Any:
-        """Pointwise kernel: field arrays followed by index meshgrids."""
-
-    def execute(self, *field_arrays: Any, region: Region, policy: Any = None) -> Any:
-        """Run this Op over *region* via *policy* (default: FlatPolicy)."""
-        p: FlatPolicy = policy if policy is not None else FlatPolicy()
-        return p.execute(self, *field_arrays, region=region)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "type": type(self).__name__,
-            "reads": list(self.reads),
-            "writes": list(self.writes),
-            "access_pattern": self.access_pattern.as_dict(),
-        }
-
-
-@dataclass(frozen=True)
-class FlatPolicy(Map):
-    """Evaluate an Op at every point in a Region using JAX/XLA.
-
-    Map:
-        domain   — (k: Op, *field_arrays, region: Region) — a kernel,
-                   its field inputs in reads order, and the interior
-                   region; inputs must cover region expanded by
-                   k.access_pattern
-        codomain — k(x) for x ∈ region.extent — the kernel evaluated
-                   pointwise over the interior
-        operator — (k, fields, Ω_h^int) ↦ jax.jit(k)(Ω_h^int);
-                   when region.n_blocks > 1 the kernel is lifted with
-                   jax.vmap before JIT so the Op remains unaware of the
-                   batch dimension
-
-    Exact: Θ = ∅ — the policy introduces no approximation.
-    """
-
-    def execute(self, op: Any, *field_arrays: Any, region: Region) -> Any:
-        """Execute *op* over *region* with JAX/XLA."""
-        _validate_op(op)
-        _validate_region_access(region, op.access_pattern, field_arrays)
-
-        _log.debug(
-            "op.execute",
-            extra={
-                "region_shape": list(region.extent.shape),
-                "n_blocks": region.n_blocks,
-            },
-        )
-
-        return _make_jit_kernel(cast(Any, op), region)(*field_arrays)
+    _validate_region_access(region, map_like.access_pattern, field_arrays)
+    return _make_jit_kernel(cast(Any, map_like), region)(*field_arrays)
 
 
 @functools.lru_cache(maxsize=256)
-def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
-    """Return a cached JIT-compiled kernel for *(op_like, region)*.
+def _make_jit_kernel(map_like: Any, region: Any) -> Callable[..., Any]:
+    """Return a cached JIT-compiled kernel for *(map_like, region)*.
 
-    Both arguments must be hashable.  ``_FuncOp`` instances satisfy this via
-    ``__hash__`` / ``__eq__`` defined on the wrapper.  Class-based ``Op``
-    subclasses satisfy it via object identity unless they define ``__eq__``
-    without a matching ``__hash__``.  ``Region`` satisfies it as a frozen
+    Both arguments must be hashable.  Frozen dataclasses satisfy this via
+    their auto-generated ``__hash__``.  ``Region`` satisfies it as a frozen
     dataclass (with ``Extent.__hash__`` converting slice bounds to a tuple).
 
-    Caching ensures that repeated ``FlatPolicy.execute`` calls with the same
-    Op and Region reuse the same compiled XLA computation rather than
-    re-tracing on every invocation.
+    Caching ensures repeated ``execute_pointwise`` calls with the same
+    map_like and Region reuse the same compiled XLA computation.
     """
     if region.n_blocks > 1:
 
@@ -328,7 +260,7 @@ def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
             indices = _region_indices(region)
 
             def single_block(*block_inputs: Any) -> Any:
-                return op_like._fn(*block_inputs, *indices)
+                return map_like._fn(*block_inputs, *indices)
 
             return jax.vmap(single_block)(*jit_inputs)
 
@@ -337,7 +269,7 @@ def _make_jit_kernel(op_like: Any, region: Any) -> Callable[..., Any]:
     @jax.jit
     def apply(*jit_inputs: Any) -> Any:
         indices = _region_indices(region)
-        return op_like._fn(*jit_inputs, *indices)
+        return map_like._fn(*jit_inputs, *indices)
 
     return cast(Callable[..., Any], apply)
 
@@ -348,12 +280,6 @@ def _region_indices(region: Region) -> tuple[jax.Array, ...]:
         start, stop = _checked_bounds(axis_slice)
         axes.append(jnp.arange(start, stop))
     return tuple(jnp.meshgrid(*axes, indexing="ij"))
-
-
-def _validate_op(op_like: Any) -> None:
-    if not hasattr(op_like, "access_pattern"):
-        msg = "Op must declare access_pattern metadata"
-        raise TypeError(msg)
 
 
 def _validate_region_access(
@@ -413,11 +339,10 @@ __all__ = [
     "Descriptor",
     "Domain",
     "Extent",
-    "FlatPolicy",
     "Map",
-    "Op",
     "Record",
     "Region",
     "Sink",
     "Source",
+    "execute_pointwise",
 ]

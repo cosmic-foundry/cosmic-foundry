@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import h5py
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
-from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region
+from cosmic_foundry.kernels import AccessPattern, Extent, Map, Region, execute_pointwise
 from cosmic_foundry.observability import StructuredFormatter, configure
 
 # ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ N = 8
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Op):
+class SevenPointLaplacian(Map):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Map:
@@ -39,12 +39,12 @@ class SevenPointLaplacian(Op):
     Exact for polynomials of degree ≤ 2.
     """
 
-    reads: ClassVar[tuple[str, ...]] = ("phi",)
-    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
-
     @property
     def access_pattern(self) -> AccessPattern:
         return AccessPattern.seven_point()
+
+    def execute(self, phi: Any, *, region: Region) -> Any:
+        return execute_pointwise(self, region, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -179,18 +179,6 @@ def test_structured_formatter_produces_valid_json() -> None:
     assert parsed["event"] == "op.execute"
     assert parsed["region_shape"] == [6, 6, 6]
     assert parsed["n_blocks"] == 1
-
-
-def test_op_execute_emits_log_record(caplog: pytest.LogCaptureFixture) -> None:
-    axes = jnp.indices((N, N, N), dtype=jnp.float64)
-    phi = axes[0] ** 2 + axes[1] ** 2 + axes[2] ** 2
-    region = Region(Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1))))
-
-    with caplog.at_level(logging.DEBUG, logger="cosmic_foundry.kernels"):
-        seven_point_laplacian.execute(phi, region=region)
-
-    events = [r.message for r in caplog.records]
-    assert "op.execute" in events
 
 
 def test_write_array_emits_log_record(
