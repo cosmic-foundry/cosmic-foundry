@@ -29,6 +29,7 @@ from cosmic_foundry.field import (  # noqa: E402
     Field,
 )
 from cosmic_foundry.function import Function, execute_pointwise  # noqa: E402
+from cosmic_foundry.indexed_set import IndexedSet  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
@@ -77,6 +78,7 @@ __all__ = [
     "ComponentId",
     "Descriptor",
     "Placement",
+    "IndexedSet",
     "Set",
     "Extent",
     "Function",
