@@ -35,7 +35,14 @@ class Provenance:
     artifact_row_count: int
 
     def write_sidecar(self, path: Path) -> None:
-        """Write provenance as a YAML sidecar next to the artifact."""
+        """Write provenance as a YAML sidecar next to the artifact.
+
+        Sink:
+            domain — (self: Provenance, path: Path)
+            effect — YAML file written at path containing the full
+                     provenance record; schema-valid against
+                     artifact-provenance.schema.json
+        """
         doc = {
             "validation_set_id": self.validation_set_id,
             "built_at": self.built_at.isoformat(),

@@ -49,7 +49,12 @@ class DiagnosticSink(Protocol):
 
 @dataclass(frozen=True)
 class NullDiagnosticSink:
-    """Diagnostic sink that discards records."""
+    """Diagnostic sink that discards records.
+
+    Sink:
+        domain — DiagnosticRecord (step, time, named scalar values)
+        effect — none; record is silently discarded
+    """
 
     def write(self, record: DiagnosticRecord) -> None:
         """Discard *record*."""
@@ -57,7 +62,13 @@ class NullDiagnosticSink:
 
 @dataclass(frozen=True)
 class TabSeparatedDiagnosticSink:
-    """Append diagnostic records to a tab-separated text file."""
+    """Append diagnostic records to a tab-separated text file.
+
+    Sink:
+        domain — DiagnosticRecord (step, time, named scalar values)
+        effect — one tab-separated row appended to the file at path;
+                 header row written on first call if the file is empty
+    """
 
     path: str | Path
     columns: tuple[str, ...]
