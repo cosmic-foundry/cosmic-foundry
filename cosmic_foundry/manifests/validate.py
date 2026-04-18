@@ -8,7 +8,12 @@ _SCHEMAS_DIR = Path(__file__).parent.parent / "schemas"
 
 
 def load_schema(name: str) -> dict[str, Any]:
-    """Load a base schema by name (without the .schema.json suffix)."""
+    """Load a base schema by name (without the .schema.json suffix).
+
+    Source:
+        origin   — JSON schema file at schemas/{name}.schema.json
+        produces — schema dict suitable for jsonschema.validate
+    """
     path = _SCHEMAS_DIR / f"{name}.schema.json"
     if not path.exists():
         raise FileNotFoundError(

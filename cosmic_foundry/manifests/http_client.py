@@ -72,6 +72,12 @@ class HTTPClient:
     def get(
         self, url: str, headers: dict[str, str] | None = None, **kwargs: Any
     ) -> requests.Response:
+        """Fetch a URL and return the response.
+
+        Source:
+            origin   — HTTP endpoint at url
+            produces — requests.Response containing the server reply
+        """
         self._check_robots(url)
         actual_headers = {"User-Agent": self.user_agent}
         if headers:
