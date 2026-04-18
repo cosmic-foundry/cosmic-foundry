@@ -29,6 +29,7 @@ from cosmic_foundry.field import (  # noqa: E402
     DiscreteField,
     Field,
 )
+from cosmic_foundry.function import Function, execute_pointwise  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
@@ -36,7 +37,6 @@ from cosmic_foundry.io import (  # noqa: E402
     merge_rank_files,
     write_array,
 )
-from cosmic_foundry.map import Map, execute_pointwise  # noqa: E402
 from cosmic_foundry.mesh import (  # noqa: E402
     Block,
     PartitionDomain,
@@ -79,7 +79,7 @@ __all__ = [
     "Placement",
     "Domain",
     "Extent",
-    "Map",
+    "Function",
     "Record",
     "Region",
     "Sink",

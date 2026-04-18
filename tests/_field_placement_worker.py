@@ -42,7 +42,7 @@ def main() -> None:
         import jax.numpy as jnp
 
         from cosmic_foundry.descriptor import AccessPattern, Extent, Region
-        from cosmic_foundry.map import Map, execute_pointwise
+        from cosmic_foundry.function import Function, execute_pointwise
 
         n = 8
         half = n // 2  # 4
@@ -66,7 +66,7 @@ def main() -> None:
         from typing import Any
 
         @dataclass(frozen=True)
-        class Laplacian(Map):
+        class Laplacian(Function):
             @property
             def access_pattern(self) -> AccessPattern:
                 return AccessPattern.seven_point()

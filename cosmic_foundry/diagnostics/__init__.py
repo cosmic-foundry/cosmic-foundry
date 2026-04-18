@@ -14,16 +14,16 @@ import numpy as np
 
 from cosmic_foundry.descriptor import Extent, Region
 from cosmic_foundry.field import DiscreteField
-from cosmic_foundry.map import Map
+from cosmic_foundry.function import Function
 from cosmic_foundry.mesh import Block
 from cosmic_foundry.record import Array, ComponentId, Record
 from cosmic_foundry.sink import Sink
 
 
-class DiagnosticReducer(Map):
+class DiagnosticReducer(Function):
     """Abstract base for one scalar diagnostic reduction.
 
-    Map:
+    Function:
         domain   — (mesh: Array[Block], {f_h^i : Ω_h → ℝ}_i, Ω_h^int,
                    rank, n_ranks) — block mesh, named discrete fields,
                    the interior region, and rank metadata
@@ -109,10 +109,10 @@ class TabSeparatedDiagnosticSink(Sink):
 
 
 @dataclass(frozen=True)
-class CollectDiagnostics(Map):
+class CollectDiagnostics(Function):
     """Apply each reducer and materialise all scalars at the diagnostic fence.
 
-    Map:
+    Function:
         domain   — (mesh: Array[Block], {f_h^i : Ω_h → ℝ}_i, [r_j]_j) —
                    block mesh, named discrete fields, and DiagnosticReducers
         codomain — (s_1, …, s_n) ∈ ℝⁿ — one scalar per reducer, host-visible
@@ -168,10 +168,10 @@ collect_diagnostics = CollectDiagnostics()
 
 
 @dataclass(frozen=True)
-class GlobalSum(Map):
+class GlobalSum(Function):
     """Sum field values over local interiors and optionally all-reduce them.
 
-    Map:
+    Function:
         domain   — (mesh: Array[Block], f_h : Ω_h^int → ℝ) — block mesh and
                    a discrete scalar field on interior grid points, intersected
                    with the given region

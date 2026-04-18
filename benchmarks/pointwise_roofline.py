@@ -1,4 +1,4 @@
-"""CPU roofline benchmark for a pointwise Map triad."""
+"""CPU roofline benchmark for a pointwise Function triad."""
 
 from __future__ import annotations
 
@@ -13,17 +13,17 @@ import jax
 import jax.numpy as jnp
 
 from cosmic_foundry.descriptor import AccessPattern, Extent, Region
-from cosmic_foundry.map import Map, execute_pointwise
+from cosmic_foundry.function import Function, execute_pointwise
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Map):
+class SevenPointLaplacian(Function):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
-    Map:
+    Function:
         domain   — φ: DiscreteField on Ω_h ⊆ ℝ³
         codomain — ∇²φ: DiscreteField on Ω_h^int ⊆ Ω_h
         operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
@@ -88,10 +88,10 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
 
 
 @dataclass(frozen=True)
-class PointwiseTriad(Map):
+class PointwiseTriad(Function):
     """STREAM-like pointwise triad: c = a + 0.5 * b.
 
-    Map:
+    Function:
         domain   — (a, b): two DiscreteFields on Ω_h
         codomain — c: DiscreteField on Ω_h
         operator — c_{ijk} = a_{ijk} + 0.5 * b_{ijk}

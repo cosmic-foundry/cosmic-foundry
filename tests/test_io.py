@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.descriptor import AccessPattern, Extent, Region
+from cosmic_foundry.function import Function, execute_pointwise
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
-from cosmic_foundry.map import Map, execute_pointwise
 from cosmic_foundry.observability import StructuredFormatter, configure
 
 # ---------------------------------------------------------------------------
@@ -26,10 +26,10 @@ N = 8
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Map):
+class SevenPointLaplacian(Function):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
-    Map:
+    Function:
         domain   — φ: DiscreteField on Ω_h ⊆ ℝ³
         codomain — ∇²φ: DiscreteField on Ω_h^int ⊆ Ω_h
         operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
