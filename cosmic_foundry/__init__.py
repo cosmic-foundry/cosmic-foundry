@@ -46,9 +46,14 @@ from cosmic_foundry.mesh import (  # noqa: E402
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
+from cosmic_foundry.pseudo_riemannian_manifold import (  # noqa: E402
+    PseudoRiemannianManifold,
+)
 from cosmic_foundry.record import Array, ComponentId, Placement, Record  # noqa: E402
+from cosmic_foundry.riemannian_manifold import RiemannianManifold  # noqa: E402
 from cosmic_foundry.set import Set  # noqa: E402
 from cosmic_foundry.sink import Sink  # noqa: E402
+from cosmic_foundry.smooth_manifold import SmoothManifold  # noqa: E402
 from cosmic_foundry.source import Source  # noqa: E402
 
 __all__ = [
@@ -79,7 +84,10 @@ __all__ = [
     "Descriptor",
     "Placement",
     "IndexedSet",
+    "PseudoRiemannianManifold",
+    "RiemannianManifold",
     "Set",
+    "SmoothManifold",
     "Extent",
     "Function",
     "Record",
