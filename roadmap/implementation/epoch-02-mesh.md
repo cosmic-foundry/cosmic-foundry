@@ -127,11 +127,11 @@ merge and update this list when the picture changes.
    `UniformGrid`; domain decomposition; round-robin rank
    assignment; `cell_centers` coordinate arrays.
 
-2. ✓ **Field allocation from blocks** (PR #88) — given a `UniformGrid`,
-   produce a `Field` whose `FieldSegment` payloads are JAX arrays
-   sized for the block interior plus a ghost-cell halo (width
-   determined by the caller's `AccessPattern`). Establishes the
-   connection between mesh topology and field storage.
+2. ✓ **Field discretization from blocks** (PR #88, PR #98) — given a
+   `UniformGrid` and a `ContinuousField`, produce a `DiscreteField`
+   whose `FieldSegment` payloads are JAX arrays evaluated at the
+   block interior cell centers. `FieldDiscretization` is the map
+   `ContinuousField × UniformGrid → DiscreteField`.
    *Depends on: #1.*
 
 3. ✓ **`HaloFillPolicy` — single-rank** (PR #90) —

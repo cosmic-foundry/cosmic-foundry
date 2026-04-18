@@ -16,16 +16,18 @@ In order:
 
 1. [P01 — 1-D nuclear ignition convergence](problems/P01-1d-nuclear-ignition.md)
 
-## Capabilities consumed
+## Maps required
 
-Union across the problems above:
+Union across the problems above. Each entry names the map (physics
+operator) the problem depends on; the implementing module will carry a
+`Map:` block with domain, codomain, operator, and convergence order.
 
-- [C0001 — compressible Euler (Cartesian)](../../../capabilities/C0001-compressible-euler-cartesian.md)
-- [C0005 — constant acceleration source](../../../capabilities/C0005-constant-acceleration-source.md)
-- [C0006 — Helmholtz-family EOS](../../../capabilities/C0006-helmholtz-eos.md)
-- [C0007 — aprox reaction network](../../../capabilities/C0007-aprox-reaction-network.md)
-- [C0008 — Strang hydro–burn coupling](../../../capabilities/C0008-strang-burn-hydro-coupling.md)
-- [C0009 — ignition-event diagnostic](../../../capabilities/C0009-ignition-event-diagnostic.md)
+- Compressible Euler equations (Cartesian) — ∂_t(ρ, ρ**v**, ρE) + ∇·F = 0
+- Constant acceleration source — S_mom = ρg, S_energy = ρ**v**·g
+- Helmholtz-family equation of state — thermodynamics from Helmholtz free energy F(ρ, T)
+- Aprox reaction network — nuclear energy generation rates for C/O burning
+- Strang hydro–burn coupling — operator-split integration of hydro and burn steps
+- Ignition-event diagnostic — detect and locate thermonuclear runaway
 
 ## Roadmap interaction
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import Field, FieldSegment, Placement, SegmentId
+from cosmic_foundry.fields import DiscreteField, Placement, SegmentId
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy
 from cosmic_foundry.kernels import Extent, Region, Stencil
 
@@ -17,7 +17,7 @@ def _segment_with_interior_values(
     *,
     fill_value: float,
     offset: float,
-) -> FieldSegment:
+) -> DiscreteField:
     payload = jnp.full(extent.shape, fill_value, dtype=jnp.float64)
     interior_slices = tuple(
         slice(axis.start - parent.start, axis.stop - parent.start)
@@ -26,7 +26,9 @@ def _segment_with_interior_values(
     local_shape = tuple(axis.stop - axis.start for axis in interior.slices)
     values = jnp.arange(local_shape[0], dtype=jnp.float64) + offset
     payload = payload.at[interior_slices].set(values)
-    return FieldSegment(SegmentId(segment_id), payload, extent)
+    return DiscreteField(
+        name="phi", segment_id=SegmentId(segment_id), payload=payload, extent=extent
+    )
 
 
 def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
@@ -46,7 +48,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
         fill_value=-20.0,
         offset=200.0,
     )
-    field = Field(
+    field = DiscreteField(
         "phi",
         (left, right),
         Placement({SegmentId(0): 0, SegmentId(1): 0}),
@@ -79,21 +81,23 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
     top_payload = top_payload.at[1:3, 1:4].set(
         jnp.array([[30.0, 31.0, 32.0], [40.0, 41.0, 42.0]])
     )
-    field = Field(
-        "phi",
-        (
-            FieldSegment(
-                SegmentId(0),
-                bottom_payload,
-                Extent((slice(-1, 3), slice(-1, 4))),
+    field = DiscreteField(
+        name="phi",
+        segments=(
+            DiscreteField(
+                name="phi",
+                segment_id=SegmentId(0),
+                payload=bottom_payload,
+                extent=Extent((slice(-1, 3), slice(-1, 4))),
             ),
-            FieldSegment(
-                SegmentId(1),
-                top_payload,
-                Extent((slice(1, 5), slice(-1, 4))),
+            DiscreteField(
+                name="phi",
+                segment_id=SegmentId(1),
+                payload=top_payload,
+                extent=Extent((slice(1, 5), slice(-1, 4))),
             ),
         ),
-        Placement({SegmentId(0): 0, SegmentId(1): 0}),
+        placement=Placement({SegmentId(0): 0, SegmentId(1): 0}),
     )
 
     filled = HaloFillPolicy().execute(
@@ -123,7 +127,7 @@ def test_execute_returns_new_field_without_mutating_original() -> None:
         fill_value=-20.0,
         offset=200.0,
     )
-    field = Field(
+    field = DiscreteField(
         "phi",
         (left, right),
         Placement({SegmentId(0): 0, SegmentId(1): 0}),
@@ -141,12 +145,15 @@ def test_execute_returns_new_field_without_mutating_original() -> None:
 
 def test_execute_rejects_required_extent_not_covered() -> None:
     access = Stencil((1,))
-    segment = FieldSegment(
-        SegmentId(0),
-        jnp.zeros((4,), dtype=jnp.float64),
-        Extent((slice(0, 4),)),
+    segment = DiscreteField(
+        name="phi",
+        segment_id=SegmentId(0),
+        payload=jnp.zeros((4,), dtype=jnp.float64),
+        extent=Extent((slice(0, 4),)),
     )
-    field = Field("phi", (segment,), Placement({SegmentId(0): 0}))
+    field = DiscreteField(
+        name="phi", segments=(segment,), placement=Placement({SegmentId(0): 0})
+    )
 
     with pytest.raises(ValueError, match="Region plus halo"):
         HaloFillPolicy().execute(
@@ -171,7 +178,7 @@ def test_execute_rejects_off_rank_neighbor_until_multi_rank_policy_exists() -> N
         fill_value=-20.0,
         offset=200.0,
     )
-    field = Field(
+    field = DiscreteField(
         "phi",
         (left, right),
         Placement({SegmentId(0): 0, SegmentId(1): 1}),

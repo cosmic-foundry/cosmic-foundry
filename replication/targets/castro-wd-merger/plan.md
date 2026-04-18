@@ -17,11 +17,13 @@ In order:
 
 1. [P01 — KH Galilean invariance](problems/P01-kh-galilean-invariance.md)
 
-## Capabilities consumed
+## Maps required
 
-Union across the problems above:
+Union across the problems above. Each entry names the map (physics
+operator) the problem depends on; the implementing module will carry a
+`Map:` block with domain, codomain, operator, and convergence order.
 
-- [C0001 — compressible Euler (Cartesian)](../../../capabilities/C0001-compressible-euler-cartesian.md)
-- [C0002 — gamma-law EOS](../../../capabilities/C0002-gamma-law-eos.md)
-- [C0003 — passive-scalar advection](../../../capabilities/C0003-passive-scalar-advection.md)
-- [C0004 — linear-mode growth-rate diagnostic](../../../capabilities/C0004-linear-mode-diagnostic.md)
+- Compressible Euler equations (Cartesian) — ∂_t(ρ, ρ**v**, ρE) + ∇·F = 0
+- Gamma-law equation of state — P = (γ−1)ρe
+- Passive-scalar advection — ∂_t(ρX) + ∇·(ρ**v**X) = 0
+- Linear-mode growth-rate diagnostic — projection onto eigenmode amplitude

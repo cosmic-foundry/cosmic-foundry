@@ -55,6 +55,7 @@ Per the implementation plan in `roadmap/implementation/epoch-02-mesh.md`:
 | 2 | Field allocation from blocks | #88 | Merged |
 | 3 | `HaloFillPolicy` — single-rank | #90 | Merged |
 | 4 | `DiagnosticReducer` + `DiagnosticSink` | #92 | Merged |
+| 2b | Fields/maps formalism — `Field` ABC, `ContinuousField`, `DiscreteField`, `FieldDiscretization`; Map: on all operator classes; replaces `allocate_field` | #98 | Merged |
 | 5 | Task-graph driver — single-rank | — | Planned |
 | 6 | `HaloFillPolicy` — multi-rank | — | Planned |
 
@@ -70,7 +71,7 @@ Per the meta-level roadmap in `roadmap/verification/README.md`:
 | M0 | Branch / PR / attribution discipline | #8 area | Merged |
 | M1 | Replication workflow and externally grounded tests | #63, #64, #69, #70 | Merged |
 | M2 | Derivation-first lane | #81 area | Merged |
-| M3 | Capability intent documentation — specs stating what each platform capability computes and how it is independently verifiable | — | Current focus |
+| M3 | Convergence coverage — for each implemented physics map with a stated p in its `Map:` block, at least one convergence test confirms that order against an externally grounded solution | — | Current focus |
 | M3b | Reproducibility meta-generator architecture and convergence plan | #93 | Planned; depends on M3 |
 | M4 | Platform validation manifests, provenance, comparison-result schema, sim-spec format | — | Planned |
 
@@ -78,16 +79,19 @@ Per the meta-level roadmap in `roadmap/verification/README.md`:
 
 Next selected PRs should explicitly state which track they advance.
 
-Meta-level next work: M3 — for each existing platform capability, write a
-spec that states what it computes and how an independent actor would verify
-it. The test: could someone read the spec, implement it themselves, and know
-whether they got it right? Capsule tooling (M3b) follows once claims are
-clearly documented.
+Meta-level next work: M3 — for each implemented physics map with a stated
+approximation order p, add a convergence test that confirms that order
+against an externally grounded solution. The first target is
+`FieldDiscretization` (p = 1). Capsule tooling (M3b) follows once this
+coverage exists.
 
-Object-level next work: continue Epoch 2 items #5–#6 (task-graph driver,
-multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
-infrastructure, comparison-result schema, and simulation specification
-format. See `roadmap/implementation/epoch-03-platform-services.md` for the full plan.
+Object-level next work: formalism sweep follow-up PR — add Map: to
+`Placement`, audit `io/` and `manifests/` modules, add MMS tests for
+`FieldDiscretization`, and design the ghost-cell stencil map. Then
+continue Epoch 2 items #5–#6 (task-graph driver, multi-rank halo fill),
+followed by Epoch 3 (Platform Services): manifest infrastructure,
+comparison-result schema, and simulation specification format. See
+`roadmap/implementation/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 

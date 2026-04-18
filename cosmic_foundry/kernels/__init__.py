@@ -223,7 +223,21 @@ def op(
 
 @dataclass(frozen=True)
 class FlatPolicy:
-    """One element per logical thread over the requested Region."""
+    """Evaluate an Op at every point in a Region using JAX/XLA.
+
+    Map:
+        domain   — (k : Ω_h^ext → ℝⁿ, Ω_h^int ⊆ Ω_h^ext) — a kernel
+                   and the interior region over which it is evaluated;
+                   inputs must cover Ω_h^int expanded by k.access_pattern
+        codomain — k(x) for x ∈ Ω_h^int — the kernel evaluated pointwise
+                   over the interior; shape matches Ω_h^int
+        operator — (k, Ω_h^int) ↦ jax.jit(k)(Ω_h^int);
+                   when Region.n_blocks > 1 the kernel is lifted with
+                   jax.vmap before JIT so the Op remains unaware of the
+                   batch dimension
+
+    Exact: Θ = ∅ — the policy introduces no approximation.
+    """
 
     def execute(
         self,
@@ -254,7 +268,18 @@ class FlatPolicy:
 
 @dataclass(frozen=True)
 class Dispatch:
-    """One local lowering unit: a BoundOp over a Region under a Policy."""
+    """One local lowering unit: a BoundOp over a Region under a Policy.
+
+    Map:
+        domain   — (k: BoundOp, Ω_h^int: Region, π: FlatPolicy) — a kernel
+                   with bound field inputs, an iteration region, and an
+                   execution policy
+        codomain — π(k, Ω_h^int) — the kernel evaluated over the interior
+        operator — execute() ↦ policy.execute(bound, region)
+
+    Exact: Θ = ∅ — Dispatch introduces no approximation; that lives in the
+    policy and Op.
+    """
 
     # One Op per Dispatch; multi-Op fusion is deferred to the Epoch 2
     # task-graph driver, which will compose compatible Ops before lowering.

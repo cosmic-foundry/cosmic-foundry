@@ -6,7 +6,7 @@ Usage (called by the pytest multihost test; not run directly):
 Each worker:
  1. Initializes jax.distributed so the run is a genuine multi-process
     execution under JAX's gRPC coordination layer.
- 2. Builds a local FieldSegment covering its half of the domain
+ 2. Builds a local leaf DiscreteField covering its half of the domain
     (rows [0, half+1) for rank 0, rows [half-1, n) for rank 1) so the
     7-point stencil can evaluate at the seam without ghost exchange.
  3. Verifies local Field coverage, then dispatches the Laplacian.
@@ -41,7 +41,11 @@ def main() -> None:
 
         import jax.numpy as jnp
 
-        from cosmic_foundry.fields import Field, FieldSegment, Placement, SegmentId
+        from cosmic_foundry.fields import (
+            DiscreteField,
+            Placement,
+            SegmentId,
+        )
         from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
 
         n = 8
@@ -62,9 +66,11 @@ def main() -> None:
         # Extents and region are expressed in local (0-based) coordinates.
         local_extent = Extent.from_shape(local_phi.shape)
         seg_id = SegmentId(rank)
-        seg = FieldSegment(seg_id, local_phi, local_extent)
+        seg = DiscreteField(
+            name="phi", segment_id=seg_id, payload=local_phi, extent=local_extent
+        )
         placement = Placement({SegmentId(0): 0, SegmentId(1): 1})
-        field = Field("phi", (seg,), placement)
+        field = DiscreteField(name="phi", segments=(seg,), placement=placement)
 
         # Owned interior: local x in [1, half) avoids the boundary rows.
         owned_region = Region(

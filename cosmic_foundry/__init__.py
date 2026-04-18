@@ -17,11 +17,12 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
     global_sum,
 )
 from cosmic_foundry.fields import (  # noqa: E402
+    ContinuousField,
+    DiscreteField,
     Field,
-    FieldSegment,
+    FieldDiscretization,
     Placement,
     SegmentId,
-    allocate_field,
 )
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
@@ -56,11 +57,12 @@ __all__ = [
     "collect_diagnostics",
     "global_sum",
     # fields
+    "ContinuousField",
+    "DiscreteField",
     "Field",
-    "FieldSegment",
+    "FieldDiscretization",
     "Placement",
     "SegmentId",
-    "allocate_field",
     # halo
     "HaloFillFence",
     "HaloFillPolicy",

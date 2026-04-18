@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from cosmic_foundry.fields import Field, FieldSegment, SegmentId
+from cosmic_foundry.fields import DiscreteField, SegmentId
 from cosmic_foundry.kernels import AccessPattern, Extent, Region
 
 
@@ -14,7 +14,7 @@ from cosmic_foundry.kernels import AccessPattern, Extent, Region
 class HaloFillFence:
     """Communication intent for one field before a Dispatch."""
 
-    field: Field
+    field: DiscreteField
     region: Region
     access_pattern: AccessPattern
 
@@ -23,13 +23,20 @@ class HaloFillFence:
 class HaloFillPolicy:
     """Fill same-rank ghost cells by copying from neighboring segments.
 
-    The policy assumes each segment extent was allocated with the same
-    ``AccessPattern`` carried by the fence. That is the current
-    ``allocate_field`` path; mixed-width halo storage will need explicit
-    interior metadata.
+    Map:
+        domain   — f_h : Ω_h^int(B_i) → ℝⁿ, a rank-n discrete field
+                   defined on the interior cells of each block B_i
+        codomain — f_h : Ω_h^ext(B_i) → ℝⁿ, the same field extended
+                   to interior ∪ ghost cells (Ω_h^ext = Ω_h^int ∪ Ω_h^ghost)
+        operator — f̃(x) = f(x) for x ∈ Ω_h^int;
+                   f̃(x) = f_adj(x) for x ∈ Ω_h^ghost,
+                   where f_adj is the interior value of the unique
+                   adjacent segment whose interior contains x
+
+    Exact: Θ = ∅ — domain extension by direct copy; no approximation.
     """
 
-    def execute(self, fence: HaloFillFence, rank: int) -> Field:
+    def execute(self, fence: HaloFillFence, rank: int) -> DiscreteField:
         """Return a new Field with ghost cells filled for *rank*."""
         required = fence.region.extent.expand(fence.access_pattern)
         if not fence.field.covers(required):
@@ -37,10 +44,13 @@ class HaloFillPolicy:
             raise ValueError(msg)
 
         local_ids: set[SegmentId] = {
-            seg.segment_id for seg in fence.field.local_segments(rank)
+            seg.segment_id
+            for seg in fence.field.local_segments(rank)
+            if seg.segment_id is not None  # always true for leaves; narrows type
         }
         updated_payloads: dict[SegmentId, Any] = {}
         for target in fence.field.local_segments(rank):
+            assert target.segment_id is not None  # target is a leaf
             target_interior = _segment_interior(target, fence.access_pattern)
             if _intersect_extents(target_interior, fence.region.extent) is None:
                 continue
@@ -54,27 +64,37 @@ class HaloFillPolicy:
                 local_ids=local_ids,
             )
 
-        segments = tuple(
-            FieldSegment(
-                segment_id=seg.segment_id,
-                payload=updated_payloads.get(seg.segment_id, seg.payload),
-                extent=seg.extent,
+        new_segments_list: list[DiscreteField] = []
+        for seg in fence.field.segments:
+            assert seg.segment_id is not None and seg.extent is not None  # leaf
+            new_segments_list.append(
+                DiscreteField(
+                    name=seg.name,
+                    segment_id=seg.segment_id,
+                    payload=updated_payloads.get(seg.segment_id, seg.payload),
+                    extent=seg.extent,
+                    interior_extent=seg.interior_extent,
+                )
             )
-            for seg in fence.field.segments
+        new_segments = tuple(new_segments_list)
+        return DiscreteField(
+            name=fence.field.name,
+            segments=new_segments,
+            placement=fence.field.placement,
         )
-        return Field(fence.field.name, segments, fence.field.placement)
 
 
 def _fill_segment_halo(
     *,
-    target: FieldSegment,
-    field: Field,
+    target: DiscreteField,
+    field: DiscreteField,
     rank: int,
     required: Extent,
     interior: Extent,
     access_pattern: AccessPattern,
     local_ids: set[SegmentId],
 ) -> Any:
+    assert target.payload is not None and target.extent is not None  # target is a leaf
     target_payload = target.payload
     target_work = _intersect_extents(target.extent, required)
     if target_work is None:
@@ -90,7 +110,7 @@ def _fill_segment_halo(
         local_candidates = [
             (source, overlap)
             for source, overlap in candidates
-            if source.segment_id in local_ids
+            if source.segment_id is not None and source.segment_id in local_ids
         ]
         if len(local_candidates) > 1:
             msg = "Multiple same-rank source segments overlap one halo region"
@@ -105,6 +125,9 @@ def _fill_segment_halo(
             continue
 
         source, overlap = local_candidates[0]
+        assert (
+            source.extent is not None and source.payload is not None
+        )  # source is a leaf
         target_payload = target_payload.at[_payload_slices(target.extent, overlap)].set(
             source.payload[_payload_slices(source.extent, overlap)]
         )
@@ -114,12 +137,12 @@ def _fill_segment_halo(
 
 def _source_candidates(
     *,
-    field: Field,
-    target: FieldSegment,
+    field: DiscreteField,
+    target: DiscreteField,
     halo_piece: Extent,
     access_pattern: AccessPattern,
-) -> list[tuple[FieldSegment, Extent]]:
-    candidates: list[tuple[FieldSegment, Extent]] = []
+) -> list[tuple[DiscreteField, Extent]]:
+    candidates: list[tuple[DiscreteField, Extent]] = []
     for source in field.segments:
         if source.segment_id == target.segment_id:
             continue
@@ -130,9 +153,10 @@ def _source_candidates(
     return candidates
 
 
-def _segment_interior(segment: FieldSegment, access_pattern: AccessPattern) -> Extent:
+def _segment_interior(segment: DiscreteField, access_pattern: AccessPattern) -> Extent:
     if segment.interior_extent is not None:
         return segment.interior_extent
+    assert segment.extent is not None  # segment is always a leaf at this call site
     return _shrink_extent(segment.extent, access_pattern)
 
 

@@ -51,6 +51,7 @@ architecture stays on its own plane.
 | [ADR-0011](object-level/ADR-0011-halo-fill-fence.md) | Halo fill fence |
 | [ADR-0012](object-level/ADR-0012-global-reduction-primitive.md) | Global reduction primitive |
 | [ADR-0014](object-level/ADR-0014-platform-application-architecture.md) | Platform / application repository architecture |
+| [ADR-0016](object-level/ADR-0016-field-map-formalism.md) | Field / map formalism |
 
 ### Meta-Level ADRs
 

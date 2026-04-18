@@ -17,14 +17,11 @@ from cosmic_foundry.diagnostics import (
     global_sum,
 )
 from cosmic_foundry.fields import (
-    Field,
-    FieldSegment,
+    DiscreteField,
     Placement,
     SegmentId,
-    allocate_field,
 )
-from cosmic_foundry.kernels import Extent, Region, Stencil
-from cosmic_foundry.mesh import UniformGrid
+from cosmic_foundry.kernels import Extent, Region
 
 
 @dataclass(frozen=True)
@@ -35,7 +32,7 @@ class SumReducer:
 
     def reduce(
         self,
-        fields: dict[str, Field],
+        fields: dict[str, DiscreteField],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -50,7 +47,7 @@ class VectorReducer:
 
     def reduce(
         self,
-        fields: dict[str, Field],
+        fields: dict[str, DiscreteField],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -58,37 +55,45 @@ class VectorReducer:
         return jnp.array([1.0, 2.0])
 
 
-def _grid_1d() -> UniformGrid:
-    return UniformGrid.create(
-        domain_origin=(0.0,),
-        domain_size=(1.0,),
-        n_cells=(8,),
-        blocks_per_axis=(2,),
-        n_ranks=1,
-    )
+def _field_with_payloads(values: tuple[jax.Array, ...]) -> DiscreteField:
+    """Build a halo-padded 2-block 1D field for testing interior-only reductions.
 
-
-def _field_with_payloads(values: tuple[jax.Array, ...]) -> Field:
-    field = allocate_field("rho", _grid_1d(), Stencil((1,)))
-    segments = tuple(
-        FieldSegment(
-            segment_id=segment.segment_id,
-            payload=value,
-            extent=segment.extent,
-            interior_extent=segment.interior_extent,
-        )
-        for segment, value in zip(field.segments, values, strict=True)
+    Block 0: interior [0, 4), halo extent [-1, 5).
+    Block 1: interior [4, 8), halo extent [3, 9).
+    """
+    segments = (
+        DiscreteField(
+            name="rho",
+            segment_id=SegmentId(0),
+            payload=values[0],
+            extent=Extent((slice(-1, 5),)),
+            interior_extent=Extent((slice(0, 4),)),
+        ),
+        DiscreteField(
+            name="rho",
+            segment_id=SegmentId(1),
+            payload=values[1],
+            extent=Extent((slice(3, 9),)),
+            interior_extent=Extent((slice(4, 8),)),
+        ),
     )
-    return Field(field.name, segments, field.placement)
+    return DiscreteField(
+        name="rho",
+        segments=segments,
+        placement=Placement({SegmentId(0): 0, SegmentId(1): 0}),
+    )
 
 
 def test_global_sum_returns_jax_scalar_without_host_materialization() -> None:
-    segment = FieldSegment(
-        SegmentId(0),
-        jnp.arange(6.0, dtype=jnp.float64),
-        Extent((slice(0, 6),)),
+    segment = DiscreteField(
+        name="rho",
+        segment_id=SegmentId(0),
+        payload=jnp.arange(6.0, dtype=jnp.float64),
+        extent=Extent((slice(0, 6),)),
     )
-    field = Field("rho", (segment,), Placement({SegmentId(0): 0}))
+    field = DiscreteField(
+        name="rho", segments=(segment,), placement=Placement({SegmentId(0): 0})
+    )
 
     result = global_sum(field, Region(Extent((slice(1, 5),))), rank=0)
 
@@ -117,12 +122,15 @@ def test_global_sum_restricts_to_region() -> None:
 
 
 def test_collect_diagnostics_materializes_one_record() -> None:
-    segment = FieldSegment(
-        SegmentId(0),
-        jnp.arange(4.0, dtype=jnp.float64),
-        Extent((slice(0, 4),)),
+    segment = DiscreteField(
+        name="rho",
+        segment_id=SegmentId(0),
+        payload=jnp.arange(4.0, dtype=jnp.float64),
+        extent=Extent((slice(0, 4),)),
     )
-    field = Field("rho", (segment,), Placement({SegmentId(0): 0}))
+    field = DiscreteField(
+        name="rho", segments=(segment,), placement=Placement({SegmentId(0): 0})
+    )
 
     record = collect_diagnostics(
         (SumReducer("total_mass", "rho"),),
