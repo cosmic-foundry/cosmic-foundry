@@ -9,19 +9,19 @@ from typing import Any
 import numpy as np
 
 from cosmic_foundry.descriptor import AccessPattern, Extent
-from cosmic_foundry.domain import Domain
 from cosmic_foundry.field import ContinuousField, DiscreteField
 from cosmic_foundry.function import Function
 from cosmic_foundry.record import Array, ComponentId, Placement
+from cosmic_foundry.set import Set
 
 
 @dataclass(frozen=True)
-class Block(Domain):
+class Block(Set):
     """One contiguous patch of uniformly-spaced cells — a spatial sub-domain.
 
     Owns topology and coordinate metadata only; array payloads live in
-    Array[DiscreteField].  A Block is a Domain: a bounded hyper-rectangular
-    region of ℝⁿ described in global index coordinates.
+    Array[DiscreteField].  A Block is a finite indexed set of cell-center
+    points described in global index coordinates.
     """
 
     index_extent: Extent

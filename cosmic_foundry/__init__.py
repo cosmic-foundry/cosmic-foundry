@@ -23,7 +23,6 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.domain import Domain  # noqa: E402
 from cosmic_foundry.field import (  # noqa: E402
     ContinuousField,
     DiscreteField,
@@ -47,6 +46,7 @@ from cosmic_foundry.mesh import (  # noqa: E402
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 from cosmic_foundry.record import Array, ComponentId, Placement, Record  # noqa: E402
+from cosmic_foundry.set import Set  # noqa: E402
 from cosmic_foundry.sink import Sink  # noqa: E402
 from cosmic_foundry.source import Source  # noqa: E402
 
@@ -77,7 +77,7 @@ __all__ = [
     "ComponentId",
     "Descriptor",
     "Placement",
-    "Domain",
+    "Set",
     "Extent",
     "Function",
     "Record",
