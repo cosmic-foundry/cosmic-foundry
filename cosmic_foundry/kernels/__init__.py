@@ -125,6 +125,23 @@ class BoundOp:
     fields: dict[str, Any]  # name → array, ordered by op.reads
 
 
+class Record(ABC):
+    """Abstract base for all record types: lightweight immutable value objects
+    that are *about* the simulation rather than *being* simulation state.
+
+    Records are internal objects produced or consumed at the semantic layer —
+    summaries, identifiers, and provenance metadata. They are distinct from
+    Fields (which ARE simulation state) and from the external representations
+    (bytes, files) that Sources and Sinks translate to and from.
+
+    Every Record must be serializable to a plain dict.
+    """
+
+    @abstractmethod
+    def as_dict(self) -> dict[str, Any]:
+        """Return a plain-dict representation of this record."""
+
+
 class Domain(ABC):
     """Abstract base for all domain types: the set D over which fields are defined.
 
@@ -421,6 +438,7 @@ __all__ = [
     "FlatPolicy",
     "Map",
     "Op",
+    "Record",
     "Region",
     "Sink",
     "Source",
