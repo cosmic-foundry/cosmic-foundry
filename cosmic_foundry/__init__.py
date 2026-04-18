@@ -21,7 +21,6 @@ from cosmic_foundry.fields import (  # noqa: E402
     ContinuousField,
     DiscreteField,
     Field,
-    FieldDiscretization,
     Placement,
 )
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy  # noqa: E402
@@ -47,8 +46,12 @@ from cosmic_foundry.kernels import (  # noqa: E402
 )
 from cosmic_foundry.mesh import (  # noqa: E402
     Block,
+    DistributedField,
+    FieldDiscretization,
+    FieldSegment,
     PartitionDomain,
     UniformGrid,
+    field_discretization,
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
@@ -93,8 +96,12 @@ __all__ = [
     "execute_pointwise",
     # mesh
     "Block",
+    "DistributedField",
+    "FieldDiscretization",
+    "FieldSegment",
     "PartitionDomain",
     "UniformGrid",
+    "field_discretization",
     "partition_domain",
     # observability
     "configure",
