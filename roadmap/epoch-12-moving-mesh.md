@@ -1,4 +1,4 @@
-# Stretch Epoch 11 — Moving Voronoi mesh
+# Stretch Epoch 12 — Moving Voronoi mesh
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

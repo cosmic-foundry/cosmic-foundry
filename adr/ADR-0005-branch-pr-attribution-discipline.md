@@ -1,8 +1,5 @@
 # ADR-0005 — Branch, PR, and attribution discipline
 
-- **Status:** Accepted
-- **Date:** 2026-04-14
-
 ## Context
 
 Cosmic Foundry expects contributions from humans and AI coding
@@ -67,9 +64,8 @@ source.
 - **One decision per ADR.** Architectural Decision Records are
   one-decision-per-file and each lands in its own PR (or in a
   tight group when ADRs reference each other, as with ADRs 0001
-  – 0003 and 0004 – 0005). Amendment and supersession rules for
-  accepted ADRs are codified separately in *ADR amendment policy*
-  below.
+  – 0003 and 0004 – 0005). Editing and supersession rules for
+  ADRs are codified separately in *ADR editing policy* below.
 
 ### History and force-push
 
@@ -116,29 +112,24 @@ source.
   repository-relative paths, not URLs to specific upstream or
   origin branches that may move.
 
-### ADR amendment policy
+### ADR editing policy
 
 Applies to every ADR in this repository.
 
-- **Amend by forward commit.** Any accepted ADR may be amended in
-  place when the change is discussed and agreed in-session.
-  Clarifications, rewordings, narrowing of scope, and corrections
-  consistent with the existing decision do not require a new ADR.
-- **Record each amendment.** Every amendment appends a dated
-  one-line bullet to a trailing *Amendments* section on the ADR,
-  naming what changed and why. Prior prose is updated in place —
-  the Amendments log, not stale text, is what preserves the audit
-  trail.
-- **Reversals still require supersession.** Changing the decision
-  itself (reversing direction, replacing the technology choice,
-  withdrawing the rule) lands as a new ADR marked
-  *Supersedes ADR-NNNN*, with the old ADR's status updated to
-  *Superseded by ADR-MMMM*. This keeps decision history
-  discoverable from the index.
-- **Agents propose amendments proactively.** When a conversation
-  implies an ADR should change, the agent should propose the edit
-  directly rather than routing the clarification through AI.md or
-  deferring to a new ADR.
+- **Edit in place.** Any ADR may be edited directly when a
+  conversation implies a change — clarifications, rewordings,
+  narrowing of scope, corrections, and extensions consistent with
+  the existing decision. No dated amendment log is maintained;
+  the document describes current architecture and git history
+  preserves the record of what changed and when.
+- **Withdrawal.** When a decision is entirely withdrawn, remove the
+  ADR from the index and note the removal in the same PR. The file
+  may be deleted or left in place without an index entry, as
+  appropriate for the situation.
+- **Agents propose edits proactively.** When a conversation
+  implies an ADR should change, the agent should propose the
+  edit directly rather than routing the clarification through
+  AI.md or deferring to a new ADR.
 
 ## Consequences
 
@@ -155,9 +146,8 @@ Applies to every ADR in this repository.
   time learning cost; CONTRIBUTING.md (landing in Epoch 0 §0.8)
   is the rampdown path.
 - **Neutral.** AI.md's informal summary is kept in sync with this
-  ADR. When the two disagree, this ADR is authoritative. AI.md may
-  be edited freely to track rewordings in this ADR; the ADR itself
-  is edited per the *ADR amendment policy* above.
+  ADR. When the two disagree, this ADR is authoritative. Either
+  document may be edited in place to track rewordings in the other.
 
 ## Alternatives considered
 
@@ -189,14 +179,3 @@ Applies to every ADR in this repository.
   §0.6 (reservation), §0.8 (CONTRIBUTING.md ramp-down).
 - ADR-0007 (Replication workflow) — depends on attribution honesty
   for the citation-backed verification trail.
-
-## Amendments
-
-- **2026-04-14.** Relaxed the immutability clause. Accepted ADRs
-  may now be amended in place by forward commit when the change is
-  discussed and agreed in-session; reversals still require
-  supersession. Prior policy optimized for an audit strictness the
-  single-contributor, pre-1.0 phase of the project does not need,
-  and blocked agents from proposing edits to existing ADRs when a
-  conversation clearly implied one. See new *ADR amendment policy*
-  subsection under Decision.

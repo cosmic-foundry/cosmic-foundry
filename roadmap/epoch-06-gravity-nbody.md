@@ -1,4 +1,4 @@
-# Epoch 5 — Self-gravity and N-body
+# Epoch 6 — Self-gravity and N-body
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

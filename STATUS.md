@@ -59,9 +59,10 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 ## Next planned work
 
-Merge #88 (field allocation from blocks), then proceed with items #3
-(`HaloFillPolicy` — single-rank) and #4 (`DiagnosticReducer` +
-`DiagnosticSink`) which can proceed in parallel.
+Complete Epoch 2 (items #3–#6: halo fill, diagnostics, task-graph driver,
+multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
+infrastructure, comparison-result schema, and simulation specification
+format. See `roadmap/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 

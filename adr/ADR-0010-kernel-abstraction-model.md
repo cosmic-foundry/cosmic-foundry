@@ -1,9 +1,5 @@
 # ADR-0010 — Kernel abstraction model: Op / Region / Policy / Dispatch
 
-- **Status:** Accepted
-- **Date:** 2026-04-15
-- **Accepted:** 2026-04-16 (Epoch 1 exit criterion met; implementation complete)
-
 ## Context
 
 ADR-0002 committed to a `@kernel` descriptor layer that would allow
@@ -231,23 +227,57 @@ such as `reads=("U",), writes=("U",)` are interpreted by the driver as
 versioned field transitions (for example, `U^n -> U^(n+1)`), not as
 ambiguous mutation of one timeless field.
 
-**`__call__` signature — decided.** An Op receives element indices
-plus an array-like field argument. The field argument is *not*
-required to be a raw JAX array; it is required to support
-`__getitem__` with Region-coordinate semantics. A Field consists of
-one or more FieldSegments, each pairing a payload with the Extent over
-which that payload is valid; Placement maps SegmentIds to
-process/device owners. The Op does not inspect FieldSegment or
-Placement metadata directly. Dispatch validation checks that the
-Field's placed segments cover the Region extent and access footprint
-required by the Op. Under `FlatPolicy` the argument can be a local
-FieldSegment payload or a thin Field view over one or more local
-segments. Under `TiledPolicy` the Policy passes a `FieldView` wrapper
-that intercepts `__getitem__` calls and redirects them to an
-SRAM-backed halo-extended tile, translating Region coordinates to
-tile-local offsets transparently. The Op's `__call__` code is
-identical under both policies; the physics author is never aware of
-segment boundaries, tile boundaries, or process ownership.
+**Field-binding interface.** `Op.__call__` is the field-binding
+interface: it accepts field arrays as positional or keyword arguments
+(matched by position to `op.reads`, or by name order-independently)
+and returns a `BoundOp`. `Dispatch` takes a `BoundOp` as its first
+argument. This spelling reads naturally as "apply op to these fields"
+— the same way ∇²φ is written mathematically — and is consistent
+whether a human or a driver constructs the `Dispatch`.
+
+```python
+# Positional — matched in order of op.reads:
+Dispatch(laplacian(phi_array), region).execute()
+
+# Keyword — matched by name, order-independent:
+Dispatch(advection_flux(rho=rho_arr, v_x=v_x_arr), region).execute()
+
+# Driver / programmatic:
+Dispatch(op(**{name: registry[name].local_array()
+               for name in op.reads}), region).execute()
+```
+
+`BoundOp` is a frozen dataclass:
+
+```python
+@dataclass(frozen=True)
+class BoundOp:
+    op: Op
+    fields: dict[str, Any]   # name → array, ordered by op.reads
+```
+
+Validation (all names in `op.reads` present; no extraneous names)
+moves to `BoundOp` construction. Internal machinery (`apply`,
+`apply_batched`) calls `op._fn` (the raw kernel function) directly,
+bypassing the binding interface. Code that probes a kernel
+directly (e.g. `tests/utils/stencils.probe_operator_weights`) calls
+`kernel._fn` to bypass binding.
+
+Field arguments are array-like objects supporting `__getitem__` with
+Region-coordinate semantics. A Field consists of one or more
+FieldSegments, each pairing a payload with the Extent over which
+that payload is valid; Placement maps SegmentIds to process/device
+owners. The Op does not inspect FieldSegment or Placement metadata
+directly. Dispatch validation checks that the Field's placed segments
+cover the Region extent and access footprint required by the Op.
+Under `FlatPolicy` the argument can be a local FieldSegment payload
+or a thin Field view over one or more local segments. Under
+`TiledPolicy` the Policy passes a `FieldView` wrapper that intercepts
+`__getitem__` calls and redirects them to an SRAM-backed
+halo-extended tile, translating Region coordinates to tile-local
+offsets transparently. The Op's `_fn` code is identical under both
+policies; the physics author is never aware of segment boundaries,
+tile boundaries, or process ownership.
 
 `FieldView` is a JAX pytree (registered via
 `jax.tree_util.register_pytree_node`); JAX traces through its
@@ -260,7 +290,7 @@ is not part of the Epoch 1 deliverable.
   `access_pattern` or `__call__` raises `TypeError` on class
   construction, not at driver assembly. Function-shaped Ops are
   validated by the `@op(...)` decorator and by `Dispatch` construction.
-- An Op's `__call__` must be traceable in the backend's execution
+- An Op's underlying `_fn` must be traceable in the backend's execution
   context (JAX-jittable for the primary backend). Constructor
   parameters like `order` are resolved before tracing and do not
   appear in the traced computation.
@@ -294,7 +324,7 @@ swappable object attached to a Dispatch. Three policies are anticipated:
 |---|---|---|
 | `FlatPolicy` | One thread per element; same code for all. Kokkos `RangePolicy` analog. | Default; sufficient for Epochs 1–3. |
 | `TiledPolicy` | Thread team with cooperative scratchpad load and explicit barrier. Kokkos `TeamPolicy` + `team_scratch` analog. Addresses bandwidth-bound stencils. | Epoch 2–3 when mesh stencil ops become real workloads. |
-| `WarpSpecializedPolicy` | Warps within a thread block assigned to different code paths. Singe analog. Addresses compute-irregular workloads (stiff ODE, tree walks). | Epoch 6 when nuclear reaction networks demand it. |
+| `WarpSpecializedPolicy` | Warps within a thread block assigned to different code paths. Singe analog. Addresses compute-irregular workloads (stiff ODE, tree walks). | Epoch 7 when nuclear reaction networks demand it. |
 
 Swapping a Policy requires no changes to the Op or to the Region. The
 physics author does not choose a Policy; the driver or a performance
@@ -387,7 +417,7 @@ solidifies against real workloads in Epoch 1.
   enabling `TiledPolicy` to swap in without changes to any Op.
   Halo-fill coordination between the task graph and the Region's
   declared footprint.
-- **Epoch 6:** `WarpSpecializedPolicy` for nuclear reaction networks,
+- **Epoch 7:** `WarpSpecializedPolicy` for nuclear reaction networks,
   if benchmarking shows `FlatPolicy` is insufficient. May require
   a code-generation path (SymPy → Triton / Pallas) rather than a
   pure library implementation.
@@ -440,14 +470,12 @@ Proposed, before the Epoch 1 implementation PR was opened:
 
 5. **Epoch 1 testing path — resolved.** Physics authors should verify
    Ops by constructing and executing a real `Dispatch`, for example
-   `Dispatch(op, region, policy=FlatPolicy(), inputs=(field,)).execute()`.
-   Direct element-level `op(...)` calls remain useful for small
-   pure-function checks, but they are not sufficient as the default
-   because they bypass `Dispatch` construction, access-pattern
-   validation, Region iteration, future output assembly metadata, and
-   backend tracing. Epoch 1 should not add a separate `run(...)` helper
-   unless repeated real call sites show that the direct `Dispatch` API
-   creates unnecessary duplication.
+   `Dispatch(op(field), region, policy=FlatPolicy()).execute()`.
+   Low-level pointwise checks should call `op._fn(arr, i, j, k)`
+   directly rather than `op(arr)`, because `Op.__call__` now returns
+   a `BoundOp` rather than a scalar. Epoch 1 should not add a
+   separate `run(...)` helper unless repeated real call sites show that
+   the direct `Dispatch` API creates unnecessary duplication.
 
 ## Alternatives considered
 
@@ -484,64 +512,6 @@ structural: function-shaped Ops use `@op(...)`, class-shaped Ops may
 subclass `Op`, and `Dispatch` accepts any object satisfying the
 protocol.
 
-## Amendments
-
-- **2026-04-17 — Field-binding protocol: `Op.__call__` returns `BoundOp`.**
-
-  The Epoch 1 `Dispatch` API accepted raw arrays through a positional
-  `inputs` tuple: `Dispatch(op, region, inputs=(phi_array,)).execute()`.
-  The ordering convention — `inputs[i]` maps to `op.reads[i]` — was
-  implicit and unenforced.  As Epoch 2 introduces a task-graph driver
-  that constructs `Dispatch` objects programmatically from a field
-  registry, this silent contract becomes a maintenance liability.
-
-  **Decision.**  `Op.__call__` becomes the field-binding interface,
-  returning a `BoundOp` that carries the op and its resolved field
-  mapping.  `Dispatch` takes a `BoundOp` as its first argument.  The
-  positional `inputs` keyword is removed.
-
-  ```python
-  # Positional — matched in order of op.reads:
-  Dispatch(laplacian(phi_array), region).execute()
-
-  # Keyword — matched by name, order-independent:
-  Dispatch(advection_flux(rho=rho_arr, v_x=v_x_arr), region).execute()
-
-  # Driver / programmatic:
-  Dispatch(op(**{name: registry[name].local_array()
-                 for name in op.reads}), region).execute()
-  ```
-
-  `BoundOp` is a frozen dataclass:
-
-  ```python
-  @dataclass(frozen=True)
-  class BoundOp:
-      op: Op
-      fields: dict[str, Any]   # name → array, ordered by op.reads
-  ```
-
-  **Internal machinery.**  `apply` and `apply_batched` call `op._fn`
-  (the raw kernel function) directly rather than going through
-  `Op.__call__`.  This frees `Op.__call__` for the user-facing binding
-  role without a call-site ambiguity.  Code that probes a kernel
-  directly (e.g. `tests/utils/stencils.probe_operator_weights`) calls
-  `kernel._fn` to bypass the binding interface.
-
-  **Rationale.**  The `op(fields…)` spelling reads naturally as
-  "apply op to these fields" — the same way ∇²φ is written
-  mathematically — and is consistent regardless of whether a human or
-  a driver constructs the `Dispatch`.  Validation (all names in
-  `op.reads` present; no extraneous names) moves to `BoundOp`
-  construction, where errors surface at call time rather than silently
-  producing wrong inputs.
-
-  **Resolved design question 5 update.**  The Epoch 1 guidance
-  "Direct element-level `op(...)` calls remain useful for small
-  pure-function checks" no longer applies: `op(arr)` now returns a
-  `BoundOp`, not a scalar.  Low-level pointwise checks should call
-  `op._fn(arr, i, j, k)` directly, or construct a minimal `Dispatch`
-  as before.
 
 ## Cross-references
 

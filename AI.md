@@ -3,6 +3,39 @@
 These guidelines apply to all AI agents working on this repository,
 regardless of platform (Claude Code, Codex, Gemini, or others).
 
+## Platform role
+
+Cosmic Foundry is the **organizational platform** for the simulation
+ecosystem. Application repositories — covering stellar physics,
+cosmology, galactic dynamics, planetary formation, and other domains
+— build on top of it. See
+[ADR-0014](adr/ADR-0014-platform-application-architecture.md) for the
+authoritative split.
+
+In practice this means:
+
+- Reusable computation infrastructure (kernels, mesh, fields, I/O,
+  diagnostics) and manifest infrastructure (`cosmic_foundry.manifests`:
+  HTTP client, `ValidationAdapter`, `Provenance`, base schemas) belong
+  here.
+- Domain-specific physics implementations and observational validation
+  data belong in the relevant application repo.
+- If a task spans the platform and an application repo, use separate
+  branches and pull requests for each repository. Keep the platform
+  change minimal and self-contained; the application repo change
+  depends on it.
+- Cross-scale workflows that compose two or more application domains
+  belong in their own repository, not here.
+- **This file is the authoritative source for all software design
+  direction across the organization.** Application repo `AI.md` files
+  are intentionally thin: they delegate here for development rules,
+  commit discipline, ADR process, physics capability lanes, code quality
+  standards, and architectural weighing criteria. They add only what
+  genuinely differs for that repo (fork/PR targets, environment setup,
+  domain-specific data rules). If a software design rule or agent
+  guideline belongs to both the platform and an application repo,
+  it belongs here — not in both places.
+
 ## Development Rules
 
 The authoritative source is
@@ -287,20 +320,20 @@ asks: *what did we learn during this epoch that should update our plans?*
 The retrospective covers:
 
 1. **ADRs in force** (`adr/README.md` and each linked file). Did the
-   implementation reveal that any decision needs amending? Were any
+   implementation reveal that any decision needs updating? Were any
    "anticipated extensions" or "deferred" items resolved in practice?
    Were any stated consequences wrong?
 
 2. **ADR set as a whole.** Beyond reviewing each ADR individually,
    examine the set itself. Are any two ADRs covering the same concern
    and worth combining? Has an ADR's scope drifted so it now overlaps
-   with a newer one, and should be narrowed or superseded? Are there
-   numbering or ordering choices that would read more coherently if
-   restructured? The goal is to keep the ADR family close to an
+   with a newer one, and should be narrowed or merged into it? Are
+   there numbering or ordering choices that would read more coherently
+   if restructured? The goal is to keep the ADR family close to an
    *orthogonal basis* — each ADR covering one independent
    architectural concern, and the set as a whole the minimum number
    of decisions needed to explain the architecture. Propose
-   reorganizations (combine, split, supersede, renumber) as follow-up
+   reorganizations (combine, split, renumber, retire) as follow-up
    PRs rather than inline retrospective edits; the retrospective
    surfaces the need, the PR executes the change.
 
@@ -318,7 +351,7 @@ The retrospective covers:
 
 6. **Surprises and pain points**. What was harder than expected? What
    design decisions caused rework? What would have been better to decide
-   earlier? Capture these as ADR amendments, roadmap notes, or additions
+   earlier? Capture these as ADR edits, roadmap notes, or additions
    to `AI.md` — wherever the lesson is most actionable for the next epoch.
 
 The output is one or more PRs amending affected documents before Epoch N+1
@@ -336,8 +369,8 @@ full ADR before making changes; the index is a pointer, not a
 summary substitute.
 
 When making a new architectural decision, copy
-`adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md`, mark it
-Proposed, and add a line to `adr/README.md` in the same PR.
+`adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md` and add
+a line to `adr/README.md` in the same PR.
 
 Before treating an architectural decision as ready for human review,
 run `pr-review/architecture-checklist.md`. The checklist forces an
@@ -347,19 +380,16 @@ boundaries, and identify fences / materialization points. Include the
 stress-review result in the ADR, the PR description, or the review
 report.
 
-Accepted ADRs may be amended in place when a conversation implies
-a change consistent with the existing decision — propose the edit
-directly rather than routing clarifications through AI.md. Each
-amendment appends a dated bullet to the ADR's *Amendments*
-section. Reversing a decision still goes via supersession (a new
-ADR). See
-[ADR-0005 §Decision → ADR amendment policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-amendment-policy).
+ADRs describe current architecture. When a conversation implies an
+ADR should change, propose the edit directly. If a decision is
+entirely withdrawn, remove it from the index. See
+[ADR-0005 §Decision → ADR editing policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
 
 ## Physics capability implementation paths
 
 Per [ADR-0013](adr/ADR-0013-derivation-first-lane.md), every PR that
 adds or changes a *physics capability* (as defined in ADR-0007
-Amendments) is in one of three lanes:
+§Decision) is in one of three lanes:
 
 - **Lane A — Port-and-verify.** Adapt from a permissively-licensed
   reference code with attribution. Default for permissive references.

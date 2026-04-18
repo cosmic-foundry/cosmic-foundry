@@ -1,14 +1,11 @@
 # ADR-0008 — Numerical-transcription discipline (placeholder)
 
-- **Status:** Proposed *(stub — analysis captured, decision deferred to Epoch 6)*
-- **Date:** 2026-04-14
-
-> **Stub note.** This ADR reserves number 0008 and records the
+> **Stub.** This ADR reserves number 0008 and records the
 > problem framing so future work does not re-derive it from
 > scratch. The decision itself is intentionally deferred: it
 > should not be forced before Epoch 1 has shaped the kernel
 > interface (ADR-0002) and before any real transcription work is
-> in flight. Final text lands before Epoch 6 (Microphysics)
+> in flight. Final text lands before Epoch 7 (Microphysics)
 > begins, where the need becomes concrete.
 
 ## Context
@@ -85,7 +82,7 @@ the final decision, not a commitment.
 **Deferred.** This ADR reserves the number, records the problem
 framing, and points to ADR-0007 as the operative discipline for
 any numerical transcription that happens before the final text
-lands. The decision must be made before Epoch 6 (Microphysics)
+lands. The decision must be made before Epoch 7 (Microphysics)
 begins — see `roadmap/index.md` §5 for the crossroad.
 
 ## Consequences
@@ -124,5 +121,5 @@ begins — see `roadmap/index.md` §5 for the crossroad.
   first discipline this ADR will extend.
 - [`roadmap/index.md`](../roadmap/index.md) §5 — records the
   crossroad for discoverability.
-- [`roadmap/epoch-06-microphysics.md`](../roadmap/epoch-06-microphysics.md)
+- [`roadmap/epoch-07-microphysics.md`](../roadmap/epoch-07-microphysics.md)
   — the epoch where this decision becomes concrete.

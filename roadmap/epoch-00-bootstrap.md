@@ -213,7 +213,7 @@ here so they cannot drift in later epochs:
   tiled dataset.
 - ADR-0006 (visualization and science-communication stack) is
   referenced from the ADR index; its decisions constrain the
-  Epoch 2 I/O design and the dedicated Epoch 3 viewer work.
+  Epoch 2 I/O design and the dedicated Epoch 4 viewer work.
 
 No runtime rendering code is written in Epoch 0; the scaffolding
 is purely dependencies, stubs, and the visual-regression harness.

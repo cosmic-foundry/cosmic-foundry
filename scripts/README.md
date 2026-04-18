@@ -34,7 +34,7 @@ cd /path/to/parent-workspace
 
 **Sibling-repo usage:**
 ```bash
-cd /path/to/parent-workspace/cosmic-observables
+cd /path/to/parent-workspace/<sibling-repo>
 ../cosmic-foundry/scripts/start_agent.sh [gemini|claude|codex]
 ```
 
@@ -46,7 +46,7 @@ Expected layout:
 ```text
 /path/to/parent/workspace/
   cosmic-foundry/
-  stellar-foundry/
+  <application-repo>/
 ```
 
 In the multi-repo workflow, reusable engine changes should stay in

@@ -1,17 +1,9 @@
 # ADR-0009 — Float64 as the default precision
 
-- **Status:** Accepted
-- **Date:** 2026-04-14
-- **Deciders:** project maintainers
-
-> **Anticipated amendment.** This ADR is expected to be amended in
-> place — not superseded — once the project is ready to experiment
-> with mixed precision. The amendment will add an explicit per-kernel
-> opt-in mechanism for lower dtypes without reversing the default
-> (float64 stays the default; opt-in is the narrowing). Per ADR-0005
-> amendment policy, such a change is consistent with the existing
-> decision and belongs in the *Amendments* section here rather than
-> in a new ADR.
+> **Anticipated extension.** This ADR will be edited in place once
+> the project is ready to experiment with mixed precision, adding an
+> explicit per-kernel opt-in mechanism for lower dtypes. Float64
+> stays the default; opt-in is the narrowing.
 
 ## Context
 

@@ -1,4 +1,4 @@
-# Epoch 10 — Particle / meshless hydrodynamics and cosmology
+# Epoch 11 — Particle / meshless hydrodynamics and cosmology
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

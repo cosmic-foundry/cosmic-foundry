@@ -1,8 +1,5 @@
 # ADR-0001 — Python-only engine with runtime code generation
 
-- **Status:** Accepted
-- **Date:** 2026-04-14
-
 ## Context
 
 Cosmic Foundry's goal (RESEARCH.md §6–§7,

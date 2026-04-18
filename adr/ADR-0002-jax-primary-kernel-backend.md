@@ -1,8 +1,5 @@
 # ADR-0002 — JAX + XLA as the primary kernel backend
 
-- **Status:** Accepted
-- **Date:** 2026-04-14
-
 ## Context
 
 ADR-0001 commits Cosmic Foundry to runtime code generation: the
@@ -46,8 +43,13 @@ The primary kernel backend is **JAX + XLA**.
 - Every kernel shipped through Epoch 1 is authored as a JAX kernel
   and exercised on the JAX/XLA backend.
 - A `@kernel` descriptor layer (designed in Epoch 1, sketched as a
-  stub in Epoch 0) wraps kernels so that secondary backends can
-  register adapters without changing call sites.
+  stub in Epoch 0) wraps **Dispatches** — compositions of one or more
+  Ops over a Region — so that secondary backends can register adapters
+  without changing call sites. Per-element operations (EOS, Riemann
+  solvers, reconstruction operators, source terms) are **Ops**: backend-
+  compatible callables inlined into the containing Dispatch that do not
+  carry the descriptor themselves. See ADR-0010 for the full Op /
+  Region / Policy / Dispatch vocabulary.
 - The following secondary backends are listed as optional extras in
   `pyproject.toml` with pinned known-good versions, so the descriptor
   layer has concrete target shapes, but **no adapter is written,
@@ -112,20 +114,3 @@ The primary kernel backend is **JAX + XLA**.
 - ADR-0001 (Python-only engine with runtime codegen) — this ADR depends on it.
 - ADR-0003 (`jax.distributed` + NCCL host-parallelism baseline) —
   combines with JAX device parallelism for between-host collectives.
-
-## Amendments
-
-- **2026-04-15** — Clarified the internal structure of the `@kernel`
-  descriptor layer using a three-axis decomposition now recorded in
-  ADR-0010. The descriptor wraps **Dispatches** (one or more Ops over a
-  Region), not individual per-element physics callables.
-  Per-element operations — EOS, Riemann solvers, reconstruction
-  operators, source terms — are **Ops**: backend-compatible callables
-  that are inlined into the containing Dispatch and do not carry the
-  descriptor themselves. A third, orthogonal concern is **Region
-  batching**: packing multiple meshblocks into a single kernel launch
-  (analogous to Parthenon's `MeshBlockPack`) maps to JAX `vmap` over a
-  stacked Region in the primary backend. Ops are unaware of the batch
-  dimension. In JAX, the Dispatch boundary is a `jit` boundary;
-  operations fused within a `jit` call are in the same XLA kernel. See
-  ADR-0010 and `roadmap/epoch-01-kernels.md` §Design constraints.

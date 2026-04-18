@@ -1,9 +1,5 @@
 # ADR-0013 — Derivation-first lane for physics capabilities
 
-- **Status:** Proposed
-- **Date:** 2026-04-17
-- **Deciders:** Cosmic Foundry core team
-
 ## Context
 
 Physics capabilities enter the engine by two broad paths: **adaptation**

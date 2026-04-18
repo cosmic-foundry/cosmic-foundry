@@ -1,9 +1,5 @@
 # ADR-0011 — Halo Fill Fence
 
-- **Status:** Proposed
-- **Date:** 2026-04-17
-- **Deciders:** Cosmic Foundry core team
-
 ## Context
 
 `Field.covers(required_extent)` can validate that a local segment contains

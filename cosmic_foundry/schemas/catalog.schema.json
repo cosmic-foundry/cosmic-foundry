@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmic-foundry.github.io/cosmic-foundry/schemas/catalog.schema.json",
+  "title": "Upstream data catalog manifest",
+  "$comment": "Base schema for any upstream observational data source. A 'catalog' is an upstream resource — archive, survey release, compilation, or bibliographic service — that an application repository draws from. Domain-specific vocabulary (domain tags, extended kind values, additional required fields) is defined in application-repo extension schemas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "kind",
+    "domain",
+    "role",
+    "homepage",
+    "status",
+    "provenance",
+    "data_products",
+    "known_caveats",
+    "next_actions"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable lowercase identifier matching the manifest filename stem."
+    },
+    "title": { "type": "string" },
+    "kind": {
+      "type": "string",
+      "enum": ["archive", "survey-release", "compilation", "bibliographic-service"]
+    },
+    "domain": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Domain tags for this catalog. Values are application-defined; the base schema imposes no enum. Selection qualifiers are not domain tags."
+    },
+    "role": {
+      "type": "string",
+      "description": "One-sentence description of this catalog's role."
+    },
+    "homepage": { "type": "string", "format": "uri" },
+    "release": {
+      "type": "string",
+      "description": "Data release identifier as used by the upstream authority. Required when status is 'ingesting' or 'available'."
+    },
+    "api_or_download": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "url"],
+        "properties": {
+          "label": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "bibcode": { "type": "string" },
+          "doi": { "type": "string" }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["candidate", "planned", "ingesting", "available", "deprecated"]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "accessed", "access"],
+      "properties": {
+        "authority": { "type": "string" },
+        "accessed": { "type": "string", "format": "date" },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["public", "restricted", "proprietary", "by-permission", "unknown"]
+            },
+            "description": { "type": "string" }
+          }
+        }
+      }
+    },
+    "data_products": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "known_caveats": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "if": {
+    "properties": { "status": { "enum": ["ingesting", "available"] } },
+    "required": ["status"]
+  },
+  "then": { "required": ["release"] }
+}
