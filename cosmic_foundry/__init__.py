@@ -38,10 +38,8 @@ from cosmic_foundry.kernels import (  # noqa: E402
     Extent,
     FlatPolicy,
     Op,
-    OpLike,
     Region,
     Stencil,
-    op,
 )
 from cosmic_foundry.mesh import Block, BlockId, UniformGrid  # noqa: E402
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
@@ -78,10 +76,8 @@ __all__ = [
     "Extent",
     "FlatPolicy",
     "Op",
-    "OpLike",
     "Region",
     "Stencil",
-    "op",
     # mesh
     "Block",
     "BlockId",

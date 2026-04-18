@@ -46,7 +46,14 @@ def main() -> None:
             Placement,
             SegmentId,
         )
-        from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
+        from cosmic_foundry.kernels import (
+            AccessPattern,
+            Dispatch,
+            Extent,
+            Op,
+            Region,
+            Stencil,
+        )
 
         n = 8
         half = n // 2  # 4
@@ -77,21 +84,30 @@ def main() -> None:
             Extent((slice(1, half), slice(1, n - 1), slice(1, n - 1)))
         )
 
-        @op(
-            access_pattern=Stencil.seven_point(),
-            reads=("phi",),
-            writes=("laplacian_phi",),
-        )
-        def laplacian(phi, i, j, k):  # type: ignore[no-untyped-def]
-            return (
-                phi[i - 1, j, k]
-                + phi[i + 1, j, k]
-                + phi[i, j - 1, k]
-                + phi[i, j + 1, k]
-                + phi[i, j, k - 1]
-                + phi[i, j, k + 1]
-                - 6.0 * phi[i, j, k]
-            )
+        from dataclasses import dataclass
+        from typing import Any, ClassVar
+
+        @dataclass(frozen=True)
+        class Laplacian(Op):
+            reads: ClassVar[tuple[str, ...]] = ("phi",)
+            writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
+
+            @property
+            def access_pattern(self) -> AccessPattern:
+                return Stencil.seven_point()
+
+            def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
+                return (
+                    phi[i - 1, j, k]
+                    + phi[i + 1, j, k]
+                    + phi[i, j - 1, k]
+                    + phi[i, j + 1, k]
+                    + phi[i, j, k - 1]
+                    + phi[i, j, k + 1]
+                    - 6.0 * phi[i, j, k]
+                )
+
+        laplacian = Laplacian()
 
         # Verify coverage before dispatching.
         required = owned_region.extent.expand(laplacian.access_pattern)

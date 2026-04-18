@@ -15,13 +15,15 @@ import json
 import socket
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, ClassVar
 
 import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.fields import DiscreteField, Placement, SegmentId
-from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
+from cosmic_foundry.kernels import AccessPattern, Dispatch, Extent, Op, Region, Stencil
 
 # ---------------------------------------------------------------------------
 # Shared Op (mirrors test_kernels.py; defined here to keep tests independent)
@@ -30,21 +32,41 @@ from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
 N = 8
 
 
-@op(
-    access_pattern=Stencil.seven_point(),
-    reads=("phi",),
-    writes=("laplacian_phi",),
-)
-def seven_point_laplacian(phi, i, j, k):  # type: ignore[no-untyped-def]
-    return (
-        phi[i - 1, j, k]
-        + phi[i + 1, j, k]
-        + phi[i, j - 1, k]
-        + phi[i, j + 1, k]
-        + phi[i, j, k - 1]
-        + phi[i, j, k + 1]
-        - 6.0 * phi[i, j, k]
-    )
+@dataclass(frozen=True)
+class SevenPointLaplacian(Op):
+    """Seven-point finite-difference Laplacian on a 3-D grid.
+
+    Map:
+        domain   — φ: DiscreteField on Ω_h ⊆ ℝ³
+        codomain — ∇²φ: DiscreteField on Ω_h^int ⊆ Ω_h
+        operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
+                                + φ_{i,j+1,k} + φ_{ij,k-1} + φ_{ij,k+1}
+                                - 6 φ_{ijk}
+
+    Θ = {h}, p = 2 — second-order finite-difference approximation of ∇².
+    Exact for polynomials of degree ≤ 2.
+    """
+
+    reads: ClassVar[tuple[str, ...]] = ("phi",)
+    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
+
+    @property
+    def access_pattern(self) -> AccessPattern:
+        return Stencil.seven_point()
+
+    def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
+        return (
+            phi[i - 1, j, k]
+            + phi[i + 1, j, k]
+            + phi[i, j - 1, k]
+            + phi[i, j + 1, k]
+            + phi[i, j, k - 1]
+            + phi[i, j, k + 1]
+            - 6.0 * phi[i, j, k]
+        )
+
+
+seven_point_laplacian = SevenPointLaplacian()
 
 
 @pytest.fixture()

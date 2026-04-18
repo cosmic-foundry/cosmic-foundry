@@ -2,31 +2,62 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any, ClassVar
+
 import jax
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.kernels import BoundOp, Dispatch, Extent, Region, Stencil, op
-
-
-@op(
-    access_pattern=Stencil.seven_point(),
-    reads=("phi",),
-    writes=("laplacian_phi",),
+from cosmic_foundry.kernels import (
+    AccessPattern,
+    BoundOp,
+    Dispatch,
+    Extent,
+    Op,
+    Region,
+    Stencil,
 )
-def seven_point_laplacian(phi, i, j, k):
-    return (
-        phi[i - 1, j, k]
-        + phi[i + 1, j, k]
-        + phi[i, j - 1, k]
-        + phi[i, j + 1, k]
-        + phi[i, j, k - 1]
-        + phi[i, j, k + 1]
-        - 6.0 * phi[i, j, k]
-    )
 
 
-def test_op_decorator_attaches_metadata() -> None:
+@dataclass(frozen=True)
+class SevenPointLaplacian(Op):
+    """Seven-point finite-difference Laplacian on a 3-D grid.
+
+    Map:
+        domain   — φ: DiscreteField on Ω_h ⊆ ℝ³
+        codomain — ∇²φ: DiscreteField on Ω_h^int ⊆ Ω_h
+        operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
+                                + φ_{i,j+1,k} + φ_{ij,k-1} + φ_{ij,k+1}
+                                - 6 φ_{ijk}
+
+    Θ = {h}, p = 2 — second-order finite-difference approximation of ∇².
+    Exact for polynomials of degree ≤ 2.
+    """
+
+    reads: ClassVar[tuple[str, ...]] = ("phi",)
+    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
+
+    @property
+    def access_pattern(self) -> AccessPattern:
+        return Stencil.seven_point()
+
+    def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
+        return (
+            phi[i - 1, j, k]
+            + phi[i + 1, j, k]
+            + phi[i, j - 1, k]
+            + phi[i, j + 1, k]
+            + phi[i, j, k - 1]
+            + phi[i, j, k + 1]
+            - 6.0 * phi[i, j, k]
+        )
+
+
+seven_point_laplacian = SevenPointLaplacian()
+
+
+def test_op_class_exposes_metadata() -> None:
     assert seven_point_laplacian.access_pattern == Stencil.seven_point()
     assert seven_point_laplacian.reads == ("phi",)
     assert seven_point_laplacian.writes == ("laplacian_phi",)
