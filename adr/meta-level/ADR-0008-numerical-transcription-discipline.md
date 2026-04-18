@@ -83,7 +83,7 @@ the final decision, not a commitment.
 framing, and points to ADR-0007 as the operative discipline for
 any numerical transcription that happens before the final text
 lands. The decision must be made before Epoch 7 (Microphysics)
-begins — see `roadmap/object-level/README.md` §Crossroads / Open Decisions for
+begins — see `roadmap/implementation/README.md` §Crossroads / Open Decisions for
 the crossroad.
 
 ## Consequences
@@ -120,8 +120,8 @@ the crossroad.
   the LOC guideline this ADR will partially relax.
 - ADR-0007 (replication workflow) — provides the verification-
   first discipline this ADR will extend.
-- [`roadmap/object-level/README.md`](../../roadmap/object-level/README.md) §Crossroads /
+- [`roadmap/implementation/README.md`](../../roadmap/implementation/README.md) §Crossroads /
   Open Decisions — records the
   crossroad for discoverability.
-- [`roadmap/object-level/epoch-07-microphysics.md`](../../roadmap/object-level/epoch-07-microphysics.md)
+- [`roadmap/implementation/epoch-07-microphysics.md`](../../roadmap/implementation/epoch-07-microphysics.md)
   — the epoch where this decision becomes concrete.

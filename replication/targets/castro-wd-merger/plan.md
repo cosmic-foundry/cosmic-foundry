@@ -21,7 +21,7 @@ In order:
 
 Union across the problems above:
 
-- [C0001 — compressible Euler (Cartesian)](../../capabilities/C0001-compressible-euler-cartesian.md)
-- [C0002 — gamma-law EOS](../../capabilities/C0002-gamma-law-eos.md)
-- [C0003 — passive-scalar advection](../../capabilities/C0003-passive-scalar-advection.md)
-- [C0004 — linear-mode growth-rate diagnostic](../../capabilities/C0004-linear-mode-diagnostic.md)
+- [C0001 — compressible Euler (Cartesian)](../../../capabilities/C0001-compressible-euler-cartesian.md)
+- [C0002 — gamma-law EOS](../../../capabilities/C0002-gamma-law-eos.md)
+- [C0003 — passive-scalar advection](../../../capabilities/C0003-passive-scalar-advection.md)
+- [C0004 — linear-mode growth-rate diagnostic](../../../capabilities/C0004-linear-mode-diagnostic.md)

@@ -4,7 +4,7 @@ This plane is the high-level, time-ordered plan for the platform and
 simulation capabilities Cosmic Foundry will gain. It answers **what the
 codebase is building**.
 
-The companion [meta-level roadmap](../meta-level/README.md) answers how
+The companion [meta-level roadmap](../verification/README.md) answers how
 those object-level claims are verified, validated, regenerated, and
 audited.
 

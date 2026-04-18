@@ -27,7 +27,7 @@ for all engine work that makes a numerical claim. Concretely:
 
 - **Spec before code.** Engine capabilities (a solver, a
   reaction network, a tracer advector) get canonical specs in
-  `replication/capabilities/`; test problems from target codes
+  `capabilities/`; test problems from target codes
   (a KH setup, a 1D detonation) get specs under
   `replication/targets/<target>/problems/` that reference their
   capabilities by ID. Capability specs describe the engine

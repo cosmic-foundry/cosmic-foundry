@@ -271,9 +271,9 @@ fastest way to orient without reading the full roadmap planes.
 
 Roadmap documentation is split onto two planes:
 
-- `roadmap/object-level/README.md` — what platform and simulation capabilities
+- `roadmap/implementation/README.md` — what platform and simulation capabilities
   the codebase is building.
-- `roadmap/meta-level/README.md` — how the project verifies, validates,
+- `roadmap/verification/README.md` — how the project verifies, validates,
   regenerates, and audits object-level claims.
 
 Every PR should state whether it advances the object-level track, the
@@ -305,9 +305,9 @@ instead. Simple tick-offs (marking an item complete) can travel with the
 **At the start of a new object-level epoch** (after retrospective PRs
 land and before the first code PR opens), open one documentation PR that
 appends an **Implementation plan** section to the epoch's roadmap file
-(`roadmap/object-level/epoch-NN-*.md`). For meta-level stages, add or
+(`roadmap/implementation/epoch-NN-*.md`). For meta-level stages, add or
 update a dedicated implementation plan such as
-`roadmap/meta-level/reproducibility-meta-generator.md`. The plan is a
+`roadmap/verification/reproducibility-meta-generator.md`. The plan is a
 numbered list of proposed PRs with:
 
 - One-line scope per entry
@@ -350,8 +350,8 @@ The retrospective covers:
    PRs rather than inline retrospective edits; the retrospective
    surfaces the need, the PR executes the change.
 
-3. **Roadmap files** (`roadmap/object-level/README.md`,
-   `roadmap/meta-level/README.md`, and the relevant per-epoch or
+3. **Roadmap files** (`roadmap/implementation/README.md`,
+   `roadmap/verification/README.md`, and the relevant per-epoch or
    meta-stage implementation plans). Does the upcoming object-level or
    meta-level scope still make sense given what we built? Are the design
    prerequisites still the right ones? Are the exit criteria still

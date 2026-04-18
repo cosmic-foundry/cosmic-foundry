@@ -538,7 +538,7 @@ protocol.
   `WarpSpecializedPolicy` and the algorithm / execution separation).
 - `research/07-implications.md` §7a item 2 (kernel abstraction
   implications for the engine's core infrastructure layer).
-- [`roadmap/object-level/epoch-01-kernels.md`](../../roadmap/object-level/epoch-01-kernels.md)
+- [`roadmap/implementation/epoch-01-kernels.md`](../../roadmap/implementation/epoch-01-kernels.md)
   (implementation constraints and exit criterion for Epoch 1).
 - ADR-0002 (JAX primary backend) — amended 2026-04-15 to reference
   this ADR for the Dispatch / Op / Region / Policy vocabulary.

@@ -4,7 +4,7 @@ This plane is the roadmap for reproducibility, verification, validation,
 provenance, and evidence. It answers **how Cosmic Foundry proves and
 regenerates object-level claims**.
 
-The companion [object-level roadmap](../object-level/README.md) answers
+The companion [object-level roadmap](../implementation/README.md) answers
 what platform and simulation capabilities the codebase is building.
 
 ## Framing
@@ -36,7 +36,7 @@ capability ordering except by recording explicit evidence dependencies.
 | M2 | [ADR-0013](../../adr/meta-level/ADR-0013-derivation-first-lane.md), `derivations/` | Lane A/B/C provenance discipline and derivation documents for physics capabilities. | Active; first derivation pending |
 | M3 | This file | Capability intent documentation: for each existing platform capability, a clear spec stating what it computes and how an independent actor would verify it. The capsule tooling (M3b) is deferred until claims are documented clearly enough to be worth collecting. | Current focus |
 | M3b | [reproducibility-meta-generator.md](reproducibility-meta-generator.md), [ADR-0015](../../adr/meta-level/ADR-0015-reproducibility-meta-generator.md) | Reproducibility capsules, collect/dry-run/render/compare, recursive approximate idempotence. | Planned; depends on M3 |
-| M4 | [epoch-03-platform-services.md](../object-level/epoch-03-platform-services.md) | Validation manifests, provenance sidecars, comparison-result schema, simulation-specification format. | Planned for Epoch 3 |
+| M4 | [epoch-03-platform-services.md](../implementation/epoch-03-platform-services.md) | Validation manifests, provenance sidecars, comparison-result schema, simulation-specification format. | Planned for Epoch 3 |
 | M5 | Application-repo capsule integration | Application capability capsules, validation products, evidence idempotence, multi-repository regeneration. | Future |
 
 ## Current Focus: M3 Capability Intent Documentation

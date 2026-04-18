@@ -19,7 +19,7 @@ that story.
   and variant-level transcription drift. Its grain is one equation per
   entry — too fine for capability-level narrative.
 - [`research/06-12-licensing.md`](../../research/06-12-licensing.md) and
-  [`roadmap/object-level/README.md`](../../roadmap/object-level/README.md) state a
+  [`roadmap/implementation/README.md`](../../roadmap/implementation/README.md) state a
   licensing principle:
   copyleft references (GADGET-4, RAMSES, MESA, SWIFT, PLUTO, Arepo, ...)
   are consulted *through published papers only*; any reimplementation is
@@ -117,7 +117,7 @@ Required sections:
 6. **Lane and license provenance.** One of `A`, `B`, or `C` with a
    one-line justification. For Lane B, name the papers consulted
    and explicitly record that the reference code was not read.
-7. **Linked capability specs.** IDs of `replication/capabilities/`
+7. **Linked capability specs.** IDs of `capabilities/`
    entries that consume this derivation.
 
 A `derivations/README.md` will be authored in a follow-up PR alongside
@@ -351,7 +351,7 @@ missing concept surfaced.
 ```
 author writes derivation (derivations/DER-NNNN-*.md)
   -> SymPy checks execute in pytest (CI-gated)
-  -> capability spec (replication/capabilities/CNNNN-*.md) links the derivation
+  -> capability spec (capabilities/CNNNN-*.md) links the derivation
   -> engine implementation lands with capability spec + derivation + golden tests
   -> formula register gains per-formula entries where coefficients are load-bearing
 ```
