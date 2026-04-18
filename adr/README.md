@@ -19,14 +19,33 @@ for the authoritative rule.
   `adr-template.md` to `ADR-NNNN-<short-title>.md` and add a
   line to this index in the same PR.
 
+## Architecture Tracks
+
+Cosmic Foundry tracks architecture at two levels:
+
+- **Object-level architecture** decides what the platform and application
+  repositories are: execution model, kernels, mesh, diagnostics, I/O,
+  visualization, manifests, repository boundaries, and eventually physics
+  capabilities.
+- **Meta-level architecture** decides how the project verifies and
+  regenerates object-level claims: PR discipline, replication workflow,
+  derivation lanes, numerical-transcription discipline, validation
+  evidence, and reproducibility capsules.
+
+Some ADRs bridge both tracks. In that case the index places the ADR where
+its primary ownership lives and calls out the cross-track dependency in
+the summary.
+
 ## Index
 
-ADRs are grouped by concern cluster to keep the family close to an
-orthogonal basis (see `AI.md` → *Epoch retrospective* → ADR set as a
-whole). The numbering reflects chronological order of adoption and is
-preserved across regroupings.
+ADRs are grouped first by architecture track, then by concern cluster, to
+keep the family close to an orthogonal basis (see `AI.md` → *Epoch
+retrospective* → ADR set as a whole). The numbering reflects chronological
+order of adoption and is preserved across regroupings.
 
-### Engine foundation
+## Object-Level Architecture
+
+### Engine Foundation
 
 Source language, kernel backend, host parallelism, and default
 numerical precision — the load-bearing choices every later ADR builds on.
@@ -53,7 +72,7 @@ numerical precision — the load-bearing choices every later ADR builds on.
   mixed-precision experimentation begins, to add an explicit
   per-kernel opt-in for lower dtypes.
 
-### Kernel model
+### Kernel Model
 
 The Op / Region / Policy / Dispatch vocabulary and the descriptors that
 extend it (halo exchange, global reductions).
@@ -79,11 +98,51 @@ extend it (halo exchange, global reductions).
   the boundary-flux balance test pattern for outflow BCs and a
   documentation requirement for conservation-law validity conditions.
 
-### Process and verification
+### Organization And Multi-Repo Architecture
 
-How work is organized — branch/PR discipline, the replication
-workflow, transcription-heavy files, and the derivation lane for
-physics capabilities.
+How the project is structured across repositories — the platform/application
+split, where observational data lives, and how application repos relate to
+the platform and to each other.
+
+- [**ADR-0014**](ADR-0014-platform-application-architecture.md) —
+  Platform / application repository architecture: cosmic-foundry is the
+  organizational platform providing computation infrastructure and manifest
+  tooling; domain-specific application repos provide physics implementations
+  and observational validation data. Introduces `cosmic_foundry.manifests`
+  as the shared data-pipeline infrastructure. Bridges to the meta-level
+  track because the manifest machinery carries validation and provenance
+  contracts.
+
+### Documentation And Visualization
+
+Authoring and presentation of engine output — docs toolchain and
+visualization stack.
+
+- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) —
+  Sphinx + MyST-NB documentation stack with `sphinx-design`;
+  `sphinx-autodoc2` for API reference; `sphinx-build -W` in CI.
+  Hosted on GitHub Pages at
+  `cosmic-foundry.github.io/cosmic-foundry/`. Interactivity is
+  parameter-driven: sliders feed **live** simulation outputs computed
+  in the browser by engine-authored WebGPU / WASM artifacts (per
+  ADR-0006), not by a browser-side Python runtime. Rendered pages
+  hide notebook-cell chrome by default. Theme (furo vs
+  pydata-sphinx-theme) and CSS polish land with the first substantial
+  docs PR.
+- [**ADR-0006**](ADR-0006-visualization-stack.md) — Visualization
+  and science-communication stack: Zarr v3 alongside HDF5;
+  WebGPU-first browser target with WebGL2 fallback; perceptual
+  colormaps via cmasher / cmocean; pyvista and vispy for desktop
+  3-D; pytest-mpl plus an in-repo perceptual-diff harness for
+  visual regressions.
+
+## Meta-Level Architecture
+
+### Process, Verification, And Reproducibility
+
+How work is organized and how object-level claims become auditable —
+branch/PR discipline, replication workflow, transcription-heavy files,
+derivation lanes, and reproducibility capsules.
 
 - [**ADR-0005**](ADR-0005-branch-pr-attribution-discipline.md) —
   Branch, PR, commit-size, history, and attribution discipline for
@@ -122,39 +181,3 @@ physics capabilities.
   declared volatile fields are normalized. Starts with platform-only
   collect, dry-run, and structural comparison support; application
   repositories own domain physics content and acceptance thresholds.
-
-### Organization and multi-repo architecture
-
-How the project is structured across repositories — the platform/application
-split, where observational data lives, and how application repos relate to
-the platform and to each other.
-
-- [**ADR-0014**](ADR-0014-platform-application-architecture.md) —
-  Platform / application repository architecture: cosmic-foundry is the
-  organizational platform providing computation infrastructure and manifest
-  tooling; domain-specific application repos provide physics implementations
-  and observational validation data. Introduces `cosmic_foundry.manifests`
-  as the shared data-pipeline infrastructure.
-
-### Documentation and visualization
-
-Authoring and presentation of engine output — docs toolchain and
-visualization stack.
-
-- [**ADR-0004**](ADR-0004-sphinx-myst-docs-stack.md) —
-  Sphinx + MyST-NB documentation stack with `sphinx-design`;
-  `sphinx-autodoc2` for API reference; `sphinx-build -W` in CI.
-  Hosted on GitHub Pages at
-  `cosmic-foundry.github.io/cosmic-foundry/`. Interactivity is
-  parameter-driven: sliders feed **live** simulation outputs computed
-  in the browser by engine-authored WebGPU / WASM artifacts (per
-  ADR-0006), not by a browser-side Python runtime. Rendered pages
-  hide notebook-cell chrome by default. Theme (furo vs
-  pydata-sphinx-theme) and CSS polish land with the first substantial
-  docs PR.
-- [**ADR-0006**](ADR-0006-visualization-stack.md) — Visualization
-  and science-communication stack: Zarr v3 alongside HDF5;
-  WebGPU-first browser target with WebGL2 fallback; perceptual
-  colormaps via cmasher / cmocean; pyvista and vispy for desktop
-  3-D; pytest-mpl plus an in-repo perceptual-diff harness for
-  visual regressions.

@@ -9,10 +9,15 @@
 
 ## Current position
 
-**Epoch 2 — Mesh and AMR — in progress.**
+**Object-level track:** Epoch 2 — Mesh and AMR — in progress.
 
 All design prerequisites resolved. Implementation underway per the
 sequencing plan in `roadmap/epoch-02-mesh.md`.
+
+**Meta-level track:** Reproducibility meta-generator detour planned.
+Complete the platform-only capsule convergence slice in
+`roadmap/reproducibility-meta-generator.md` before resuming Epoch 2 item
+#5.
 
 ## Completed epochs
 
@@ -56,6 +61,18 @@ Per the implementation plan in `roadmap/epoch-02-mesh.md`:
 
 Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 `roadmap/epoch-02-mesh.md`.
+
+## Meta-level progress
+
+Per the two-track roadmap in `roadmap/index.md`:
+
+| ID | Item | PR | Status |
+|----|------|----|--------|
+| M0 | Branch / PR / attribution discipline | #8 area | Merged |
+| M1 | Replication workflow and externally grounded tests | #63, #64, #69, #70 | Merged |
+| M2 | Derivation-first lane | #81 area | Merged |
+| M3 | Reproducibility meta-generator architecture and convergence plan | #93 | Planned |
+| M4 | Platform validation manifests, provenance, comparison-result schema, sim-spec format | — | Planned |
 
 ## Next planned work
 

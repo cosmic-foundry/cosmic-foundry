@@ -1,10 +1,12 @@
-# Cosmic Foundry — Implementation Roadmap
+# Cosmic Foundry — Two-Track Implementation Roadmap
 
-This document is the high-level, time-ordered plan for building Cosmic
-Foundry. It is derived from RESEARCH.md — specifically the union of
-capabilities in §6 and the engine-design implications in §7 — and
-expresses a development sequence for a **platform that the organization's
-simulation application repositories build on top of**.
+This document is the high-level plan for building Cosmic Foundry across
+two coordinated tracks:
+
+- the **object-level roadmap**, which says what platform and simulation
+  capabilities the codebase will gain; and
+- the **meta-level roadmap**, which says how the project verifies,
+  validates, regenerates, and audits those object-level claims.
 
 The roadmap is intentionally strategic: each epoch is weeks-to-months
 of real work, not a sprint. Granularity is "order of operations,"
@@ -24,6 +26,22 @@ N-body, cosmology, particle / meshless / moving-mesh methods, and
 stellar evolution — and whose platform services (manifest
 infrastructure, provenance, simulation specifications, comparison-result
 contracts) are reusable by every downstream application repository.
+
+**Two-track architecture.** Object-level work builds the engine,
+platform services, and application-facing capability surface. Meta-level
+work builds the evidence machinery that proves those capabilities are
+specified, reproducible, externally grounded, and regenerable. The tracks
+are separate so the object-level roadmap does not absorb verification
+mechanics, and the meta-level roadmap does not decide scientific or
+computational scope.
+
+**Gating rule.** Meta-level work may deliberately pause object-level work
+when the project needs stronger confidence before adding more complexity.
+Such detours should be short, explicitly scoped, and should define the
+condition for returning to the object-level roadmap. PR #93 introduces
+the first such detour: build enough of the reproducibility meta-generator
+to converge on the current platform state before resuming Epoch 2 item
+#5.
 
 **Platform and application roles.** Cosmic Foundry is the organizational
 platform. Application repositories — covering stellar physics, cosmology,
@@ -55,6 +73,13 @@ validating, and tracking these lives in the platform
 (`cosmic_foundry.manifests`); application repos provide domain-specific
 manifests and adapters that conform to platform-defined protocols and
 base schemas.
+
+**Principle — executable evidence before scale.** Object-level claims
+should be backed by executable meta-level evidence as early as possible:
+specs, formulas, derivations, golden fixtures, validation manifests,
+capsules, dry-run checks, and eventually regenerated evidence bundles.
+When the evidence workflow cannot describe the current platform state,
+fix the workflow before increasing the object-level surface area.
 
 **Principle — easy case before hard case.** Within each subsystem,
 ship the simplest instance before the general one: uniform grid before
@@ -133,10 +158,17 @@ an ADR.
 
 ---
 
-## 3. Epochs
+## 3. Object-Level Roadmap
 
-Each epoch is detailed in its own file. Stretch epochs are optional and
-enter the schedule only once the baseline sequence is stable.
+The object-level roadmap is the time-ordered sequence for the platform
+and simulation capabilities. It is derived from RESEARCH.md —
+specifically the union of capabilities in §6 and the engine-design
+implications in §7 — and expresses the development sequence for the
+platform that the organization's simulation application repositories
+build on top of.
+
+Each object-level epoch is detailed in its own file. Stretch epochs are
+optional and enter the schedule only once the baseline sequence is stable.
 
 | # | File | Scope |
 |--:|------|-------|
@@ -158,7 +190,47 @@ enter the schedule only once the baseline sequence is stable.
 
 ---
 
-## 4. Cross-cutting, continuous concerns
+## 4. Meta-Level Roadmap
+
+The meta-level roadmap is the verification, validation, and
+reproducibility track. It defines the machinery that keeps object-level
+claims auditable as the platform and application repositories grow.
+
+Meta-level work is not a separate product line. It is the confidence
+infrastructure for the object-level roadmap, and it can gate object-level
+work when the project needs to make its evidence workflow executable
+before adding more engine surface area.
+
+| ID | File / Authority | Scope | Status |
+|----|------------------|-------|--------|
+| M0 | [ADR-0005](../adr/ADR-0005-branch-pr-attribution-discipline.md), `AI.md` | Branch, PR, commit-size, history, and attribution discipline. | Active |
+| M1 | [ADR-0007](../adr/ADR-0007-replication-workflow.md), [`replication/`](../replication/README.md) | Bounded-increment verification, capability specs, golden-data harness, formulas register, externally grounded tests. | Active |
+| M2 | [ADR-0013](../adr/ADR-0013-derivation-first-lane.md), `derivations/` | Lane A/B/C provenance discipline and derivation documents for physics capabilities. | Active; first derivation pending |
+| M3 | [reproducibility-meta-generator.md](reproducibility-meta-generator.md), [ADR-0015](../adr/ADR-0015-reproducibility-meta-generator.md) | Reproducibility capsules, collect/dry-run/render/compare, recursive approximate idempotence. | Planned detour before Epoch 2 item #5 |
+| M4 | [epoch-03-platform-services.md](epoch-03-platform-services.md) | Validation manifests, provenance sidecars, comparison-result schema, simulation-specification format. | Planned for Epoch 3 |
+| M5 | Application-repo capsule integration | Application capability capsules, validation products, evidence idempotence, multi-repository regeneration. | Future |
+
+### Current Meta-Level Detour
+
+Before resuming the object-level Epoch 2 task-graph driver, complete the
+M3 convergence slice:
+
+```text
+collect current platform state
+-> dry-run capsule references
+-> render independent-actor instructions
+-> collect again from the same or regenerated state
+-> compare normalized capsules for structural idempotence
+```
+
+The exit criteria for the detour live in
+[reproducibility-meta-generator.md](reproducibility-meta-generator.md).
+Once they are satisfied, the roadmap returns to object-level Epoch 2 item
+#5.
+
+---
+
+## 5. Cross-Track Continuous Concerns
 
 These grow every epoch; they are not tied to a single phase.
 
@@ -203,7 +275,7 @@ These grow every epoch; they are not tied to a single phase.
 
 ---
 
-## 5. Crossroads / open decisions
+## 6. Crossroads / Open Decisions
 
 These are flagged now and must be resolved before entering the named
 epoch, via an ADR:
@@ -260,11 +332,12 @@ epoch, via an ADR:
 
 ---
 
-## 6. Relationship to RESEARCH.md
+## 7. Relationship To RESEARCH.md
 
-Every physics epoch above traces back to specific capabilities in
-RESEARCH.md §6. Epoch 3 (Platform Services) is organizational
-infrastructure rather than a physics capability and does not map to §6.
+Every object-level physics epoch above traces back to specific
+capabilities in RESEARCH.md §6. Epoch 3 (Platform Services) and the
+meta-level roadmap are organizational and verification infrastructure
+rather than physics capabilities and do not map to §6.
 
 | Epoch | RESEARCH.md §6 capabilities covered |
 |------:|-------------------------------------|

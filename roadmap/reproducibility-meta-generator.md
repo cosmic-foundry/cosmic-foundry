@@ -1,9 +1,13 @@
 # Reproducibility Meta-Generator Roadmap
 
-> Cross-cutting verification detour. See
+> Meta-level verification detour. See
 > [ADR-0015](../adr/ADR-0015-reproducibility-meta-generator.md).
 
 ## Purpose
+
+This is the first focused implementation plan in the meta-level roadmap:
+the track concerned with reproducibility, verification, validation,
+provenance, and evidence rather than object-level engine capabilities.
 
 Before continuing the current object-level roadmap, build enough of the
 reproducibility meta-generator to exercise it against the platform state
@@ -131,11 +135,12 @@ The detour is complete when:
 
 ## Relationship To The Object-Level Roadmap
 
-This roadmap does not replace Epoch 2. It is a verification detour that
-should run before the next mesh-driver PR because the task-graph driver
-will become a central orchestration point for later physics verification.
-The meta-generator should be able to describe the platform state and its
-verification plan before that orchestration layer becomes more complex.
+This roadmap does not replace the object-level Epoch 2 roadmap. It is a
+meta-level verification detour that should run before the next
+mesh-driver PR because the task-graph driver will become a central
+orchestration point for later physics verification. The meta-generator
+should be able to describe the platform state and its verification plan
+before that orchestration layer becomes more complex.
 
 After this detour, Epoch 2 resumes with:
 

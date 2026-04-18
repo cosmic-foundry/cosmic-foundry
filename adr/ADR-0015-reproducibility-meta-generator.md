@@ -44,6 +44,11 @@ The meta-generator emits and optionally executes a versioned
 plus human-readable notes that describe how to regenerate and verify a
 physics engine or capability set at a specific point in time.
 
+This ADR belongs to the **meta-level architecture** track: it defines how
+Cosmic Foundry makes object-level platform and physics claims
+regenerable, verifiable, and auditable. It does not add an object-level
+simulation capability.
+
 ### Reproducibility capsule
 
 A capsule is an evidence-oriented contract, not a source archive. It
