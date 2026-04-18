@@ -107,7 +107,8 @@ The primary kernel backend is **JAX + XLA**.
 
 ## Cross-references
 
-- [`roadmap/index.md`](../roadmap/index.md) §2 (Technology baseline).
+- [`roadmap/object-level.md`](../roadmap/object-level.md) §Technology
+  Baseline.
 - [`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md) §0.2, §0.6.
 - [`roadmap/epoch-01-kernels.md`](../roadmap/epoch-01-kernels.md)
   (kernel descriptor, where the interface solidifies).

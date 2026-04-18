@@ -101,7 +101,8 @@ baseline.
   XLA version on a fixed device; collective reductions over floats
   are not associative, so cross-topology bitwise reproducibility is
   not claimed.
-- **Neutral.** `roadmap/index.md` §2 currently lists `mpi4py`,
+- **Neutral.** `roadmap/object-level.md` §Technology Baseline currently
+  lists `mpi4py`,
   `mpi4jax`, and parallel HDF5 as baseline dependencies — a
   follow-up roadmap edit is required to align §2 with this ADR.
   `environment/cosmic_foundry.yml` includes `openmpi` as a conda
@@ -134,9 +135,9 @@ baseline.
 
 ## Cross-references
 
-- [`roadmap/index.md`](../roadmap/index.md) §2 (Technology baseline
-  — requires a follow-up edit to align with this ADR), §5
-  (crossroads: host-parallelism model, now resolved).
+- [`roadmap/object-level.md`](../roadmap/object-level.md) §Technology
+  Baseline (requires a follow-up edit to align with this ADR) and
+  §Crossroads / Open Decisions (host-parallelism model, now resolved).
 - [`roadmap/epoch-00-bootstrap.md`](../roadmap/epoch-00-bootstrap.md)
   §0.7 (`cosmic-foundry hello` — requires a follow-up edit to replace
   `mpi4py.MPI.Init()` with `jax.distributed.initialize()`).

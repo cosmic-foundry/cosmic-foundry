@@ -63,7 +63,7 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 ## Meta-level progress
 
-Per the two-track roadmap in `roadmap/index.md`:
+Per the meta-level roadmap in `roadmap/meta-level.md`:
 
 | ID | Item | PR | Status |
 |----|------|----|--------|
@@ -89,6 +89,8 @@ format. See `roadmap/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 
-Full epoch plan: [`roadmap/index.md`](roadmap/index.md)
+Roadmap index: [`roadmap/index.md`](roadmap/index.md)
+Object-level roadmap: `roadmap/object-level.md`
+Meta-level roadmap: `roadmap/meta-level.md`
 Per-epoch details: `roadmap/epoch-NN-*.md`
 Meta-generator roadmap: `roadmap/reproducibility-meta-generator.md`
