@@ -26,8 +26,8 @@ from typing import Any
 import h5py
 import numpy as np
 
-from cosmic_foundry.kernels import Sink
 from cosmic_foundry.observability import get_logger
+from cosmic_foundry.sink import Sink
 
 _log = get_logger(__name__)
 

@@ -22,16 +22,10 @@ from typing import Any
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.kernels import (
-    AccessPattern,
-    ComponentId,
-    Extent,
-    Map,
-    Region,
-    execute_pointwise,
-)
+from cosmic_foundry.descriptor import AccessPattern, Extent, Region
+from cosmic_foundry.map import Map, execute_pointwise
 from cosmic_foundry.mesh import DistributedField, FieldSegment
-from cosmic_foundry.record import Placement
+from cosmic_foundry.record import ComponentId, Placement
 
 # ---------------------------------------------------------------------------
 # Shared Op (mirrors test_kernels.py; defined here to keep tests independent)

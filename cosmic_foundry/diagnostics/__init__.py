@@ -12,8 +12,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from cosmic_foundry.kernels import Extent, Map, Record, Region, Sink
+from cosmic_foundry.descriptor import Extent, Region
+from cosmic_foundry.map import Map
 from cosmic_foundry.mesh import DistributedField
+from cosmic_foundry.record import Record
+from cosmic_foundry.sink import Sink
 
 
 class DiagnosticReducer(Map):

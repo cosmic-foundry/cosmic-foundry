@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import ContinuousField
+from cosmic_foundry.field import ContinuousField
 from cosmic_foundry.mesh import (
     DistributedField,
     FieldDiscretization,

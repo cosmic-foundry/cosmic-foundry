@@ -13,8 +13,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from cosmic_foundry.descriptor import AccessPattern, Extent, Region
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
-from cosmic_foundry.kernels import AccessPattern, Extent, Map, Region, execute_pointwise
+from cosmic_foundry.map import Map, execute_pointwise
 from cosmic_foundry.observability import StructuredFormatter, configure
 
 # ---------------------------------------------------------------------------

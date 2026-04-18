@@ -6,15 +6,10 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from cosmic_foundry.kernels import (
-    AccessPattern,
-    ComponentId,
-    Descriptor,
-    Extent,
-    Map,
-    Region,
-)
+from cosmic_foundry.descriptor import AccessPattern, Descriptor, Extent, Region
+from cosmic_foundry.map import Map
 from cosmic_foundry.mesh import DistributedField, FieldSegment
+from cosmic_foundry.record import ComponentId
 
 
 @dataclass(frozen=True)

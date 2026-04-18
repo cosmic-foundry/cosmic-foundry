@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml  # type: ignore
 
-from cosmic_foundry.kernels import Record
+from cosmic_foundry.record import Record
 
 
 @dataclass(frozen=True)

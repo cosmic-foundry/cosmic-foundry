@@ -9,13 +9,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.kernels import (
-    AccessPattern,
-    Extent,
-    Map,
-    Region,
-    execute_pointwise,
-)
+from cosmic_foundry.descriptor import AccessPattern, Extent, Region
+from cosmic_foundry.map import Map, execute_pointwise
 
 
 @dataclass(frozen=True)
