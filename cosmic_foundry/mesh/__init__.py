@@ -10,6 +10,7 @@ import numpy as np
 
 from cosmic_foundry.descriptor import AccessPattern, Extent
 from cosmic_foundry.domain import Domain
+from cosmic_foundry.field import Field
 from cosmic_foundry.map import Map
 from cosmic_foundry.record import ComponentId, Placement
 
@@ -184,7 +185,7 @@ partition_domain = PartitionDomain()
 
 
 @dataclass(frozen=True)
-class FieldSegment:
+class FieldSegment(Field):
     """A discrete scalar field on one spatial block: f_h: B_h → ℝ.
 
     Carries the array payload together with the spatial metadata that
@@ -208,7 +209,7 @@ class FieldSegment:
 
 
 @dataclass(frozen=True)
-class DistributedField:
+class DistributedField(Field):
     """A discrete scalar field over the full domain, partitioned into blocks.
 
     Each segment is a ``FieldSegment`` owned by exactly one rank according
