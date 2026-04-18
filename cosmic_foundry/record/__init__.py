@@ -100,7 +100,7 @@ class Array(Record, Generic[T]):
     together with a Placement recording which process rank owns each element.
 
     This is the general container for structured collections across the
-    simulation: Array[Block] represents a partitioned spatial domain;
+    simulation: Array[Patch] represents a partitioned spatial domain;
     Array[DiscreteField] represents a distributed discrete field.
     """
 

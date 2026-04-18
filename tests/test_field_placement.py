@@ -1,7 +1,7 @@
 """Tests for Placement, covers(), and the Field → Op integration.
 
 Placement unit tests verify the ComponentId→rank mapping API.
-covers() tests verify that Array[Block] correctly reports spatial coverage.
+covers() tests verify that Array[Patch] correctly reports spatial coverage.
 The integration tests run the seven-point Laplacian on φ = x²+y²+z² and
 verify the expected result (6.0) in both single-process and multi-process modes.
 """

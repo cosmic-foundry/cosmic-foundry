@@ -19,13 +19,13 @@ from cosmic_foundry.diagnostics import (
     global_sum,
 )
 from cosmic_foundry.field import DiscreteField
-from cosmic_foundry.mesh import Block, partition_domain
+from cosmic_foundry.mesh import Patch, partition_domain
 from cosmic_foundry.record import Array, ComponentId, Placement
 
 
 def _make_1d_mesh(
     n_cells: int = 8, n_blocks: int = 2, n_ranks: int = 1
-) -> Array[Block]:
+) -> Array[Patch]:
     return partition_domain(
         domain_origin=(0.0,),
         domain_size=(float(n_cells),),
@@ -43,7 +43,7 @@ class SumReducer(DiagnosticReducer):
 
     def execute(
         self,
-        mesh: Array[Block],
+        mesh: Array[Patch],
         fields: dict[str, Array[DiscreteField]],
         region: Region,
         rank: int,
@@ -59,7 +59,7 @@ class VectorReducer(DiagnosticReducer):
 
     def execute(
         self,
-        mesh: Array[Block],
+        mesh: Array[Patch],
         fields: dict[str, Array[DiscreteField]],
         region: Region,
         rank: int,
@@ -86,7 +86,7 @@ def test_global_sum_returns_jax_scalar() -> None:
 def test_global_sum_sums_over_interior_only() -> None:
     """GlobalSum over both blocks sums interior values, not halos."""
     mesh = _make_1d_mesh(n_cells=8, n_blocks=2)
-    # Block 0 interior: [0, 4), block 1 interior: [4, 8)
+    # Patch 0 interior: [0, 4), block 1 interior: [4, 8)
     field = Array(
         elements=(
             DiscreteField(name="rho", payload=jnp.array([1.0, 2.0, 3.0, 4.0])),
@@ -111,7 +111,7 @@ def test_global_sum_restricts_to_region() -> None:
     )
 
     # Region [2, 6) overlaps block 0 at [2,4) and block 1 at [4,6)
-    # Block 0 payload[2:4] = [3, 4]; block 1 payload[0:2] = [5, 6]
+    # Patch 0 payload[2:4] = [3, 4]; block 1 payload[0:2] = [5, 6]
     result = global_sum(mesh, field, Region(Extent((slice(2, 6),))), rank=0)
 
     assert result == pytest.approx(18.0)

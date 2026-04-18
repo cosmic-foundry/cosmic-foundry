@@ -23,6 +23,7 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
     collect_diagnostics,
     global_sum,
 )
+from cosmic_foundry.discretization import Discretization  # noqa: E402
 from cosmic_foundry.field import (  # noqa: E402
     ContinuousField,
     DiscreteField,
@@ -37,14 +38,16 @@ from cosmic_foundry.io import (  # noqa: E402
     merge_rank_files,
     write_array,
 )
+from cosmic_foundry.located_discretization import LocatedDiscretization  # noqa: E402
 from cosmic_foundry.mesh import (  # noqa: E402
-    Block,
     PartitionDomain,
+    Patch,
     covers,
     discretize,
     fill_halo,
     partition_domain,
 )
+from cosmic_foundry.modal_discretization import ModalDiscretization  # noqa: E402
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 from cosmic_foundry.pseudo_riemannian_manifold import (  # noqa: E402
     PseudoRiemannianManifold,
@@ -83,7 +86,10 @@ __all__ = [
     "ComponentId",
     "Descriptor",
     "Placement",
+    "Discretization",
     "IndexedSet",
+    "LocatedDiscretization",
+    "ModalDiscretization",
     "PseudoRiemannianManifold",
     "RiemannianManifold",
     "Set",
@@ -96,7 +102,7 @@ __all__ = [
     "Source",
     "execute_pointwise",
     # mesh
-    "Block",
+    "Patch",
     "PartitionDomain",
     "covers",
     "discretize",
