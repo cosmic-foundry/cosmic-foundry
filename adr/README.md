@@ -111,6 +111,17 @@ physics capabilities.
   checks on load-bearing algebraic steps; Lean is available but
   not a required dependency. Operationalizes the licensing principle
   in `research/06-12-licensing.md` and `roadmap/index.md`.
+- [**ADR-0015**](ADR-0015-reproducibility-meta-generator.md) —
+  Reproducibility meta-generator: platform-owned machinery that emits
+  and optionally executes versioned reproducibility capsules. Capsules
+  combine source maps, architecture basis, environment recipes,
+  capability manifests, verification and validation plans, execution
+  transcripts, and evidence indexes so independent actors can regenerate
+  and audit a physics engine or capability set at a specific point in
+  time. Recursive capsule comparison targets approximate idempotence after
+  declared volatile fields are normalized. Starts with platform-only
+  collect, dry-run, and structural comparison support; application
+  repositories own domain physics content and acceptance thresholds.
 
 ### Organization and multi-repo architecture
 
