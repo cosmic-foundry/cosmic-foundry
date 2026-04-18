@@ -10,19 +10,20 @@ import numpy as np
 
 from cosmic_foundry.descriptor import AccessPattern, Extent
 from cosmic_foundry.domain import Domain
-from cosmic_foundry.field import Field
+from cosmic_foundry.field import ContinuousField, DiscreteField
 from cosmic_foundry.map import Map
-from cosmic_foundry.record import ComponentId, Placement
+from cosmic_foundry.record import Array, ComponentId, Placement
 
 
 @dataclass(frozen=True)
 class Block(Domain):
     """One contiguous patch of uniformly-spaced cells — a spatial sub-domain.
 
-    Owns topology and coordinate metadata only; array payloads live in Field.
+    Owns topology and coordinate metadata only; array payloads live in
+    Array[DiscreteField].  A Block is a Domain: a bounded hyper-rectangular
+    region of ℝⁿ described in global index coordinates.
     """
 
-    block_id: ComponentId
     index_extent: Extent
     origin: tuple[float, ...]  # physical coord of first cell center
     cell_spacing: tuple[float, ...]  # h_i along each axis
@@ -45,73 +46,6 @@ class Block(Domain):
 
 
 @dataclass(frozen=True)
-class UniformGrid(Domain):
-    """Ω_h — a continuous domain Ω partitioned into a structured block grid.
-
-    Produced by :data:`partition_domain`.  Blocks are enumerated in C order
-    (last axis varies fastest) and distributed across ranks round-robin by
-    flat index.
-    """
-
-    blocks: tuple[Block, ...]
-    rank_map: tuple[int, ...]  # rank_map[block_id.value] → owning rank
-
-    @property
-    def ndim(self) -> int:
-        return self.blocks[0].ndim
-
-    def block(self, block_id: ComponentId) -> Block:
-        return self.blocks[block_id.value]
-
-    def owner(self, block_id: ComponentId) -> int:
-        return self.rank_map[block_id.value]
-
-    def blocks_for_rank(self, rank: int) -> tuple[Block, ...]:
-        return tuple(b for b in self.blocks if self.rank_map[b.block_id.value] == rank)
-
-    def fill_halo(
-        self,
-        field: DistributedField,
-        access_pattern: AccessPattern,
-        rank: int,
-    ) -> DistributedField:
-        """Return a new DistributedField with same-rank ghost cells filled.
-
-        Copies ghost-cell values from the interior of neighboring segments
-        owned by the same rank.  Multi-rank halo exchange is not implemented;
-        a NotImplementedError is raised if a ghost cell's source lives on a
-        different rank.
-        """
-        local_ids: set[ComponentId] = {
-            seg.segment_id for seg in field.local_segments(rank)
-        }
-        updated: dict[ComponentId, Any] = {}
-        for target in field.local_segments(rank):
-            updated[target.segment_id] = _fill_segment_halo(
-                target=target,
-                field=field,
-                rank=rank,
-                local_ids=local_ids,
-                access_pattern=access_pattern,
-            )
-        new_segments = tuple(
-            FieldSegment(
-                name=seg.name,
-                segment_id=seg.segment_id,
-                payload=updated.get(seg.segment_id, seg.payload),
-                extent=seg.extent,
-                interior_extent=seg.interior_extent,
-            )
-            for seg in field.segments
-        )
-        return DistributedField(
-            name=field.name,
-            segments=new_segments,
-            placement=field.placement,
-        )
-
-
-@dataclass(frozen=True)
 class PartitionDomain(Map):
     """Partition a continuous domain into a discrete block grid.
 
@@ -119,8 +53,8 @@ class PartitionDomain(Map):
         domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
                    blocks_per_axis ∈ ℤⁿ, n_ranks ∈ ℤ) — a continuous
                    domain specification and discretization parameters
-        codomain — UniformGrid (Ω_h): a partition of Ω into
-                   ∏ blocks_per_axis blocks, each covering
+        codomain — Array[Block]: a finite indexed family of Blocks partitioning
+                   Ω into ∏ blocks_per_axis blocks, each covering
                    n_cells/blocks_per_axis interior cells with spacing
                    h = L/n_cells, assigned to ranks round-robin
         operator — (Ω, h, blocks) ↦ {(B_i, Ω_h^int(B_i), rank_i)}_i
@@ -137,7 +71,7 @@ class PartitionDomain(Map):
         n_cells: tuple[int, ...],
         blocks_per_axis: tuple[int, ...],
         n_ranks: int,
-    ) -> UniformGrid:
+    ) -> Array[Block]:
         ndim = len(n_cells)
         if not (len(domain_origin) == len(domain_size) == len(blocks_per_axis) == ndim):
             raise ValueError(
@@ -155,7 +89,7 @@ class PartitionDomain(Map):
         cpb = tuple(n_cells[i] // blocks_per_axis[i] for i in range(ndim))
 
         blocks: list[Block] = []
-        rank_map: list[int] = []
+        owners: dict[ComponentId, int] = {}
 
         for flat_id, multi_idx in enumerate(
             itertools.product(*(range(blocks_per_axis[i]) for i in range(ndim)))
@@ -170,225 +104,146 @@ class PartitionDomain(Map):
             )
             blocks.append(
                 Block(
-                    block_id=ComponentId(flat_id),
                     index_extent=index_extent,
                     origin=origin,
                     cell_spacing=h,
                 )
             )
-            rank_map.append(flat_id % n_ranks)
+            owners[ComponentId(flat_id)] = flat_id % n_ranks
 
-        return UniformGrid(blocks=tuple(blocks), rank_map=tuple(rank_map))
+        return Array(elements=tuple(blocks), placement=Placement(owners))
 
 
 partition_domain = PartitionDomain()
 
 
-@dataclass(frozen=True)
-class FieldSegment(Field):
-    """A discrete scalar field on one spatial block: f_h: B_h → ℝ.
+def discretize(f: ContinuousField, mesh: Array[Block]) -> Array[DiscreteField]:
+    """Sample *f* at each block's cell centers, returning Array[DiscreteField].
 
-    Carries the array payload together with the spatial metadata that
-    locates it within the global domain.  ``interior_extent`` is set
-    only when ghost cells are present; without it the full ``extent``
-    is the interior.
+    The returned Array has the same Placement as the mesh: element i is the
+    DiscreteField on block i.  Each payload has shape equal to the block's
+    index_extent.shape and no ghost cells.
     """
+    import jax.numpy as jnp
 
-    name: str
-    segment_id: ComponentId
-    payload: Any
-    extent: Extent
-    interior_extent: Extent | None = None
-
-    def __post_init__(self) -> None:
-        if self.interior_extent is not None:
-            intersection = _intersect_extents(self.extent, self.interior_extent)
-            if intersection != self.interior_extent:
-                msg = "FieldSegment interior_extent must be contained in extent"
-                raise ValueError(msg)
+    elements: list[DiscreteField] = []
+    for block in mesh.elements:
+        axes = [block.cell_centers(axis) for axis in range(block.ndim)]
+        coords = jnp.meshgrid(*axes, indexing="ij")
+        payload = f.sample(*coords).payload
+        elements.append(DiscreteField(name=f.name, payload=payload))
+    return Array(elements=tuple(elements), placement=mesh.placement)
 
 
-@dataclass(frozen=True)
-class DistributedField(Field):
-    """A discrete scalar field over the full domain, partitioned into blocks.
-
-    Each segment is a ``FieldSegment`` owned by exactly one rank according
-    to ``placement``.  ``DistributedField`` is the spatial-level counterpart
-    of a ``DiscreteField``; it carries ownership and topology metadata that
-    the pure ``DiscreteField`` deliberately omits.
-    """
-
-    name: str
-    segments: tuple[FieldSegment, ...]
-    placement: Placement
-
-    def __post_init__(self) -> None:
-        for seg in self.segments:
-            try:
-                self.placement.owner(seg.segment_id)
-            except KeyError:
-                msg = (
-                    f"DistributedField segment {seg.segment_id!r} is not "
-                    f"registered in the Placement for {self.name!r}"
-                )
-                raise ValueError(msg) from None
-
-    def segment(self, segment_id: ComponentId) -> FieldSegment:
-        """Return the segment with the given *segment_id*."""
-        for seg in self.segments:
-            if seg.segment_id == segment_id:
-                return seg
-        msg = f"ComponentId {segment_id!r} not found in DistributedField {self.name!r}"
-        raise KeyError(msg)
-
-    def local_segments(self, rank: int) -> tuple[FieldSegment, ...]:
-        """Return the segments owned by *rank* according to the placement."""
-        local_ids = self.placement.segments_for_rank(rank)
-        return tuple(seg for seg in self.segments if seg.segment_id in local_ids)
-
-    def covers(self, required_extent: Extent) -> bool:
-        """Return True iff the union of segment extents covers *required_extent*."""
-        shape = required_extent.shape
-        origin = tuple(s.start for s in required_extent.slices)
-        covered = np.zeros(shape, dtype=bool)
-        for seg in self.segments:
-            intersection = _intersect_extents(seg.extent, required_extent)
-            if intersection is None:
-                continue
-            local_idx = tuple(
-                slice(s.start - o, s.stop - o)
-                for s, o in zip(intersection.slices, origin, strict=False)
-            )
-            covered[local_idx] = True
-        return bool(covered.all())
-
-
-@dataclass(frozen=True)
-class FieldDiscretization(Map):
-    """Discretize a ContinuousField onto a discrete grid of points in its domain.
-
-    The concept is domain-general: sampling f: D → ℝ onto D_h ⊂ D is the
-    same operation whether D is physical space or thermodynamic state space.
-    This implementation covers the spatial case (D = Ω ⊆ ℝⁿ, G = UniformGrid).
-
-    Map:
-        domain   — (f: ContinuousField on Ω ⊆ ℝⁿ, G = {(B_i, h)}) — a
-                   continuous scalar field and a uniform grid partitioning Ω
-                   into blocks B_i with grid spacing h; f.sample is called
-                   with one JAX coordinate array per spatial axis,
-                   broadcast-compatible with block shape
-        codomain — f_h: DistributedField on Ω_h — one FieldSegment per block
-                   with extent = block.index_extent and no ghost cells;
-                   collected into a DistributedField over the full grid
-        operator — (f, G) ↦ f_h where f_h(x_i) = f(x_i) for x_i ∈ Ω_h^int
-
-    Θ = {h}, p = 1 — piecewise-constant representation has L∞ error O(h)
-    for smooth f; verified by MMS.
-    """
-
-    def execute(self, f: Any, grid: Any) -> DistributedField:
-        """Return a DistributedField with payloads equal to f at cell centers."""
-        import jax.numpy as jnp
-
-        leaves: list[FieldSegment] = []
-        owners: dict[ComponentId, int] = {}
-        for block in grid.blocks:
-            axes = [block.cell_centers(axis) for axis in range(block.ndim)]
-            coords = jnp.meshgrid(*axes, indexing="ij")
-            payload = f.sample(*coords).payload
-            leaves.append(
-                FieldSegment(
-                    name=f.name,
-                    segment_id=block.block_id,
-                    payload=payload,
-                    extent=block.index_extent,
-                )
-            )
-            owners[block.block_id] = grid.owner(block.block_id)
-
-        return DistributedField(
-            name=f.name,
-            segments=tuple(leaves),
-            placement=Placement(owners),
+def covers(mesh: Array[Block], extent: Extent) -> bool:
+    """Return True iff the union of block index_extents covers *extent*."""
+    shape = extent.shape
+    origin = tuple(s.start for s in extent.slices)
+    covered = np.zeros(shape, dtype=bool)
+    for block in mesh.elements:
+        intersection = _intersect_extents(block.index_extent, extent)
+        if intersection is None:
+            continue
+        local_idx = tuple(
+            slice(s.start - o, s.stop - o)
+            for s, o in zip(intersection.slices, origin, strict=False)
         )
+        covered[local_idx] = True
+    return bool(covered.all())
 
 
-field_discretization = FieldDiscretization()
-
-
-def _fill_segment_halo(
-    *,
-    target: FieldSegment,
-    field: DistributedField,
-    rank: int,
-    local_ids: set[ComponentId],
+def fill_halo(
+    mesh: Array[Block],
+    field: Array[DiscreteField],
     access_pattern: AccessPattern,
-) -> Any:
-    interior = _segment_interior(target, access_pattern)
-    payload = target.payload
-    for halo_piece in _subtract_extent(target.extent, interior):
-        candidates = _source_candidates(
-            field=field,
-            target=target,
-            halo_piece=halo_piece,
-            access_pattern=access_pattern,
+    rank: int,
+) -> Array[DiscreteField]:
+    """Return a new Array[DiscreteField] with halo-expanded payloads.
+
+    Ghost cells are filled from same-rank neighbor interiors.
+    Each element of *field* must have a payload whose shape equals
+    block.index_extent.shape (i.e. the interior, as returned by discretize()).
+    The returned Array has halo-sized payloads:
+    block.index_extent.expand(access_pattern).shape.  Ghost-cell values are
+    copied from the interior of neighboring blocks owned by the same rank.
+    Multi-rank halo exchange is not implemented; a NotImplementedError is
+    raised if a ghost cell's source lives on a different rank.
+    """
+    import jax.numpy as jnp
+
+    local_ids = mesh.placement.segments_for_rank(rank)
+    updated: dict[ComponentId, DiscreteField] = {}
+    for cid in local_ids:
+        block = mesh[cid]
+        interior = block.index_extent
+        halo_extent = interior.expand(access_pattern)
+
+        expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].payload.dtype)
+        expanded = expanded.at[_payload_slices(halo_extent, interior)].set(
+            field[cid].payload
         )
-        local_candidates = [
-            (src, overlap) for src, overlap in candidates if src.segment_id in local_ids
-        ]
+
+        updated_payload = _fill_block_halo(
+            target_cid=cid,
+            target_interior=interior,
+            target_halo_extent=halo_extent,
+            expanded_payload=expanded,
+            mesh=mesh,
+            field=field,
+            rank=rank,
+            local_ids=local_ids,
+        )
+        updated[cid] = DiscreteField(name=field[cid].name, payload=updated_payload)
+    new_elements = tuple(
+        updated.get(ComponentId(i), field[ComponentId(i)])
+        for i in range(len(field.elements))
+    )
+    return Array(elements=new_elements, placement=field.placement)
+
+
+def _fill_block_halo(
+    *,
+    target_cid: ComponentId,
+    target_interior: Extent,
+    target_halo_extent: Extent,
+    expanded_payload: Any,
+    mesh: Array[Block],
+    field: Array[DiscreteField],
+    rank: int,
+    local_ids: frozenset[ComponentId],
+) -> Any:
+    payload = expanded_payload
+    for halo_piece in _subtract_extent(target_halo_extent, target_interior):
+        candidates: list[tuple[ComponentId, Extent]] = []
+        for i in range(len(mesh.elements)):
+            src_cid = ComponentId(i)
+            if src_cid == target_cid:
+                continue
+            overlap = _intersect_extents(mesh[src_cid].index_extent, halo_piece)
+            if overlap is not None:
+                candidates.append((src_cid, overlap))
+
+        local_candidates = [(c, ov) for c, ov in candidates if c in local_ids]
+
         if len(local_candidates) > 1:
-            msg = "Multiple same-rank source segments overlap one halo region"
+            msg = "Multiple same-rank source blocks overlap one halo region"
             raise ValueError(msg)
         if len(local_candidates) == 0:
             if candidates:
                 msg = (
-                    f"fill_halo cannot fill a halo from rank {rank}; "
+                    f"fill_halo cannot fill from rank {rank}; "
                     "multi-rank halo exchange is not implemented"
                 )
                 raise NotImplementedError(msg)
             continue
-        src, overlap = local_candidates[0]
-        payload = payload.at[_payload_slices(target.extent, overlap)].set(
-            src.payload[_payload_slices(src.extent, overlap)]
+
+        src_cid, overlap = local_candidates[0]
+        src_interior = mesh[src_cid].index_extent
+        payload = payload.at[_payload_slices(target_halo_extent, overlap)].set(
+            field[src_cid].payload[_payload_slices(src_interior, overlap)]
         )
+
     return payload
-
-
-def _source_candidates(
-    *,
-    field: DistributedField,
-    target: FieldSegment,
-    halo_piece: Extent,
-    access_pattern: AccessPattern,
-) -> list[tuple[FieldSegment, Extent]]:
-    candidates: list[tuple[FieldSegment, Extent]] = []
-    for src in field.segments:
-        if src.segment_id == target.segment_id:
-            continue
-        src_interior = _segment_interior(src, access_pattern)
-        overlap = _intersect_extents(src_interior, halo_piece)
-        if overlap is not None:
-            candidates.append((src, overlap))
-    return candidates
-
-
-def _segment_interior(segment: FieldSegment, access_pattern: AccessPattern) -> Extent:
-    if segment.interior_extent is not None:
-        return segment.interior_extent
-    return _shrink_extent(segment.extent, access_pattern)
-
-
-def _shrink_extent(extent: Extent, access_pattern: AccessPattern) -> Extent:
-    slices: list[slice] = []
-    for axis, axis_slice in enumerate(extent.slices):
-        halo = access_pattern.halo_width(axis)
-        start = axis_slice.start + halo
-        stop = axis_slice.stop - halo
-        if start > stop:
-            msg = "Cannot shrink an extent by a halo wider than the extent"
-            raise ValueError(msg)
-        slices.append(slice(start, stop))
-    return Extent(tuple(slices))
 
 
 def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
@@ -438,11 +293,9 @@ def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
 
 __all__ = [
     "Block",
-    "DistributedField",
-    "FieldDiscretization",
-    "FieldSegment",
     "PartitionDomain",
-    "UniformGrid",
-    "field_discretization",
+    "covers",
+    "discretize",
+    "fill_halo",
     "partition_domain",
 ]

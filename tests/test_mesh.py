@@ -1,4 +1,4 @@
-"""Tests for the uniform structured mesh."""
+"""Tests for the uniform structured mesh: Block, partition_domain, covers."""
 
 from __future__ import annotations
 
@@ -6,14 +6,13 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.descriptor import Extent
-from cosmic_foundry.mesh import Block, UniformGrid, partition_domain
-from cosmic_foundry.record import ComponentId
+from cosmic_foundry.mesh import Block, covers, partition_domain
+from cosmic_foundry.record import Array, ComponentId
 
 
 class TestBlock:
     def _make_block(self) -> Block:
         return Block(
-            block_id=ComponentId(0),
             index_extent=Extent((slice(0, 8), slice(0, 8), slice(0, 8))),
             origin=(0.0625, 0.0625, 0.0625),
             cell_spacing=(0.125, 0.125, 0.125),
@@ -27,7 +26,6 @@ class TestBlock:
     def test_cell_centers_values(self):
         h = 0.25
         block = Block(
-            block_id=ComponentId(0),
             index_extent=Extent((slice(0, 4),)),
             origin=(0.5 * h,),
             cell_spacing=(h,),
@@ -43,8 +41,8 @@ class TestBlock:
         np.testing.assert_allclose(diffs, b.cell_spacing[0])
 
 
-class TestUniformGrid:
-    def _make_2d(self, **kwargs) -> UniformGrid:
+class TestPartitionDomain:
+    def _make_2d(self, **kwargs) -> Array[Block]:
         defaults = dict(
             domain_origin=(0.0, 0.0),
             domain_size=(1.0, 1.0),
@@ -56,7 +54,8 @@ class TestUniformGrid:
         return partition_domain(**defaults)
 
     def test_block_count(self):
-        assert len(self._make_2d().blocks) == 4  # 2×2
+        mesh = self._make_2d()
+        assert len(mesh.elements) == 4  # 2×2
 
     def test_non_divisible_raises(self):
         with pytest.raises(ValueError, match="not divisible"):
@@ -80,7 +79,7 @@ class TestUniformGrid:
 
     def test_index_extents_tile_domain(self):
         n_cells = (8, 12)
-        grid = partition_domain(
+        mesh = partition_domain(
             domain_origin=(0.0, 0.0),
             domain_size=(1.0, 1.0),
             n_cells=n_cells,
@@ -88,13 +87,13 @@ class TestUniformGrid:
             n_ranks=1,
         )
         covered = np.zeros(n_cells, dtype=int)
-        for block in grid.blocks:
+        for block in mesh.elements:
             covered[block.index_extent.slices] += 1
         assert np.all(covered == 1), "blocks must tile the domain exactly once"
 
     def test_cell_centers_cover_domain(self):
         """First and last cell centers sit h/2 from the domain edges."""
-        grid = partition_domain(
+        mesh = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(4,),
@@ -102,53 +101,90 @@ class TestUniformGrid:
             n_ranks=1,
         )
         all_centers = np.concatenate(
-            [np.asarray(b.cell_centers(0)) for b in grid.blocks]
+            [np.asarray(b.cell_centers(0)) for b in mesh.elements]
         )
         h = 0.25
         assert all_centers[0] == pytest.approx(0.5 * h)
         assert all_centers[-1] == pytest.approx(1.0 - 0.5 * h)
 
     def test_round_robin_placement(self):
-        grid = partition_domain(
+        mesh = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(8,),
             blocks_per_axis=(4,),
             n_ranks=2,
         )
-        assert grid.owner(ComponentId(0)) == 0
-        assert grid.owner(ComponentId(1)) == 1
-        assert grid.owner(ComponentId(2)) == 0
-        assert grid.owner(ComponentId(3)) == 1
-
-    def test_blocks_for_rank_partition(self):
-        grid = self._make_2d(n_ranks=2)
-        r0 = grid.blocks_for_rank(0)
-        r1 = grid.blocks_for_rank(1)
-        assert len(r0) + len(r1) == len(grid.blocks)
-        assert set(b.block_id for b in r0).isdisjoint(b.block_id for b in r1)
-
-    def test_block_lookup(self):
-        grid = self._make_2d()
-        for block in grid.blocks:
-            assert grid.block(block.block_id) is block
+        assert mesh.placement.owner(ComponentId(0)) == 0
+        assert mesh.placement.owner(ComponentId(1)) == 1
+        assert mesh.placement.owner(ComponentId(2)) == 0
+        assert mesh.placement.owner(ComponentId(3)) == 1
 
     def test_3d_tiling(self):
         n_cells = (8, 8, 8)
-        grid = partition_domain(
+        mesh = partition_domain(
             domain_origin=(0.0, 0.0, 0.0),
             domain_size=(1.0, 1.0, 1.0),
             n_cells=n_cells,
             blocks_per_axis=(2, 2, 2),
             n_ranks=4,
         )
-        assert len(grid.blocks) == 8
+        assert len(mesh.elements) == 8
         covered = np.zeros(n_cells, dtype=int)
-        for block in grid.blocks:
+        for block in mesh.elements:
             covered[block.index_extent.slices] += 1
         assert np.all(covered == 1)
 
     def test_cell_spacing_uniform(self):
-        grid = self._make_2d()
-        for block in grid.blocks:
+        mesh = self._make_2d()
+        for block in mesh.elements:
             assert block.cell_spacing == (0.125, 0.125)
+
+    def test_returns_array_of_block(self):
+        mesh = self._make_2d()
+        assert isinstance(mesh, Array)
+        assert all(isinstance(b, Block) for b in mesh.elements)
+
+
+class TestCovers:
+    def test_single_block_covers_its_own_extent(self):
+        mesh = partition_domain(
+            domain_origin=(0.0,),
+            domain_size=(1.0,),
+            n_cells=(8,),
+            blocks_per_axis=(1,),
+            n_ranks=1,
+        )
+        assert covers(mesh, Extent((slice(0, 8),)))
+
+    def test_two_blocks_cover_full_domain(self):
+        mesh = partition_domain(
+            domain_origin=(0.0,),
+            domain_size=(1.0,),
+            n_cells=(8,),
+            blocks_per_axis=(2,),
+            n_ranks=1,
+        )
+        assert covers(mesh, Extent((slice(0, 8),)))
+
+    def test_gap_in_coverage_detected(self):
+        """A mesh missing the middle rows does not cover the full extent."""
+        from cosmic_foundry.record import Placement
+
+        blocks = (
+            Block(
+                index_extent=Extent((slice(0, 3),)),
+                origin=(0.5,),
+                cell_spacing=(1.0,),
+            ),
+            Block(
+                index_extent=Extent((slice(5, 8),)),
+                origin=(5.5,),
+                cell_spacing=(1.0,),
+            ),
+        )
+        mesh: Array[Block] = Array(
+            elements=blocks,
+            placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
+        )
+        assert not covers(mesh, Extent((slice(0, 8),)))

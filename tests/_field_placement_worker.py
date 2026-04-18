@@ -6,10 +6,10 @@ Usage (called by the pytest multihost test; not run directly):
 Each worker:
  1. Initializes jax.distributed so the run is a genuine multi-process
     execution under JAX's gRPC coordination layer.
- 2. Builds a local FieldSegment covering its half of the domain
+ 2. Builds a local array covering its half of the domain
     (rows [0, half+1) for rank 0, rows [half-1, n) for rank 1) so the
     7-point stencil can evaluate at the seam without ghost exchange.
- 3. Verifies local Field coverage, then dispatches the Laplacian.
+ 3. Dispatches the Laplacian on the owned interior.
  4. Prints one line of JSON:
       {"rank": <int>, "ok": true,  "all_close_6": <bool>}
    or {"rank": <int>, "ok": false, "error": "<msg>"}
@@ -43,8 +43,6 @@ def main() -> None:
 
         from cosmic_foundry.descriptor import AccessPattern, Extent, Region
         from cosmic_foundry.map import Map, execute_pointwise
-        from cosmic_foundry.mesh import DistributedField, FieldSegment
-        from cosmic_foundry.record import ComponentId, Placement
 
         n = 8
         half = n // 2  # 4
@@ -55,22 +53,11 @@ def main() -> None:
 
         # Each rank gets its half plus a 1-cell halo at the seam so the
         # 7-point stencil is valid at local index 1 and local index half-1.
-        # Both ranks share the same local shape (half+1, n, n) = (5, 8, 8).
         if rank == 0:
             local_phi = phi_full[: half + 1]  # global rows 0..4
         else:
             local_phi = phi_full[half - 1 :]  # global rows 3..7
 
-        # Extents and region are expressed in local (0-based) coordinates.
-        local_extent = Extent.from_shape(local_phi.shape)
-        seg_id = ComponentId(rank)
-        seg = FieldSegment(
-            name="phi", segment_id=seg_id, payload=local_phi, extent=local_extent
-        )
-        placement = Placement({ComponentId(0): 0, ComponentId(1): 1})
-        field = DistributedField(name="phi", segments=(seg,), placement=placement)
-
-        # Owned interior: local x in [1, half) avoids the boundary rows.
         owned_region = Region(
             Extent((slice(1, half), slice(1, n - 1), slice(1, n - 1)))
         )
@@ -99,11 +86,6 @@ def main() -> None:
                 )
 
         laplacian = Laplacian()
-
-        # Verify coverage before dispatching.
-        required = owned_region.extent.expand(laplacian.access_pattern)
-        if not field.covers(required):
-            raise RuntimeError("local segment does not cover owned region + halo")
 
         result = laplacian.execute(local_phi, region=owned_region)
         all_close = bool(jnp.allclose(result, 6.0))

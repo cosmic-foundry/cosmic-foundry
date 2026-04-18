@@ -1,12 +1,9 @@
-"""Tests for the Field placement data model.
+"""Tests for Placement, covers(), and the Field → Op integration.
 
-Non-distributed tests cover the ComponentId / FieldSegment / DistributedField /
-Placement API and the DistributedField.covers() validation.
-
-The multi-rank test at the bottom spawns two subprocesses that initialize
-``jax.distributed`` and run the Laplacian on disjoint half-domains, then
-checks that every rank returned 6.0.  It runs in the standard test suite;
-no special flags are required.
+Placement unit tests verify the ComponentId→rank mapping API.
+covers() tests verify that Array[Block] correctly reports spatial coverage.
+The integration tests run the seven-point Laplacian on φ = x²+y²+z² and
+verify the expected result (6.0) in both single-process and multi-process modes.
 """
 
 from __future__ import annotations
@@ -24,12 +21,8 @@ import pytest
 
 from cosmic_foundry.descriptor import AccessPattern, Extent, Region
 from cosmic_foundry.map import Map, execute_pointwise
-from cosmic_foundry.mesh import DistributedField, FieldSegment
+from cosmic_foundry.mesh import covers, partition_domain
 from cosmic_foundry.record import ComponentId, Placement
-
-# ---------------------------------------------------------------------------
-# Shared Op (mirrors test_kernels.py; defined here to keep tests independent)
-# ---------------------------------------------------------------------------
 
 N = 8
 
@@ -112,163 +105,80 @@ def test_placement_rejects_empty() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Field unit tests
+# covers() tests
 # ---------------------------------------------------------------------------
 
 
-def test_field_rejects_segment_not_in_placement(phi: jnp.ndarray) -> None:
-    seg = FieldSegment(
-        name="phi",
-        segment_id=ComponentId(99),
-        payload=phi,
-        extent=Extent.from_shape(phi.shape),
+def test_covers_single_block_full_extent() -> None:
+    mesh = partition_domain(
+        domain_origin=(0.0, 0.0, 0.0),
+        domain_size=(float(N), float(N), float(N)),
+        n_cells=(N, N, N),
+        blocks_per_axis=(1, 1, 1),
+        n_ranks=1,
     )
-    with pytest.raises(ValueError, match="not registered"):
-        DistributedField(
-            name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
-        )
+    full = Extent.from_shape((N, N, N))
+    assert covers(mesh, full)
 
 
-def test_field_segment_rejects_interior_outside_extent(phi: jnp.ndarray) -> None:
-    with pytest.raises(ValueError, match="interior_extent"):
-        FieldSegment(
-            name="phi",
-            segment_id=ComponentId(0),
-            payload=phi,
-            extent=Extent((slice(0, 4), slice(0, N), slice(0, N))),
-            interior_extent=Extent((slice(3, 5), slice(0, N), slice(0, N))),
-        )
-
-
-def test_field_local_segments_single_process(phi: jnp.ndarray) -> None:
-    seg = FieldSegment(
-        name="phi",
-        segment_id=ComponentId(0),
-        payload=phi,
-        extent=Extent.from_shape(phi.shape),
+def test_covers_two_blocks_cover_split_domain() -> None:
+    mesh = partition_domain(
+        domain_origin=(0.0, 0.0, 0.0),
+        domain_size=(float(N), float(N), float(N)),
+        n_cells=(N, N, N),
+        blocks_per_axis=(2, 1, 1),
+        n_ranks=1,
     )
-    field = DistributedField(
-        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
-    )
-    assert field.local_segments(0) == (seg,)
-    assert field.local_segments(1) == ()
+    assert covers(mesh, Extent.from_shape((N, N, N)))
 
 
-def test_field_segment_lookup(phi: jnp.ndarray) -> None:
-    seg = FieldSegment(
-        name="phi",
-        segment_id=ComponentId(0),
-        payload=phi,
-        extent=Extent.from_shape(phi.shape),
+def test_covers_rejects_extent_outside_mesh() -> None:
+    """A mesh covering [0, N) does not cover an extent that exceeds that range."""
+    mesh = partition_domain(
+        domain_origin=(0.0, 0.0, 0.0),
+        domain_size=(float(N), float(N), float(N)),
+        n_cells=(N, N, N),
+        blocks_per_axis=(1, 1, 1),
+        n_ranks=1,
     )
-    field = DistributedField(
-        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
-    )
-    assert field.segment(ComponentId(0)) is seg
-    with pytest.raises(KeyError):
-        field.segment(ComponentId(99))
+    # Expand [0, N)^3 by 1 → [-1, N+1)^3 which the mesh cannot cover
+    full = Extent.from_shape((N, N, N))
+    beyond = full.expand(seven_point_laplacian.access_pattern)
+    assert not covers(mesh, beyond)
 
 
 # ---------------------------------------------------------------------------
-# Field.covers() tests
-# ---------------------------------------------------------------------------
-
-
-def test_single_segment_covers_full_extent(phi: jnp.ndarray) -> None:
-    full = Extent.from_shape(phi.shape)
-    seg = FieldSegment(name="phi", segment_id=ComponentId(0), payload=phi, extent=full)
-    field = DistributedField(
-        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
-    )
-    assert field.covers(full)
-
-
-def test_two_disjoint_segments_cover_split_domain(phi: jnp.ndarray) -> None:
-    half = N // 2
-    ext0 = Extent((slice(0, half), slice(0, N), slice(0, N)))
-    ext1 = Extent((slice(half, N), slice(0, N), slice(0, N)))
-    seg0 = FieldSegment(
-        name="phi", segment_id=ComponentId(0), payload=phi[:half], extent=ext0
-    )
-    seg1 = FieldSegment(
-        name="phi", segment_id=ComponentId(1), payload=phi[half:], extent=ext1
-    )
-    field = DistributedField(
-        name="phi",
-        segments=(seg0, seg1),
-        placement=Placement({ComponentId(0): 0, ComponentId(1): 1}),
-    )
-    assert field.covers(Extent.from_shape(phi.shape))
-
-
-def test_gap_in_coverage_is_detected(phi: jnp.ndarray) -> None:
-    # Row 3 is missing between the two segments.
-    ext0 = Extent((slice(0, 3), slice(0, N), slice(0, N)))
-    ext1 = Extent((slice(4, N), slice(0, N), slice(0, N)))
-    seg0 = FieldSegment(
-        name="phi", segment_id=ComponentId(0), payload=phi[:3], extent=ext0
-    )
-    seg1 = FieldSegment(
-        name="phi", segment_id=ComponentId(1), payload=phi[4:], extent=ext1
-    )
-    field = DistributedField(
-        name="phi",
-        segments=(seg0, seg1),
-        placement=Placement({ComponentId(0): 0, ComponentId(1): 1}),
-    )
-    assert not field.covers(Extent.from_shape(phi.shape))
-
-
-def test_covers_checks_halo_expansion(phi: jnp.ndarray) -> None:
-    # A segment that covers only the interior is not sufficient once the
-    # 7-point stencil halo is added.
-    interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
-    seg = FieldSegment(
-        name="phi",
-        segment_id=ComponentId(0),
-        payload=phi[1 : N - 1, 1 : N - 1, 1 : N - 1],
-        extent=interior,
-    )
-    field = DistributedField(
-        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
-    )
-    required = interior.expand(seven_point_laplacian.access_pattern)
-    assert not field.covers(required)
-
-
-# ---------------------------------------------------------------------------
-# Single-process Field → Op integration (degenerate case)
+# Single-process integration
 # ---------------------------------------------------------------------------
 
 
 def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
-    """One Field, one segment, full domain — the degenerate single-rank case."""
-    full = Extent.from_shape(phi.shape)
-    seg = FieldSegment(name="phi", segment_id=ComponentId(0), payload=phi, extent=full)
-    field = DistributedField(
-        name="phi", segments=(seg,), placement=Placement({ComponentId(0): 0})
+    """One block, full domain — the degenerate single-rank case."""
+    mesh = partition_domain(
+        domain_origin=(0.0, 0.0, 0.0),
+        domain_size=(float(N), float(N), float(N)),
+        n_cells=(N, N, N),
+        blocks_per_axis=(1, 1, 1),
+        n_ranks=1,
     )
+    full = Extent.from_shape((N, N, N))
+    required = full.expand(seven_point_laplacian.access_pattern)
+    assert not covers(mesh, required)  # mesh doesn't cover the halo ring
 
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
-    required = interior.expand(seven_point_laplacian.access_pattern)
-    assert field.covers(required)
+    assert covers(mesh, interior)  # mesh does cover the interior
 
-    result = seven_point_laplacian.execute(seg.payload, region=Region(interior))
+    result = seven_point_laplacian.execute(phi, region=Region(interior))
     assert jnp.allclose(result, 6.0)
 
 
 # ---------------------------------------------------------------------------
-# Multi-rank correctness harness (requires --multihost)
+# Multi-rank correctness harness
 # ---------------------------------------------------------------------------
 
 
 def test_multi_rank_field_placement_laplacian() -> None:
-    """Two ranks each compute the Laplacian on their partition via jax.distributed.
-
-    Rank 0 owns rows [0, half+1); rank 1 owns rows [half-1, n).  Each covers
-    a disjoint interior [1, half) in local coordinates.  All results must be
-    6.0, matching the single-rank computation on phi = x^2 + y^2 + z^2.
-    """
+    """Two ranks each compute the Laplacian on their partition via jax.distributed."""
     with socket.socket() as s:
         s.bind(("", 0))
         port = s.getsockname()[1]
