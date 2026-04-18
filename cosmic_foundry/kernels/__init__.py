@@ -11,6 +11,12 @@ from typing import Any, cast
 import jax
 import jax.numpy as jnp
 
+from cosmic_foundry.domain import Domain
+from cosmic_foundry.map import Map
+from cosmic_foundry.record import ComponentId, Record
+from cosmic_foundry.sink import Sink
+from cosmic_foundry.source import Source
+
 
 class Descriptor(ABC):
     """Abstract base for all computation-configuring value objects.
@@ -118,109 +124,6 @@ class Region(Descriptor):
 
     def as_dict(self) -> dict[str, Any]:
         return {"extent": self.extent.as_dict(), "n_blocks": self.n_blocks}
-
-
-class Record(ABC):
-    """Abstract base for all record types: lightweight immutable value objects
-    that are *about* the simulation rather than *being* simulation state.
-
-    Records are internal objects produced or consumed at the semantic layer —
-    summaries, identifiers, and provenance metadata. They are distinct from
-    Fields (which ARE simulation state) and from the external representations
-    (bytes, files) that Sources and Sinks translate to and from.
-
-    Every Record must be serializable to a plain dict.
-    """
-
-    @abstractmethod
-    def as_dict(self) -> dict[str, Any]:
-        """Return a plain-dict representation of this record."""
-
-
-@dataclass(frozen=True)
-class ComponentId(Record):
-    """Opaque integer identifier for a named simulation component.
-
-    Used wherever a typed, hashable, serializable integer key is needed —
-    mesh blocks, field segments, and any future entity type.  A single class
-    avoids redundant id types for concepts that are structurally identical.
-    """
-
-    value: int
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"value": self.value}
-
-
-class Domain(ABC):
-    """Abstract base for all domain types: the set D over which fields are defined.
-
-    A domain is the input space of a field f: D → ℝ. Domains differ in their
-    representation (continuous vs. discrete) and their nature (physical space,
-    thermodynamic state space, etc.). Every Field has a Domain; a Domain is
-    not itself a Field.
-
-    The one universal property of a domain is its dimensionality.
-    """
-
-    @property
-    @abstractmethod
-    def ndim(self) -> int:
-        """Number of dimensions of this domain."""
-
-
-class Map(ABC):
-    """Abstract base for all map classes: M: A × Θ → B.
-
-    Every concrete Map subclass carries a ``Map:`` block in its class
-    docstring specifying domain, codomain, operator, Θ, and approximation
-    order p.  Subclasses that carry no parameters should use
-    ``@dataclass(frozen=True)`` so that instances are hashable.
-    """
-
-    @abstractmethod
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the map and return the result."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Delegate to execute(); lets a Map instance be used as a callable."""
-        return self.execute(*args, **kwargs)
-
-
-class Source(ABC):
-    """Abstract base for all source classes: R: external state → B.
-
-    Every concrete Source subclass carries a ``Source:`` block in its class
-    docstring specifying the external state consumed (origin) and the value
-    produced.  Subclasses that carry no parameters should use
-    ``@dataclass(frozen=True)`` so that instances are hashable.
-    """
-
-    @abstractmethod
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Read from external state and return the result."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Delegate to execute()."""
-        return self.execute(*args, **kwargs)
-
-
-class Sink(ABC):
-    """Abstract base for all sink classes: S: A → external state.
-
-    Every concrete Sink subclass carries a ``Sink:`` block in its class
-    docstring specifying the domain consumed and the external effect produced.
-    Subclasses that carry no parameters should use
-    ``@dataclass(frozen=True)`` so that instances are hashable.
-    """
-
-    @abstractmethod
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Consume input and materialise it into external state."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Delegate to execute()."""
-        return self.execute(*args, **kwargs)
 
 
 def execute_pointwise(
