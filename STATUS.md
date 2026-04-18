@@ -14,10 +14,9 @@
 All design prerequisites resolved. Implementation underway per the
 sequencing plan in `roadmap/epoch-02-mesh.md`.
 
-**Meta-level track:** Reproducibility meta-generator detour planned.
-Complete the platform-only capsule convergence slice in
-`roadmap/reproducibility-meta-generator.md` before resuming Epoch 2 item
-#5.
+**Meta-level track:** Reproducibility meta-generator M3 planned.
+Implement the platform-only capsule convergence slice in
+`roadmap/reproducibility-meta-generator.md`.
 
 ## Completed epochs
 
@@ -76,17 +75,20 @@ Per the two-track roadmap in `roadmap/index.md`:
 
 ## Next planned work
 
-Complete the reproducibility meta-generator detour in
-`roadmap/reproducibility-meta-generator.md`: platform-only capsule
+Next selected PRs should explicitly state which track they advance.
+
+Meta-level next work: implement
+`roadmap/reproducibility-meta-generator.md` M3 — platform-only capsule
 collect, dry-run, render, and structural comparison against the current
-repository state. Resume Epoch 2 afterward with items #5–#6
-(task-graph driver, multi-rank halo fill), then begin Epoch 3
-(Platform Services): manifest infrastructure, comparison-result schema,
-and simulation specification format. See
-`roadmap/epoch-03-platform-services.md` for the full plan.
+repository state.
+
+Object-level next work: continue Epoch 2 items #5–#6 (task-graph driver,
+multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
+infrastructure, comparison-result schema, and simulation specification
+format. See `roadmap/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 
 Full epoch plan: [`roadmap/index.md`](roadmap/index.md)
 Per-epoch details: `roadmap/epoch-NN-*.md`
-Meta-generator detour: `roadmap/reproducibility-meta-generator.md`
+Meta-generator roadmap: `roadmap/reproducibility-meta-generator.md`

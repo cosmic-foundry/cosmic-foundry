@@ -35,13 +35,12 @@ are separate so the object-level roadmap does not absorb verification
 mechanics, and the meta-level roadmap does not decide scientific or
 computational scope.
 
-**Gating rule.** Meta-level work may deliberately pause object-level work
-when the project needs stronger confidence before adding more complexity.
-Such detours should be short, explicitly scoped, and should define the
-condition for returning to the object-level roadmap. PR #93 introduces
-the first such detour: build enough of the reproducibility meta-generator
-to converge on the current platform state before resuming Epoch 2 item
-#5.
+**Track selection rule.** Each PR declares which track it advances:
+object-level, meta-level, or both. The tracks can proceed in parallel,
+but cross-track dependencies must be explicit. PR #93 advances the
+meta-level track by defining the reproducibility meta-generator and its
+first platform convergence plan; the object-level track remains at Epoch
+2 item #5.
 
 **Platform and application roles.** Cosmic Foundry is the organizational
 platform. Application repositories — covering stellar physics, cosmology,
@@ -197,23 +196,22 @@ reproducibility track. It defines the machinery that keeps object-level
 claims auditable as the platform and application repositories grow.
 
 Meta-level work is not a separate product line. It is the confidence
-infrastructure for the object-level roadmap, and it can gate object-level
-work when the project needs to make its evidence workflow executable
-before adding more engine surface area.
+infrastructure for the object-level roadmap. A PR can advance this track
+without implying that object-level work is blocked, unless a specific
+cross-track dependency is recorded.
 
 | ID | File / Authority | Scope | Status |
 |----|------------------|-------|--------|
 | M0 | [ADR-0005](../adr/ADR-0005-branch-pr-attribution-discipline.md), `AI.md` | Branch, PR, commit-size, history, and attribution discipline. | Active |
 | M1 | [ADR-0007](../adr/ADR-0007-replication-workflow.md), [`replication/`](../replication/README.md) | Bounded-increment verification, capability specs, golden-data harness, formulas register, externally grounded tests. | Active |
 | M2 | [ADR-0013](../adr/ADR-0013-derivation-first-lane.md), `derivations/` | Lane A/B/C provenance discipline and derivation documents for physics capabilities. | Active; first derivation pending |
-| M3 | [reproducibility-meta-generator.md](reproducibility-meta-generator.md), [ADR-0015](../adr/ADR-0015-reproducibility-meta-generator.md) | Reproducibility capsules, collect/dry-run/render/compare, recursive approximate idempotence. | Planned detour before Epoch 2 item #5 |
+| M3 | [reproducibility-meta-generator.md](reproducibility-meta-generator.md), [ADR-0015](../adr/ADR-0015-reproducibility-meta-generator.md) | Reproducibility capsules, collect/dry-run/render/compare, recursive approximate idempotence. | Planned meta-level focus |
 | M4 | [epoch-03-platform-services.md](epoch-03-platform-services.md) | Validation manifests, provenance sidecars, comparison-result schema, simulation-specification format. | Planned for Epoch 3 |
 | M5 | Application-repo capsule integration | Application capability capsules, validation products, evidence idempotence, multi-repository regeneration. | Future |
 
-### Current Meta-Level Detour
+### Current Meta-Level Focus
 
-Before resuming the object-level Epoch 2 task-graph driver, complete the
-M3 convergence slice:
+The current planned meta-level work is the M3 platform convergence slice:
 
 ```text
 collect current platform state
@@ -223,10 +221,9 @@ collect current platform state
 -> compare normalized capsules for structural idempotence
 ```
 
-The exit criteria for the detour live in
+The exit criteria for M3 live in
 [reproducibility-meta-generator.md](reproducibility-meta-generator.md).
-Once they are satisfied, the roadmap returns to object-level Epoch 2 item
-#5.
+The current object-level work remains Epoch 2 item #5.
 
 ---
 
@@ -250,10 +247,10 @@ These grow every epoch; they are not tied to a single phase.
 - **Reproducibility meta-generator.** The project also tracks
   reproducibility at the workflow level: a platform-owned
   meta-generator emits capsules that describe how to regenerate and
-  verify an engine state. The near-term implementation detour is
+  verify an engine state. The near-term meta-level implementation plan is
   [roadmap/reproducibility-meta-generator.md](reproducibility-meta-generator.md):
-  build platform-only collect, dry-run, render, and structural comparison
-  before continuing Epoch 2 object-level mesh work.
+  build platform-only collect, dry-run, render, and structural
+  comparison.
 - **Multi-repo coordination.** As application repos mature, the
   platform's public API surface must be versioned carefully. Breaking
   changes to Op/Region/Policy/Dispatch, Field, the mesh model, or the

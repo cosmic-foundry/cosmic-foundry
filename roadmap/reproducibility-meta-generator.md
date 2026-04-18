@@ -1,6 +1,6 @@
 # Reproducibility Meta-Generator Roadmap
 
-> Meta-level verification detour. See
+> Meta-level verification implementation plan. See
 > [ADR-0015](../adr/ADR-0015-reproducibility-meta-generator.md).
 
 ## Purpose
@@ -9,16 +9,15 @@ This is the first focused implementation plan in the meta-level roadmap:
 the track concerned with reproducibility, verification, validation,
 provenance, and evidence rather than object-level engine capabilities.
 
-Before continuing the current object-level roadmap, build enough of the
-reproducibility meta-generator to exercise it against the platform state
-that exists today. The goal is not to finish the full long-term capsule
-executor. The goal is to make the regeneration workflow executable
-early enough that it can discover missing contracts in the platform's
-ADRs, roadmap, replication specs, schemas, environment recipe, and tests.
+Build enough of the reproducibility meta-generator to exercise it against
+the platform state that exists today. The goal is not to finish the full
+long-term capsule executor. The goal is to make the regeneration workflow
+executable early enough that it can discover missing contracts in the
+platform's ADRs, roadmap, replication specs, schemas, environment recipe,
+and tests.
 
-This detour should converge back to Epoch 2 item #5
-(`Task-graph driver - single-rank`) with a working platform-only
-capsule workflow:
+This meta-level plan should converge on a working platform-only capsule
+workflow:
 
 ```text
 collect current platform state
@@ -57,9 +56,9 @@ Out of scope for the first implementation slice:
 
 ## Implementation Plan
 
-The plan is intentionally short so it can converge before Epoch 2 mesh
-work resumes. Each item should be a small PR unless implementation
-experience shows two adjacent items are only useful together.
+The plan is intentionally short. Each item should be a small PR unless
+implementation experience shows two adjacent items are only useful
+together.
 
 1. **ADR and roadmap seed** — define the meta-generator architecture,
    recursive approximate idempotence, and this implementation plan.
@@ -110,15 +109,14 @@ experience shows two adjacent items are only useful together.
    record it as the next expansion point.
    *Depends on: #6.*
 
-8. **Object-level roadmap handoff** — run the platform convergence
-   workflow and update `STATUS.md` with the result. Resume Epoch 2 item
-   #5 only after the workflow either passes or records named gaps with
-   removal conditions.
+8. **Track status update** — run the platform convergence workflow and
+   update `STATUS.md` with the result. Record whether the next selected
+   PR advances the meta-level track, the object-level track, or both.
    *Depends on: #7.*
 
 ## Exit Criteria
 
-The detour is complete when:
+The M3 platform convergence slice is complete when:
 
 - `cosmic-foundry capsule collect --target platform` emits a valid
   capsule for the current repository;
@@ -131,18 +129,18 @@ The detour is complete when:
 - CI or the local test suite exercises the platform capsule convergence
   workflow; and
 - the resulting gaps are fixed in authoritative artifacts or listed with
-  removal conditions before Epoch 2 item #5 resumes.
+  removal conditions.
 
 ## Relationship To The Object-Level Roadmap
 
 This roadmap does not replace the object-level Epoch 2 roadmap. It is a
-meta-level verification detour that should run before the next
-mesh-driver PR because the task-graph driver will become a central
-orchestration point for later physics verification. The meta-generator
-should be able to describe the platform state and its verification plan
-before that orchestration layer becomes more complex.
+parallel meta-level plan. The task-graph driver will become a central
+orchestration point for later physics verification, so the meta-generator
+should eventually be able to describe that platform state and its
+verification plan, but object-level and meta-level PRs remain separate
+track choices unless a PR records a specific cross-track dependency.
 
-After this detour, Epoch 2 resumes with:
+The current object-level roadmap remains:
 
 1. task-graph driver - single-rank;
 2. multi-rank halo fill;
