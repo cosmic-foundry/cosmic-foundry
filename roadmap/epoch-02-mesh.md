@@ -81,6 +81,14 @@ Tests that assert conservation must state in their docstring which of these
 conditions hold.  A conservation test without this documentation is incomplete
 and should be treated as a review finding.
 
+**Diagnostics and runtime error checks must not become hidden CPU
+breakpoints.** Reducers and value-dependent health checks return JAX arrays
+until the driver reaches an explicit diagnostic or health-check fence.
+Metadata checks may raise Python exceptions before launch, but checks that
+inspect field values — NaN/Inf counts, negative density or pressure, CFL
+limits, conservation residuals — are batched on device and materialized once
+at the fence before any host-visible warning or exception is raised.
+
 ---
 
 ## What this epoch delivers
@@ -134,15 +142,20 @@ merge and update this list when the picture changes.
 
 4. **`DiagnosticReducer` + `DiagnosticSink`** (implements
    ADR-0012) — `global_sum` helper, `DiagnosticRecord` container,
-   tab-separated `.diag` file writer. Independent of the halo
-   exchange path; can proceed in parallel with #3.
+   tab-separated `.diag` file writer. Include the runtime-health-check
+   materialization rule: value checks return JAX arrays until the driver
+   reaches an explicit fence. Independent of the halo exchange path; can
+   proceed in parallel with #3.
    *Depends on: #2.*
 
 5. **Task-graph driver — single-rank** — ordered sequence of
    `(HaloFillFence | Dispatch)` steps; driver inspects
    `Op.reads`/`writes` and inserts fences before dispatches
-   whose footprint exceeds the local segment interior. Connects
-   `UniformGrid`, `Field`, `Dispatch`, and `HaloFillPolicy`.
+   whose footprint exceeds the local segment interior. The driver must
+   distinguish metadata validation from host-materializing runtime checks
+   so it can batch/fuse/queue device work and materialize only at named
+   fences. Connects `UniformGrid`, `Field`, `Dispatch`, and
+   `HaloFillPolicy`.
    *Depends on: #3.*
 
 6. **`HaloFillPolicy` — multi-rank** — extend the single-rank

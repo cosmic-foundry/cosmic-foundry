@@ -371,6 +371,20 @@ any case where an intermediate field must be materialized before later
 work. This keeps Dispatch as the local lowering unit while the driver
 owns global ordering, visibility, and synchronization semantics.
 
+**Host synchronization rule.** The timestep hot path must not convert
+JAX arrays to Python scalars or NumPy arrays except at explicit fences.
+Conversions such as `float(jax_array)`, `bool(jax_array)`, `.item()`,
+`np.asarray(jax_array)`, `jax.device_get`, and `block_until_ready()`
+are materialization points: they force the host to wait for device work
+and prevent the driver from keeping the GPU command stream fed. Metadata
+validation may raise ordinary Python exceptions before launch, but checks
+that inspect field values — diagnostics, conservation residuals, CFL
+limits, `isfinite` checks, negative-density checks, and similar runtime
+health checks — return JAX arrays until the driver reaches a named fence.
+The driver batches those checks where possible, materializes their small
+results once at the fence, and only then raises host-visible warnings or
+errors.
+
 ## Naming rationale and alternatives
 
 These names were chosen after rejecting several alternatives with
