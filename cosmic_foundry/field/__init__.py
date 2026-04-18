@@ -13,8 +13,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from cosmic_foundry.record import Placement
-
 
 class Field(ABC):
     """Abstract base for all field parameterizations: f: D → ℝ.
@@ -79,5 +77,4 @@ __all__ = [
     "ContinuousField",
     "DiscreteField",
     "Field",
-    "Placement",
 ]

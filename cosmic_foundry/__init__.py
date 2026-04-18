@@ -28,7 +28,6 @@ from cosmic_foundry.field import (  # noqa: E402
     ContinuousField,
     DiscreteField,
     Field,
-    Placement,
 )
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
@@ -49,7 +48,7 @@ from cosmic_foundry.mesh import (  # noqa: E402
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
-from cosmic_foundry.record import ComponentId, Record  # noqa: E402
+from cosmic_foundry.record import ComponentId, Placement, Record  # noqa: E402
 from cosmic_foundry.sink import Sink  # noqa: E402
 from cosmic_foundry.source import Source  # noqa: E402
 
@@ -69,7 +68,6 @@ __all__ = [
     "DiscreteField",
     "Field",
     "FieldDiscretization",
-    "Placement",
     # io
     "HAS_PARALLEL_HDF5",
     "MergeRankFiles",
@@ -80,6 +78,7 @@ __all__ = [
     "AccessPattern",
     "ComponentId",
     "Descriptor",
+    "Placement",
     "Domain",
     "Extent",
     "Map",
