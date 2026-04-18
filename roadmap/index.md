@@ -1,29 +1,29 @@
 # Cosmic Foundry Roadmap Index
 
-Cosmic Foundry's roadmap is organized into three tracks:
+Cosmic Foundry's roadmap is organized into two tracks:
 
-- [Capabilities](../capabilities/README.md) — **Track 1:** what we want to
-  compute. Capability specs organized by the object/map framing.
-- [Implementation roadmap](implementation/README.md) — **Track 2:** how the
-  codebase delivers those capabilities. Epoch sequencing and platform delivery.
-- [Verification roadmap](verification/README.md) — **Track 3:** how Track 1
-  claims are verified to be correctly realized in Track 2.
+- [Implementation roadmap](implementation/README.md) — **Track 1:** how the
+  codebase delivers physics capabilities. Epoch sequencing and platform
+  delivery. What the engine computes is expressed by the maps in the code,
+  each documented with a `Map:` block stating domain, codomain, operator,
+  and approximation parameters (ADR-0016).
+- [Verification roadmap](verification/README.md) — **Track 2:** how Track 1
+  claims are verified to be correctly realized. Reproducibility, convergence
+  testing, replication targets, and validation evidence.
 
-The tracks are intentionally separate. Track 1 defines correctness claims
-independently of how they are implemented or verified. Track 2 sequences
-delivery without absorbing verification mechanics. Track 3 verifies without
-deciding scientific or computational scope.
+The tracks are intentionally separate. Track 1 sequences delivery without
+absorbing verification mechanics. Track 2 verifies without deciding
+scientific or computational scope.
 
 ## Track Selection
 
 Each PR declares which track it advances:
 
-- **Capabilities** — adding or amending a capability spec.
 - **Implementation** — engine, platform-service, or application-facing code.
 - **Verification** — reproducibility, verification, validation, provenance,
   evidence, or review-discipline work.
-- **Multiple tracks** — a change that intentionally moves a capability spec
-  and its implementation or evidence machinery together.
+- **Multiple tracks** — a change that intentionally advances both implementation
+  and its verification evidence together.
 
 Cross-track dependencies must be explicit in the relevant PR description
 and status update.
@@ -32,13 +32,14 @@ and status update.
 
 - **Implementation:** Epoch 2 — Mesh and AMR — in progress. Next item is
   task-graph driver — single-rank.
-- **Verification:** M3 — Capability intent documentation — current focus.
+- **Verification:** M3 — Map: block coverage — ensure every implemented
+  physics map carries a complete `Map:` block with domain, codomain,
+  operator, Θ, and p.
 
 See [STATUS.md](../STATUS.md) for the session-start summary.
 
 ## Detailed Plans
 
-- [Capabilities](../capabilities/README.md)
 - [Implementation roadmap](implementation/README.md)
 - [Verification roadmap](verification/README.md)
 - [M3 verification plan](verification/reproducibility-meta-generator.md)

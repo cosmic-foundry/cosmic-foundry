@@ -43,7 +43,10 @@ class Block:
 
 @dataclass(frozen=True)
 class UniformGrid:
-    """Uniform domain partitioned into a structured layout of blocks.
+    """A uniform domain Ω partitioned into a structured layout of blocks.
+
+    The discrete domain Ω_h produced by ``UniformGrid.create`` — see that
+    method for the domain-discretization Map: description.
 
     Blocks are enumerated in C order (last axis varies fastest) and
     distributed across ranks round-robin by flat index.
@@ -71,7 +74,20 @@ class UniformGrid:
         blocks_per_axis: tuple[int, ...],
         n_ranks: int,
     ) -> UniformGrid:
-        """Partition a uniform domain into blocks and assign them to ranks.
+        """Partition a continuous domain into a discrete block grid.
+
+        Map:
+            domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
+                       blocks_per_axis ∈ ℤⁿ, n_ranks ∈ ℤ) — a continuous
+                       domain specification and discretization parameters
+            codomain — UniformGrid: a partition of Ω into
+                       ∏ blocks_per_axis blocks, each covering
+                       n_cells/blocks_per_axis interior cells with spacing
+                       h = L/n_cells, assigned to ranks round-robin
+            operator — (Ω, h, blocks) ↦ {(B_i, Ω_h^int(B_i), rank_i)}_i
+
+        Θ = {h} — the discrete grid approximates the continuous domain;
+        h = domain_size / n_cells along each axis.
 
         Raises ValueError if any axis of n_cells is not divisible by the
         corresponding blocks_per_axis entry.

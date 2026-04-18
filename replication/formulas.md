@@ -7,10 +7,10 @@ implementation could silently encode a wrong answer — wrong sign,
 missing term, wrong coefficient, wrong variant chosen from several
 in the literature.
 
-This register complements the capability specs in `capabilities/`.
-A capability spec describes what a feature does and how to verify it;
-this register maps from individual formulas to their authoritative
-sources and their tests, at finer granularity than a capability.
+This register complements the `Map:` block on each implementing class or
+function. The `Map:` block describes what a map computes and its
+approximation parameters; this register maps individual formulas to
+their authoritative sources and tests, at finer granularity.
 
 ## How to add an entry
 

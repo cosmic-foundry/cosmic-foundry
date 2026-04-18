@@ -71,7 +71,7 @@ Per the meta-level roadmap in `roadmap/verification/README.md`:
 | M0 | Branch / PR / attribution discipline | #8 area | Merged |
 | M1 | Replication workflow and externally grounded tests | #63, #64, #69, #70 | Merged |
 | M2 | Derivation-first lane | #81 area | Merged |
-| M3 | Capability intent documentation — specs stating what each platform capability computes and how it is independently verifiable | — | Current focus |
+| M3 | Map: block coverage — every implemented physics map carries a complete `Map:` block with domain, codomain, operator, Θ, and p | — | Current focus |
 | M3b | Reproducibility meta-generator architecture and convergence plan | #93 | Planned; depends on M3 |
 | M4 | Platform validation manifests, provenance, comparison-result schema, sim-spec format | — | Planned |
 

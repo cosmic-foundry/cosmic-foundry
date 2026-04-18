@@ -357,9 +357,9 @@ The retrospective covers:
    prerequisites still the right ones? Are the exit criteria still
    well-defined?
 
-4. **`replication/` specs and formulas register**. Do the capability
-   specs reflect what was actually implemented? Are there formula entries
-   or capability stubs that should be updated now rather than left stale?
+4. **`replication/` and formulas register**. Do the `Map:` blocks on
+   implemented physics maps reflect what was actually built? Are there
+   formula entries that should be updated now rather than left stale?
 
 5. **`AI.md` and process documents**. Did any development rules prove
    unworkable, insufficient, or in need of precision?
