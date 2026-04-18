@@ -39,12 +39,10 @@ from cosmic_foundry.io import (  # noqa: E402
 from cosmic_foundry.map import Map, execute_pointwise  # noqa: E402
 from cosmic_foundry.mesh import (  # noqa: E402
     Block,
-    DistributedField,
-    FieldDiscretization,
-    FieldSegment,
     PartitionDomain,
-    UniformGrid,
-    field_discretization,
+    covers,
+    discretize,
+    fill_halo,
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
@@ -67,7 +65,6 @@ __all__ = [
     "ContinuousField",
     "DiscreteField",
     "Field",
-    "FieldDiscretization",
     # io
     "HAS_PARALLEL_HDF5",
     "MergeRankFiles",
@@ -90,12 +87,10 @@ __all__ = [
     "execute_pointwise",
     # mesh
     "Block",
-    "DistributedField",
-    "FieldDiscretization",
-    "FieldSegment",
     "PartitionDomain",
-    "UniformGrid",
-    "field_discretization",
+    "covers",
+    "discretize",
+    "fill_halo",
     "partition_domain",
     # observability
     "configure",

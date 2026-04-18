@@ -18,8 +18,21 @@ from cosmic_foundry.diagnostics import (
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.mesh import DistributedField, FieldSegment
-from cosmic_foundry.record import ComponentId, Placement
+from cosmic_foundry.field import DiscreteField
+from cosmic_foundry.mesh import Block, partition_domain
+from cosmic_foundry.record import Array, ComponentId, Placement
+
+
+def _make_1d_mesh(
+    n_cells: int = 8, n_blocks: int = 2, n_ranks: int = 1
+) -> Array[Block]:
+    return partition_domain(
+        domain_origin=(0.0,),
+        domain_size=(float(n_cells),),
+        n_cells=(n_cells,),
+        blocks_per_axis=(n_blocks,),
+        n_ranks=n_ranks,
+    )
 
 
 @dataclass(frozen=True)
@@ -30,12 +43,13 @@ class SumReducer(DiagnosticReducer):
 
     def execute(
         self,
-        fields: dict[str, DistributedField],
+        mesh: Array[Block],
+        fields: dict[str, Array[DiscreteField]],
         region: Region,
         rank: int,
         n_ranks: int,
     ) -> jax.Array:
-        return global_sum(fields[self.field_name], region, rank)
+        return global_sum(mesh, fields[self.field_name], region, rank)
 
 
 @dataclass(frozen=True)
@@ -45,7 +59,8 @@ class VectorReducer(DiagnosticReducer):
 
     def execute(
         self,
-        fields: dict[str, DistributedField],
+        mesh: Array[Block],
+        fields: dict[str, Array[DiscreteField]],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -53,85 +68,67 @@ class VectorReducer(DiagnosticReducer):
         return jnp.array([1.0, 2.0])
 
 
-def _field_with_payloads(values: tuple[jax.Array, ...]) -> DistributedField:
-    """Build a halo-padded 2-block 1D field for testing interior-only reductions.
-
-    Block 0: interior [0, 4), halo extent [-1, 5).
-    Block 1: interior [4, 8), halo extent [3, 9).
-    """
-    segments = (
-        FieldSegment(
-            name="rho",
-            segment_id=ComponentId(0),
-            payload=values[0],
-            extent=Extent((slice(-1, 5),)),
-            interior_extent=Extent((slice(0, 4),)),
+def test_global_sum_returns_jax_scalar() -> None:
+    mesh = _make_1d_mesh(n_cells=6, n_blocks=1)
+    field = Array(
+        elements=(
+            DiscreteField(name="rho", payload=jnp.arange(6.0, dtype=jnp.float64)),
         ),
-        FieldSegment(
-            name="rho",
-            segment_id=ComponentId(1),
-            payload=values[1],
-            extent=Extent((slice(3, 9),)),
-            interior_extent=Extent((slice(4, 8),)),
-        ),
-    )
-    return DistributedField(
-        name="rho",
-        segments=segments,
-        placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
+        placement=Placement({ComponentId(0): 0}),
     )
 
-
-def test_global_sum_returns_jax_scalar_without_host_materialization() -> None:
-    segment = FieldSegment(
-        name="rho",
-        segment_id=ComponentId(0),
-        payload=jnp.arange(6.0, dtype=jnp.float64),
-        extent=Extent((slice(0, 6),)),
-    )
-    field = DistributedField(
-        name="rho", segments=(segment,), placement=Placement({ComponentId(0): 0})
-    )
-
-    result = global_sum(field, Region(Extent((slice(1, 5),))), rank=0)
+    result = global_sum(mesh, field, Region(Extent((slice(1, 5),))), rank=0)
 
     assert result.shape == ()
     assert result == pytest.approx(10.0)
 
 
-def test_global_sum_uses_interiors_and_does_not_count_halos() -> None:
-    left = jnp.array([-1000.0, 1.0, 2.0, 3.0, 4.0, -1000.0])
-    right = jnp.array([-2000.0, 5.0, 6.0, 7.0, 8.0, -2000.0])
-    field = _field_with_payloads((left, right))
+def test_global_sum_sums_over_interior_only() -> None:
+    """GlobalSum over both blocks sums interior values, not halos."""
+    mesh = _make_1d_mesh(n_cells=8, n_blocks=2)
+    # Block 0 interior: [0, 4), block 1 interior: [4, 8)
+    field = Array(
+        elements=(
+            DiscreteField(name="rho", payload=jnp.array([1.0, 2.0, 3.0, 4.0])),
+            DiscreteField(name="rho", payload=jnp.array([5.0, 6.0, 7.0, 8.0])),
+        ),
+        placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
+    )
 
-    result = global_sum(field, Region(Extent((slice(0, 8),))), rank=0)
+    result = global_sum(mesh, field, Region(Extent((slice(0, 8),))), rank=0)
 
     assert result == pytest.approx(36.0)
 
 
 def test_global_sum_restricts_to_region() -> None:
-    left = jnp.array([-1000.0, 1.0, 2.0, 3.0, 4.0, -1000.0])
-    right = jnp.array([-2000.0, 5.0, 6.0, 7.0, 8.0, -2000.0])
-    field = _field_with_payloads((left, right))
+    mesh = _make_1d_mesh(n_cells=8, n_blocks=2)
+    field = Array(
+        elements=(
+            DiscreteField(name="rho", payload=jnp.array([1.0, 2.0, 3.0, 4.0])),
+            DiscreteField(name="rho", payload=jnp.array([5.0, 6.0, 7.0, 8.0])),
+        ),
+        placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
+    )
 
-    result = global_sum(field, Region(Extent((slice(2, 6),))), rank=0)
+    # Region [2, 6) overlaps block 0 at [2,4) and block 1 at [4,6)
+    # Block 0 payload[2:4] = [3, 4]; block 1 payload[0:2] = [5, 6]
+    result = global_sum(mesh, field, Region(Extent((slice(2, 6),))), rank=0)
 
     assert result == pytest.approx(18.0)
 
 
 def test_collect_diagnostics_materializes_one_record() -> None:
-    segment = FieldSegment(
-        name="rho",
-        segment_id=ComponentId(0),
-        payload=jnp.arange(4.0, dtype=jnp.float64),
-        extent=Extent((slice(0, 4),)),
-    )
-    field = DistributedField(
-        name="rho", segments=(segment,), placement=Placement({ComponentId(0): 0})
+    mesh = _make_1d_mesh(n_cells=4, n_blocks=1)
+    field = Array(
+        elements=(
+            DiscreteField(name="rho", payload=jnp.arange(4.0, dtype=jnp.float64)),
+        ),
+        placement=Placement({ComponentId(0): 0}),
     )
 
     record = collect_diagnostics(
         (SumReducer("total_mass", "rho"),),
+        mesh,
         {"rho": field},
         Region(Extent((slice(0, 4),))),
         step=7,
@@ -148,9 +145,11 @@ def test_collect_diagnostics_materializes_one_record() -> None:
 
 
 def test_collect_diagnostics_rejects_duplicate_names() -> None:
+    mesh = _make_1d_mesh(n_cells=4, n_blocks=1)
     with pytest.raises(ValueError, match="unique"):
         collect_diagnostics(
             (SumReducer("total", "rho"), SumReducer("total", "rho")),
+            mesh,
             {},
             Region(Extent((slice(0, 1),))),
             step=0,
@@ -161,9 +160,11 @@ def test_collect_diagnostics_rejects_duplicate_names() -> None:
 
 
 def test_collect_diagnostics_requires_scalar_outputs() -> None:
+    mesh = _make_1d_mesh(n_cells=4, n_blocks=1)
     with pytest.raises(ValueError, match="scalar"):
         collect_diagnostics(
             (VectorReducer(),),
+            mesh,
             {},
             Region(Extent((slice(0, 1),))),
             step=0,

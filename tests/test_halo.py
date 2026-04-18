@@ -1,16 +1,17 @@
-"""Tests for UniformGrid.fill_halo (same-rank ghost-cell copy)."""
+"""Tests for fill_halo: ghost-cell copy from interior-sized payloads."""
 
 from __future__ import annotations
 
-import jax.numpy as jnp
+import numpy as np
 import pytest
 
-from cosmic_foundry.descriptor import AccessPattern, Extent
-from cosmic_foundry.mesh import DistributedField, FieldSegment, partition_domain
-from cosmic_foundry.record import ComponentId, Placement
+from cosmic_foundry.descriptor import AccessPattern
+from cosmic_foundry.field import ContinuousField
+from cosmic_foundry.mesh import discretize, fill_halo, partition_domain
+from cosmic_foundry.record import Array, ComponentId
 
 
-def _make_1d_grid(n_ranks: int = 1):
+def _make_1d_mesh(n_ranks: int = 1) -> Array:
     return partition_domain(
         domain_origin=(0.0,),
         domain_size=(8.0,),
@@ -20,66 +21,39 @@ def _make_1d_grid(n_ranks: int = 1):
     )
 
 
-def _segment_with_interior_values(
-    segment_id: int,
-    extent: Extent,
-    interior: Extent,
-    *,
-    fill_value: float,
-    offset: float,
-) -> FieldSegment:
-    payload = jnp.full(extent.shape, fill_value, dtype=jnp.float64)
-    interior_slices = tuple(
-        slice(a.start - p.start, a.stop - p.start)
-        for p, a in zip(extent.slices, interior.slices, strict=False)
-    )
-    local_shape = tuple(a.stop - a.start for a in interior.slices)
-    values = jnp.arange(local_shape[0], dtype=jnp.float64) + offset
-    payload = payload.at[interior_slices].set(values)
-    return FieldSegment(
-        name="phi", segment_id=ComponentId(segment_id), payload=payload, extent=extent
-    )
-
-
 def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
-    """Same-rank block faces copy from neighboring block interiors."""
-    grid = _make_1d_grid()
+    """Ghost cells at the shared face are filled from the neighbor interior."""
+    mesh = _make_1d_mesh()
     access = AccessPattern((1,))
-    left = _segment_with_interior_values(
-        0,
-        Extent((slice(-1, 5),)),
-        Extent((slice(0, 4),)),
-        fill_value=-10.0,
-        offset=100.0,
-    )
-    right = _segment_with_interior_values(
-        1,
-        Extent((slice(3, 9),)),
-        Extent((slice(4, 8),)),
-        fill_value=-20.0,
-        offset=200.0,
-    )
-    field = DistributedField(
-        "phi",
-        (left, right),
-        Placement({ComponentId(0): 0, ComponentId(1): 0}),
-    )
 
-    filled = grid.fill_halo(field, access, rank=0)
+    f = ContinuousField(name="phi", fn=lambda x: x)
+    field = discretize(f, mesh)
 
-    # Right ghost of left block filled from right block interior at global 4 → 200.0
-    assert filled.segment(ComponentId(0)).payload[5] == pytest.approx(200.0)
-    # Left ghost of left block has no neighbor (domain boundary) → unchanged
-    assert filled.segment(ComponentId(0)).payload[0] == pytest.approx(-10.0)
-    # Left ghost of right block filled from left block interior at global 3 → 103.0
-    assert filled.segment(ComponentId(1)).payload[0] == pytest.approx(103.0)
-    # Right ghost of right block has no neighbor (domain boundary) → unchanged
-    assert filled.segment(ComponentId(1)).payload[5] == pytest.approx(-20.0)
+    filled = fill_halo(mesh, field, access, rank=0)
+
+    # Block 0 interior: [0, 4), values ~0.5, 1.5, 2.5, 3.5 (cell centers with h=1)
+    # Block 1 interior: [4, 8), values ~4.5, 5.5, 6.5, 7.5
+    # Filled block 0 halo-sized payload: shape (6,), interior at [1:5]
+    # Right ghost (index 5) should be block 1's first interior value (4.5)
+    b0_payload = filled[ComponentId(0)].payload
+    b1_payload = filled[ComponentId(1)].payload
+
+    assert b0_payload.shape == (6,)  # halo-expanded: [-1, 5)
+    assert b1_payload.shape == (6,)  # halo-expanded: [3, 9)
+
+    # Right ghost of block 0 = left interior of block 1 (global index 4 → 4.5)
+    assert b0_payload[5] == pytest.approx(4.5)
+    # Left ghost of block 0 has no neighbor → zero-filled
+    assert b0_payload[0] == pytest.approx(0.0)
+    # Left ghost of block 1 = right interior of block 0 (global index 3 → 3.5)
+    assert b1_payload[0] == pytest.approx(3.5)
+    # Right ghost of block 1 has no neighbor → zero-filled
+    assert b1_payload[5] == pytest.approx(0.0)
 
 
 def test_single_rank_fill_copies_2d_face_slab() -> None:
     """A full face slab is copied, not only one scalar cell."""
-    grid = partition_domain(
+    mesh = partition_domain(
         domain_origin=(0.0, 0.0),
         domain_size=(2.0, 3.0),
         n_cells=(4, 3),
@@ -87,93 +61,65 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
         n_ranks=1,
     )
     access = AccessPattern((1, 1))
-    bottom_payload = jnp.full((4, 5), -1.0, dtype=jnp.float64)
-    top_payload = jnp.full((4, 5), -2.0, dtype=jnp.float64)
-    bottom_payload = bottom_payload.at[1:3, 1:4].set(
-        jnp.array([[10.0, 11.0, 12.0], [20.0, 21.0, 22.0]])
-    )
-    top_payload = top_payload.at[1:3, 1:4].set(
-        jnp.array([[30.0, 31.0, 32.0], [40.0, 41.0, 42.0]])
-    )
-    field = DistributedField(
-        name="phi",
-        segments=(
-            FieldSegment(
-                name="phi",
-                segment_id=ComponentId(0),
-                payload=bottom_payload,
-                extent=Extent((slice(-1, 3), slice(-1, 4))),
-            ),
-            FieldSegment(
-                name="phi",
-                segment_id=ComponentId(1),
-                payload=top_payload,
-                extent=Extent((slice(1, 5), slice(-1, 4))),
-            ),
-        ),
-        placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
-    )
 
-    filled = grid.fill_halo(field, access, rank=0)
+    # f(x, y) = 10*x + y so each block has distinct values
+    f = ContinuousField(name="phi", fn=lambda x, y: 10.0 * x + y)
+    field = discretize(f, mesh)
 
-    assert jnp.allclose(
-        filled.segment(ComponentId(0)).payload[3, 1:4],
-        jnp.array([30.0, 31.0, 32.0]),
-    )
+    filled = fill_halo(mesh, field, access, rank=0)
+
+    # Block 0: interior x in [0, 2), y in [0, 3) → shape (2, 3) interior, (4, 5) halo
+    # Block 1: interior x in [2, 4), y in [0, 3)
+    # The right ghost slab of block 0 (halo row 3 in payload) should equal
+    # block 1's left interior slab (row 0 in block 1's interior payload).
+    b0 = filled[ComponentId(0)].payload
+    b1_interior = field[ComponentId(1)].payload
+
+    assert b0.shape == (4, 5)  # halo-expanded
+    np.testing.assert_allclose(b0[3, 1:4], b1_interior[0, :])
 
 
-def test_fill_halo_returns_new_field_without_mutating_original() -> None:
-    grid = _make_1d_grid()
+def test_fill_halo_returns_new_array_without_mutating_original() -> None:
+    mesh = _make_1d_mesh()
     access = AccessPattern((1,))
-    left = _segment_with_interior_values(
-        0,
-        Extent((slice(-1, 5),)),
-        Extent((slice(0, 4),)),
-        fill_value=-10.0,
-        offset=100.0,
-    )
-    right = _segment_with_interior_values(
-        1,
-        Extent((slice(3, 9),)),
-        Extent((slice(4, 8),)),
-        fill_value=-20.0,
-        offset=200.0,
-    )
-    field = DistributedField(
-        "phi",
-        (left, right),
-        Placement({ComponentId(0): 0, ComponentId(1): 0}),
-    )
 
-    filled = grid.fill_halo(field, access, rank=0)
+    f = ContinuousField(name="phi", fn=lambda x: x)
+    field = discretize(f, mesh)
+    original_payload = field[ComponentId(0)].payload.copy()
+
+    filled = fill_halo(mesh, field, access, rank=0)
 
     assert filled is not field
-    assert field.segment(ComponentId(0)).payload[5] == pytest.approx(-10.0)
-    assert filled.segment(ComponentId(0)).payload[5] == pytest.approx(200.0)
+    np.testing.assert_allclose(field[ComponentId(0)].payload, original_payload)
+    assert filled[ComponentId(0)].payload.shape == (6,)
 
 
 def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> None:
-    grid = _make_1d_grid(n_ranks=2)
+    mesh = _make_1d_mesh(n_ranks=2)
     access = AccessPattern((1,))
-    left = _segment_with_interior_values(
-        0,
-        Extent((slice(-1, 5),)),
-        Extent((slice(0, 4),)),
-        fill_value=-10.0,
-        offset=100.0,
-    )
-    right = _segment_with_interior_values(
-        1,
-        Extent((slice(3, 9),)),
-        Extent((slice(4, 8),)),
-        fill_value=-20.0,
-        offset=200.0,
-    )
-    field = DistributedField(
-        "phi",
-        (left, right),
-        Placement({ComponentId(0): 0, ComponentId(1): 1}),
-    )
+
+    f = ContinuousField(name="phi", fn=lambda x: x)
+    field = discretize(f, mesh)
 
     with pytest.raises(NotImplementedError, match="multi-rank"):
-        grid.fill_halo(field, access, rank=0)
+        fill_halo(mesh, field, access, rank=0)
+
+
+def test_interior_values_preserved_after_fill() -> None:
+    """Interior values in the returned payload must equal the original field."""
+    mesh = _make_1d_mesh()
+    access = AccessPattern((1,))
+
+    f = ContinuousField(name="phi", fn=lambda x: x * x)
+    field = discretize(f, mesh)
+
+    filled = fill_halo(mesh, field, access, rank=0)
+
+    # Block 0 halo extent [-1, 5): interior at payload indices [1:5]
+    np.testing.assert_allclose(
+        filled[ComponentId(0)].payload[1:5], field[ComponentId(0)].payload
+    )
+    # Block 1 halo extent [3, 9): interior at payload indices [1:5]
+    np.testing.assert_allclose(
+        filled[ComponentId(1)].payload[1:5], field[ComponentId(1)].payload
+    )

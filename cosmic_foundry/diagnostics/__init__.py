@@ -13,9 +13,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.descriptor import Extent, Region
+from cosmic_foundry.field import DiscreteField
 from cosmic_foundry.map import Map
-from cosmic_foundry.mesh import DistributedField
-from cosmic_foundry.record import Record
+from cosmic_foundry.mesh import Block
+from cosmic_foundry.record import Array, ComponentId, Record
 from cosmic_foundry.sink import Sink
 
 
@@ -23,10 +24,11 @@ class DiagnosticReducer(Map):
     """Abstract base for one scalar diagnostic reduction.
 
     Map:
-        domain   — ({f_h^i : Ω_h → ℝ}_i, Ω_h^int, rank, n_ranks) — named
-                   discrete fields, the interior region, and rank metadata
+        domain   — (mesh: Array[Block], {f_h^i : Ω_h → ℝ}_i, Ω_h^int,
+                   rank, n_ranks) — block mesh, named discrete fields,
+                   the interior region, and rank metadata
         codomain — ℝ (a 0-d JAX array) — one scalar diagnostic value
-        operator — execute({f_h^i}, region, rank, n_ranks) → scalar
+        operator — execute(mesh, {f_h^i}, region, rank, n_ranks) → scalar
     """
 
     name: str
@@ -35,7 +37,8 @@ class DiagnosticReducer(Map):
     @abstractmethod
     def execute(
         self,
-        fields: Mapping[str, DistributedField],
+        mesh: Array[Block],
+        fields: Mapping[str, Array[DiscreteField]],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -110,21 +113,23 @@ class CollectDiagnostics(Map):
     """Apply each reducer and materialise all scalars at the diagnostic fence.
 
     Map:
-        domain   — ({f_h^i : Ω_h → ℝ}_i, [r_j]_j) — a named collection of
-                   discrete fields and an ordered sequence of DiagnosticReducers
+        domain   — (mesh: Array[Block], {f_h^i : Ω_h → ℝ}_i, [r_j]_j) —
+                   block mesh, named discrete fields, and DiagnosticReducers
         codomain — (s_1, …, s_n) ∈ ℝⁿ — one scalar per reducer, host-visible
-        operator — ({f_h^i}, [r_j]) ↦ (r_j.reduce({f_h^i}, region, rank, n_ranks))_j;
+        operator — (mesh, {f_h^i}, [r_j]) ↦
+                   (r_j.execute(mesh, {f_h^i}, region, rank, n_ranks))_j;
                    all device scalars are stacked into one jnp.array and
                    transferred to host with a single np.asarray call
 
     Exact: Θ = ∅ — the fence itself introduces no approximation; any
-    approximation lives inside the individual DiagnosticReducer.reduce calls.
+    approximation lives inside the individual DiagnosticReducer.execute calls.
     """
 
     def execute(
         self,
         reducers: Sequence[DiagnosticReducer],
-        fields: Mapping[str, DistributedField],
+        mesh: Array[Block],
+        fields: Mapping[str, Array[DiscreteField]],
         region: Region,
         *,
         step: int,
@@ -138,7 +143,8 @@ class CollectDiagnostics(Map):
             raise ValueError(msg)
 
         device_values = [
-            jnp.asarray(r.execute(fields, region, rank, n_ranks)) for r in reducers
+            jnp.asarray(r.execute(mesh, fields, region, rank, n_ranks))
+            for r in reducers
         ]
         for name, value in zip(names, device_values, strict=False):
             if value.shape != ():
@@ -166,10 +172,11 @@ class GlobalSum(Map):
     """Sum field values over local interiors and optionally all-reduce them.
 
     Map:
-        domain   — f_h : Ω_h^int → ℝ, a discrete scalar field on interior
-                   grid points, intersected with the given region
+        domain   — (mesh: Array[Block], f_h : Ω_h^int → ℝ) — block mesh and
+                   a discrete scalar field on interior grid points, intersected
+                   with the given region
         codomain — ℝ (a real number; field evaluated at a single point)
-        operator — (f_h, region) ↦ Σ_{x ∈ Ω_h^int ∩ region} f_h(x)
+        operator — (mesh, f_h, region) ↦ Σ_{x ∈ Ω_h^int ∩ region} f_h(x)
 
     Unweighted grid-point sum. To approximate ∫_Ω f dΩ, multiply by h^d
     where h is the grid spacing and d is the spatial dimension.
@@ -183,21 +190,26 @@ class GlobalSum(Map):
 
     def execute(
         self,
-        field: DistributedField,
+        mesh: Array[Block],
+        field: Array[DiscreteField],
         region: Region,
         rank: int,
         *,
         axis_name: Hashable | None = None,
     ) -> jax.Array:
         local = jnp.asarray(0.0, dtype=jnp.float64)
-        for segment in field.local_segments(rank):
-            extent = segment.extent
-            payload = segment.payload
-            interior: Extent = segment.interior_extent or extent
+        for i in range(len(mesh.elements)):
+            cid = ComponentId(i)
+            if cid not in mesh.placement.segments_for_rank(rank):
+                continue
+            block = mesh[cid]
+            interior = block.index_extent
             overlap = _intersect_extents(interior, region.extent)
             if overlap is None:
                 continue
-            local = local + jnp.sum(payload[_payload_slices(extent, overlap)])
+            local = local + jnp.sum(
+                field[cid].payload[_payload_slices(interior, overlap)]
+            )
 
         if axis_name is None:
             return local
