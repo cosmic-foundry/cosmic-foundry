@@ -41,9 +41,10 @@ property — `ndim` — which every domain must declare. Domains differ in their
 nature (physical space, thermodynamic state space, etc.) and representation
 (continuous or discrete).
 
-The concrete `Domain` in the spatial simulation path is `UniformGrid`, which
-is Ω_h: the discrete approximation of the continuous domain Ω. `UniformGrid`
-inherits from `Domain`; its `ndim` returns the number of spatial dimensions.
+The concrete `Domain` types in the spatial simulation path are `UniformGrid`
+(Ω_h — the full discrete domain) and `Block` (one contiguous spatial patch,
+a sub-domain of Ω_h). Both inherit from `Domain`; their `ndim` returns the
+number of spatial dimensions.
 
 ### Field
 
@@ -171,6 +172,7 @@ carry the `Map:` block in the class docstring.
 | Class | Nature | ndim |
 |---|---|---|
 | `UniformGrid` | Ω_h — discrete approximation of physical space Ω ⊆ ℝⁿ | spatial dimension |
+| `Block` | one contiguous spatial patch — a sub-domain of Ω_h | spatial dimension |
 
 ### Canonical map instances
 
