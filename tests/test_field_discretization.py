@@ -5,8 +5,13 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import ContinuousField, FieldDiscretization
-from cosmic_foundry.mesh import DistributedField, UniformGrid, partition_domain
+from cosmic_foundry.fields import ContinuousField
+from cosmic_foundry.mesh import (
+    DistributedField,
+    FieldDiscretization,
+    UniformGrid,
+    partition_domain,
+)
 
 
 def _grid_1d(n_cells: int, n_blocks: int, n_ranks: int = 1) -> UniformGrid:

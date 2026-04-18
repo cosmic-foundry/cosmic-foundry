@@ -218,6 +218,59 @@ class DistributedField:
         return bool(covered.all())
 
 
+@dataclass(frozen=True)
+class FieldDiscretization(Map):
+    """Discretize a ContinuousField onto a discrete grid of points in its domain.
+
+    The concept is domain-general: sampling f: D → ℝ onto D_h ⊂ D is the
+    same operation whether D is physical space or thermodynamic state space.
+    This implementation covers the spatial case (D = Ω ⊆ ℝⁿ, G = UniformGrid).
+
+    Map:
+        domain   — (f: ContinuousField on Ω ⊆ ℝⁿ, G = {(B_i, h)}) — a
+                   continuous scalar field and a uniform grid partitioning Ω
+                   into blocks B_i with grid spacing h; f.sample is called
+                   with one JAX coordinate array per spatial axis,
+                   broadcast-compatible with block shape
+        codomain — f_h: DistributedField on Ω_h — one FieldSegment per block
+                   with extent = block.index_extent and no ghost cells;
+                   collected into a DistributedField over the full grid
+        operator — (f, G) ↦ f_h where f_h(x_i) = f(x_i) for x_i ∈ Ω_h^int
+
+    Θ = {h}, p = 1 — piecewise-constant representation has L∞ error O(h)
+    for smooth f; verified by MMS.
+    """
+
+    def execute(self, f: Any, grid: Any) -> DistributedField:
+        """Return a DistributedField with payloads equal to f at cell centers."""
+        import jax.numpy as jnp
+
+        leaves: list[FieldSegment] = []
+        owners: dict[ComponentId, int] = {}
+        for block in grid.blocks:
+            axes = [block.cell_centers(axis) for axis in range(block.ndim)]
+            coords = jnp.meshgrid(*axes, indexing="ij")
+            payload = f.sample(*coords).payload
+            leaves.append(
+                FieldSegment(
+                    name=f.name,
+                    segment_id=block.block_id,
+                    payload=payload,
+                    extent=block.index_extent,
+                )
+            )
+            owners[block.block_id] = grid.owner(block.block_id)
+
+        return DistributedField(
+            name=f.name,
+            segments=tuple(leaves),
+            placement=Placement(owners),
+        )
+
+
+field_discretization = FieldDiscretization()
+
+
 def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
     if a.ndim != b.ndim:
         msg = "Cannot intersect Extents with different ndim"
@@ -235,8 +288,10 @@ def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
 __all__ = [
     "Block",
     "DistributedField",
+    "FieldDiscretization",
     "FieldSegment",
     "PartitionDomain",
     "UniformGrid",
+    "field_discretization",
     "partition_domain",
 ]
