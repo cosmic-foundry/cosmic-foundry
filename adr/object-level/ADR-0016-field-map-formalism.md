@@ -56,6 +56,30 @@ callable is meaningful. An equation of state f: (ρ, T) → P is a
 spatial field onto a simulation grid, with D = thermodynamic state space
 instead of D = Ω ⊆ ℝⁿ.
 
+### Sink
+
+A sink is an operation that consumes data and materialises it into external
+state — a file, a network message, a display — rather than returning a
+mathematical object:
+
+```
+S : A → external state
+```
+
+Sinks are the third primitive alongside fields and maps. They differ from
+maps in that their output is not a value in a mathematical codomain but a
+side effect on the world outside the computation. Every non-trivial sink
+carries a ``Sink:`` block in its docstring:
+
+```
+Sink:
+    domain — description of the input consumed
+    effect — external state produced or modified
+```
+
+Free functions that are sinks carry the ``Sink:`` block in the function
+docstring; sink classes carry it in the class docstring.
+
 ### Map
 
 A map is a relationship between fields:
@@ -110,10 +134,12 @@ carry the `Map:` block in the function docstring.
 
 ## Consequences
 
-- **Positive.** The two-concept vocabulary (field, map) provides a decision
-  procedure for every new class: is this a field (a function on a domain)
-  or a map (a transformation)? The `Map:` docstring convention makes
-  approximation properties explicit and machine-auditable. Desiderata are
+- **Positive.** The three-concept vocabulary (field, map, sink) provides a
+  decision procedure for every new class: is this a field (a function on a
+  domain), a map (a transformation returning a mathematical object), or a
+  sink (an operation that materialises data into external state)? The `Map:`
+  and `Sink:` docstring conventions make approximation properties and
+  side-effect contracts explicit and machine-auditable. Desiderata are
   cleanly separated from operator signatures.
 - **Negative.** Every operator class must be written with a `Map:` block.
   The requirement adds authoring overhead for new contributors. Classes that
@@ -142,10 +168,12 @@ requirements, violating the clean domain → codomain structure. Ghost-cell
 storage belongs to a separate map (halo allocation) whose domain is the
 consumer's stencil requirements, not the source field.
 
-**Informal conventions without an ADR.** The `Map:` block pattern could be
-treated as a style guide item rather than an architectural decision. Rejected
-because without a recorded decision, new contributors have no basis for
-understanding why `AccessPattern` does not belong in `FieldDiscretization`,
-what "Θ = ∅" means in context, or that EOS tabulation is a `FieldDiscretization`
-on thermodynamic state space rather than a different kind of thing.
-The formalism is the architecture; the ADR is the primary explanation of it.
+**Informal conventions without an ADR.** The `Map:` and `Sink:` block
+patterns could be treated as style guide items rather than an architectural
+decision. Rejected because without a recorded decision, new contributors have
+no basis for understanding why `AccessPattern` does not belong in
+`FieldDiscretization`, what "Θ = ∅" means in context, why `write_array` has
+a `Sink:` block instead of a `Map:` block, or that EOS tabulation is a
+`FieldDiscretization` on thermodynamic state space rather than a different
+kind of thing. The formalism is the architecture; the ADR is the primary
+explanation of it.

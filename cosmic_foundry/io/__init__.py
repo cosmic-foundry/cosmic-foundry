@@ -39,17 +39,14 @@ def write_array(
 ) -> None:
     """Write *array* to a new HDF5 file at *path* under dataset name *dataset*.
 
+    Sink:
+        domain — (array: array-like, path: Path, dataset: str) — a numeric
+                 array and a destination HDF5 path with a dataset name
+        effect — HDF5 file created at path; array stored under dataset name;
+                 any existing file at path is overwritten
+
     *array* may be a JAX array or a NumPy array; it is converted to NumPy
     before the write so no JAX-specific serialization is required.
-
-    Parameters
-    ----------
-    path:
-        Destination file path.  Any existing file at this path is overwritten.
-    array:
-        Array to write.  Converted to ``numpy.ndarray`` if necessary.
-    dataset:
-        HDF5 dataset name inside the file.
     """
     np_array = np.asarray(array)
     dest = Path(path)
@@ -70,22 +67,16 @@ def merge_rank_files(
 ) -> None:
     """Concatenate per-rank HDF5 files into a single output file.
 
-    Each file in *rank_paths* must contain a dataset named *dataset*.  The
-    arrays are concatenated in order along *axis* and written to *output_path*.
+    Sink:
+        domain — ([f_i: HDF5 file]_i, output_path: Path) — an ordered
+                 sequence of per-rank HDF5 files each containing dataset,
+                 and a destination path
+        effect — single HDF5 file written at output_path; per-rank arrays
+                 concatenated in rank order along axis
 
-    This is the post-processing merge step for the ``HAS_PARALLEL_HDF5=False``
+    Each file in *rank_paths* must contain a dataset named *dataset*.  This
+    is the post-processing merge step for the ``HAS_PARALLEL_HDF5=False``
     write path.
-
-    Parameters
-    ----------
-    rank_paths:
-        Ordered sequence of per-rank file paths (rank 0 first).
-    output_path:
-        Destination file path for the merged result.
-    dataset:
-        HDF5 dataset name to read from each rank file and write to the output.
-    axis:
-        Axis along which to concatenate.
     """
     if not rank_paths:
         msg = "rank_paths must contain at least one file"
