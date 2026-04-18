@@ -147,7 +147,7 @@ def probe_operator_weights(
     using a plain NumPy-backed probe array — it does not go through
     ``Region``.  This keeps the probe independent of the
     execution machinery and works for any kernel with the pointwise
-    signature of a class-based ``Op``.
+    signature of a pointwise ``Map``.
     """
     center = n // 2
     weights: dict[tuple[int, int, int], float] = {}

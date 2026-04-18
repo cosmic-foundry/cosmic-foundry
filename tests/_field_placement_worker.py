@@ -49,8 +49,9 @@ def main() -> None:
             AccessPattern,
             ComponentId,
             Extent,
-            Op,
+            Map,
             Region,
+            execute_pointwise,
         )
 
         n = 8
@@ -83,16 +84,16 @@ def main() -> None:
         )
 
         from dataclasses import dataclass
-        from typing import Any, ClassVar
+        from typing import Any
 
         @dataclass(frozen=True)
-        class Laplacian(Op):
-            reads: ClassVar[tuple[str, ...]] = ("phi",)
-            writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
-
+        class Laplacian(Map):
             @property
             def access_pattern(self) -> AccessPattern:
                 return AccessPattern.seven_point()
+
+            def execute(self, phi: Any, *, region: Region) -> Any:
+                return execute_pointwise(self, region, phi)
 
             def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
                 return (

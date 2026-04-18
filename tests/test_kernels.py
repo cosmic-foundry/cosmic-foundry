@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -12,13 +12,14 @@ import pytest
 from cosmic_foundry.kernels import (
     AccessPattern,
     Extent,
-    Op,
+    Map,
     Region,
+    execute_pointwise,
 )
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Op):
+class SevenPointLaplacian(Map):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Map:
@@ -32,12 +33,12 @@ class SevenPointLaplacian(Op):
     Exact for polynomials of degree ≤ 2.
     """
 
-    reads: ClassVar[tuple[str, ...]] = ("phi",)
-    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
-
     @property
     def access_pattern(self) -> AccessPattern:
         return AccessPattern.seven_point()
+
+    def execute(self, phi: Any, *, region: Region) -> Any:
+        return execute_pointwise(self, region, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -54,10 +55,8 @@ class SevenPointLaplacian(Op):
 seven_point_laplacian = SevenPointLaplacian()
 
 
-def test_op_class_exposes_metadata() -> None:
+def test_op_class_exposes_access_pattern() -> None:
     assert seven_point_laplacian.access_pattern == AccessPattern.seven_point()
-    assert seven_point_laplacian.reads == ("phi",)
-    assert seven_point_laplacian.writes == ("laplacian_phi",)
 
 
 def test_op_execute_runs_kernel() -> None:

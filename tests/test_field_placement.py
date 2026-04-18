@@ -17,7 +17,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import jax.numpy as jnp
 import pytest
@@ -27,8 +27,9 @@ from cosmic_foundry.kernels import (
     AccessPattern,
     ComponentId,
     Extent,
-    Op,
+    Map,
     Region,
+    execute_pointwise,
 )
 
 # ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ N = 8
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Op):
+class SevenPointLaplacian(Map):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Map:
@@ -53,12 +54,12 @@ class SevenPointLaplacian(Op):
     Exact for polynomials of degree ≤ 2.
     """
 
-    reads: ClassVar[tuple[str, ...]] = ("phi",)
-    writes: ClassVar[tuple[str, ...]] = ("laplacian_phi",)
-
     @property
     def access_pattern(self) -> AccessPattern:
         return AccessPattern.seven_point()
+
+    def execute(self, phi: Any, *, region: Region) -> Any:
+        return execute_pointwise(self, region, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
