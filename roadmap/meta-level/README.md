@@ -34,24 +34,25 @@ capability ordering except by recording explicit evidence dependencies.
 | M0 | [ADR-0005](../../adr/meta-level/ADR-0005-branch-pr-attribution-discipline.md), [`AI.md`](../../AI.md) | Branch, PR, commit-size, history, and attribution discipline. | Active |
 | M1 | [ADR-0007](../../adr/meta-level/ADR-0007-replication-workflow.md), [`replication/`](../../replication/README.md) | Bounded-increment verification, capability specs, golden-data harness, formulas register, externally grounded tests. | Active |
 | M2 | [ADR-0013](../../adr/meta-level/ADR-0013-derivation-first-lane.md), `derivations/` | Lane A/B/C provenance discipline and derivation documents for physics capabilities. | Active; first derivation pending |
-| M3 | [reproducibility-meta-generator.md](reproducibility-meta-generator.md), [ADR-0015](../../adr/meta-level/ADR-0015-reproducibility-meta-generator.md) | Reproducibility capsules, collect/dry-run/render/compare, recursive approximate idempotence. | Planned meta-level focus |
+| M3 | This file | Capability intent documentation: for each existing platform capability, a clear spec stating what it computes and how an independent actor would verify it. The capsule tooling (M3b) is deferred until claims are documented clearly enough to be worth collecting. | Current focus |
+| M3b | [reproducibility-meta-generator.md](reproducibility-meta-generator.md), [ADR-0015](../../adr/meta-level/ADR-0015-reproducibility-meta-generator.md) | Reproducibility capsules, collect/dry-run/render/compare, recursive approximate idempotence. | Planned; depends on M3 |
 | M4 | [epoch-03-platform-services.md](../object-level/epoch-03-platform-services.md) | Validation manifests, provenance sidecars, comparison-result schema, simulation-specification format. | Planned for Epoch 3 |
 | M5 | Application-repo capsule integration | Application capability capsules, validation products, evidence idempotence, multi-repository regeneration. | Future |
 
-## Current Focus: M3 Platform Convergence
+## Current Focus: M3 Capability Intent Documentation
 
-The current planned meta-level work is the M3 platform convergence slice:
+The capsule tooling (M3b) is only valuable if the claims it collects are
+clearly stated. The current focus is therefore a step earlier: for each
+existing platform capability, write a spec that states what it computes and
+how an independent actor — without access to the authors or the git history
+— could verify that the implementation is correct.
 
-```text
-collect current platform state
--> dry-run capsule references
--> render independent-actor instructions
--> collect again from the same or regenerated state
--> compare normalized capsules for structural idempotence
-```
+The test: could someone read the spec, implement the capability themselves,
+run the stated verification, and know whether they got it right? If not, the
+spec is incomplete.
 
-The detailed implementation plan and exit criteria live in
-[reproducibility-meta-generator.md](reproducibility-meta-generator.md).
+Once existing capabilities meet that bar, M3b (the capsule tooling) has
+something real to collect and dry-run against.
 
 ## Cross-Plane Interfaces
 

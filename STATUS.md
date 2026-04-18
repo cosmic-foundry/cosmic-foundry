@@ -70,17 +70,19 @@ Per the meta-level roadmap in `roadmap/meta-level/README.md`:
 | M0 | Branch / PR / attribution discipline | #8 area | Merged |
 | M1 | Replication workflow and externally grounded tests | #63, #64, #69, #70 | Merged |
 | M2 | Derivation-first lane | #81 area | Merged |
-| M3 | Reproducibility meta-generator architecture and convergence plan | #93 | Planned |
+| M3 | Capability intent documentation — specs stating what each platform capability computes and how it is independently verifiable | — | Current focus |
+| M3b | Reproducibility meta-generator architecture and convergence plan | #93 | Planned; depends on M3 |
 | M4 | Platform validation manifests, provenance, comparison-result schema, sim-spec format | — | Planned |
 
 ## Next planned work
 
 Next selected PRs should explicitly state which track they advance.
 
-Meta-level next work: implement
-`roadmap/meta-level/reproducibility-meta-generator.md` M3 — platform-only capsule
-collect, dry-run, render, and structural comparison against the current
-repository state.
+Meta-level next work: M3 — for each existing platform capability, write a
+spec that states what it computes and how an independent actor would verify
+it. The test: could someone read the spec, implement it themselves, and know
+whether they got it right? Capsule tooling (M3b) follows once claims are
+clearly documented.
 
 Object-level next work: continue Epoch 2 items #5–#6 (task-graph driver,
 multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
