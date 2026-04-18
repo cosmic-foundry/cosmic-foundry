@@ -122,6 +122,10 @@ Applies to every ADR in this repository.
   the existing decision. No dated amendment log is maintained;
   the document describes current architecture and git history
   preserves the record of what changed and when.
+- **Withdrawal.** When a decision is entirely withdrawn, remove the
+  ADR from the index and note the removal in the same PR. The file
+  may be deleted or left in place without an index entry, as
+  appropriate for the situation.
 - **Agents propose edits proactively.** When a conversation
   implies an ADR should change, the agent should propose the
   edit directly rather than routing the clarification through

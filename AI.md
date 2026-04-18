@@ -382,7 +382,7 @@ report.
 
 ADRs describe current architecture. When a conversation implies an
 ADR should change, propose the edit directly. If a decision is
-entirely withdrawn, remove or archive the ADR from the index. See
+entirely withdrawn, remove it from the index. See
 [ADR-0005 §Decision → ADR editing policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
 
 ## Physics capability implementation paths
