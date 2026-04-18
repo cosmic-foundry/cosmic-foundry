@@ -6,7 +6,6 @@ import functools
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, ClassVar, cast
 
 import jax
@@ -15,12 +14,6 @@ import jax.numpy as jnp
 from cosmic_foundry.observability import get_logger
 
 _log = get_logger(__name__)
-
-
-class Backend(Enum):
-    """Kernel backend identifiers."""
-
-    JAX = "jax"
 
 
 class Descriptor(ABC):
@@ -248,7 +241,6 @@ class Op(Map, Descriptor):
 
     reads: ClassVar[tuple[str, ...]] = ()
     writes: ClassVar[tuple[str, ...]] = ()
-    backends: ClassVar[frozenset[Backend]] = frozenset({Backend.JAX})
 
     @property
     @abstractmethod
@@ -397,9 +389,6 @@ def _validate_op(op_like: Any) -> None:
     if not hasattr(op_like, "access_pattern"):
         msg = "Op must declare access_pattern metadata"
         raise TypeError(msg)
-    if Backend.JAX not in op_like.backends:
-        msg = "FlatPolicy requires an Op that supports the JAX backend"
-        raise ValueError(msg)
 
 
 def _validate_region_access(
@@ -455,7 +444,6 @@ def _slice_length(axis_slice: slice) -> int:
 
 __all__ = [
     "AccessPattern",
-    "Backend",
     "Descriptor",
     "Dispatch",
     "Domain",
