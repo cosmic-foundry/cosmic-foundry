@@ -45,7 +45,6 @@ from cosmic_foundry.kernels import (  # noqa: E402
     Region,
     Sink,
     Source,
-    Stencil,
 )
 from cosmic_foundry.mesh import (  # noqa: E402
     Block,
@@ -94,7 +93,6 @@ __all__ = [
     "Region",
     "Sink",
     "Source",
-    "Stencil",
     # mesh
     "Block",
     "PartitionDomain",

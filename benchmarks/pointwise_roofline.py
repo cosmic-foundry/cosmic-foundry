@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region, Stencil
+from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
@@ -38,7 +38,7 @@ class SevenPointLaplacian(Op):
 
     @property
     def access_pattern(self) -> AccessPattern:
-        return Stencil.seven_point()
+        return AccessPattern.seven_point()
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -103,7 +103,7 @@ class PointwiseTriad(Op):
 
     @property
     def access_pattern(self) -> AccessPattern:
-        return Stencil((0, 0, 0))
+        return AccessPattern((0, 0, 0))
 
     def _fn(self, a: Any, b: Any, i: Any, j: Any, k: Any) -> Any:
         return a[i, j, k] + 0.5 * b[i, j, k]

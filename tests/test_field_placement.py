@@ -29,7 +29,6 @@ from cosmic_foundry.kernels import (
     Extent,
     Op,
     Region,
-    Stencil,
 )
 
 # ---------------------------------------------------------------------------
@@ -59,7 +58,7 @@ class SevenPointLaplacian(Op):
 
     @property
     def access_pattern(self) -> AccessPattern:
-        return Stencil.seven_point()
+        return AccessPattern.seven_point()
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (

@@ -32,45 +32,37 @@ class Descriptor(ABC):
         """Return a plain-dict representation of this descriptor."""
 
 
-class AccessPattern(Descriptor):
-    """Metadata describing the locality contract for an Op."""
-
-    @abstractmethod
-    def halo_width(self, axis: int) -> int:
-        """Return the ghost-cell depth required on one axis."""
-
-    def as_dict(self) -> dict[str, Any]:
-        """Return a plain-dict representation of this access pattern."""
-        return {"type": type(self).__name__}
-
-
 @dataclass(frozen=True)
-class Stencil(AccessPattern):
-    """Fixed-width neighborhood centered on a grid element."""
+class AccessPattern(Descriptor):
+    """Concrete descriptor specifying the locality contract for an Op.
+
+    ``radii[i]`` is the ghost-cell depth required on axis ``i``.
+    """
 
     radii: tuple[int, ...]
 
+    def halo_width(self, axis: int) -> int:
+        """Return the ghost-cell depth required on one axis."""
+        return self.radii[axis]
+
     @classmethod
-    def seven_point(cls) -> Stencil:
-        """Return the 3-D seven-point nearest-neighbor stencil."""
+    def seven_point(cls) -> AccessPattern:
+        """Return the 3-D seven-point nearest-neighbor access pattern."""
         return cls((1, 1, 1))
 
     @classmethod
-    def symmetric(cls, order: int, ndim: int = 3) -> Stencil:
-        """Return a symmetric stencil for an even finite-difference order."""
+    def symmetric(cls, order: int, ndim: int = 3) -> AccessPattern:
+        """Return a symmetric access pattern for an even finite-difference order."""
         if order <= 0 or order % 2 != 0:
-            msg = "symmetric stencil order must be a positive even integer"
+            msg = "symmetric order must be a positive even integer"
             raise ValueError(msg)
         if ndim <= 0:
             msg = "ndim must be positive"
             raise ValueError(msg)
         return cls((order // 2,) * ndim)
 
-    def halo_width(self, axis: int) -> int:
-        return self.radii[axis]
-
     def as_dict(self) -> dict[str, Any]:
-        return {"type": "Stencil", "radii": list(self.radii)}
+        return {"type": "AccessPattern", "radii": list(self.radii)}
 
 
 @dataclass(frozen=True)
@@ -428,5 +420,4 @@ __all__ = [
     "Region",
     "Sink",
     "Source",
-    "Stencil",
 ]

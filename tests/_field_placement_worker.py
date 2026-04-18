@@ -51,7 +51,6 @@ def main() -> None:
             Extent,
             Op,
             Region,
-            Stencil,
         )
 
         n = 8
@@ -93,7 +92,7 @@ def main() -> None:
 
             @property
             def access_pattern(self) -> AccessPattern:
-                return Stencil.seven_point()
+                return AccessPattern.seven_point()
 
             def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
                 return (
