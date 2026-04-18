@@ -4,13 +4,14 @@
 - ``Placement``          — maps each SegmentId to the process rank that owns it.
                            Carries no physical meaning or kernel-lowering logic.
 - ``Field``              — abstract base for all field parameterizations: f: D → ℝ.
-- ``ContinuousField``    — Θ = ∅: f: Ω → ℝ represented by an analytic callable.
+- ``ContinuousField``    — Θ = ∅: f: D → ℝ represented by an analytic callable.
 - ``DiscreteField``      — Θ = {h}: f_h: Ω_h → ℝ.  Leaf nodes (single block)
                            carry payload/extent/segment_id directly.  Composite
                            nodes (multi-block) carry segments and placement.
                            Both are the same kind of mathematical object — a
                            field on a discrete domain.
-- ``FieldDiscretization``— map from ContinuousField × UniformGrid to DiscreteField.
+- ``FieldDiscretization``— map from ContinuousField × UniformGrid to DiscreteField
+                           (spatial-domain implementation; concept is domain-general).
 """
 
 from __future__ import annotations
@@ -75,8 +76,8 @@ class Field(ABC):
     A field assigns a value to every point in its domain D. Concrete
     subclasses differ in how D is represented and how f is stored:
 
-    - ``ContinuousField``: D = Ω ⊆ ℝⁿ, Θ = ∅, stored as a callable.
-    - ``DiscreteField``:   D = Ω_h ⊂ Ω,  Θ = {h}, stored as array segments.
+    - ``ContinuousField``: D = any domain, Θ = ∅, stored as a callable.
+    - ``DiscreteField``:   D = D_h ⊂ D,   Θ = {h}, stored as array segments.
     """
 
     name: str
@@ -84,22 +85,23 @@ class Field(ABC):
 
 @dataclass(frozen=True)
 class ContinuousField(Field):
-    """A continuous scalar field f: Ω → ℝ represented by an analytic callable.
+    """A continuous scalar field f: D → ℝ represented by an analytic callable.
 
     Θ = ∅ — exact representation; the callable is the field itself, not an
-    approximation of it.  Evaluated at arbitrary spatial coordinates by
-    calling fn(*coords) where each coord is a JAX array of positions along
-    one spatial axis.
+    approximation of it.  D may be any domain: physical space, thermodynamic
+    state space, or otherwise.  Evaluated at a point in D by calling
+    fn(*args) where each arg is a JAX array of coordinates along one axis
+    of D.
     """
 
     name: str
     fn: Callable[..., Any]
 
-    def evaluate(self, *coords: Any) -> Any:
-        """Evaluate the field at the given spatial coordinates."""
+    def evaluate(self, *args: Any) -> Any:
+        """Evaluate the field at the given point in domain D."""
         import jax.numpy as jnp
 
-        return jnp.asarray(self.fn(*coords), dtype=jnp.float64)
+        return jnp.asarray(self.fn(*args), dtype=jnp.float64)
 
 
 @dataclass(frozen=True)
@@ -224,16 +226,21 @@ class DiscreteField(Field):
 
 @dataclass(frozen=True)
 class FieldDiscretization:
-    """Discretize a ContinuousField onto interior cell centers of a uniform grid.
+    """Discretize a ContinuousField onto a discrete grid of points in its domain.
+
+    The concept is domain-general: sampling f: D → ℝ onto D_h ⊂ D is the
+    same operation whether D is physical space or thermodynamic state space.
+    This implementation covers the spatial case (D = Ω ⊆ ℝⁿ, G = UniformGrid).
 
     Map:
-        domain   — (f: ContinuousField, G = {(B_i, h)}) — a continuous scalar
-                   field and a uniform grid partitioning Ω into blocks B_i with
-                   grid spacing h; f.evaluate is called with one JAX coordinate
-                   array per spatial axis, broadcast-compatible with block shape
-        codomain — f_h: DiscreteField — one leaf DiscreteField per block with
-                   extent = block.index_extent and no ghost cells; collected
-                   into a composite DiscreteField over the full grid
+        domain   — (f: ContinuousField on Ω ⊆ ℝⁿ, G = {(B_i, h)}) — a
+                   continuous scalar field and a uniform grid partitioning Ω
+                   into blocks B_i with grid spacing h; f.evaluate is called
+                   with one JAX coordinate array per spatial axis,
+                   broadcast-compatible with block shape
+        codomain — f_h: DiscreteField on Ω_h — one leaf DiscreteField per
+                   block with extent = block.index_extent and no ghost cells;
+                   collected into a composite DiscreteField over the full grid
         operator — (f, G) ↦ f_h where f_h(x_i) = f(x_i) for x_i ∈ Ω_h^int
 
     Θ = {h}, p = 1 — piecewise-constant representation has L∞ error O(h)

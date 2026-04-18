@@ -29,7 +29,7 @@ principle: an answer to "what is the fundamental object?" and an answer to
 
 ### Field
 
-A field is a function on a spatial domain:
+A field is a function on a domain:
 
 ```
 f : D → ℝ
@@ -40,18 +40,21 @@ The `Field` ABC has two concrete parameterizations:
 
 | Class | Domain D | Parameter space Θ | Representation |
 |-------|----------|-------------------|----------------|
-| `ContinuousField` | Ω ⊆ ℝⁿ (continuous) | ∅ (exact) | A Python callable |
-| `DiscreteField` | Ω_h ⊂ Ω (grid points) | {h} (grid spacing) | Array segments over `FieldSegment`s |
+| `ContinuousField` | D (any domain; exact) | ∅ | A Python callable |
+| `DiscreteField` | D_h ⊂ D (discrete grid) | {h} (grid spacing) | Payload arrays per block |
 
-`ContinuousField` carries no approximation: evaluating it at any point in Ω
+`ContinuousField` carries no approximation: evaluating it at any point in D
 returns the exact field value. `DiscreteField` carries approximation error
 O(hᵖ) for smooth fields; p depends on the discretization scheme.
 
-**Scope of `ContinuousField`.** `ContinuousField` represents fields on physical
-space: f: Ω ⊆ ℝⁿ → ℝ evaluated at spatial coordinates. It does not represent
-maps on other state spaces. An equation of state, for example, is a map on
-thermodynamic state space (ρ, T) → (P, e, …) — not a `ContinuousField`, because
-its domain is not a spatial domain.
+**Domain D is unrestricted.** `ContinuousField` represents any exact scalar
+field f: D → ℝ regardless of what D is. D may be physical space (Ω ⊆ ℝⁿ),
+thermodynamic state space ((ρ, T)), or any other domain on which an exact
+callable is meaningful. An equation of state f: (ρ, T) → P is a
+`ContinuousField` on thermodynamic state space. Tabulating it onto a discrete
+(ρ, T) grid is a `FieldDiscretization` — the same operation as sampling a
+spatial field onto a simulation grid, with D = thermodynamic state space
+instead of D = Ω ⊆ ℝⁿ.
 
 ### Map
 
@@ -143,5 +146,6 @@ consumer's stencil requirements, not the source field.
 treated as a style guide item rather than an architectural decision. Rejected
 because without a recorded decision, new contributors have no basis for
 understanding why `AccessPattern` does not belong in `FieldDiscretization`,
-why `ContinuousField` does not model EOS, or what "Θ = ∅" means in context.
+what "Θ = ∅" means in context, or that EOS tabulation is a `FieldDiscretization`
+on thermodynamic state space rather than a different kind of thing.
 The formalism is the architecture; the ADR is the primary explanation of it.
