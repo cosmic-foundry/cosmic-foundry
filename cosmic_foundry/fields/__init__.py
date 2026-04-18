@@ -23,7 +23,7 @@ from typing import Any, NewType
 
 import numpy as np
 
-from cosmic_foundry.kernels import Extent
+from cosmic_foundry.kernels import Extent, Map
 
 SegmentId = NewType("SegmentId", int)
 
@@ -225,7 +225,7 @@ class DiscreteField(Field):
 
 
 @dataclass(frozen=True)
-class FieldDiscretization:
+class FieldDiscretization(Map):
     """Discretize a ContinuousField onto a discrete grid of points in its domain.
 
     The concept is domain-general: sampling f: D → ℝ onto D_h ⊂ D is the

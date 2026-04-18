@@ -7,7 +7,7 @@ from itertools import product
 from typing import Any
 
 from cosmic_foundry.fields import DiscreteField, SegmentId
-from cosmic_foundry.kernels import AccessPattern, Extent, Region
+from cosmic_foundry.kernels import AccessPattern, Extent, Map, Region
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class HaloFillFence:
 
 
 @dataclass(frozen=True)
-class HaloFillPolicy:
+class HaloFillPolicy(Map):
     """Fill same-rank ghost cells by copying from neighboring segments.
 
     Map:

@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.fields import DiscreteField
-from cosmic_foundry.kernels import Extent, Region
+from cosmic_foundry.kernels import Extent, Map, Region
 
 
 class DiagnosticReducer(Protocol):
@@ -97,16 +97,8 @@ class TabSeparatedDiagnosticSink:
             stream.write("\t".join(values) + "\n")
 
 
-def collect_diagnostics(
-    reducers: Sequence[DiagnosticReducer],
-    fields: Mapping[str, DiscreteField],
-    region: Region,
-    *,
-    step: int,
-    time: float,
-    rank: int,
-    n_ranks: int,
-) -> DiagnosticRecord:
+@dataclass(frozen=True)
+class CollectDiagnostics(Map):
     """Apply each reducer and materialise all scalars at the diagnostic fence.
 
     Map:
@@ -120,38 +112,49 @@ def collect_diagnostics(
     Exact: Θ = ∅ — the fence itself introduces no approximation; any
     approximation lives inside the individual DiagnosticReducer.reduce calls.
     """
-    names = tuple(reducer.name for reducer in reducers)
-    if len(set(names)) != len(names):
-        msg = "DiagnosticReducer names must be unique"
-        raise ValueError(msg)
 
-    device_values = [
-        jnp.asarray(r.reduce(fields, region, rank, n_ranks)) for r in reducers
-    ]
-    for name, value in zip(names, device_values, strict=False):
-        if value.shape != ():
-            msg = f"DiagnosticReducer {name!r} must return a scalar JAX array"
+    def execute(
+        self,
+        reducers: Sequence[DiagnosticReducer],
+        fields: Mapping[str, DiscreteField],
+        region: Region,
+        *,
+        step: int,
+        time: float,
+        rank: int,
+        n_ranks: int,
+    ) -> DiagnosticRecord:
+        names = tuple(reducer.name for reducer in reducers)
+        if len(set(names)) != len(names):
+            msg = "DiagnosticReducer names must be unique"
             raise ValueError(msg)
 
-    host_values = (
-        np.asarray(jnp.stack(device_values)) if device_values else np.array([])
-    )
-    return DiagnosticRecord(
-        step=step,
-        time=time,
-        values={
-            name: float(value) for name, value in zip(names, host_values, strict=False)
-        },
-    )
+        device_values = [
+            jnp.asarray(r.reduce(fields, region, rank, n_ranks)) for r in reducers
+        ]
+        for name, value in zip(names, device_values, strict=False):
+            if value.shape != ():
+                msg = f"DiagnosticReducer {name!r} must return a scalar JAX array"
+                raise ValueError(msg)
+
+        host_values = (
+            np.asarray(jnp.stack(device_values)) if device_values else np.array([])
+        )
+        return DiagnosticRecord(
+            step=step,
+            time=time,
+            values={
+                name: float(value)
+                for name, value in zip(names, host_values, strict=False)
+            },
+        )
 
 
-def global_sum(
-    field: DiscreteField,
-    region: Region,
-    rank: int,
-    *,
-    axis_name: Hashable | None = None,
-) -> jax.Array:
+collect_diagnostics = CollectDiagnostics()
+
+
+@dataclass(frozen=True)
+class GlobalSum(Map):
     """Sum field values over local interiors and optionally all-reduce them.
 
     Map:
@@ -166,21 +169,35 @@ def global_sum(
     Without *axis_name*, returns the rank-local sum. Supplying a JAX
     parallel-map axis name applies ``jax.lax.psum`` and returns the global
     sum inside that mapped context.
-    """
-    local = jnp.asarray(0.0, dtype=jnp.float64)
-    for segment in field.local_segments(rank):
-        extent = segment.extent
-        payload = segment.payload
-        assert extent is not None and payload is not None  # segment is a leaf
-        interior: Extent = segment.interior_extent or extent
-        overlap = _intersect_extents(interior, region.extent)
-        if overlap is None:
-            continue
-        local = local + jnp.sum(payload[_payload_slices(extent, overlap)])
 
-    if axis_name is None:
-        return local
-    return cast(jax.Array, jax.lax.psum(local, axis_name))
+    Exact: Θ = ∅ — unweighted sum; no approximation introduced.
+    """
+
+    def execute(
+        self,
+        field: DiscreteField,
+        region: Region,
+        rank: int,
+        *,
+        axis_name: Hashable | None = None,
+    ) -> jax.Array:
+        local = jnp.asarray(0.0, dtype=jnp.float64)
+        for segment in field.local_segments(rank):
+            extent = segment.extent
+            payload = segment.payload
+            assert extent is not None and payload is not None  # segment is a leaf
+            interior: Extent = segment.interior_extent or extent
+            overlap = _intersect_extents(interior, region.extent)
+            if overlap is None:
+                continue
+            local = local + jnp.sum(payload[_payload_slices(extent, overlap)])
+
+        if axis_name is None:
+            return local
+        return cast(jax.Array, jax.lax.psum(local, axis_name))
+
+
+global_sum = GlobalSum()
 
 
 def _format_float(value: float) -> str:
@@ -212,9 +229,11 @@ def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
 
 
 __all__ = [
+    "CollectDiagnostics",
     "DiagnosticRecord",
     "DiagnosticReducer",
     "DiagnosticSink",
+    "GlobalSum",
     "NullDiagnosticSink",
     "TabSeparatedDiagnosticSink",
     "collect_diagnostics",
