@@ -1,4 +1,4 @@
-"""Domain ABC."""
+"""Domain — the abstract type of all sets that can serve as the domain of a field."""
 
 from __future__ import annotations
 
@@ -6,14 +6,15 @@ from abc import ABC, abstractmethod
 
 
 class Domain(ABC):
-    """Abstract base for all domain types: the set D over which fields are defined.
+    """The set D on which a field f: D → ℝ is defined.
 
-    A domain is the input space of a field f: D → ℝ. Domains differ in their
-    representation (continuous vs. discrete) and their nature (physical space,
-    thermodynamic state space, etc.). Every Field has a Domain; a Domain is
-    not itself a Field.
+    A domain is not a region, a grid, or a spatial extent — it is the abstract
+    type of all sets that can serve as the input space of a field.  Domains
+    differ in their structure (continuous, discrete, graph-valued, …) and their
+    nature (physical space, thermodynamic state space, index space, …).
 
-    The one universal property of a domain is its dimensionality.
+    Concrete subclasses supply the structure of D.  This ABC makes no
+    assumptions about geometry, boundedness, or dimensionality.
     """
 
     @property
