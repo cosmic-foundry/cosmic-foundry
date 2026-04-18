@@ -1,4 +1,4 @@
-# Stretch Epoch 13 — Subgrid physics and observables
+# Stretch Epoch 14 — Subgrid physics and observables
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 
@@ -7,6 +7,6 @@
   that EAGLE-, COLIBRE-, and FIRE-class recipes can be expressed
   inside the engine.
 - On-the-fly synthetic EUV, X-ray, and spectral-line observables.
-- In-situ rendering passes wired into the Epoch 3 pipeline so
+- In-situ rendering passes wired into the Epoch 4 pipeline so
   long-running simulations emit gallery-ready assets during
   runtime rather than only at checkpoint.

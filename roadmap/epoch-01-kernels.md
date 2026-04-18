@@ -150,7 +150,7 @@ Region. Three policies are anticipated, implemented incrementally:
 
 Only `FlatPolicy` is implemented in Epoch 1. `TiledPolicy` is
 anticipated in Epoch 2–3 when mesh stencil operations become real
-workloads. `WarpSpecializedPolicy` is anticipated in Epoch 6 when
+workloads. `WarpSpecializedPolicy` is anticipated in Epoch 7 when
 nuclear reaction networks require it. The interface must be designed
 so that swapping policies requires no changes to Op implementations.
 

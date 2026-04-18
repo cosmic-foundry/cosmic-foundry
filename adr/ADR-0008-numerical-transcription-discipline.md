@@ -82,7 +82,7 @@ the final decision, not a commitment.
 **Deferred.** This ADR reserves the number, records the problem
 framing, and points to ADR-0007 as the operative discipline for
 any numerical transcription that happens before the final text
-lands. The decision must be made before Epoch 6 (Microphysics)
+lands. The decision must be made before Epoch 7 (Microphysics)
 begins — see `roadmap/index.md` §5 for the crossroad.
 
 ## Consequences

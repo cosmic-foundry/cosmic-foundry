@@ -103,7 +103,7 @@ Bring up the mesh hierarchy the physics modules will live on:
 **Exit criterion:** a second-order advection test converges at
 design order on AMR, runs identically on CPU and GPU, produces
 rank-invariant output, and writes a matching Zarr pyramid that
-the Epoch 3 viewer MVP consumes without hand editing.
+the Epoch 4 viewer MVP consumes without hand editing.
 
 ---
 
@@ -188,5 +188,5 @@ merge and update this list when the picture changes.
 13. **Second-order advection convergence test** — meets exit
     criterion: converges at design order on AMR, CPU/GPU
     identical, rank-invariant, Zarr pyramid readable by the
-    Epoch 3 viewer.
+    Epoch 4 viewer.
     *Depends on: #10, #12.*

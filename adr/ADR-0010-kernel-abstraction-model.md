@@ -324,7 +324,7 @@ swappable object attached to a Dispatch. Three policies are anticipated:
 |---|---|---|
 | `FlatPolicy` | One thread per element; same code for all. Kokkos `RangePolicy` analog. | Default; sufficient for Epochs 1–3. |
 | `TiledPolicy` | Thread team with cooperative scratchpad load and explicit barrier. Kokkos `TeamPolicy` + `team_scratch` analog. Addresses bandwidth-bound stencils. | Epoch 2–3 when mesh stencil ops become real workloads. |
-| `WarpSpecializedPolicy` | Warps within a thread block assigned to different code paths. Singe analog. Addresses compute-irregular workloads (stiff ODE, tree walks). | Epoch 6 when nuclear reaction networks demand it. |
+| `WarpSpecializedPolicy` | Warps within a thread block assigned to different code paths. Singe analog. Addresses compute-irregular workloads (stiff ODE, tree walks). | Epoch 7 when nuclear reaction networks demand it. |
 
 Swapping a Policy requires no changes to the Op or to the Region. The
 physics author does not choose a Policy; the driver or a performance
@@ -417,7 +417,7 @@ solidifies against real workloads in Epoch 1.
   enabling `TiledPolicy` to swap in without changes to any Op.
   Halo-fill coordination between the task graph and the Region's
   declared footprint.
-- **Epoch 6:** `WarpSpecializedPolicy` for nuclear reaction networks,
+- **Epoch 7:** `WarpSpecializedPolicy` for nuclear reaction networks,
   if benchmarking shows `FlatPolicy` is insufficient. May require
   a code-generation path (SymPy → Triton / Pallas) rather than a
   pure library implementation.

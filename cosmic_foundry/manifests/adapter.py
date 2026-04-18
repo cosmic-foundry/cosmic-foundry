@@ -10,8 +10,8 @@ class ValidationAdapter(Protocol):
 
     An adapter is responsible for fetching upstream data, normalizing it to a
     reproducible artifact, and recording the provenance of that transformation.
-    Application repos (stellar-foundry, cosmological-foundry, etc.) implement
-    this protocol for each upstream catalog they ingest from.
+    Application repos implement this protocol for each upstream catalog
+    they ingest from.
     """
 
     catalog_id: str

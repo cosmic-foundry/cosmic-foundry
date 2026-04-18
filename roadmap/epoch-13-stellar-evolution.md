@@ -1,4 +1,4 @@
-# Stretch Epoch 12 — Stellar evolution
+# Stretch Epoch 13 — Stellar evolution
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

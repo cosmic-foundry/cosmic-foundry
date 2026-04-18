@@ -1,4 +1,4 @@
-# Epoch 3 — Visualization and science communication
+# Epoch 4 — Visualization and science communication
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

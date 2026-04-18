@@ -1,4 +1,4 @@
-# Epoch 6 — Microphysics sub-layer
+# Epoch 7 — Microphysics sub-layer
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

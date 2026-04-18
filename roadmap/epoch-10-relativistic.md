@@ -1,4 +1,4 @@
-# Epoch 9 — Relativistic physics
+# Epoch 10 — Relativistic physics
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 

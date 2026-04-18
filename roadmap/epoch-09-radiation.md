@@ -1,4 +1,4 @@
-# Epoch 8 — Radiation transport
+# Epoch 9 — Radiation transport
 
 > Part of the [Cosmic Foundry roadmap](index.md).
 
