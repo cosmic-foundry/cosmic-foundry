@@ -35,7 +35,6 @@ from cosmic_foundry.io import (  # noqa: E402
 )
 from cosmic_foundry.kernels import (  # noqa: E402
     AccessPattern,
-    Backend,
     Descriptor,
     Dispatch,
     Domain,
@@ -87,7 +86,6 @@ __all__ = [
     "write_array",
     # kernels
     "AccessPattern",
-    "Backend",
     "Descriptor",
     "Dispatch",
     "Domain",
