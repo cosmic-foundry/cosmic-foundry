@@ -26,8 +26,10 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
 from cosmic_foundry.discretization import Discretization  # noqa: E402
 from cosmic_foundry.field import (  # noqa: E402
     ContinuousField,
-    DiscreteField,
     Field,
+    PatchFunction,
+    ScalarField,
+    TensorField,
 )
 from cosmic_foundry.function import Function, execute_pointwise  # noqa: E402
 from cosmic_foundry.indexed_set import IndexedSet  # noqa: E402
@@ -72,8 +74,10 @@ __all__ = [
     "global_sum",
     # fields
     "ContinuousField",
-    "DiscreteField",
     "Field",
+    "PatchFunction",
+    "ScalarField",
+    "TensorField",
     # io
     "HAS_PARALLEL_HDF5",
     "MergeRankFiles",
