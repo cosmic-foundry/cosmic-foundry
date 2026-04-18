@@ -20,7 +20,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.fields import Field, FieldSegment, Placement, SegmentId
+from cosmic_foundry.fields import DiscreteField, FieldSegment, Placement, SegmentId
 from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def test_placement_rejects_empty() -> None:
 def test_field_rejects_segment_not_in_placement(phi: jnp.ndarray) -> None:
     seg = FieldSegment(SegmentId(99), phi, Extent.from_shape(phi.shape))
     with pytest.raises(ValueError, match="not registered"):
-        Field("phi", (seg,), Placement({SegmentId(0): 0}))
+        DiscreteField("phi", (seg,), Placement({SegmentId(0): 0}))
 
 
 def test_field_segment_rejects_interior_outside_extent(phi: jnp.ndarray) -> None:
@@ -110,14 +110,14 @@ def test_field_segment_rejects_interior_outside_extent(phi: jnp.ndarray) -> None
 
 def test_field_local_segments_single_process(phi: jnp.ndarray) -> None:
     seg = FieldSegment(SegmentId(0), phi, Extent.from_shape(phi.shape))
-    field = Field("phi", (seg,), Placement({SegmentId(0): 0}))
+    field = DiscreteField("phi", (seg,), Placement({SegmentId(0): 0}))
     assert field.local_segments(0) == (seg,)
     assert field.local_segments(1) == ()
 
 
 def test_field_segment_lookup(phi: jnp.ndarray) -> None:
     seg = FieldSegment(SegmentId(0), phi, Extent.from_shape(phi.shape))
-    field = Field("phi", (seg,), Placement({SegmentId(0): 0}))
+    field = DiscreteField("phi", (seg,), Placement({SegmentId(0): 0}))
     assert field.segment(SegmentId(0)) is seg
     with pytest.raises(KeyError):
         field.segment(SegmentId(99))
@@ -131,7 +131,7 @@ def test_field_segment_lookup(phi: jnp.ndarray) -> None:
 def test_single_segment_covers_full_extent(phi: jnp.ndarray) -> None:
     full = Extent.from_shape(phi.shape)
     seg = FieldSegment(SegmentId(0), phi, full)
-    field = Field("phi", (seg,), Placement({SegmentId(0): 0}))
+    field = DiscreteField("phi", (seg,), Placement({SegmentId(0): 0}))
     assert field.covers(full)
 
 
@@ -141,7 +141,9 @@ def test_two_disjoint_segments_cover_split_domain(phi: jnp.ndarray) -> None:
     ext1 = Extent((slice(half, N), slice(0, N), slice(0, N)))
     seg0 = FieldSegment(SegmentId(0), phi[:half], ext0)
     seg1 = FieldSegment(SegmentId(1), phi[half:], ext1)
-    field = Field("phi", (seg0, seg1), Placement({SegmentId(0): 0, SegmentId(1): 1}))
+    field = DiscreteField(
+        "phi", (seg0, seg1), Placement({SegmentId(0): 0, SegmentId(1): 1})
+    )
     assert field.covers(Extent.from_shape(phi.shape))
 
 
@@ -151,7 +153,9 @@ def test_gap_in_coverage_is_detected(phi: jnp.ndarray) -> None:
     ext1 = Extent((slice(4, N), slice(0, N), slice(0, N)))
     seg0 = FieldSegment(SegmentId(0), phi[:3], ext0)
     seg1 = FieldSegment(SegmentId(1), phi[4:], ext1)
-    field = Field("phi", (seg0, seg1), Placement({SegmentId(0): 0, SegmentId(1): 1}))
+    field = DiscreteField(
+        "phi", (seg0, seg1), Placement({SegmentId(0): 0, SegmentId(1): 1})
+    )
     assert not field.covers(Extent.from_shape(phi.shape))
 
 
@@ -160,7 +164,7 @@ def test_covers_checks_halo_expansion(phi: jnp.ndarray) -> None:
     # 7-point stencil halo is added.
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
     seg = FieldSegment(SegmentId(0), phi[1 : N - 1, 1 : N - 1, 1 : N - 1], interior)
-    field = Field("phi", (seg,), Placement({SegmentId(0): 0}))
+    field = DiscreteField("phi", (seg,), Placement({SegmentId(0): 0}))
     required = interior.expand(seven_point_laplacian.access_pattern)
     assert not field.covers(required)
 
@@ -174,7 +178,7 @@ def test_single_process_field_dispatch_laplacian(phi: jnp.ndarray) -> None:
     """One Field, one segment, full domain — the degenerate single-rank case."""
     full = Extent.from_shape(phi.shape)
     seg = FieldSegment(SegmentId(0), phi, full)
-    field = Field("phi", (seg,), Placement({SegmentId(0): 0}))
+    field = DiscreteField("phi", (seg,), Placement({SegmentId(0): 0}))
 
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
     required = interior.expand(seven_point_laplacian.access_pattern)

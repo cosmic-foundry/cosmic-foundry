@@ -41,7 +41,12 @@ def main() -> None:
 
         import jax.numpy as jnp
 
-        from cosmic_foundry.fields import Field, FieldSegment, Placement, SegmentId
+        from cosmic_foundry.fields import (
+            DiscreteField,
+            FieldSegment,
+            Placement,
+            SegmentId,
+        )
         from cosmic_foundry.kernels import Dispatch, Extent, Region, Stencil, op
 
         n = 8
@@ -64,7 +69,7 @@ def main() -> None:
         seg_id = SegmentId(rank)
         seg = FieldSegment(seg_id, local_phi, local_extent)
         placement = Placement({SegmentId(0): 0, SegmentId(1): 1})
-        field = Field("phi", (seg,), placement)
+        field = DiscreteField("phi", (seg,), placement)
 
         # Owned interior: local x in [1, half) avoids the boundary rows.
         owned_region = Region(

@@ -1,31 +1,30 @@
-"""Field, FieldSegment, Placement, and SegmentId data model.
+"""Field hierarchy, FieldSegment, Placement, SegmentId, and FieldDiscretization.
 
-The four concepts here correspond to the *storage* axis of the kernel
-abstraction (ADR-0010):
+- ``SegmentId``          — opaque identifier for one contiguous array segment.
+- ``FieldSegment``       — a payload array paired with the Extent over which it
+                           is valid.  Carries no ownership information.
+- ``Placement``          — maps each SegmentId to the process rank that owns it.
+                           Carries no physical meaning or kernel-lowering logic.
+- ``Field``              — abstract base for all field parameterizations: f: D → ℝ.
+- ``ContinuousField``    — Θ = ∅: f: Ω → ℝ represented by an analytic callable.
+- ``DiscreteField``      — Θ = {h}: f_h: Ω_h → ℝ stored as per-block array segments.
+- ``FieldDiscretization``— map from ContinuousField × UniformGrid to DiscreteField.
 
-- ``SegmentId``   — opaque identifier for one contiguous array segment.
-- ``FieldSegment``— a payload array paired with the Extent over which it
-                    is valid.  Carries no ownership information.
-- ``Placement``   — maps each SegmentId to the process rank that owns it.
-                    Carries no physical meaning or kernel-lowering logic.
-- ``Field``       — a semantic label plus a tuple of FieldSegments plus a
-                    Placement.  Does not own the iteration extent; Region
-                    and Dispatch supply that.
-
-Single-process execution is the degenerate case: one Field, one
+Single-process execution is the degenerate case: one DiscreteField, one
 FieldSegment, one Placement whose sole segment maps to rank 0.
 Multi-process execution uses the same API with disjoint extents.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from abc import ABC
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, NewType
 
 import numpy as np
 
-from cosmic_foundry.kernels import AccessPattern, Extent
+from cosmic_foundry.kernels import Extent
 
 SegmentId = NewType("SegmentId", int)
 
@@ -59,7 +58,7 @@ class Placement:
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
     It is the sole authoritative source for process/device ownership within
-    a ``Field``.
+    a ``DiscreteField``.
     """
 
     def __init__(self, owners: Mapping[SegmentId, int]) -> None:
@@ -96,13 +95,47 @@ class Placement:
         return hash(tuple(sorted(self._owners.items())))
 
 
-@dataclass(frozen=True)
-class Field:
-    """A named collection of FieldSegments with a process ownership map.
+class Field(ABC):
+    """Abstract base for all field parameterizations: f: D → ℝ.
 
-    ``Field`` owns the semantic label and the segment set.  It does not
-    own iteration extent or process topology; those belong to ``Region``
-    and ``Placement`` respectively.
+    A field assigns a value to every point in its domain D. Concrete
+    subclasses differ in how D is represented and how f is stored:
+
+    - ``ContinuousField``: D = Ω ⊆ ℝⁿ, Θ = ∅, stored as a callable.
+    - ``DiscreteField``:   D = Ω_h ⊂ Ω,  Θ = {h}, stored as array segments.
+    """
+
+    name: str
+
+
+@dataclass(frozen=True)
+class ContinuousField(Field):
+    """A continuous scalar field f: Ω → ℝ represented by an analytic callable.
+
+    Θ = ∅ — exact representation; the callable is the field itself, not an
+    approximation of it.  Evaluated at arbitrary spatial coordinates by
+    calling fn(*coords) where each coord is a JAX array of positions along
+    one spatial axis.
+    """
+
+    name: str
+    fn: Callable[..., Any]
+
+    def evaluate(self, *coords: Any) -> Any:
+        """Evaluate the field at the given spatial coordinates."""
+        import jax.numpy as jnp
+
+        return jnp.asarray(self.fn(*coords), dtype=jnp.float64)
+
+
+@dataclass(frozen=True)
+class DiscreteField(Field):
+    """A discrete scalar field f_h: Ω_h → ℝ stored as per-block array segments.
+
+    Θ = {h} — the discrete representation approximates the underlying continuous
+    field to O(h) in the L∞ norm for smooth fields under piecewise-constant
+    interpolation.  Produced by ``FieldDiscretization``; consumed by halo-fill,
+    kernel dispatch, and diagnostic reduction maps.
     """
 
     name: str
@@ -116,7 +149,7 @@ class Field:
             except KeyError:
                 msg = (
                     f"FieldSegment {seg.segment_id!r} is not registered "
-                    f"in the Placement for Field {self.name!r}"
+                    f"in the Placement for DiscreteField {self.name!r}"
                 )
                 raise ValueError(msg) from None
 
@@ -125,7 +158,7 @@ class Field:
         for seg in self.segments:
             if seg.segment_id == segment_id:
                 return seg
-        msg = f"SegmentId {segment_id!r} not found in Field {self.name!r}"
+        msg = f"SegmentId {segment_id!r} not found in DiscreteField {self.name!r}"
         raise KeyError(msg)
 
     def local_segments(self, rank: int) -> tuple[FieldSegment, ...]:
@@ -153,37 +186,48 @@ class Field:
         return bool(covered.all())
 
 
-def allocate_field(
-    name: str,
-    grid: Any,  # UniformGrid — imported lazily to keep mesh ↔ fields decoupled
-    access_pattern: AccessPattern,
-) -> Field:
-    """Allocate a Field over a UniformGrid with halo-padded payloads.
+@dataclass(frozen=True)
+class FieldDiscretization:
+    """Discretize a ContinuousField onto interior cell centers of a uniform grid.
 
-    Each block in *grid* becomes one FieldSegment whose extent is the block's
-    ``index_extent`` expanded by *access_pattern* and whose payload is a
-    zero-initialised float64 JAX array of that expanded shape.  The returned
-    Field's Placement mirrors *grid*'s rank assignment.
+    Map:
+        domain   — (f: ContinuousField, G = {(B_i, h)}) — a continuous scalar
+                   field and a uniform grid partitioning Ω into blocks B_i with
+                   grid spacing h; f.evaluate is called with one JAX coordinate
+                   array per spatial axis, broadcast-compatible with block shape
+        codomain — f_h: DiscreteField on Ω_h^int(B_i) — one FieldSegment per
+                   block with extent = block.index_extent and no ghost cells
+        operator — (f, G) ↦ f_h where f_h(x_i) = f(x_i) for x_i ∈ Ω_h^int
+
+    Θ = {h}, p = 1 — piecewise-constant representation has L∞ error O(h)
+    for smooth f; verified by MMS.
     """
-    import jax.numpy as jnp
 
-    segments: list[FieldSegment] = []
-    owners: dict[SegmentId, int] = {}
-    for block in grid.blocks:
-        seg_id = SegmentId(int(block.block_id))
-        halo_extent = block.index_extent.expand(access_pattern)
-        payload = jnp.zeros(halo_extent.shape, dtype=jnp.float64)
-        segments.append(
-            FieldSegment(
-                segment_id=seg_id,
-                payload=payload,
-                extent=halo_extent,
-                interior_extent=block.index_extent,
+    def execute(self, f: ContinuousField, grid: Any) -> DiscreteField:
+        """Return a DiscreteField with payloads equal to f evaluated at cell centers."""
+        import jax.numpy as jnp
+
+        segments: list[FieldSegment] = []
+        owners: dict[SegmentId, int] = {}
+        for block in grid.blocks:
+            axes = [block.cell_centers(axis) for axis in range(block.ndim)]
+            coords = jnp.meshgrid(*axes, indexing="ij")
+            payload = jnp.asarray(f.evaluate(*coords), dtype=jnp.float64)
+            seg_id = SegmentId(int(block.block_id))
+            segments.append(
+                FieldSegment(
+                    segment_id=seg_id,
+                    payload=payload,
+                    extent=block.index_extent,
+                )
             )
-        )
-        owners[seg_id] = grid.owner(block.block_id)
+            owners[seg_id] = grid.owner(block.block_id)
 
-    return Field(name=name, segments=tuple(segments), placement=Placement(owners))
+        return DiscreteField(
+            name=f.name,
+            segments=tuple(segments),
+            placement=Placement(owners),
+        )
 
 
 def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
@@ -202,9 +246,11 @@ def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
 
 
 __all__ = [
+    "ContinuousField",
+    "DiscreteField",
     "Field",
+    "FieldDiscretization",
     "FieldSegment",
     "Placement",
     "SegmentId",
-    "allocate_field",
 ]

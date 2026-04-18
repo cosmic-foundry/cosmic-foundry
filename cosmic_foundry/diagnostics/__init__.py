@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from cosmic_foundry.fields import Field
+from cosmic_foundry.fields import DiscreteField
 from cosmic_foundry.kernels import Extent, Region
 
 
@@ -23,7 +23,7 @@ class DiagnosticReducer(Protocol):
 
     def reduce(
         self,
-        fields: Mapping[str, Field],
+        fields: Mapping[str, DiscreteField],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -88,7 +88,7 @@ class TabSeparatedDiagnosticSink:
 
 def collect_diagnostics(
     reducers: Sequence[DiagnosticReducer],
-    fields: Mapping[str, Field],
+    fields: Mapping[str, DiscreteField],
     region: Region,
     *,
     step: int,
@@ -96,7 +96,19 @@ def collect_diagnostics(
     rank: int,
     n_ranks: int,
 ) -> DiagnosticRecord:
-    """Collect reducer outputs and materialize once at the diagnostic fence."""
+    """Apply each reducer and materialise all scalars at the diagnostic fence.
+
+    Map:
+        domain   — ({f_h^i : Ω_h → ℝ}_i, [r_j]_j) — a named collection of
+                   discrete fields and an ordered sequence of DiagnosticReducers
+        codomain — (s_1, …, s_n) ∈ ℝⁿ — one scalar per reducer, host-visible
+        operator — ({f_h^i}, [r_j]) ↦ (r_j.reduce({f_h^i}, region, rank, n_ranks))_j;
+                   all device scalars are stacked into one jnp.array and
+                   transferred to host with a single np.asarray call
+
+    Exact: Θ = ∅ — the fence itself introduces no approximation; any
+    approximation lives inside the individual DiagnosticReducer.reduce calls.
+    """
     names = tuple(reducer.name for reducer in reducers)
     if len(set(names)) != len(names):
         msg = "DiagnosticReducer names must be unique"
@@ -123,7 +135,7 @@ def collect_diagnostics(
 
 
 def global_sum(
-    field: Field,
+    field: DiscreteField,
     region: Region,
     rank: int,
     *,
@@ -131,7 +143,16 @@ def global_sum(
 ) -> jax.Array:
     """Sum field values over local interiors and optionally all-reduce them.
 
-    Without *axis_name*, this returns the rank-local sum. Supplying a JAX
+    Map:
+        domain   — f_h : Ω_h^int → ℝ, a discrete scalar field on interior
+                   grid points, intersected with the given region
+        codomain — ℝ (a real number; field evaluated at a single point)
+        operator — (f_h, region) ↦ Σ_{x ∈ Ω_h^int ∩ region} f_h(x)
+
+    Unweighted grid-point sum. To approximate ∫_Ω f dΩ, multiply by h^d
+    where h is the grid spacing and d is the spatial dimension.
+
+    Without *axis_name*, returns the rank-local sum. Supplying a JAX
     parallel-map axis name applies ``jax.lax.psum`` and returns the global
     sum inside that mapped context.
     """

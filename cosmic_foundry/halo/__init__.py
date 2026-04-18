@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from cosmic_foundry.fields import Field, FieldSegment, SegmentId
+from cosmic_foundry.fields import DiscreteField, FieldSegment, SegmentId
 from cosmic_foundry.kernels import AccessPattern, Extent, Region
 
 
@@ -14,7 +14,7 @@ from cosmic_foundry.kernels import AccessPattern, Extent, Region
 class HaloFillFence:
     """Communication intent for one field before a Dispatch."""
 
-    field: Field
+    field: DiscreteField
     region: Region
     access_pattern: AccessPattern
 
@@ -23,13 +23,20 @@ class HaloFillFence:
 class HaloFillPolicy:
     """Fill same-rank ghost cells by copying from neighboring segments.
 
-    The policy assumes each segment extent was allocated with the same
-    ``AccessPattern`` carried by the fence. That is the current
-    ``allocate_field`` path; mixed-width halo storage will need explicit
-    interior metadata.
+    Map:
+        domain   — f_h : Ω_h^int(B_i) → ℝⁿ, a rank-n discrete field
+                   defined on the interior cells of each block B_i
+        codomain — f_h : Ω_h^ext(B_i) → ℝⁿ, the same field extended
+                   to interior ∪ ghost cells (Ω_h^ext = Ω_h^int ∪ Ω_h^ghost)
+        operator — f̃(x) = f(x) for x ∈ Ω_h^int;
+                   f̃(x) = f_adj(x) for x ∈ Ω_h^ghost,
+                   where f_adj is the interior value of the unique
+                   adjacent segment whose interior contains x
+
+    Exact: Θ = ∅ — domain extension by direct copy; no approximation.
     """
 
-    def execute(self, fence: HaloFillFence, rank: int) -> Field:
+    def execute(self, fence: HaloFillFence, rank: int) -> DiscreteField:
         """Return a new Field with ghost cells filled for *rank*."""
         required = fence.region.extent.expand(fence.access_pattern)
         if not fence.field.covers(required):
@@ -62,13 +69,13 @@ class HaloFillPolicy:
             )
             for seg in fence.field.segments
         )
-        return Field(fence.field.name, segments, fence.field.placement)
+        return DiscreteField(fence.field.name, segments, fence.field.placement)
 
 
 def _fill_segment_halo(
     *,
     target: FieldSegment,
-    field: Field,
+    field: DiscreteField,
     rank: int,
     required: Extent,
     interior: Extent,
@@ -114,7 +121,7 @@ def _fill_segment_halo(
 
 def _source_candidates(
     *,
-    field: Field,
+    field: DiscreteField,
     target: FieldSegment,
     halo_piece: Extent,
     access_pattern: AccessPattern,
