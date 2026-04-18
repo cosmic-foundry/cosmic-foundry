@@ -38,7 +38,6 @@ from cosmic_foundry.kernels import (  # noqa: E402
     Extent,
     FlatPolicy,
     Op,
-    OpLike,
     Region,
     Stencil,
 )
@@ -77,7 +76,6 @@ __all__ = [
     "Extent",
     "FlatPolicy",
     "Op",
-    "OpLike",
     "Region",
     "Stencil",
     # mesh

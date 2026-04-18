@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, ClassVar, Protocol, cast
+from typing import Any, ClassVar, cast
 
 import jax
 import jax.numpy as jnp
@@ -110,21 +110,6 @@ class Region:
             raise ValueError(msg)
 
 
-class OpLike(Protocol):
-    """Structural protocol for executable Ops."""
-
-    access_pattern: AccessPattern
-    reads: tuple[str, ...]
-    writes: tuple[str, ...]
-    backends: frozenset[Backend]
-
-    def __call__(self, *args: Any) -> BoundOp:
-        """Bind field inputs to this Op, returning a BoundOp."""
-
-    def _fn(self, *args: Any) -> Any:
-        """Pointwise kernel: field arrays followed by index meshgrids."""
-
-
 @dataclass
 class BoundOp:
     """An Op with its field inputs bound, ready for dispatch.
@@ -136,7 +121,7 @@ class BoundOp:
         Dispatch(bound, region).execute()
     """
 
-    op: Any  # OpLike — Any avoids circular-protocol issues
+    op: Any  # Op instance — Any avoids forward-reference issues
     fields: dict[str, Any]  # name → array, ordered by op.reads
 
 
@@ -363,7 +348,6 @@ __all__ = [
     "Extent",
     "FlatPolicy",
     "Op",
-    "OpLike",
     "Region",
     "Stencil",
 ]
