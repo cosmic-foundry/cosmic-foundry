@@ -14,6 +14,7 @@ from cosmic_foundry.fields import (  # noqa: E402
     SegmentId,
     allocate_field,
 )
+from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     merge_rank_files,
@@ -43,6 +44,9 @@ __all__ = [
     "Placement",
     "SegmentId",
     "allocate_field",
+    # halo
+    "HaloFillFence",
+    "HaloFillPolicy",
     # io
     "HAS_PARALLEL_HDF5",
     "merge_rank_files",
