@@ -219,25 +219,28 @@ def test_generate_bibliography_with_sidecar(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ValidationAdapter protocol
+# ValidationAdapter ABC
 # ---------------------------------------------------------------------------
 
 
-def test_validation_adapter_is_protocol() -> None:
-    # A class with the right attributes satisfies the protocol at runtime.
-    class MyAdapter:
+def test_validation_adapter_concrete_subclass() -> None:
+    class MyAdapter(ValidationAdapter):
         catalog_id = "test"
         validation_set_id = "test-set"
 
-        def build(self, artifact_dir: Path) -> Provenance:  # type: ignore[empty-body]
+        def execute(self, artifact_dir: Path) -> Provenance:  # type: ignore[empty-body]
             ...
 
-    assert isinstance(MyAdapter(), ValidationAdapter)
+    adapter = MyAdapter()
+    assert isinstance(adapter, ValidationAdapter)
 
 
-def test_validation_adapter_missing_attribute() -> None:
-    class Incomplete:
+def test_validation_adapter_incomplete_raises() -> None:
+    import pytest
+
+    class Incomplete(ValidationAdapter):
         catalog_id = "test"
-        # missing validation_set_id and build
+        # execute() not implemented
 
-    assert not isinstance(Incomplete(), ValidationAdapter)
+    with pytest.raises(TypeError):
+        Incomplete()  # type: ignore[abstract]

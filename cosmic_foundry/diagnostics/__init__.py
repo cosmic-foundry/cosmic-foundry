@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
@@ -15,13 +16,21 @@ from cosmic_foundry.fields import DiscreteField
 from cosmic_foundry.kernels import Extent, Map, Record, Region, Sink
 
 
-class DiagnosticReducer(Protocol):
-    """Structural protocol for one scalar diagnostic reduction."""
+class DiagnosticReducer(Map):
+    """Abstract base for one scalar diagnostic reduction.
+
+    Map:
+        domain   — ({f_h^i : Ω_h → ℝ}_i, Ω_h^int, rank, n_ranks) — named
+                   discrete fields, the interior region, and rank metadata
+        codomain — ℝ (a 0-d JAX array) — one scalar diagnostic value
+        operator — execute({f_h^i}, region, rank, n_ranks) → scalar
+    """
 
     name: str
     includes_boundary_flux: bool
 
-    def reduce(
+    @abstractmethod
+    def execute(
         self,
         fields: Mapping[str, DiscreteField],
         region: Region,
@@ -126,7 +135,7 @@ class CollectDiagnostics(Map):
             raise ValueError(msg)
 
         device_values = [
-            jnp.asarray(r.reduce(fields, region, rank, n_ranks)) for r in reducers
+            jnp.asarray(r.execute(fields, region, rank, n_ranks)) for r in reducers
         ]
         for name, value in zip(names, device_values, strict=False):
             if value.shape != ():

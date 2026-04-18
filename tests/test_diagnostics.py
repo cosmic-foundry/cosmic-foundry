@@ -11,6 +11,7 @@ import pytest
 
 from cosmic_foundry.diagnostics import (
     DiagnosticRecord,
+    DiagnosticReducer,
     NullDiagnosticSink,
     TabSeparatedDiagnosticSink,
     collect_diagnostics,
@@ -25,12 +26,12 @@ from cosmic_foundry.kernels import Extent, Region
 
 
 @dataclass(frozen=True)
-class SumReducer:
+class SumReducer(DiagnosticReducer):
     name: str
     field_name: str
     includes_boundary_flux: bool = False
 
-    def reduce(
+    def execute(
         self,
         fields: dict[str, DiscreteField],
         region: Region,
@@ -41,11 +42,11 @@ class SumReducer:
 
 
 @dataclass(frozen=True)
-class VectorReducer:
+class VectorReducer(DiagnosticReducer):
     name: str = "bad_vector"
     includes_boundary_flux: bool = False
 
-    def reduce(
+    def execute(
         self,
         fields: dict[str, DiscreteField],
         region: Region,
