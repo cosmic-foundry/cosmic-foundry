@@ -31,8 +31,8 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
 
     filled = fill_halo(mesh, field, access, rank=0)
 
-    # Block 0 interior: [0, 4), values ~0.5, 1.5, 2.5, 3.5 (cell centers with h=1)
-    # Block 1 interior: [4, 8), values ~4.5, 5.5, 6.5, 7.5
+    # Patch 0 interior: [0, 4), values ~0.5, 1.5, 2.5, 3.5 (cell centers with h=1)
+    # Patch 1 interior: [4, 8), values ~4.5, 5.5, 6.5, 7.5
     # Filled block 0 halo-sized payload: shape (6,), interior at [1:5]
     # Right ghost (index 5) should be block 1's first interior value (4.5)
     b0_payload = filled[ComponentId(0)].payload
@@ -68,8 +68,8 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
 
     filled = fill_halo(mesh, field, access, rank=0)
 
-    # Block 0: interior x in [0, 2), y in [0, 3) → shape (2, 3) interior, (4, 5) halo
-    # Block 1: interior x in [2, 4), y in [0, 3)
+    # Patch 0: interior x in [0, 2), y in [0, 3) → shape (2, 3) interior, (4, 5) halo
+    # Patch 1: interior x in [2, 4), y in [0, 3)
     # The right ghost slab of block 0 (halo row 3 in payload) should equal
     # block 1's left interior slab (row 0 in block 1's interior payload).
     b0 = filled[ComponentId(0)].payload
@@ -115,11 +115,11 @@ def test_interior_values_preserved_after_fill() -> None:
 
     filled = fill_halo(mesh, field, access, rank=0)
 
-    # Block 0 halo extent [-1, 5): interior at payload indices [1:5]
+    # Patch 0 halo extent [-1, 5): interior at payload indices [1:5]
     np.testing.assert_allclose(
         filled[ComponentId(0)].payload[1:5], field[ComponentId(0)].payload
     )
-    # Block 1 halo extent [3, 9): interior at payload indices [1:5]
+    # Patch 1 halo extent [3, 9): interior at payload indices [1:5]
     np.testing.assert_allclose(
         filled[ComponentId(1)].payload[1:5], field[ComponentId(1)].payload
     )

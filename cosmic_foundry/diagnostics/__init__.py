@@ -15,7 +15,7 @@ import numpy as np
 from cosmic_foundry.descriptor import Extent, Region
 from cosmic_foundry.field import DiscreteField
 from cosmic_foundry.function import Function
-from cosmic_foundry.mesh import Block
+from cosmic_foundry.mesh import Patch
 from cosmic_foundry.record import Array, ComponentId, Record
 from cosmic_foundry.sink import Sink
 
@@ -24,7 +24,7 @@ class DiagnosticReducer(Function):
     """Abstract base for one scalar diagnostic reduction.
 
     Function:
-        domain   — (mesh: Array[Block], {f_h^i : Ω_h → ℝ}_i, Ω_h^int,
+        domain   — (mesh: Array[Patch], {f_h^i : Ω_h → ℝ}_i, Ω_h^int,
                    rank, n_ranks) — block mesh, named discrete fields,
                    the interior region, and rank metadata
         codomain — ℝ (a 0-d JAX array) — one scalar diagnostic value
@@ -37,7 +37,7 @@ class DiagnosticReducer(Function):
     @abstractmethod
     def execute(
         self,
-        mesh: Array[Block],
+        mesh: Array[Patch],
         fields: Mapping[str, Array[DiscreteField]],
         region: Region,
         rank: int,
@@ -113,7 +113,7 @@ class CollectDiagnostics(Function):
     """Apply each reducer and materialise all scalars at the diagnostic fence.
 
     Function:
-        domain   — (mesh: Array[Block], {f_h^i : Ω_h → ℝ}_i, [r_j]_j) —
+        domain   — (mesh: Array[Patch], {f_h^i : Ω_h → ℝ}_i, [r_j]_j) —
                    block mesh, named discrete fields, and DiagnosticReducers
         codomain — (s_1, …, s_n) ∈ ℝⁿ — one scalar per reducer, host-visible
         operator — (mesh, {f_h^i}, [r_j]) ↦
@@ -128,7 +128,7 @@ class CollectDiagnostics(Function):
     def execute(
         self,
         reducers: Sequence[DiagnosticReducer],
-        mesh: Array[Block],
+        mesh: Array[Patch],
         fields: Mapping[str, Array[DiscreteField]],
         region: Region,
         *,
@@ -172,7 +172,7 @@ class GlobalSum(Function):
     """Sum field values over local interiors and optionally all-reduce them.
 
     Function:
-        domain   — (mesh: Array[Block], f_h : Ω_h^int → ℝ) — block mesh and
+        domain   — (mesh: Array[Patch], f_h : Ω_h^int → ℝ) — block mesh and
                    a discrete scalar field on interior grid points, intersected
                    with the given region
         codomain — ℝ (a real number; field evaluated at a single point)
@@ -190,7 +190,7 @@ class GlobalSum(Function):
 
     def execute(
         self,
-        mesh: Array[Block],
+        mesh: Array[Patch],
         field: Array[DiscreteField],
         region: Region,
         rank: int,

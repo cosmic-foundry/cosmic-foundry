@@ -1,4 +1,4 @@
-"""Tests for discretize: (ContinuousField, Array[Block]) → Array[DiscreteField]."""
+"""Tests for discretize: (ContinuousField, Array[Patch]) → Array[DiscreteField]."""
 
 from __future__ import annotations
 
@@ -49,12 +49,12 @@ class TestDiscretizeOperator:
         for df in field.elements:
             assert jnp.all(df.payload == pytest.approx(42.0))
 
-    def test_identity_function_produces_cell_centers_1d(self) -> None:
+    def test_identity_function_produces_node_positions_1d(self) -> None:
         mesh = _mesh_1d(8, 1)
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, mesh)
         assert jnp.allclose(
-            field[ComponentId(0)].payload, mesh[ComponentId(0)].cell_centers(0)
+            field[ComponentId(0)].payload, mesh[ComponentId(0)].node_positions(0)
         )
 
     def test_multiblock_each_segment_samples_its_own_block(self) -> None:
@@ -63,15 +63,15 @@ class TestDiscretizeOperator:
         field = discretize(f, mesh)
         for i, block in enumerate(mesh.elements):
             cid = ComponentId(i)
-            assert jnp.allclose(field[cid].payload, block.cell_centers(0))
+            assert jnp.allclose(field[cid].payload, block.node_positions(0))
 
     def test_2d_function_evaluated_at_cell_center_meshgrid(self) -> None:
         mesh = _mesh_2d((4, 6), (1, 1))
         f = ContinuousField(name="phi", fn=lambda x, y: x + y)
         field = discretize(f, mesh)
         block = mesh[ComponentId(0)]
-        xs = block.cell_centers(0)
-        ys = block.cell_centers(1)
+        xs = block.node_positions(0)
+        ys = block.node_positions(1)
         X, Y = jnp.meshgrid(xs, ys, indexing="ij")
         assert jnp.allclose(field[ComponentId(0)].payload, X + Y)
 

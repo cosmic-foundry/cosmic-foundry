@@ -1,4 +1,4 @@
-"""Tests for the uniform structured mesh: Block, partition_domain, covers."""
+"""Tests for the uniform structured mesh: Patch, partition_domain, covers."""
 
 from __future__ import annotations
 
@@ -6,43 +6,43 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.descriptor import Extent
-from cosmic_foundry.mesh import Block, covers, partition_domain
+from cosmic_foundry.mesh import Patch, covers, partition_domain
 from cosmic_foundry.record import Array, ComponentId
 
 
-class TestBlock:
-    def _make_block(self) -> Block:
-        return Block(
+class TestPatch:
+    def _make_patch(self) -> Patch:
+        return Patch(
             index_extent=Extent((slice(0, 8), slice(0, 8), slice(0, 8))),
             origin=(0.0625, 0.0625, 0.0625),
             cell_spacing=(0.125, 0.125, 0.125),
         )
 
     def test_shape_and_ndim(self):
-        b = self._make_block()
-        assert b.shape == (8, 8, 8)
-        assert b.ndim == 3
+        p = self._make_patch()
+        assert p.shape == (8, 8, 8)
+        assert p.ndim == 3
 
-    def test_cell_centers_values(self):
+    def test_node_positions_values(self):
         h = 0.25
-        block = Block(
+        patch = Patch(
             index_extent=Extent((slice(0, 4),)),
             origin=(0.5 * h,),
             cell_spacing=(h,),
         )
-        centers = np.asarray(block.cell_centers(0))
+        positions = np.asarray(patch.node_positions(0))
         expected = np.array([0.125, 0.375, 0.625, 0.875])
-        np.testing.assert_allclose(centers, expected)
+        np.testing.assert_allclose(positions, expected)
 
-    def test_cell_centers_spacing(self):
-        b = self._make_block()
-        centers = np.asarray(b.cell_centers(0))
-        diffs = np.diff(centers)
-        np.testing.assert_allclose(diffs, b.cell_spacing[0])
+    def test_node_positions_spacing(self):
+        p = self._make_patch()
+        positions = np.asarray(p.node_positions(0))
+        diffs = np.diff(positions)
+        np.testing.assert_allclose(diffs, p.cell_spacing[0])
 
 
 class TestPartitionDomain:
-    def _make_2d(self, **kwargs) -> Array[Block]:
+    def _make_2d(self, **kwargs) -> Array[Patch]:
         defaults = dict(
             domain_origin=(0.0, 0.0),
             domain_size=(1.0, 1.0),
@@ -53,7 +53,7 @@ class TestPartitionDomain:
         defaults.update(kwargs)
         return partition_domain(**defaults)
 
-    def test_block_count(self):
+    def test_patch_count(self):
         mesh = self._make_2d()
         assert len(mesh.elements) == 4  # 2×2
 
@@ -87,12 +87,12 @@ class TestPartitionDomain:
             n_ranks=1,
         )
         covered = np.zeros(n_cells, dtype=int)
-        for block in mesh.elements:
-            covered[block.index_extent.slices] += 1
-        assert np.all(covered == 1), "blocks must tile the domain exactly once"
+        for patch in mesh.elements:
+            covered[patch.index_extent.slices] += 1
+        assert np.all(covered == 1), "patches must tile the domain exactly once"
 
-    def test_cell_centers_cover_domain(self):
-        """First and last cell centers sit h/2 from the domain edges."""
+    def test_node_positions_cover_domain(self):
+        """First and last node positions sit h/2 from the domain edges."""
         mesh = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
@@ -100,12 +100,12 @@ class TestPartitionDomain:
             blocks_per_axis=(2,),
             n_ranks=1,
         )
-        all_centers = np.concatenate(
-            [np.asarray(b.cell_centers(0)) for b in mesh.elements]
+        all_positions = np.concatenate(
+            [np.asarray(p.node_positions(0)) for p in mesh.elements]
         )
         h = 0.25
-        assert all_centers[0] == pytest.approx(0.5 * h)
-        assert all_centers[-1] == pytest.approx(1.0 - 0.5 * h)
+        assert all_positions[0] == pytest.approx(0.5 * h)
+        assert all_positions[-1] == pytest.approx(1.0 - 0.5 * h)
 
     def test_round_robin_placement(self):
         mesh = partition_domain(
@@ -131,23 +131,23 @@ class TestPartitionDomain:
         )
         assert len(mesh.elements) == 8
         covered = np.zeros(n_cells, dtype=int)
-        for block in mesh.elements:
-            covered[block.index_extent.slices] += 1
+        for patch in mesh.elements:
+            covered[patch.index_extent.slices] += 1
         assert np.all(covered == 1)
 
     def test_cell_spacing_uniform(self):
         mesh = self._make_2d()
-        for block in mesh.elements:
-            assert block.cell_spacing == (0.125, 0.125)
+        for patch in mesh.elements:
+            assert patch.cell_spacing == (0.125, 0.125)
 
-    def test_returns_array_of_block(self):
+    def test_returns_array_of_patch(self):
         mesh = self._make_2d()
         assert isinstance(mesh, Array)
-        assert all(isinstance(b, Block) for b in mesh.elements)
+        assert all(isinstance(p, Patch) for p in mesh.elements)
 
 
 class TestCovers:
-    def test_single_block_covers_its_own_extent(self):
+    def test_single_patch_covers_its_own_extent(self):
         mesh = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
@@ -157,7 +157,7 @@ class TestCovers:
         )
         assert covers(mesh, Extent((slice(0, 8),)))
 
-    def test_two_blocks_cover_full_domain(self):
+    def test_two_patches_cover_full_domain(self):
         mesh = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
@@ -171,20 +171,20 @@ class TestCovers:
         """A mesh missing the middle rows does not cover the full extent."""
         from cosmic_foundry.record import Placement
 
-        blocks = (
-            Block(
+        patches = (
+            Patch(
                 index_extent=Extent((slice(0, 3),)),
                 origin=(0.5,),
                 cell_spacing=(1.0,),
             ),
-            Block(
+            Patch(
                 index_extent=Extent((slice(5, 8),)),
                 origin=(5.5,),
                 cell_spacing=(1.0,),
             ),
         )
-        mesh: Array[Block] = Array(
-            elements=blocks,
+        mesh: Array[Patch] = Array(
+            elements=patches,
             placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
         )
         assert not covers(mesh, Extent((slice(0, 8),)))
