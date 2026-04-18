@@ -117,6 +117,13 @@ or reducing a field to a scalar — must be describable precisely as a map.
 If a class cannot be given a well-defined domain, codomain, and operator,
 it should be redesigned until it can.
 
+`Map` is an abstract base class in `cosmic_foundry.kernels`.  Every
+concrete map class inherits from it and implements `execute()`.  `Map`
+provides a default `__call__` that delegates to `execute()`, so map
+instances are callable.  Stateless maps (those with Θ = ∅ and no
+constructor parameters) expose a module-level singleton for convenience:
+`collect_diagnostics = CollectDiagnostics()`, `global_sum = GlobalSum()`.
+
 Desiderata are not map parameters. A consumer's requirement on a map's
 output (e.g. "I need N ghost cells") is a constraint on which map to call,
 not a parameter of the map itself. It must not appear in the map's signature.
@@ -147,8 +154,8 @@ carry the `Map:` block in the function docstring.
 | `FlatPolicy` | `BoundOp` × `Region` | array over Ω_h^int | ∅ |
 | `Dispatch` | `BoundOp` × `Region` × `FlatPolicy` | policy result | ∅ |
 | `HaloFillPolicy` | `DiscreteField` × `Region` × `Stencil` | `DiscreteField` with filled halos | ∅ |
-| `global_sum` | `DiscreteField` × `Region` | scalar | ∅ |
-| `collect_diagnostics` | reducers × fields × `Region` | `DiagnosticRecord` | ∅ |
+| `GlobalSum` | `DiscreteField` × `Region` | scalar | ∅ |
+| `CollectDiagnostics` | reducers × fields × `Region` | `DiagnosticRecord` | ∅ |
 
 ## Consequences
 
