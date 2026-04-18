@@ -14,7 +14,6 @@ from cosmic_foundry.kernels import (
     Extent,
     Op,
     Region,
-    Stencil,
 )
 
 
@@ -38,7 +37,7 @@ class SevenPointLaplacian(Op):
 
     @property
     def access_pattern(self) -> AccessPattern:
-        return Stencil.seven_point()
+        return AccessPattern.seven_point()
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -56,7 +55,7 @@ seven_point_laplacian = SevenPointLaplacian()
 
 
 def test_op_class_exposes_metadata() -> None:
-    assert seven_point_laplacian.access_pattern == Stencil.seven_point()
+    assert seven_point_laplacian.access_pattern == AccessPattern.seven_point()
     assert seven_point_laplacian.reads == ("phi",)
     assert seven_point_laplacian.writes == ("laplacian_phi",)
 
@@ -72,7 +71,7 @@ def test_op_execute_runs_kernel() -> None:
 
 
 def test_stencil_symmetric_sets_halo_width() -> None:
-    stencil = Stencil.symmetric(order=4, ndim=3)
+    stencil = AccessPattern.symmetric(order=4, ndim=3)
     assert stencil.halo_width(0) == 2
     assert stencil.halo_width(1) == 2
     assert stencil.halo_width(2) == 2

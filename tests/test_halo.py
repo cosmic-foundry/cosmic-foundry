@@ -7,7 +7,7 @@ import pytest
 
 from cosmic_foundry.fields import DiscreteField, Placement
 from cosmic_foundry.halo import HaloFillFence, HaloFillPolicy
-from cosmic_foundry.kernels import ComponentId, Extent, Region, Stencil
+from cosmic_foundry.kernels import AccessPattern, ComponentId, Extent, Region
 
 
 def _segment_with_interior_values(
@@ -33,7 +33,7 @@ def _segment_with_interior_values(
 
 def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
     """Same-rank block faces copy from neighboring block interiors."""
-    access = Stencil((1,))
+    access = AccessPattern((1,))
     left = _segment_with_interior_values(
         0,
         Extent((slice(-1, 5),)),
@@ -72,7 +72,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
 
 def test_single_rank_fill_copies_2d_face_slab() -> None:
     """A full face slab is copied, not only one scalar cell."""
-    access = Stencil((1, 1))
+    access = AccessPattern((1, 1))
     bottom_payload = jnp.full((4, 5), -1.0, dtype=jnp.float64)
     top_payload = jnp.full((4, 5), -2.0, dtype=jnp.float64)
     bottom_payload = bottom_payload.at[1:3, 1:4].set(
@@ -112,7 +112,7 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
 
 
 def test_execute_returns_new_field_without_mutating_original() -> None:
-    access = Stencil((1,))
+    access = AccessPattern((1,))
     left = _segment_with_interior_values(
         0,
         Extent((slice(-1, 5),)),
@@ -144,7 +144,7 @@ def test_execute_returns_new_field_without_mutating_original() -> None:
 
 
 def test_execute_rejects_required_extent_not_covered() -> None:
-    access = Stencil((1,))
+    access = AccessPattern((1,))
     segment = DiscreteField(
         name="phi",
         segment_id=ComponentId(0),
@@ -163,7 +163,7 @@ def test_execute_rejects_required_extent_not_covered() -> None:
 
 
 def test_execute_rejects_off_rank_neighbor_until_multi_rank_policy_exists() -> None:
-    access = Stencil((1,))
+    access = AccessPattern((1,))
     left = _segment_with_interior_values(
         0,
         Extent((slice(-1, 5),)),

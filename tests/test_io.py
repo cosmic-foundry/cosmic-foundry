@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
-from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region, Stencil
+from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region
 from cosmic_foundry.observability import StructuredFormatter, configure
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ class SevenPointLaplacian(Op):
 
     @property
     def access_pattern(self) -> AccessPattern:
-        return Stencil.seven_point()
+        return AccessPattern.seven_point()
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
