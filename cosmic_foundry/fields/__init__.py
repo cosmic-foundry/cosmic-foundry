@@ -19,13 +19,21 @@ from __future__ import annotations
 from abc import ABC
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, NewType
+from typing import Any
 
 import numpy as np
 
 from cosmic_foundry.kernels import Descriptor, Extent, Map
 
-SegmentId = NewType("SegmentId", int)
+
+@dataclass(frozen=True)
+class SegmentId(Descriptor):
+    """Opaque identifier for one contiguous block segment within a DiscreteField."""
+
+    value: int
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"value": self.value}
 
 
 class Placement(Descriptor):
