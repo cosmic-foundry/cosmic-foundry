@@ -57,4 +57,4 @@ and the
 Architectural decisions are recorded in
 [`adr/README.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/README.md).
 The numerical kernels run on JAX; see
-[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0002-jax-primary-kernel-backend.md).
+[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/object-level/ADR-0002-jax-primary-kernel-backend.md).

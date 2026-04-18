@@ -12,11 +12,11 @@
 **Object-level track:** Epoch 2 — Mesh and AMR — in progress.
 
 All design prerequisites resolved. Implementation underway per the
-sequencing plan in `roadmap/epoch-02-mesh.md`.
+sequencing plan in `roadmap/object-level/epoch-02-mesh.md`.
 
 **Meta-level track:** Reproducibility meta-generator M3 planned.
 Implement the platform-only capsule convergence slice in
-`roadmap/reproducibility-meta-generator.md`.
+`roadmap/meta-level/reproducibility-meta-generator.md`.
 
 ## Completed epochs
 
@@ -47,7 +47,7 @@ Implement the platform-only capsule convergence slice in
 
 ## Epoch 2 progress
 
-Per the implementation plan in `roadmap/epoch-02-mesh.md`:
+Per the implementation plan in `roadmap/object-level/epoch-02-mesh.md`:
 
 | # | Item | PR | Status |
 |---|------|----|--------|
@@ -59,11 +59,11 @@ Per the implementation plan in `roadmap/epoch-02-mesh.md`:
 | 6 | `HaloFillPolicy` — multi-rank | — | Planned |
 
 Items 7–13 (AMR hierarchy, I/O, exit criterion) in
-`roadmap/epoch-02-mesh.md`.
+`roadmap/object-level/epoch-02-mesh.md`.
 
 ## Meta-level progress
 
-Per the meta-level roadmap in `roadmap/meta-level.md`:
+Per the meta-level roadmap in `roadmap/meta-level/README.md`:
 
 | ID | Item | PR | Status |
 |----|------|----|--------|
@@ -78,19 +78,19 @@ Per the meta-level roadmap in `roadmap/meta-level.md`:
 Next selected PRs should explicitly state which track they advance.
 
 Meta-level next work: implement
-`roadmap/reproducibility-meta-generator.md` M3 — platform-only capsule
+`roadmap/meta-level/reproducibility-meta-generator.md` M3 — platform-only capsule
 collect, dry-run, render, and structural comparison against the current
 repository state.
 
 Object-level next work: continue Epoch 2 items #5–#6 (task-graph driver,
 multi-rank halo fill), then begin Epoch 3 (Platform Services): manifest
 infrastructure, comparison-result schema, and simulation specification
-format. See `roadmap/epoch-03-platform-services.md` for the full plan.
+format. See `roadmap/object-level/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 
 Roadmap index: [`roadmap/index.md`](roadmap/index.md)
-Object-level roadmap: `roadmap/object-level.md`
-Meta-level roadmap: `roadmap/meta-level.md`
-Per-epoch details: `roadmap/epoch-NN-*.md`
-Meta-generator roadmap: `roadmap/reproducibility-meta-generator.md`
+Object-level roadmap: `roadmap/object-level/README.md`
+Meta-level roadmap: `roadmap/meta-level/README.md`
+Per-epoch details: `roadmap/object-level/epoch-NN-*.md`
+Meta-generator roadmap: `roadmap/meta-level/reproducibility-meta-generator.md`

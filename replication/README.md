@@ -3,7 +3,7 @@
 This directory holds the workflow, specs, plans, and golden-data
 harnesses for replicating other astrophysics codes' results to
 within numerical roundoff. The workflow is governed by
-[ADR-0007](../adr/ADR-0007-replication-workflow.md) and is itself
+[ADR-0007](../adr/meta-level/ADR-0007-replication-workflow.md) and is itself
 a **living specification**: update this README as we learn from
 each replication target.
 

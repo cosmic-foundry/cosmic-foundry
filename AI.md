@@ -9,7 +9,7 @@ Cosmic Foundry is the **organizational platform** for the simulation
 ecosystem. Application repositories — covering stellar physics,
 cosmology, galactic dynamics, planetary formation, and other domains
 — build on top of it. See
-[ADR-0014](adr/ADR-0014-platform-application-architecture.md) for the
+[ADR-0014](adr/object-level/ADR-0014-platform-application-architecture.md) for the
 authoritative split.
 
 In practice this means:
@@ -39,7 +39,7 @@ In practice this means:
 ## Development Rules
 
 The authoritative source is
-[ADR-0005](adr/ADR-0005-branch-pr-attribution-discipline.md). This
+[ADR-0005](adr/meta-level/ADR-0005-branch-pr-attribution-discipline.md). This
 section is the informal quick-reference; when the two disagree, the
 ADR wins.
 
@@ -271,9 +271,9 @@ fastest way to orient without reading the full roadmap planes.
 
 Roadmap documentation is split onto two planes:
 
-- `roadmap/object-level.md` — what platform and simulation capabilities
+- `roadmap/object-level/README.md` — what platform and simulation capabilities
   the codebase is building.
-- `roadmap/meta-level.md` — how the project verifies, validates,
+- `roadmap/meta-level/README.md` — how the project verifies, validates,
   regenerates, and audits object-level claims.
 
 Every PR should state whether it advances the object-level track, the
@@ -305,10 +305,10 @@ instead. Simple tick-offs (marking an item complete) can travel with the
 **At the start of a new object-level epoch** (after retrospective PRs
 land and before the first code PR opens), open one documentation PR that
 appends an **Implementation plan** section to the epoch's roadmap file
-(`roadmap/epoch-NN-*.md`). For meta-level stages, add or update a
-dedicated implementation plan such as
-`roadmap/reproducibility-meta-generator.md`. The plan is a numbered list
-of proposed PRs with:
+(`roadmap/object-level/epoch-NN-*.md`). For meta-level stages, add or
+update a dedicated implementation plan such as
+`roadmap/meta-level/reproducibility-meta-generator.md`. The plan is a
+numbered list of proposed PRs with:
 
 - One-line scope per entry
 - Explicit "depends on" notes for ordering constraints
@@ -350,10 +350,10 @@ The retrospective covers:
    PRs rather than inline retrospective edits; the retrospective
    surfaces the need, the PR executes the change.
 
-3. **Roadmap files** (`roadmap/object-level.md`,
-   `roadmap/meta-level.md`, and the relevant per-epoch or meta-stage
-   implementation plans). Does the upcoming object-level or meta-level
-   scope still make sense given what we built? Are the design
+3. **Roadmap files** (`roadmap/object-level/README.md`,
+   `roadmap/meta-level/README.md`, and the relevant per-epoch or
+   meta-stage implementation plans). Does the upcoming object-level or
+   meta-level scope still make sense given what we built? Are the design
    prerequisites still the right ones? Are the exit criteria still
    well-defined?
 
@@ -379,14 +379,15 @@ spec and tests, not part of the retrospective sweep.
 
 Architectural decisions are recorded as ADRs in `adr/`. **At the start
 of every session**, read `adr/README.md` — it is the canonical registry
-of every ADR in force and routes to `adr/object-level.md` and
-`adr/meta-level.md`. When work touches a topic listed there, read the
-relevant architecture plane and the full ADR before making changes; the
-registry and plane documents are pointers, not summary substitutes.
+of every ADR in force and routes to `adr/object-level/README.md` and
+`adr/meta-level/README.md`. When work touches a topic listed there, read
+the relevant architecture plane and the full ADR before making changes;
+the registry and plane documents are pointers, not summary substitutes.
 
 When making a new architectural decision, copy
-`adr/adr-template.md` to `adr/ADR-NNNN-<short-title>.md` and add
-a line to `adr/README.md` in the same PR.
+`adr/adr-template.md` to
+`adr/<object-level|meta-level>/ADR-NNNN-<short-title>.md` and add a line
+to `adr/README.md` in the same PR.
 
 Before treating an architectural decision as ready for human review,
 run `pr-review/architecture-checklist.md`. The checklist forces an
@@ -399,11 +400,11 @@ report.
 ADRs describe current architecture. When a conversation implies an
 ADR should change, propose the edit directly. If a decision is
 entirely withdrawn, remove it from the index. See
-[ADR-0005 §Decision → ADR editing policy](adr/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
+[ADR-0005 §Decision → ADR editing policy](adr/meta-level/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
 
 ## Physics capability implementation paths
 
-Per [ADR-0013](adr/ADR-0013-derivation-first-lane.md), every PR that
+Per [ADR-0013](adr/meta-level/ADR-0013-derivation-first-lane.md), every PR that
 adds or changes a *physics capability* (as defined in ADR-0007
 §Decision) is in one of three lanes:
 

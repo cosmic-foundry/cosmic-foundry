@@ -49,7 +49,8 @@ re-run the full setup script.
 
 ## Architectural decisions
 
-New cross-cutting decisions go in `adr/`. Copy `adr/adr-template.md`,
+New decisions go in the appropriate architecture plane under
+`adr/object-level/` or `adr/meta-level/`. Copy `adr/adr-template.md`,
 fill it in, mark it Proposed, and add a line to `adr/README.md` in the
 same PR. See [AI.md](AI.md) for the full ADR process.
 

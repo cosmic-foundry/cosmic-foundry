@@ -56,7 +56,7 @@ state.
 
 - Tests live under `tests/`, mirroring the package layout.
 - Every new capability needs a test. See
-  [ADR-0007](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/ADR-0007-replication-workflow.md)
+  [ADR-0007](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/meta-level/ADR-0007-replication-workflow.md)
   for the verification-first discipline applied to numerical
   capabilities.
 - Visual regression tests use `pytest-mpl` and live under `tests/visual/`.
