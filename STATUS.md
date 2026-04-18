@@ -59,12 +59,17 @@ Items 7–13 (AMR hierarchy, I/O, exit criterion) in
 
 ## Next planned work
 
-Complete Epoch 2 (items #5–#6: task-graph driver, multi-rank halo fill),
-then begin Epoch 3 (Platform Services): manifest
-infrastructure, comparison-result schema, and simulation specification
-format. See `roadmap/epoch-03-platform-services.md` for the full plan.
+Complete the reproducibility meta-generator detour in
+`roadmap/reproducibility-meta-generator.md`: platform-only capsule
+collect, dry-run, render, and structural comparison against the current
+repository state. Resume Epoch 2 afterward with items #5–#6
+(task-graph driver, multi-rank halo fill), then begin Epoch 3
+(Platform Services): manifest infrastructure, comparison-result schema,
+and simulation specification format. See
+`roadmap/epoch-03-platform-services.md` for the full plan.
 
 ## Reference
 
 Full epoch plan: [`roadmap/index.md`](roadmap/index.md)
 Per-epoch details: `roadmap/epoch-NN-*.md`
+Meta-generator detour: `roadmap/reproducibility-meta-generator.md`

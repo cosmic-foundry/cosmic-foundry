@@ -175,6 +175,13 @@ These grow every epoch; they are not tied to a single phase.
 - **Reproducibility.** Bitwise-reproducible runs are a goal for
   single-backend CPU execution (following GAMER-2, GADGET-4); full
   cross-backend bitwise reproducibility is not expected.
+- **Reproducibility meta-generator.** The project also tracks
+  reproducibility at the workflow level: a platform-owned
+  meta-generator emits capsules that describe how to regenerate and
+  verify an engine state. The near-term implementation detour is
+  [roadmap/reproducibility-meta-generator.md](reproducibility-meta-generator.md):
+  build platform-only collect, dry-run, render, and structural comparison
+  before continuing Epoch 2 object-level mesh work.
 - **Multi-repo coordination.** As application repos mature, the
   platform's public API surface must be versioned carefully. Breaking
   changes to Op/Region/Policy/Dispatch, Field, the mesh model, or the
