@@ -48,7 +48,7 @@ from cosmic_foundry.mesh import (  # noqa: E402
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
-from cosmic_foundry.record import ComponentId, Placement, Record  # noqa: E402
+from cosmic_foundry.record import Array, ComponentId, Placement, Record  # noqa: E402
 from cosmic_foundry.sink import Sink  # noqa: E402
 from cosmic_foundry.source import Source  # noqa: E402
 
@@ -76,6 +76,7 @@ __all__ = [
     "write_array",
     # kernels
     "AccessPattern",
+    "Array",
     "ComponentId",
     "Descriptor",
     "Placement",
