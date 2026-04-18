@@ -34,6 +34,17 @@ on.
   place when mixed-precision experimentation begins, to add an explicit
   per-kernel opt-in for lower dtypes.
 
+## Field And Map Formalism
+
+The two primitive organizing concepts: fields as functions on spatial
+domains, and maps as relationships between fields.
+
+- [**ADR-0016**](ADR-0016-field-map-formalism.md) — Field / map formalism:
+  `Field` as f: D → ℝ with `ContinuousField` (Θ = ∅) and `DiscreteField`
+  (Θ = {h}) parameterizations; every operator class is a map with a
+  documented domain, codomain, and operator; desiderata are not map
+  parameters.
+
 ## Kernel Model
 
 The Op / Region / Policy / Dispatch vocabulary and the descriptors that
