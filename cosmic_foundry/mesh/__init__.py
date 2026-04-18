@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from cosmic_foundry.descriptor import Extent
+from cosmic_foundry.descriptor import AccessPattern, Extent
 from cosmic_foundry.domain import Domain
 from cosmic_foundry.map import Map
 from cosmic_foundry.record import ComponentId, Placement
@@ -67,6 +67,47 @@ class UniformGrid(Domain):
 
     def blocks_for_rank(self, rank: int) -> tuple[Block, ...]:
         return tuple(b for b in self.blocks if self.rank_map[b.block_id.value] == rank)
+
+    def fill_halo(
+        self,
+        field: DistributedField,
+        access_pattern: AccessPattern,
+        rank: int,
+    ) -> DistributedField:
+        """Return a new DistributedField with same-rank ghost cells filled.
+
+        Copies ghost-cell values from the interior of neighboring segments
+        owned by the same rank.  Multi-rank halo exchange is not implemented;
+        a NotImplementedError is raised if a ghost cell's source lives on a
+        different rank.
+        """
+        local_ids: set[ComponentId] = {
+            seg.segment_id for seg in field.local_segments(rank)
+        }
+        updated: dict[ComponentId, Any] = {}
+        for target in field.local_segments(rank):
+            updated[target.segment_id] = _fill_segment_halo(
+                target=target,
+                field=field,
+                rank=rank,
+                local_ids=local_ids,
+                access_pattern=access_pattern,
+            )
+        new_segments = tuple(
+            FieldSegment(
+                name=seg.name,
+                segment_id=seg.segment_id,
+                payload=updated.get(seg.segment_id, seg.payload),
+                extent=seg.extent,
+                interior_extent=seg.interior_extent,
+            )
+            for seg in field.segments
+        )
+        return DistributedField(
+            name=field.name,
+            segments=new_segments,
+            placement=field.placement,
+        )
 
 
 @dataclass(frozen=True)
@@ -272,6 +313,112 @@ class FieldDiscretization(Map):
 
 
 field_discretization = FieldDiscretization()
+
+
+def _fill_segment_halo(
+    *,
+    target: FieldSegment,
+    field: DistributedField,
+    rank: int,
+    local_ids: set[ComponentId],
+    access_pattern: AccessPattern,
+) -> Any:
+    interior = _segment_interior(target, access_pattern)
+    payload = target.payload
+    for halo_piece in _subtract_extent(target.extent, interior):
+        candidates = _source_candidates(
+            field=field,
+            target=target,
+            halo_piece=halo_piece,
+            access_pattern=access_pattern,
+        )
+        local_candidates = [
+            (src, overlap) for src, overlap in candidates if src.segment_id in local_ids
+        ]
+        if len(local_candidates) > 1:
+            msg = "Multiple same-rank source segments overlap one halo region"
+            raise ValueError(msg)
+        if len(local_candidates) == 0:
+            if candidates:
+                msg = (
+                    f"fill_halo cannot fill a halo from rank {rank}; "
+                    "multi-rank halo exchange is not implemented"
+                )
+                raise NotImplementedError(msg)
+            continue
+        src, overlap = local_candidates[0]
+        payload = payload.at[_payload_slices(target.extent, overlap)].set(
+            src.payload[_payload_slices(src.extent, overlap)]
+        )
+    return payload
+
+
+def _source_candidates(
+    *,
+    field: DistributedField,
+    target: FieldSegment,
+    halo_piece: Extent,
+    access_pattern: AccessPattern,
+) -> list[tuple[FieldSegment, Extent]]:
+    candidates: list[tuple[FieldSegment, Extent]] = []
+    for src in field.segments:
+        if src.segment_id == target.segment_id:
+            continue
+        src_interior = _segment_interior(src, access_pattern)
+        overlap = _intersect_extents(src_interior, halo_piece)
+        if overlap is not None:
+            candidates.append((src, overlap))
+    return candidates
+
+
+def _segment_interior(segment: FieldSegment, access_pattern: AccessPattern) -> Extent:
+    if segment.interior_extent is not None:
+        return segment.interior_extent
+    return _shrink_extent(segment.extent, access_pattern)
+
+
+def _shrink_extent(extent: Extent, access_pattern: AccessPattern) -> Extent:
+    slices: list[slice] = []
+    for axis, axis_slice in enumerate(extent.slices):
+        halo = access_pattern.halo_width(axis)
+        start = axis_slice.start + halo
+        stop = axis_slice.stop - halo
+        if start > stop:
+            msg = "Cannot shrink an extent by a halo wider than the extent"
+            raise ValueError(msg)
+        slices.append(slice(start, stop))
+    return Extent(tuple(slices))
+
+
+def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
+    """Return pieces of *extent* that lie outside *removed*."""
+    overlap = _intersect_extents(extent, removed)
+    if overlap is None:
+        return (extent,)
+    axis_parts: list[list[tuple[slice, bool]]] = []
+    for axis_extent, axis_overlap in zip(extent.slices, overlap.slices, strict=False):
+        parts: list[tuple[slice, bool]] = []
+        if axis_extent.start < axis_overlap.start:
+            parts.append((slice(axis_extent.start, axis_overlap.start), False))
+        parts.append((axis_overlap, True))
+        if axis_overlap.stop < axis_extent.stop:
+            parts.append((slice(axis_overlap.stop, axis_extent.stop), False))
+        axis_parts.append(parts)
+    pieces: list[Extent] = []
+    for combo in itertools.product(*axis_parts):
+        slices = tuple(part for part, _ in combo)
+        if all(inside for _, inside in combo):
+            continue
+        if all(s.start < s.stop for s in slices):
+            pieces.append(Extent(slices))
+    return tuple(pieces)
+
+
+def _payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
+    return tuple(
+        slice(c.start - p.start, c.stop - p.start)
+        for p, c in zip(parent.slices, child.slices, strict=False)
+    )
 
 
 def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
