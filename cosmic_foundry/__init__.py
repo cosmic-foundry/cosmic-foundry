@@ -38,6 +38,7 @@ from cosmic_foundry.kernels import (  # noqa: E402
     Backend,
     BoundOp,
     Dispatch,
+    Domain,
     Extent,
     FlatPolicy,
     Map,
@@ -47,7 +48,13 @@ from cosmic_foundry.kernels import (  # noqa: E402
     Source,
     Stencil,
 )
-from cosmic_foundry.mesh import Block, BlockId, UniformGrid  # noqa: E402
+from cosmic_foundry.mesh import (  # noqa: E402
+    Block,
+    BlockId,
+    PartitionDomain,
+    UniformGrid,
+    partition_domain,
+)
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 
 __all__ = [
@@ -82,6 +89,7 @@ __all__ = [
     "Backend",
     "BoundOp",
     "Dispatch",
+    "Domain",
     "Extent",
     "FlatPolicy",
     "Map",
@@ -93,7 +101,9 @@ __all__ = [
     # mesh
     "Block",
     "BlockId",
+    "PartitionDomain",
     "UniformGrid",
+    "partition_domain",
     # observability
     "configure",
     "get_logger",
