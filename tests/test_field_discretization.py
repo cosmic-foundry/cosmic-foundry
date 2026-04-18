@@ -6,11 +6,11 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.fields import ContinuousField, FieldDiscretization, SegmentId
-from cosmic_foundry.mesh import UniformGrid
+from cosmic_foundry.mesh import UniformGrid, partition_domain
 
 
 def _grid_1d(n_cells: int, n_blocks: int, n_ranks: int = 1) -> UniformGrid:
-    return UniformGrid.create(
+    return partition_domain(
         domain_origin=(0.0,),
         domain_size=(1.0,),
         n_cells=(n_cells,),
@@ -24,7 +24,7 @@ def _grid_2d(
     blocks_per_axis: tuple[int, int],
     n_ranks: int = 1,
 ) -> UniformGrid:
-    return UniformGrid.create(
+    return partition_domain(
         domain_origin=(0.0, 0.0),
         domain_size=(1.0, 1.0),
         n_cells=n_cells,

@@ -6,7 +6,7 @@ import itertools
 from dataclasses import dataclass
 from typing import Any, NewType
 
-from cosmic_foundry.kernels import Extent
+from cosmic_foundry.kernels import Domain, Extent, Map
 
 BlockId = NewType("BlockId", int)
 
@@ -15,8 +15,7 @@ BlockId = NewType("BlockId", int)
 class Block:
     """One contiguous patch of uniformly-spaced cells.
 
-    Owns topology and coordinate metadata only; array payloads
-    live in Field/FieldSegment.
+    Owns topology and coordinate metadata only; array payloads live in Field.
     """
 
     block_id: BlockId
@@ -42,18 +41,20 @@ class Block:
 
 
 @dataclass(frozen=True)
-class UniformGrid:
-    """A uniform domain Ω partitioned into a structured layout of blocks.
+class UniformGrid(Domain):
+    """Ω_h — a continuous domain Ω partitioned into a structured block grid.
 
-    The discrete domain Ω_h produced by ``UniformGrid.create`` — see that
-    method for the domain-discretization Map: description.
-
-    Blocks are enumerated in C order (last axis varies fastest) and
-    distributed across ranks round-robin by flat index.
+    Produced by :data:`partition_domain`.  Blocks are enumerated in C order
+    (last axis varies fastest) and distributed across ranks round-robin by
+    flat index.
     """
 
     blocks: tuple[Block, ...]
     rank_map: tuple[int, ...]  # rank_map[block_id] → owning rank
+
+    @property
+    def ndim(self) -> int:
+        return self.blocks[0].ndim
 
     def block(self, block_id: BlockId) -> Block:
         return self.blocks[block_id]
@@ -64,9 +65,27 @@ class UniformGrid:
     def blocks_for_rank(self, rank: int) -> tuple[Block, ...]:
         return tuple(b for b in self.blocks if self.rank_map[b.block_id] == rank)
 
-    @classmethod
-    def create(
-        cls,
+
+@dataclass(frozen=True)
+class PartitionDomain(Map):
+    """Partition a continuous domain into a discrete block grid.
+
+    Map:
+        domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
+                   blocks_per_axis ∈ ℤⁿ, n_ranks ∈ ℤ) — a continuous
+                   domain specification and discretization parameters
+        codomain — UniformGrid (Ω_h): a partition of Ω into
+                   ∏ blocks_per_axis blocks, each covering
+                   n_cells/blocks_per_axis interior cells with spacing
+                   h = L/n_cells, assigned to ranks round-robin
+        operator — (Ω, h, blocks) ↦ {(B_i, Ω_h^int(B_i), rank_i)}_i
+
+    Θ = {h} — the discrete grid approximates the continuous domain;
+    h = domain_size / n_cells along each axis.
+    """
+
+    def execute(
+        self,
         *,
         domain_origin: tuple[float, ...],
         domain_size: tuple[float, ...],
@@ -74,24 +93,6 @@ class UniformGrid:
         blocks_per_axis: tuple[int, ...],
         n_ranks: int,
     ) -> UniformGrid:
-        """Partition a continuous domain into a discrete block grid.
-
-        Map:
-            domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
-                       blocks_per_axis ∈ ℤⁿ, n_ranks ∈ ℤ) — a continuous
-                       domain specification and discretization parameters
-            codomain — UniformGrid: a partition of Ω into
-                       ∏ blocks_per_axis blocks, each covering
-                       n_cells/blocks_per_axis interior cells with spacing
-                       h = L/n_cells, assigned to ranks round-robin
-            operator — (Ω, h, blocks) ↦ {(B_i, Ω_h^int(B_i), rank_i)}_i
-
-        Θ = {h} — the discrete grid approximates the continuous domain;
-        h = domain_size / n_cells along each axis.
-
-        Raises ValueError if any axis of n_cells is not divisible by the
-        corresponding blocks_per_axis entry.
-        """
         ndim = len(n_cells)
         if not (len(domain_origin) == len(domain_size) == len(blocks_per_axis) == ndim):
             raise ValueError(
@@ -132,4 +133,15 @@ class UniformGrid:
             )
             rank_map.append(flat_id % n_ranks)
 
-        return cls(blocks=tuple(blocks), rank_map=tuple(rank_map))
+        return UniformGrid(blocks=tuple(blocks), rank_map=tuple(rank_map))
+
+
+partition_domain = PartitionDomain()
+
+__all__ = [
+    "Block",
+    "BlockId",
+    "PartitionDomain",
+    "UniformGrid",
+    "partition_domain",
+]

@@ -25,7 +25,25 @@ principle: an answer to "what is the fundamental object?" and an answer to
 
 ## Decision
 
-**Fields and maps are the two primitive organizing concepts.**
+**Domain, field, map, source, and sink are the five primitive organizing concepts.**
+
+### Domain
+
+A domain is the set D over which a field is defined:
+
+```
+D — the input space of f : D → ℝ
+```
+
+A domain is not a field. It is the geometric or state-space substrate that
+fields are defined over. `Domain` is an abstract base class with one abstract
+property — `ndim` — which every domain must declare. Domains differ in their
+nature (physical space, thermodynamic state space, etc.) and representation
+(continuous or discrete).
+
+The concrete `Domain` in the spatial simulation path is `UniformGrid`, which
+is Ω_h: the discrete approximation of the continuous domain Ω. `UniformGrid`
+inherits from `Domain`; its `ndim` returns the number of spatial dimensions.
 
 ### Field
 
@@ -145,15 +163,21 @@ Map:
 p = N   — approximation order, when Θ ≠ ∅.
 ```
 
-Free functions that are maps (e.g. `global_sum`, `collect_diagnostics`)
-carry the `Map:` block in the function docstring.
+Free functions that are maps (e.g. `GlobalSum`, `CollectDiagnostics`)
+carry the `Map:` block in the class docstring.
+
+### Canonical domain instances
+
+| Class | Nature | ndim |
+|---|---|---|
+| `UniformGrid` | Ω_h — discrete approximation of physical space Ω ⊆ ℝⁿ | spatial dimension |
 
 ### Canonical map instances
 
 | Class / function | Domain | Codomain | Θ |
 |---|---|---|---|
-| `UniformGrid.create` | Ω × ℤⁿ (n_cells, blocks) | Ω_h (block partition) | {h} |
-| `FieldDiscretization` | `ContinuousField` × `UniformGrid` | `DiscreteField` | {h}, p = 1 |
+| `PartitionDomain` | Ω × ℤⁿ (n_cells, blocks) | `UniformGrid` (Ω_h) | {h} |
+| `FieldDiscretization` | `ContinuousField` × `Domain` | `DiscreteField` | {h}, p = 1 |
 | `FlatPolicy` | `BoundOp` × `Region` | array over Ω_h^int | ∅ |
 | `Dispatch` | `BoundOp` × `Region` × `FlatPolicy` | policy result | ∅ |
 | `HaloFillPolicy` | `DiscreteField` × `Region` × `Stencil` | `DiscreteField` with filled halos | ∅ |

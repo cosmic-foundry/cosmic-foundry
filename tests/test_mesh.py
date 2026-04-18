@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.kernels import Extent
-from cosmic_foundry.mesh import Block, BlockId, UniformGrid
+from cosmic_foundry.mesh import Block, BlockId, UniformGrid, partition_domain
 
 
 class TestBlock:
@@ -52,14 +52,14 @@ class TestUniformGrid:
             n_ranks=2,
         )
         defaults.update(kwargs)
-        return UniformGrid.create(**defaults)
+        return partition_domain(**defaults)
 
     def test_block_count(self):
         assert len(self._make_2d().blocks) == 4  # 2×2
 
     def test_non_divisible_raises(self):
         with pytest.raises(ValueError, match="not divisible"):
-            UniformGrid.create(
+            partition_domain(
                 domain_origin=(0.0,),
                 domain_size=(1.0,),
                 n_cells=(7,),
@@ -69,7 +69,7 @@ class TestUniformGrid:
 
     def test_mismatched_lengths_raises(self):
         with pytest.raises(ValueError):
-            UniformGrid.create(
+            partition_domain(
                 domain_origin=(0.0,),
                 domain_size=(1.0, 1.0),
                 n_cells=(8,),
@@ -79,7 +79,7 @@ class TestUniformGrid:
 
     def test_index_extents_tile_domain(self):
         n_cells = (8, 12)
-        grid = UniformGrid.create(
+        grid = partition_domain(
             domain_origin=(0.0, 0.0),
             domain_size=(1.0, 1.0),
             n_cells=n_cells,
@@ -93,7 +93,7 @@ class TestUniformGrid:
 
     def test_cell_centers_cover_domain(self):
         """First and last cell centers sit h/2 from the domain edges."""
-        grid = UniformGrid.create(
+        grid = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(4,),
@@ -108,7 +108,7 @@ class TestUniformGrid:
         assert all_centers[-1] == pytest.approx(1.0 - 0.5 * h)
 
     def test_round_robin_placement(self):
-        grid = UniformGrid.create(
+        grid = partition_domain(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(8,),
@@ -134,7 +134,7 @@ class TestUniformGrid:
 
     def test_3d_tiling(self):
         n_cells = (8, 8, 8)
-        grid = UniformGrid.create(
+        grid = partition_domain(
             domain_origin=(0.0, 0.0, 0.0),
             domain_size=(1.0, 1.0, 1.0),
             n_cells=n_cells,
