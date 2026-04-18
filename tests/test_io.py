@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
-from cosmic_foundry.kernels import AccessPattern, Dispatch, Extent, Op, Region, Stencil
+from cosmic_foundry.kernels import AccessPattern, Extent, Op, Region, Stencil
 from cosmic_foundry.observability import StructuredFormatter, configure
 
 # ---------------------------------------------------------------------------
@@ -70,9 +70,7 @@ def phi() -> jnp.ndarray:
 @pytest.fixture()
 def laplacian_result(phi: jnp.ndarray) -> jnp.ndarray:
     region = Region(Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1))))
-    return Dispatch(
-        op=seven_point_laplacian, fields={"phi": phi}, region=region
-    ).execute()
+    return seven_point_laplacian.execute(phi, region=region)
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +123,7 @@ def test_merge_rank_files_concatenates_along_axis0(tmp_path: Path) -> None:
 
     # Simulate two ranks computing their interior half.
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
-    full_result = Dispatch(
-        op=seven_point_laplacian, fields={"phi": phi}, region=Region(interior)
-    ).execute()
+    full_result = seven_point_laplacian.execute(phi, region=Region(interior))
 
     rank0_result = full_result[:half]
     rank1_result = full_result[half:]
@@ -167,7 +163,7 @@ def test_structured_formatter_produces_valid_json() -> None:
         level=logging.DEBUG,
         pathname="",
         lineno=0,
-        msg="dispatch.execute",
+        msg="op.execute",
         args=(),
         exc_info=None,
     )
@@ -180,21 +176,21 @@ def test_structured_formatter_produces_valid_json() -> None:
 
     assert parsed["level"] == "DEBUG"
     assert parsed["logger"] == "cosmic_foundry.kernels"
-    assert parsed["event"] == "dispatch.execute"
+    assert parsed["event"] == "op.execute"
     assert parsed["region_shape"] == [6, 6, 6]
     assert parsed["n_blocks"] == 1
 
 
-def test_dispatch_emits_log_record(caplog: pytest.LogCaptureFixture) -> None:
+def test_op_execute_emits_log_record(caplog: pytest.LogCaptureFixture) -> None:
     axes = jnp.indices((N, N, N), dtype=jnp.float64)
     phi = axes[0] ** 2 + axes[1] ** 2 + axes[2] ** 2
     region = Region(Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1))))
 
     with caplog.at_level(logging.DEBUG, logger="cosmic_foundry.kernels"):
-        Dispatch(op=seven_point_laplacian, fields={"phi": phi}, region=region).execute()
+        seven_point_laplacian.execute(phi, region=region)
 
     events = [r.message for r in caplog.records]
-    assert "dispatch.execute" in events
+    assert "op.execute" in events
 
 
 def test_write_array_emits_log_record(
