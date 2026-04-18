@@ -11,7 +11,6 @@ import pytest
 
 from cosmic_foundry.kernels import (
     AccessPattern,
-    BoundOp,
     Dispatch,
     Extent,
     Op,
@@ -63,18 +62,14 @@ def test_op_class_exposes_metadata() -> None:
     assert seven_point_laplacian.writes == ("laplacian_phi",)
 
 
-def test_op_call_returns_bound_op() -> None:
-    phi = jnp.ones((8, 8, 8))
-    bound = seven_point_laplacian(phi)
-    assert isinstance(bound, BoundOp)
-    assert bound.op is seven_point_laplacian
-    assert bound.fields == {"phi": phi}
-
-
-def test_op_call_too_many_args_raises() -> None:
-    phi = jnp.ones((8, 8, 8))
-    with pytest.raises(TypeError, match="positional arguments"):
-        seven_point_laplacian(phi, phi)  # reads=("phi",) has only 1 slot
+def test_op_execute_runs_kernel() -> None:
+    n = 8
+    axes = jnp.indices((n, n, n), dtype=jnp.float64)
+    phi = axes[0] ** 2 + axes[1] ** 2 + axes[2] ** 2
+    region = Region(Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1))))
+    result = seven_point_laplacian(phi, region=region)
+    assert result.shape == (n - 2, n - 2, n - 2)
+    assert jnp.allclose(result, 6.0)
 
 
 def test_stencil_symmetric_sets_halo_width() -> None:
@@ -91,8 +86,9 @@ def test_dispatch_executes_laplacian_over_region() -> None:
     region = Region(Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1))))
 
     result = Dispatch(
-        seven_point_laplacian(phi),
-        region,
+        op=seven_point_laplacian,
+        fields={"phi": phi},
+        region=region,
     ).execute()
 
     assert result.shape == (n - 2, n - 2, n - 2)
@@ -104,7 +100,7 @@ def test_dispatch_rejects_region_without_required_halo() -> None:
     region = Region(Extent.from_shape(phi.shape))
 
     with pytest.raises(ValueError, match="exceeds input bounds"):
-        Dispatch(seven_point_laplacian(phi), region).execute()
+        Dispatch(op=seven_point_laplacian, fields={"phi": phi}, region=region).execute()
 
 
 def test_dispatch_executes_laplacian_over_batched_region() -> None:
@@ -120,8 +116,9 @@ def test_dispatch_executes_laplacian_over_batched_region() -> None:
         n_blocks=n_blocks,
     )
     result = Dispatch(
-        seven_point_laplacian(phi_batched),
-        region,
+        op=seven_point_laplacian,
+        fields={"phi": phi_batched},
+        region=region,
     ).execute()
 
     assert result.shape == (n_blocks, n - 2, n - 2, n - 2)
@@ -140,12 +137,16 @@ def test_batched_region_matches_single_block_results() -> None:
     extent = Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1)))
 
     single_results = [
-        Dispatch(seven_point_laplacian(phi), Region(extent)).execute() for phi in blocks
+        Dispatch(
+            op=seven_point_laplacian, fields={"phi": phi}, region=Region(extent)
+        ).execute()
+        for phi in blocks
     ]
 
     batched_result = Dispatch(
-        seven_point_laplacian(jnp.stack(blocks)),
-        Region(extent, n_blocks=len(blocks)),
+        op=seven_point_laplacian,
+        fields={"phi": jnp.stack(blocks)},
+        region=Region(extent, n_blocks=len(blocks)),
     ).execute()
 
     for i, expected in enumerate(single_results):
@@ -160,7 +161,9 @@ def test_batched_region_rejects_mismatched_batch_size() -> None:
         n_blocks=3,
     )
     with pytest.raises(ValueError, match="n_blocks"):
-        Dispatch(seven_point_laplacian(phi_batched), region).execute()
+        Dispatch(
+            op=seven_point_laplacian, fields={"phi": phi_batched}, region=region
+        ).execute()
 
 
 def test_region_rejects_nonpositive_n_blocks() -> None:

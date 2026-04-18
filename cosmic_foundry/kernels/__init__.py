@@ -139,24 +139,6 @@ class Region(Descriptor):
         return {"extent": self.extent.as_dict(), "n_blocks": self.n_blocks}
 
 
-@dataclass
-class BoundOp(Descriptor):
-    """An Op with its field inputs bound, ready for dispatch.
-
-    Created by calling an Op with its field arrays::
-
-        bound = laplacian(phi_array)          # positional
-        bound = flux(rho=rho_arr, v=v_arr)    # keyword
-        Dispatch(bound, region).execute()
-    """
-
-    op: Any  # Op instance — Any avoids forward-reference issues
-    fields: dict[str, Any]  # name → array, ordered by op.reads
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"op": type(self.op).__name__, "fields": list(self.fields.keys())}
-
-
 class Record(ABC):
     """Abstract base for all record types: lightweight immutable value objects
     that are *about* the simulation rather than *being* simulation state.
@@ -245,17 +227,23 @@ class Sink(ABC):
         return self.execute(*args, **kwargs)
 
 
-class Op(ABC):
-    """Nominal base class for class-shaped Ops.
+class Op(Map, Descriptor):
+    """Abstract base for class-shaped kernels.
 
-    Every concrete Op defines its kernel logic in ``_fn`` and declares
-    ``access_pattern``, ``reads``, and ``writes`` as class attributes.
-    ``__call__`` is provided here: it binds field arrays by name and
-    returns a :class:`BoundOp` ready for :class:`Dispatch`.
+    Every concrete Op defines its pointwise kernel logic in ``_fn`` and
+    declares ``access_pattern``, ``reads``, and ``writes`` as class
+    attributes. ``execute`` (and thus ``__call__``) runs the kernel
+    directly over the supplied field arrays and region via a Policy.
 
     Subclasses that carry no parameters should use
     ``@dataclass(frozen=True)`` so that instances are hashable and the
     JIT cache in :func:`_make_jit_kernel` can deduplicate compilations.
+
+    Map:
+        domain   — (*field_arrays, region: Region) — field arrays in
+                   reads order, covering region expanded by access_pattern
+        codomain — pointwise kernel result over region.extent
+        operator — execute(*field_arrays, region) ↦ policy(self, region)
     """
 
     reads: ClassVar[tuple[str, ...]] = ()
@@ -271,19 +259,18 @@ class Op(ABC):
     def _fn(self, *args: Any) -> Any:
         """Pointwise kernel: field arrays followed by index meshgrids."""
 
-    def __call__(self, *args: Any, **kwargs: Any) -> BoundOp:
-        """Bind positional and keyword field arrays to this Op."""
-        if len(args) > len(self.reads):
-            n_reads = len(self.reads)
-            name = type(self).__name__
-            msg = (
-                f"Op {name!r} reads {self.reads!r} ({n_reads} fields) "
-                f"but received {len(args)} positional arguments"
-            )
-            raise TypeError(msg)
-        fields: dict[str, Any] = {self.reads[i]: arg for i, arg in enumerate(args)}
-        fields.update(kwargs)
-        return BoundOp(op=self, fields=fields)
+    def execute(self, *field_arrays: Any, region: Region, policy: Any = None) -> Any:
+        """Run this Op over *region* via *policy* (default: FlatPolicy)."""
+        p: FlatPolicy = policy if policy is not None else FlatPolicy()
+        return p.execute(self, *field_arrays, region=region)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "type": type(self).__name__,
+            "reads": list(self.reads),
+            "writes": list(self.writes),
+            "access_pattern": self.access_pattern.as_dict(),
+        }
 
 
 @dataclass(frozen=True)
@@ -291,34 +278,24 @@ class FlatPolicy(Map):
     """Evaluate an Op at every point in a Region using JAX/XLA.
 
     Map:
-        domain   — (k : Ω_h^ext → ℝⁿ, Ω_h^int ⊆ Ω_h^ext) — a kernel
-                   and the interior region over which it is evaluated;
-                   inputs must cover Ω_h^int expanded by k.access_pattern
-        codomain — k(x) for x ∈ Ω_h^int — the kernel evaluated pointwise
-                   over the interior; shape matches Ω_h^int
-        operator — (k, Ω_h^int) ↦ jax.jit(k)(Ω_h^int);
-                   when Region.n_blocks > 1 the kernel is lifted with
+        domain   — (k: Op, *field_arrays, region: Region) — a kernel,
+                   its field inputs in reads order, and the interior
+                   region; inputs must cover region expanded by
+                   k.access_pattern
+        codomain — k(x) for x ∈ region.extent — the kernel evaluated
+                   pointwise over the interior
+        operator — (k, fields, Ω_h^int) ↦ jax.jit(k)(Ω_h^int);
+                   when region.n_blocks > 1 the kernel is lifted with
                    jax.vmap before JIT so the Op remains unaware of the
                    batch dimension
 
     Exact: Θ = ∅ — the policy introduces no approximation.
     """
 
-    def execute(
-        self,
-        bound: BoundOp,
-        region: Region,
-    ) -> Any:
-        """Execute a BoundOp over a Region with JAX/XLA.
-
-        When ``region.n_blocks > 1`` inputs carry a leading batch axis and
-        the kernel is lowered with ``jax.vmap``; the Op is unaware of that
-        dimension.
-        """
-        op_like = bound.op
-        inputs = tuple(bound.fields.values())
-        _validate_op(op_like)
-        _validate_region_access(region, op_like.access_pattern, inputs)
+    def execute(self, op: Any, *field_arrays: Any, region: Region) -> Any:
+        """Execute *op* over *region* with JAX/XLA."""
+        _validate_op(op)
+        _validate_region_access(region, op.access_pattern, field_arrays)
 
         _log.debug(
             "dispatch.execute",
@@ -328,33 +305,49 @@ class FlatPolicy(Map):
             },
         )
 
-        return _make_jit_kernel(cast(Any, op_like), region)(*inputs)
+        return _make_jit_kernel(cast(Any, op), region)(*field_arrays)
 
 
-@dataclass(frozen=True)
-class Dispatch(Map):
-    """One local lowering unit: a BoundOp over a Region under a Policy.
+@dataclass
+class Dispatch(Map, Descriptor):
+    """One local execution unit: an Op over a Region under a Policy.
+
+    Carries the full execution plan as an inspectable record. A future
+    task-graph driver can collect a sequence of Dispatches, analyze
+    reads/writes for fusion compatibility, and lower fused kernels before
+    calling execute(). One Op per Dispatch; multi-Op fusion is the
+    driver's responsibility.
 
     Map:
-        domain   — (k: BoundOp, Ω_h^int: Region, π: FlatPolicy) — a kernel
-                   with bound field inputs, an iteration region, and an
-                   execution policy
-        codomain — π(k, Ω_h^int) — the kernel evaluated over the interior
-        operator — execute() ↦ policy.execute(bound, region)
+        domain   — (k: Op, {f_i}, Ω_h^int: Region, π: FlatPolicy) — a
+                   kernel, its field inputs, an iteration region, and a
+                   policy
+        codomain — π(k, {f_i}, Ω_h^int) — the kernel evaluated over
+                   the interior
+        operator — execute() ↦ op.execute(*fields.values(), region,
+                   policy=policy)
 
-    Exact: Θ = ∅ — Dispatch introduces no approximation; that lives in the
-    policy and Op.
+    Exact: Θ = ∅ — Dispatch introduces no approximation.
     """
 
-    # One Op per Dispatch; multi-Op fusion is deferred to the Epoch 2
-    # task-graph driver, which will compose compatible Ops before lowering.
-    bound: BoundOp
+    op: Any  # Op instance
+    fields: dict[str, Any]  # name → array, ordered by op.reads
     region: Region
     policy: FlatPolicy = field(default_factory=FlatPolicy)
 
     def execute(self) -> Any:
         """Execute this Dispatch."""
-        return self.policy.execute(self.bound, self.region)
+        return self.op.execute(
+            *self.fields.values(), region=self.region, policy=self.policy
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "op": self.op.as_dict(),
+            "fields": list(self.fields.keys()),
+            "region": self.region.as_dict(),
+            "policy": type(self.policy).__name__,
+        }
 
 
 @functools.lru_cache(maxsize=256)
@@ -463,7 +456,6 @@ def _slice_length(axis_slice: slice) -> int:
 __all__ = [
     "AccessPattern",
     "Backend",
-    "BoundOp",
     "Descriptor",
     "Dispatch",
     "Domain",
