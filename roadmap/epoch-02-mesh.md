@@ -119,14 +119,14 @@ merge and update this list when the picture changes.
    `UniformGrid`; domain decomposition; round-robin rank
    assignment; `cell_centers` coordinate arrays.
 
-2. **Field allocation from blocks** — given a `UniformGrid`,
+2. ✓ **Field allocation from blocks** (PR #88) — given a `UniformGrid`,
    produce a `Field` whose `FieldSegment` payloads are JAX arrays
    sized for the block interior plus a ghost-cell halo (width
    determined by the caller's `AccessPattern`). Establishes the
    connection between mesh topology and field storage.
    *Depends on: #1.*
 
-3. **`HaloFillPolicy` — single-rank** (implements ADR-0011) —
+3. ✓ **`HaloFillPolicy` — single-rank** (PR #90) —
    fill ghost cells for blocks on the same rank by copying from
    the neighbor block's payload. Includes `Field.covers` checks
    and the basic `HaloFillFence` → `HaloFillPolicy.execute` path.
