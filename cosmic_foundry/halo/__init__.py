@@ -21,7 +21,13 @@ class HaloFillFence:
 
 @dataclass(frozen=True)
 class HaloFillPolicy:
-    """Fill same-rank ghost cells by copying from neighboring segments."""
+    """Fill same-rank ghost cells by copying from neighboring segments.
+
+    The policy assumes each segment extent was allocated with the same
+    ``AccessPattern`` carried by the fence. That is the current
+    ``allocate_field`` path; mixed-width halo storage will need explicit
+    interior metadata.
+    """
 
     def execute(self, fence: HaloFillFence, rank: int) -> Field:
         """Return a new Field with ghost cells filled for *rank*."""
