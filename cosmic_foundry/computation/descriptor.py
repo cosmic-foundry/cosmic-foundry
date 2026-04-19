@@ -15,8 +15,8 @@ class Descriptor(ABC):
 
     A Descriptor is an immutable object that specifies *how* computation is
     performed — coordinate extents, iteration regions, access patterns, field
-    bindings, data placement. Descriptors are distinct from Records (which are
-    *about* the simulation) and from Maps (which *perform* computation).
+    bindings, data placement. Descriptors are distinct from Maps (which *perform*
+    computation).
 
     Every Descriptor must be serializable to a plain dict.
     """
