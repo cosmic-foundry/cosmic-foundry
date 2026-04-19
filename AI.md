@@ -15,9 +15,8 @@ file covers only behavior that is specific to AI agents.
 Cosmic Foundry is the **organizational platform** for the simulation
 ecosystem. Application repositories — covering stellar physics,
 cosmology, galactic dynamics, planetary formation, and other domains
-— build on top of it. See
-[ADR-0014](adr/object-level/ADR-0014-platform-application-architecture.md)
-for the authoritative split.
+— build on top of it. The platform/application split is documented in
+`ARCHITECTURE.md §Platform and application split`.
 
 In practice this means:
 
@@ -87,9 +86,8 @@ In practice this means:
 
 2. **Read `STATUS.md`** — current planned work and navigation anchor.
 
-3. **Read `adr/README.md`** — canonical registry of every ADR in
-   force. When work touches a topic listed there, read the relevant
-   architecture plane and the full ADR before making changes.
+3. **Read `ARCHITECTURE.md`** — all live architectural decisions. When
+   work touches a topic documented there, read it before making changes.
 
 ---
 

@@ -7,8 +7,7 @@ the capability set surveyed in [`RESEARCH.md`](RESEARCH.md) — hydrodynamics
 through numerical relativity, radiation transport, gravity, N-body,
 microphysics, and cosmology. It is being built incrementally toward a
 code that can replicate published astrophysics results. JAX powers the
-numerical kernels; see
-[ADR-0002](adr/object-level/ADR-0002-jax-primary-kernel-backend.md).
+numerical kernels (see `ARCHITECTURE.md` for the technology baseline).
 
 ## Quick start
 
@@ -44,7 +43,7 @@ sphinx-build -W docs docs/_build/html
 - [`RESEARCH.md`](RESEARCH.md) — survey of the computational astrophysics
   code landscape that informs the design.
 - [`ROADMAP.md`](ROADMAP.md) — epoch-by-epoch development plan.
-- [`adr/README.md`](adr/README.md) — architectural decision records.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — architectural decisions.
 
 ## License
 

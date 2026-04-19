@@ -55,9 +55,8 @@ is text only.
    architecture stress-review note and integrate any findings into
    Blocker / Critical / Notable / Nit according to severity. If
    clean, summarize the note in the checklist walkthrough.
-5. **Cross-reference.** Check consistency with `adr/README.md`
-   (the ADR index), `AI.md`, and any document the PR edits or
-   cites.
+5. **Cross-reference.** Check consistency with `ARCHITECTURE.md`,
+   `AI.md`, and any document the PR edits or cites.
 6. **Gap-hunt.** What should the PR have touched but didn't?
    Tests for new code paths, doc updates for new features, ADR
    amendments for architectural shifts, index entries for new
@@ -75,7 +74,7 @@ Use these sections exactly and in this order.
 
 ## Blocker
 <Issues that mean the PR must not merge as-is: correctness,
- safety, or discipline violations (ADR-0005, AI.md).
+ safety, or discipline violations (ARCHITECTURE.md, AI.md, DEVELOPMENT.md).
  Write "None." if empty.>
 
 ## Critical

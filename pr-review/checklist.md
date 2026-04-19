@@ -23,12 +23,11 @@ when pre-commit now catches them.
 
 ## Docs integrity
 
-- **Index entries missing.** Adding an ADR requires a line in
-  `adr/README.md` (enforced by `check_adr_index.py`). Adding a
-  research-notes subsection requires a link from
-  `research/index.md`. Adding a capability epoch requires a row in
-  `ROADMAP.md`. Check the latter two manually — they are not yet
-  automated.
+- **Index entries missing.** Adding a research-notes subsection
+  requires a link from `research/index.md`. Adding a capability epoch
+  requires a row in `ROADMAP.md`. Adding an architectural decision
+  requires a paragraph in `ARCHITECTURE.md`. Check these manually —
+  they are not automated.
 - **Cross-references broken by renames/moves.** If the PR
   renames or moves a file, grep the repo for the old path.
   `check_markdown_links.py` validates own-repo GitHub URLs but

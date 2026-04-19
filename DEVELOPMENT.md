@@ -10,10 +10,8 @@ For the current status and planned work, see [`STATUS.md`](STATUS.md).
 
 ## Development Rules
 
-The authoritative source is
-[ADR-0005](adr/meta-level/ADR-0005-branch-pr-attribution-discipline.md). This
-section is the informal quick-reference; when the two disagree, the
-ADR wins.
+This section is the authoritative quick-reference for branch and PR
+discipline.
 
 ### Branches and PRs
 
@@ -245,42 +243,29 @@ should update our plans?*
 
 The retrospective covers:
 
-1. **ADRs in force** (`adr/README.md` and each linked file). Did the
-   implementation reveal that any decision needs updating? Were any
-   "anticipated extensions" or "deferred" items resolved in practice?
-   Were any stated consequences wrong?
+1. **`ARCHITECTURE.md`**. Did the implementation reveal that any live
+   decision needs updating? Were any open questions resolved? Are any
+   paragraphs now self-evident from the code and therefore removable?
 
-2. **ADR set as a whole.** Beyond reviewing each ADR individually,
-   examine the set itself. Are any two ADRs covering the same concern
-   and worth combining? Has an ADR's scope drifted so it now overlaps
-   with a newer one, and should be narrowed or merged into it? Are
-   there numbering or ordering choices that would read more coherently
-   if restructured? The goal is to keep the ADR family close to an
-   *orthogonal basis* — each ADR covering one independent
-   architectural concern, and the set as a whole the minimum number
-   of decisions needed to explain the architecture. Propose
-   reorganizations (combine, split, renumber, retire) as follow-up
-   PRs rather than inline retrospective edits; the retrospective
-   surfaces the need, the PR executes the change.
-
-3. **`ROADMAP.md`**. Does the upcoming simulation or V&V scope still
+2. **`ROADMAP.md`**. Does the upcoming simulation or V&V scope still
    make sense given what we built? Should any epoch one-liner be
    reworded, reordered, or split? Is the immediate next work section
    still accurate?
 
-4. **`replication/` and formulas register**. Do the `Map:` blocks on
-   implemented physics maps reflect what was actually built? Are there
-   formula entries that should be updated now rather than left stale?
+3. **`replication/` and formulas register**. Do the Function: blocks on
+   implemented operator classes reflect what was actually built? Are
+   there formula entries that should be updated now rather than left
+   stale?
 
-5. **Process documents** (`AI.md`, `DEVELOPMENT.md`). Did any
+4. **Process documents** (`AI.md`, `DEVELOPMENT.md`). Did any
    development rules prove unworkable, insufficient, or in need of
    precision?
 
-6. **Surprises and pain points**. What was harder than expected? What
+5. **Surprises and pain points**. What was harder than expected? What
    design decisions caused rework? What would have been better to
-   decide earlier? Capture these as ADR edits, roadmap notes, or
-   updates to `DEVELOPMENT.md` or `AI.md` — wherever the lesson is
-   most actionable for the next epoch.
+   decide earlier? Capture these as updates to `ARCHITECTURE.md`,
+   `DEVELOPMENT.md`, or `AI.md` — wherever the lesson is most
+   actionable for the next epoch.
 
 The output is one or more documentation PRs landing before Epoch N+1
 code begins.
@@ -289,39 +274,24 @@ code begins.
 
 ## Architectural Decisions
 
-Architectural decisions are recorded as ADRs in `adr/`. Read
-`adr/README.md` — it is the canonical registry of every ADR in force
-and routes to `adr/object-level/README.md` and
-`adr/meta-level/README.md`. When work touches a topic listed there,
-read the relevant architecture plane and the full ADR before making
-changes; the registry and plane documents are pointers, not summary
-substitutes.
+Architectural decisions live in `ARCHITECTURE.md`. Each live decision
+is a one-paragraph claim. When a decision is made, add a paragraph in
+the appropriate section. When a decision is superseded by the code or
+withdrawn, remove it. When an open question is resolved, move it from
+the *Open questions* section to the appropriate live section and update
+the affected modules.
 
-When making a new architectural decision, copy
-`adr/adr-template.md` to
-`adr/<object-level|meta-level>/ADR-NNNN-<short-title>.md` and add a
-line to `adr/README.md` in the same PR.
-
-Before treating an architectural decision as ready for human review,
-run `pr-review/architecture-checklist.md`. The checklist forces a
-reviewer to map the design space, define concept ownership, write
-realistic usage traces, normalize dependencies and lowering
-boundaries, and identify fences / materialization points. Include the
-stress-review result in the ADR, the PR description, or the review
-report.
-
-ADRs describe current architecture. When a conversation implies an
-ADR should change, propose the edit directly. If a decision is
-entirely withdrawn, remove it from the index. See
-[ADR-0005 §Decision → ADR editing policy](adr/meta-level/ADR-0005-branch-pr-attribution-discipline.md#adr-editing-policy).
+Before making or proposing a significant architectural change, run the
+architecture stress-review checklist at
+`pr-review/architecture-checklist.md`. Include the stress-review result
+in the PR description or review report.
 
 ---
 
 ## Physics capability implementation paths
 
-Per [ADR-0013](adr/meta-level/ADR-0013-derivation-first-lane.md),
-every PR that adds or changes a *physics capability* (as defined in
-ADR-0007 §Decision) is in one of three lanes:
+Every PR that adds or changes a *physics capability* is in one of
+three lanes:
 
 - **Lane A — Port-and-verify.** Adapt from a permissively-licensed
   reference code with attribution. Default for permissive references.

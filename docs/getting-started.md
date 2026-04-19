@@ -59,6 +59,4 @@ JIT smoke   : ok
 
 `hello` detects distributed mode from the `JAX_COORDINATOR_ADDRESS`
 environment variable. Set `JAX_COORDINATOR_ADDRESS`, `JAX_NUM_PROCESSES`,
-and `JAX_PROCESS_ID` before launching to enable `jax.distributed`. See
-[ADR-0003](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/object-level/ADR-0003-jax-distributed-host-parallelism.md)
-for the design rationale.
+and `JAX_PROCESS_ID` before launching to enable `jax.distributed`. See `ARCHITECTURE.md` for the design rationale.

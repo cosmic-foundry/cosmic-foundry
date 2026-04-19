@@ -13,9 +13,6 @@ Checks currently wired:
   (`[text](path)` or `[text](path#anchor)`) must resolve to an
   existing file. External URLs and pure in-page fragments are
   skipped. Fenced code blocks are ignored.
-- **`check_adr_index.py`** — every ADR file in `adr/` is linked
-  from `adr/README.md`, and every link in the index points to a
-  file that exists.
 - **`check_action_versions.py`** — `uses: owner/action@vN` pins in
   `.github/workflows/*.yml` must not regress below their version on
   `origin/main`. Intentional downgrades require a

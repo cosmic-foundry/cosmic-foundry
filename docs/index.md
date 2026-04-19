@@ -55,6 +55,4 @@ For the full design survey and development plan, see
 and the
 [development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
 Architectural decisions are recorded in
-[`adr/README.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/README.md).
-The numerical kernels run on JAX; see
-[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/object-level/ADR-0002-jax-primary-kernel-backend.md).
+[`ARCHITECTURE.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ARCHITECTURE.md).
