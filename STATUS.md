@@ -54,3 +54,5 @@ hierarchy`. The three root ABCs and their concrete children:
 ## Current work
 
 Immediate code work (in dependency order):
+
+*No immediate work queued. See `ROADMAP.md` for the next unspecified items.*
