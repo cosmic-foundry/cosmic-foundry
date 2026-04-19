@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any
 
-from cosmic_foundry.discretization import Discretization
+from cosmic_foundry.theory.discretization import Discretization
 
 
 class ModalDiscretization(Discretization):

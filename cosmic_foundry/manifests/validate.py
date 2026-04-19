@@ -5,7 +5,7 @@ from typing import Any
 
 import jsonschema  # type: ignore
 
-from cosmic_foundry.source import Source
+from cosmic_foundry.theory.source import Source
 
 _SCHEMAS_DIR = Path(__file__).parent.parent / "schemas"
 

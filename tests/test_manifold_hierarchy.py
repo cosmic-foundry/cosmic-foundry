@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from cosmic_foundry.indexed_set import IndexedSet
-from cosmic_foundry.pseudo_riemannian_manifold import PseudoRiemannianManifold
-from cosmic_foundry.riemannian_manifold import RiemannianManifold
-from cosmic_foundry.set import Set
-from cosmic_foundry.smooth_manifold import SmoothManifold
+from cosmic_foundry.theory.indexed_set import IndexedSet
+from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
+from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
+from cosmic_foundry.theory.set import Set
+from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 # ---------------------------------------------------------------------------
 # Instantiation guards

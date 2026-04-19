@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.indexed_set import IndexedSet
+from cosmic_foundry.theory.indexed_set import IndexedSet
 
 
 class Discretization(IndexedSet):  # noqa: B024
@@ -24,7 +24,7 @@ class Discretization(IndexedSet):  # noqa: B024
 
     A Discretization carries no metric, no geometry beyond what is needed
     to define the approximation, and no payload — payloads live in
-    PatchFunction.
+    Array[T].
     """
 
 

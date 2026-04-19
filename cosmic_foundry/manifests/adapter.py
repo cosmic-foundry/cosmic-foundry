@@ -1,8 +1,8 @@
 from abc import abstractmethod
 from pathlib import Path
 
-from cosmic_foundry.function import Function
 from cosmic_foundry.manifests.provenance import Provenance
+from cosmic_foundry.theory.function import Function
 
 
 class ValidationAdapter(Function):
