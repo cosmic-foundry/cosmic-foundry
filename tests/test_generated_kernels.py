@@ -24,17 +24,17 @@ def _extract_generated_block(path: Path) -> str:
 
 
 def test_laplacian_constants_match_derivation() -> None:
-    """The generated constants block in laplacian.py must match a fresh
+    """The generated constants block in stencil.py must match a fresh
     derivation run. Calling generate() runs the SymPy Taylor-expansion
     assertions as a side-effect, so this test simultaneously verifies the
     algebra and the committed constants.
     """
-    from cosmic_foundry.computation.laplacian import generate
+    from cosmic_foundry.computation.stencil import generate
 
     committed = _extract_generated_block(
-        ROOT / "cosmic_foundry" / "computation" / "laplacian.py"
+        ROOT / "cosmic_foundry" / "computation" / "stencil.py"
     )
     assert committed == generate(), (
-        "cosmic_foundry/computation/laplacian.py constants are out of sync "
+        "cosmic_foundry/computation/stencil.py constants are out of sync "
         "with the derivation. Regenerate with: python scripts/generate_kernels.py"
     )

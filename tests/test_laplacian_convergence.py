@@ -25,7 +25,7 @@ import jax.numpy as jnp
 
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.laplacian import seven_point_laplacian
+from cosmic_foundry.computation.stencil import seven_point_laplacian
 from tests.utils.convergence import assert_convergence_order
 
 
