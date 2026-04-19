@@ -9,7 +9,7 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 
 | Epoch | Capability |
 |-------|------------|
-| 0 | Project scaffolding: CI, pre-commit, ADR process, entry point. ✓ |
+| 0 | Project scaffolding: CI, pre-commit, documentation standards, entry point. ✓ |
 | 1 | Kernel abstraction, field placement, HDF5 I/O, deterministic logging. ✓ |
 | 2 | Uniform structured mesh, AMR hierarchy, halo fill, task-graph driver. |
 | 3 | Platform services: manifest infrastructure, comparison-result schema, simulation spec format. |
@@ -27,17 +27,19 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 
 ---
 
-## V&V capabilities
+## Platform & infrastructure
 
-### Infrastructure milestones
+### Milestones
 
-One-time deliveries that establish the verification foundation:
+One-time deliveries that establish the platform foundation — covering process
+discipline, documentation architecture, verification infrastructure, and
+reproducibility tooling:
 
 | Milestone | Capability |
 |-----------|------------|
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
 | M1 | Verification infrastructure: Function:/Source:/Sink: block convention, formulas register, convergence testing helpers, externally-grounded test pattern demonstrated on Epoch 1 kernel. ✓ |
-| M2 | Minimal architectural basis: all live architectural decisions expressed as a complete, orthogonal set of one-paragraph claims in a single file. |
+| M2 | Documentation architecture: all live architectural decisions as one-paragraph claims in a single file; docs/ consolidated to index + API reference. |
 | M3 | Validation infrastructure: manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
 | M4 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
 | M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
@@ -64,7 +66,7 @@ Every simulation epoch must satisfy this checklist before it is considered verif
 4. Add `∂M` to `theory/`
 5. Add `BoundaryCondition(Function)` ABC
 
-### V&V
+### Infrastructure
 
-1. M2: retire `adr/`; consolidate all live architectural decisions into `ARCHITECTURE.md`
+1. M2: retire `adr/`; consolidate all live architectural decisions into `ARCHITECTURE.md`; consolidate `docs/`
 2. Apply per-epoch verification standard to simulation Epoch 1 (convergence test for the Laplacian stencil)
