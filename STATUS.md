@@ -13,6 +13,18 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ## Current work
 
+**Generalize the derivation infrastructure into a reusable framework.**
+The sentinel splicing logic, hash computation, and `generate()` contract are
+currently hand-rolled inside `laplacian.py` and `scripts/generate_kernels.py`.
+Before rolling out to additional operators, extract these into shared utilities:
+a `_make_hash(constants)` helper and a `generate_constants_block(constants)`
+formatter in `cosmic_foundry/computation/_codegen.py`; sentinel strings as
+module-level constants shared between the generator script and the drift-check
+test; and `scripts/generate_kernels.py` generalized to discover and splice any
+module that exposes a `generate()` function. Each new kernel module then only
+needs to implement `_derive()` and call the shared utilities — no boilerplate
+to copy.
+
 **Scale derivation pattern to the full codebase.**
 `cosmic_foundry/computation/laplacian.py` establishes the proof-of-concept:
 derivation (`_derive`), hash-verified generated constants block, and production
