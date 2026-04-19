@@ -31,9 +31,9 @@ examine individual commit history.
   substitute your own mental list.
 - [`architecture-checklist.md`](architecture-checklist.md) —
   the architecture stress-review protocol. Use it when the PR
-  adds or amends an ADR, changes a roadmap architecture
-  contract, introduces a named abstraction, or reshapes a
-  driver/backend/public API boundary.
+  adds or amends an architectural claim in `ARCHITECTURE.md`,
+  changes a roadmap architecture contract, introduces a named
+  abstraction, or reshapes a driver/backend/public API boundary.
 
 Do **not** modify the working tree, push, comment on the PR,
 or take any other action visible outside the review. Output
@@ -42,8 +42,8 @@ is text only.
 ## Protocol
 
 1. **Orient.** Read the PR title and description. Note what
-   the PR claims to do. Read any ADR or linked issue it
-   references.
+   the PR claims to do. Read any linked issue or
+   `ARCHITECTURE.md` section it references.
 2. **Diff walk.** Read the full diff. For each hunk, ask: does
    this match the PR's stated intent? Is the change minimal
    for that intent?
@@ -58,9 +58,9 @@ is text only.
 5. **Cross-reference.** Check consistency with `ARCHITECTURE.md`,
    `AI.md`, and any document the PR edits or cites.
 6. **Gap-hunt.** What should the PR have touched but didn't?
-   Tests for new code paths, doc updates for new features, ADR
-   amendments for architectural shifts, index entries for new
-   files.
+   Tests for new code paths, doc updates for new features,
+   `ARCHITECTURE.md` updates for architectural shifts, index
+   entries for new files.
 7. **Synthesize.** Produce the report below.
 
 ## Output format
@@ -80,7 +80,7 @@ Use these sections exactly and in this order.
 ## Critical
 <Very likely wrong but not merge-blocking: missing tests for
  non-trivial code paths, unhandled edge cases, contradictions
- with an ADR, undocumented behavior changes.
+ with ARCHITECTURE.md, undocumented behavior changes.
  Write "None." if empty.>
 
 ## Notable

@@ -2,7 +2,7 @@
 
 import jax
 
-# ADR-0009: the package guarantees float64 precision at import time.
+# The package guarantees float64 precision at import time.
 # Must be set before any JAX computation is JIT-compiled.
 jax.config.update("jax_enable_x64", True)
 

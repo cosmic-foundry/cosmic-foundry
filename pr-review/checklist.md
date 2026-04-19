@@ -82,16 +82,15 @@ when pre-commit now catches them.
 ## Project framing and tone
 
 - **Tech-stack-first framing.** Top-level descriptions (README,
-  `docs/index.md`, ADR motivations, roadmap epoch summaries)
-  should lead with the *physics / mission* goal, not "built on
-  JAX" or similar. JAX, unyt, Zarr, etc. belong in ADRs and
-  deeper docs.
+  `docs/index.md`, roadmap epoch summaries) should lead with the
+  *physics / mission* goal, not "built on JAX" or similar. JAX,
+  unyt, Zarr, etc. belong in `ARCHITECTURE.md` and deeper docs.
 - **Backwards-compatibility cruft.** The project has not cut a
   stable API. If the PR preserves legacy names, adds
   deprecation warnings, or keeps a shim "just in case", push
   back — the expected mode is structural edits.
 - **Conversational or agent-session prose.** Code comments,
-  docstrings, ADR text, and roadmap prose must read as durable
+  docstrings, `ARCHITECTURE.md`, and roadmap prose must read as durable
   documentation, not transcribed conversation. Flag: first- or
   second-person voice ("we decided", "you should", "I think"),
   phrases that presuppose a live exchange ("as discussed", "as

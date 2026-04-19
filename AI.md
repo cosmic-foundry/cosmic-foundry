@@ -4,8 +4,8 @@ These guidelines apply to all AI agents working on this repository,
 regardless of platform (Claude Code, Codex, Gemini, or others).
 
 For development workflow rules that apply to all contributors (branch
-discipline, commit size, environment setup, roadmap management, ADR
-process, physics lanes), see [`DEVELOPMENT.md`](DEVELOPMENT.md). This
+discipline, commit size, environment setup, roadmap management,
+physics lanes), see [`DEVELOPMENT.md`](DEVELOPMENT.md). This
 file covers only behavior that is specific to AI agents.
 
 ---

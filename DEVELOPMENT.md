@@ -63,15 +63,16 @@ discipline.
 - **PR review.** The project's adversarial reviewer lives at
   [`pr-review/`](pr-review/README.md) (roles + checklist of
   historical failure modes). Run the reviewer against any non-trivial
-  PR before requesting human review. For ADRs and architecture-changing
-  PRs, also run the architecture stress-review checklist at
+  PR before requesting human review. For architecture-changing PRs,
+  also run the architecture stress-review checklist at
   [`pr-review/architecture-checklist.md`](pr-review/architecture-checklist.md).
 
-  **For ADR PRs the architecture stress-review note is required, not
-  optional.** Include it in the PR description before opening. A PR
-  that adds or amends an ADR without a stress-review note should not
-  be opened for human review — the note is evidence that the review
-  was actually done, not a post-hoc summary.
+  **For architecture-changing PRs the stress-review note is required,
+  not optional.** Include it in the PR description before opening. A
+  PR that introduces or reshapes an architectural abstraction without a
+  stress-review note should not be opened for human review — the note
+  is evidence that the review was actually done, not a post-hoc
+  summary.
 
   **Terminal / automation:**
   ```bash
@@ -91,13 +92,13 @@ discipline.
   for reviewer cognitive load, not the rule itself.
 - Generated files, lock files, fixtures / golden data, and pure
   deletions don't count toward the target or ceiling.
-- Documentation diffs (ADRs, research notes, roadmap edits,
+- Documentation diffs (research notes, roadmap edits,
   README / AI.md / similar) are exempt from the guideline.
 
 ### Weighing architectural options
 
-When comparing architectural options (in ADRs, design discussions,
-or ad-hoc recommendations), do **not** weight by author effort or
+When comparing architectural options (in design discussions,
+ARCHITECTURE.md updates, or ad-hoc recommendations), do **not** weight by author effort or
 lines of code produced. Agent-assisted authoring has made upstream
 writing cost a rounding error; downstream costs now dominate and are
 what the analysis should rank by:
@@ -130,7 +131,7 @@ ambition is cheap to type.
 
 - Never include local absolute filesystem paths (e.g. `/Users/…`,
   `/home/…`, `C:\Users\…`) in commit messages, PR titles, PR
-  descriptions, or ADR text. Use repository-relative paths or
+  descriptions, or ARCHITECTURE.md. Use repository-relative paths or
   generic tool commands instead.
 - Never commit API keys, tokens, or credentials. If one leaks,
   rotate it — rewriting history does not un-leak a pushed secret.
@@ -149,7 +150,7 @@ ambition is cheap to type.
   structural refactors.
 - Do not encode the repository's current roadmap epoch in code,
   tests, configuration, or live documentation. Epoch labels belong
-  in roadmap and ADR planning text, not in module docstrings,
+  in roadmap and planning text, not in module docstrings,
   pytest marker descriptions, API notes, or overview copy as a
   statement of current project state.
 
@@ -234,7 +235,7 @@ belong in the immediate section.
 
 **When an epoch is declared complete**, before opening any code PR for
 the next epoch, perform a retrospective review. The retrospective
-produces only documentation changes — ADR edits, roadmap updates,
+produces only documentation changes — ARCHITECTURE.md updates, roadmap updates,
 process document corrections. It does not introduce code changes or
 new features. Any code issue discovered during the retrospective
 becomes a separate PR with its own spec and tests. The question the
