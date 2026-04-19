@@ -35,7 +35,7 @@ sphinx-build -W docs docs/_build/html
 
 ## Repository layout
 
-The code is the authoritative description of each module's current implementation. Start here:
+Start here:
 
 | Directory | What it is | Read first |
 |---|---|---|

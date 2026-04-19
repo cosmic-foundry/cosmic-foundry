@@ -2,10 +2,10 @@
 
 This document is the authoritative record of live architectural decisions
 for this repository. Decisions not yet made are listed under *Open
-questions*. The code is the authoritative description of each module's
-current implementation; this file records only what is not self-evident
-from reading the code. `DEVELOPMENT.md` covers workflow and process
-decisions (including physics capability lanes).
+questions*. The code is designed to make its own structure self-evident;
+ARCHITECTURE.md records the decisions and reasoning behind that
+structure, not a description of it. `DEVELOPMENT.md` covers workflow and
+process decisions (including physics capability lanes).
 
 ---
 
