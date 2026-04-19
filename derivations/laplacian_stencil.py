@@ -122,14 +122,16 @@ _neighbor_weight = int(_weights_1d[0])
 assert _neighbor_weight == 1, f"Face-neighbor weight is {_neighbor_weight}; expected 1"
 
 # ---------------------------------------------------------------------------
-# Public summary (importable constants)
+# Public constants — derived values, not typed by hand
 # ---------------------------------------------------------------------------
+# These are the outputs of the SymPy computation above, cast to plain Python
+# ints so callers pay no SymPy cost at import time.
 
-#: Weights of the 7-point Laplacian stencil at unit grid spacing.
-WEIGHTS_7PT: dict[str, int] = {
-    "center": -6,
-    "face_neighbor": 1,
-}
+#: Center weight of the 7-point Laplacian stencil (3 × 1D center = −6).
+CENTER_WEIGHT: int = _center_weight_3d
+
+#: Weight of each of the 6 face neighbors (+1 in every axis direction).
+NEIGHBOR_WEIGHT: int = _neighbor_weight
 
 #: Formal approximation order in grid spacing h.
 APPROXIMATION_ORDER: int = 2

@@ -79,13 +79,13 @@ def test_fd_coefficients_rejects_zeroth_derivative() -> None:
 # Validity: linear kernel, unit spacing, interior probe point with halo ≥ 1.
 
 
-def test_seven_point_laplacian_neighbor_weights_match_sympy() -> None:
-    """Each of the 6 face-neighbor weights must equal the SymPy coefficient."""
-    from tests.test_kernels import seven_point_laplacian  # reuse existing op
-
-    # SymPy: 2nd-order centered d²f/dx², coefficient at offset ±1 is 1.
-    # Same coefficient applies in each of the 3 axis directions.
-    expected_neighbor = float(fd_coefficients(2, [-1, 0, 1])[0])  # Rational(1)
+def test_seven_point_laplacian_neighbor_weights_match_derivation() -> None:
+    """Each of the 6 face-neighbor weights must equal the value derived in
+    derivations/laplacian_stencil.py (Taylor expansion → NEIGHBOR_WEIGHT).
+    Importing the derivation module runs its SymPy assertions as a side-effect.
+    """
+    from derivations.laplacian_stencil import NEIGHBOR_WEIGHT
+    from tests.test_kernels import seven_point_laplacian
 
     face_neighbors = [
         (1, 0, 0),
@@ -98,23 +98,22 @@ def test_seven_point_laplacian_neighbor_weights_match_sympy() -> None:
     weights = probe_operator_weights(seven_point_laplacian, face_neighbors)
 
     for offset, w in weights.items():
-        assert w == pytest.approx(expected_neighbor), (
+        assert w == pytest.approx(NEIGHBOR_WEIGHT), (
             f"Neighbor weight at offset {offset} is {w}; "
-            f"expected {expected_neighbor} (SymPy)"
+            f"expected {NEIGHBOR_WEIGHT} (derivations/laplacian_stencil.py)"
         )
 
 
-def test_seven_point_laplacian_center_weight_matches_sympy() -> None:
-    """Center weight must be 3 × (SymPy 1D center coefficient) = 3 × (−2) = −6."""
+def test_seven_point_laplacian_center_weight_matches_derivation() -> None:
+    """Center weight must equal the value derived in
+    derivations/laplacian_stencil.py (3 × 1D center = −6).
+    Importing the derivation module runs its SymPy assertions as a side-effect.
+    """
+    from derivations.laplacian_stencil import CENTER_WEIGHT
     from tests.test_kernels import seven_point_laplacian
 
-    # 1D center coefficient from SymPy: -2.
-    # 3D 7-point Laplacian sums three independent 1D stencils, so center = 3 × (-2).
-    center_1d = float(fd_coefficients(2, [-1, 0, 1])[1])  # Rational(-2)
-    expected_center = 3 * center_1d  # -6.0
-
     weights = probe_operator_weights(seven_point_laplacian, [(0, 0, 0)])
-    assert weights[(0, 0, 0)] == pytest.approx(expected_center), (
+    assert weights[(0, 0, 0)] == pytest.approx(CENTER_WEIGHT), (
         f"Center weight is {weights[(0, 0, 0)]}; "
-        f"expected {expected_center} (3 × SymPy 1D center)"
+        f"expected {CENTER_WEIGHT} (derivations/laplacian_stencil.py)"
     )
