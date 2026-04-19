@@ -10,7 +10,7 @@ from cosmic_foundry._version import __version__  # noqa: E402
 from cosmic_foundry.computation.array import Array, ComponentId, Placement  # noqa: E402
 from cosmic_foundry.computation.descriptor import Extent  # noqa: E402
 from cosmic_foundry.computation.reductions import GlobalSum, global_sum  # noqa: E402
-from cosmic_foundry.computation.stencil import execute_pointwise  # noqa: E402
+from cosmic_foundry.computation.stencil import Stencil  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
@@ -53,7 +53,7 @@ __all__ = [
     "Function",
     "GlobalSum",
     "Placement",
-    "execute_pointwise",
+    "Stencil",
     "global_sum",
     # fields
     "ContinuousField",

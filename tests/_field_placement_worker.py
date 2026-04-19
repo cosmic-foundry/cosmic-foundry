@@ -42,8 +42,7 @@ def main() -> None:
         import jax.numpy as jnp
 
         from cosmic_foundry.computation.descriptor import Extent
-        from cosmic_foundry.computation.stencil import execute_pointwise
-        from cosmic_foundry.theory.function import Function
+        from cosmic_foundry.computation.stencil import Stencil
 
         n = 8
         half = n // 2  # 4
@@ -65,13 +64,8 @@ def main() -> None:
         from typing import Any
 
         @dataclass(frozen=True)
-        class Laplacian(Function):
-            @property
-            def radii(self) -> tuple[int, ...]:
-                return (1, 1, 1)
-
-            def execute(self, phi: Any, *, extent: Extent) -> Any:
-                return execute_pointwise(self, extent, phi)
+        class Laplacian(Stencil):
+            radii: tuple[int, ...] = (1, 1, 1)
 
             def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
                 return (

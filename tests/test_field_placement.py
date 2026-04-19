@@ -21,15 +21,14 @@ import pytest
 
 from cosmic_foundry.computation.array import ComponentId, Placement
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.stencil import execute_pointwise
+from cosmic_foundry.computation.stencil import Stencil
 from cosmic_foundry.mesh import covers, partition_domain
-from cosmic_foundry.theory.function import Function
 
 N = 8
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Function):
+class SevenPointLaplacian(Stencil):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Function:
@@ -43,12 +42,7 @@ class SevenPointLaplacian(Function):
     Exact for polynomials of degree ≤ 2.
     """
 
-    @property
-    def radii(self) -> tuple[int, ...]:
-        return (1, 1, 1)
-
-    def execute(self, phi: Any, *, extent: Extent) -> Any:
-        return execute_pointwise(self, extent, phi)
+    radii: tuple[int, ...] = (1, 1, 1)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
