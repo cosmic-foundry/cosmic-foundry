@@ -10,6 +10,17 @@ unblocked, it moves to `STATUS.md`.
 
 ---
 
+## Planned theory additions
+
+**`DynamicManifold(PseudoRiemannianManifold)`**
+— A manifold whose signature is fixed but whose metric tensor is a
+dynamical field in the simulation state rather than a structural
+property. Required for full GR simulations. In the 3+1 (ADM) formalism:
+spatial hypersurfaces Σ_t are 3-D Riemannian; the 3-metric `γ_ij` and
+extrinsic curvature `K_ij` are evolved fields.
+
+---
+
 ## Simulation capabilities
 
 | Epoch | Capability |
