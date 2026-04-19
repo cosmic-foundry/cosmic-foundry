@@ -11,7 +11,6 @@ from typing import Any
 
 from cosmic_foundry.computation.descriptor import (
     Extent,
-    intersect_extents,
     payload_slices,
 )
 
@@ -26,7 +25,7 @@ def fill_by_overlap(
 
     Returns the updated target_array, or the original if the extents do not intersect.
     """
-    overlap = intersect_extents(source_extent, target_extent)
+    overlap = source_extent.intersect(target_extent)
     if overlap is None:
         return target_array
     return target_array.at[payload_slices(target_extent, overlap)].set(

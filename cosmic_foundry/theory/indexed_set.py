@@ -7,7 +7,7 @@ from abc import abstractmethod
 from cosmic_foundry.theory.set import Set
 
 
-class IndexedSet(Set):  # noqa: B024
+class IndexedSet(Set):
     """A Set equipped with a bijection to a finite subset of ℤⁿ.
 
     An IndexedSet adds exactly one piece of structure to a Set: its elements
@@ -20,9 +20,10 @@ class IndexedSet(Set):  # noqa: B024
     from IndexedSet and layer on additional structure.
 
     Required:
-        ndim  — number of index dimensions n
-        shape — sizes (s₁, …, sₙ) of the index range along each axis,
-                so that the total number of elements is ∏ sᵢ
+        ndim      — number of index dimensions n
+        shape     — sizes (s₁, …, sₙ) of the index range along each axis,
+                    so that the total number of elements is ∏ sᵢ
+        intersect — set-theoretic intersection: S ∩ T → IndexedSet | None
     """
 
     @property
@@ -34,6 +35,10 @@ class IndexedSet(Set):  # noqa: B024
     @abstractmethod
     def shape(self) -> tuple[int, ...]:
         """Size along each index axis."""
+
+    @abstractmethod
+    def intersect(self, other: IndexedSet) -> IndexedSet | None:
+        """Return the intersection S ∩ T, or None if the sets are disjoint."""
 
 
 __all__ = [

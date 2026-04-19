@@ -11,11 +11,11 @@ import numpy as np
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import (
     Extent,
-    intersect_extents,
     payload_slices,
 )
 from cosmic_foundry.computation.overlap import fill_by_overlap
 from cosmic_foundry.theory.function import Function
+from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 
 
@@ -40,6 +40,9 @@ class Patch(LocatedDiscretization):
     @property
     def shape(self) -> tuple[int, ...]:
         return self.index_extent.shape
+
+    def intersect(self, other: IndexedSet) -> Extent | None:
+        return self.index_extent.intersect(other)
 
     def node_positions(self, axis: int) -> Any:
         """1-D coordinate array of cell-center positions along *axis*."""
@@ -124,7 +127,7 @@ def covers(mesh: Array[Patch], extent: Extent) -> bool:
     origin = tuple(s.start for s in extent.slices)
     covered = np.zeros(shape, dtype=bool)
     for patch in mesh.elements:
-        intersection = intersect_extents(patch.index_extent, extent)
+        intersection = patch.index_extent.intersect(extent)
         if intersection is None:
             continue
         local_idx = tuple(
@@ -186,7 +189,7 @@ def _validate_halo_coverage(
             i
             for i in range(len(mesh.elements))
             if i != target_cid
-            and intersect_extents(mesh[i].index_extent, halo_piece) is not None
+            and mesh[i].index_extent.intersect(halo_piece) is not None
         ]
         if len(candidates) > 1:
             msg = "Multiple source patches overlap one halo region"
@@ -195,7 +198,7 @@ def _validate_halo_coverage(
 
 def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
     """Return pieces of *extent* that lie outside *removed*."""
-    overlap = intersect_extents(extent, removed)
+    overlap = extent.intersect(removed)
     if overlap is None:
         return (extent,)
     axis_parts: list[list[tuple[slice, bool]]] = []
