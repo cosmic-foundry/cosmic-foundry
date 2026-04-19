@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import Patch
 from cosmic_foundry.theory.discretization import Discretization
+from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 from cosmic_foundry.theory.modal_discretization import ModalDiscretization

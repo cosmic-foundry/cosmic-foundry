@@ -10,6 +10,7 @@ library) belongs in computation/, mesh/, or geometry/.
 from __future__ import annotations
 
 from cosmic_foundry.theory.discretization import Discretization
+from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 from cosmic_foundry.theory.field import Field, ScalarField, TensorField
 from cosmic_foundry.theory.flat_manifold import FlatManifold
 from cosmic_foundry.theory.function import Function
@@ -18,6 +19,7 @@ from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 from cosmic_foundry.theory.manifold import Manifold
 from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
+from cosmic_foundry.theory.minkowski_space import MinkowskiSpace
 from cosmic_foundry.theory.modal_discretization import ModalDiscretization
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
@@ -26,6 +28,7 @@ from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 __all__ = [
     "Discretization",
+    "EuclideanSpace",
     "Field",
     "FlatManifold",
     "Function",
@@ -34,6 +37,7 @@ __all__ = [
     "LocatedDiscretization",
     "Manifold",
     "ManifoldWithBoundary",
+    "MinkowskiSpace",
     "ModalDiscretization",
     "PseudoRiemannianManifold",
     "RiemannianManifold",

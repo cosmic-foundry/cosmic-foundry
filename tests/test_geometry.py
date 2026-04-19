@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
-from cosmic_foundry.geometry.minkowski_space import MinkowskiSpace
+from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 from cosmic_foundry.theory.flat_manifold import FlatManifold
+from cosmic_foundry.theory.minkowski_space import MinkowskiSpace
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.theory.smooth_manifold import SmoothManifold
