@@ -199,9 +199,11 @@ script from the `cosmic-foundry` checkout directory.
 
 **At the start of every session**, read `STATUS.md` in the repository
 root. It is the navigation anchor: the directory map, planned modules
-not yet coded, and the immediate next work. Read `ROADMAP.md` for the
-high-level capability sequence across both the simulation and V&V
-tracks.
+not yet coded, and the immediate implementation queue. Read `ROADMAP.md`
+for the long-horizon capability sequence (epochs, milestones, verification
+standard) — items there are not yet specified well enough to implement
+without further design discussion. When an item becomes fully specified
+and unblocked, move it from `ROADMAP.md` to `STATUS.md`.
 
 Every PR should state whether it advances the simulation track, the
 V&V track, or both. Cross-track dependencies must be explicit in the
@@ -223,7 +225,7 @@ items in `STATUS.md`** and ask two questions for each:
 2. Is anything in the current change inconsistent with it?
 
 If the answer to (1) is no, flesh out the missing details in `STATUS.md`
-or `ROADMAP.md` in the same PR. Do not update `ARCHITECTURE.md` speculatively
+in the same PR (moving the item from `ROADMAP.md` if it lives there). Do not update `ARCHITECTURE.md` speculatively
 — it records live decisions only and is updated by the PR that implements
 the change. If the answer to (2) is yes, resolve the inconsistency before
 merging. The goal is that the next item is always fully specified before
@@ -234,11 +236,11 @@ the current one lands.
 ## Implementation plans
 
 The immediate next work for both tracks is maintained in the
-`## Immediate next work` section of `ROADMAP.md`. Keep it current:
-when a sprint item completes, remove it; when new immediate work
-becomes clear, add it. Do not plan beyond what is concretely
-unblocked — if an item depends on decisions not yet made, it does not
-belong in the immediate section.
+`## Current work` section of `STATUS.md`. Keep it current:
+when an item completes, remove it from `STATUS.md`; when new immediate
+work becomes fully specified and unblocked, move it from `ROADMAP.md`
+to `STATUS.md`. Do not add items to `STATUS.md` that depend on decisions
+not yet made — those belong in `ROADMAP.md`.
 
 ---
 

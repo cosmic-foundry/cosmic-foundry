@@ -1,14 +1,18 @@
 # Cosmic Foundry — Status
 
-This file is the navigation anchor for the repository. It tells you
-where to find the authoritative description of each part of the codebase
-and describes planned modules that do not yet have code.
+This file is the navigation anchor for the repository. It owns two things:
+the directory map (where to find each part of the codebase) and the
+near-term implementation queue (planned modules and the immediate next work).
+Items belong here when they are fully specified and unblocked — i.e. we have
+direct line-of-sight on what to implement. Items that are not yet specified
+well enough to implement belong in [`ROADMAP.md`](ROADMAP.md).
 
 For cross-cutting architectural decisions and open design questions, see
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 For development workflow and contribution process, see
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
-For the high-level capability roadmap, see [`ROADMAP.md`](ROADMAP.md).
+For the long-horizon capability sequence (epochs, milestones, verification
+standard), see [`ROADMAP.md`](ROADMAP.md).
 
 ---
 

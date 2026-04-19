@@ -1,7 +1,12 @@
 # Cosmic Foundry — Roadmap
 
 For cross-cutting architectural decisions, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
-For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md).
+For near-term work — planned modules and the immediate implementation queue — see [`STATUS.md`](STATUS.md).
+
+This file covers the long-horizon capability sequence: epochs, milestones, and the
+verification standard. Items belong here when they are not yet specified well enough
+to implement without further design discussion. Once an item is fully specified and
+unblocked, it moves to `STATUS.md`.
 
 ---
 
@@ -53,19 +58,3 @@ Every simulation epoch must satisfy this checklist before it is considered verif
 - At least one externally-grounded test (analytical solution or published benchmark — not an engine-generated golden file)
 - At least one convergence test confirming the stated approximation order p
 - Lane A/B/C classification stated; derivation document with SymPy checks for Lanes B and C
-
----
-
-## Immediate next work
-
-### Simulation
-
-1. Add `FlatManifold(PseudoRiemannianManifold)` to `theory/`
-2. Add `geometry/` with `EuclideanSpace` and `MinkowskiSpace`
-3. Thread `ndim` from manifold through `computation/` via `LocatedDiscretization.manifold` and a `Domain` type
-4. Add `∂M` to `theory/`
-5. Add `BoundaryCondition(Function)` ABC
-
-### Infrastructure
-
-1. Apply per-epoch verification standard to simulation Epoch 1 (convergence test for the Laplacian stencil)
