@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cosmic_foundry.computation.array import Array, ComponentId
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.mesh import Patch, covers, partition_domain
 
@@ -115,10 +115,10 @@ class TestPartitionDomain:
             blocks_per_axis=(4,),
             n_ranks=2,
         )
-        assert mesh.placement.owner(ComponentId(0)) == 0
-        assert mesh.placement.owner(ComponentId(1)) == 1
-        assert mesh.placement.owner(ComponentId(2)) == 0
-        assert mesh.placement.owner(ComponentId(3)) == 1
+        assert mesh.placement.owner(0) == 0
+        assert mesh.placement.owner(1) == 1
+        assert mesh.placement.owner(2) == 0
+        assert mesh.placement.owner(3) == 1
 
     def test_3d_tiling(self):
         n_cells = (8, 8, 8)
@@ -185,6 +185,6 @@ class TestCovers:
         )
         mesh: Array[Patch] = Array(
             elements=patches,
-            placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
+            placement=Placement({0: 0, 1: 0}),
         )
         assert not covers(mesh, Extent((slice(0, 8),)))

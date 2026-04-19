@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.computation.array import Array, ComponentId
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.mesh import partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
@@ -53,27 +53,24 @@ class TestDiscretizeOperator:
         mesh = _mesh_1d(8, 1)
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = f.discretize(mesh)
-        assert jnp.allclose(
-            field[ComponentId(0)], mesh[ComponentId(0)].node_positions(0)
-        )
+        assert jnp.allclose(field[0], mesh[0].node_positions(0))
 
     def test_multiblock_each_segment_samples_its_own_block(self) -> None:
         mesh = _mesh_1d(8, 2)
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = f.discretize(mesh)
         for i, block in enumerate(mesh.elements):
-            cid = ComponentId(i)
-            assert jnp.allclose(field[cid], block.node_positions(0))
+            assert jnp.allclose(field[i], block.node_positions(0))
 
     def test_2d_function_evaluated_at_cell_center_meshgrid(self) -> None:
         mesh = _mesh_2d((4, 6), (1, 1))
         f = ContinuousField(name="phi", fn=lambda x, y: x + y)
         field = f.discretize(mesh)
-        block = mesh[ComponentId(0)]
+        block = mesh[0]
         xs = block.node_positions(0)
         ys = block.node_positions(1)
         X, Y = jnp.meshgrid(xs, ys, indexing="ij")
-        assert jnp.allclose(field[ComponentId(0)], X + Y)
+        assert jnp.allclose(field[0], X + Y)
 
 
 class TestDiscretizeCodomain:
@@ -84,7 +81,7 @@ class TestDiscretizeCodomain:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = f.discretize(mesh)
         for i, block in enumerate(mesh.elements):
-            assert field[ComponentId(i)].shape == block.shape
+            assert field[i].shape == block.shape
 
     def test_payload_dtype_is_float64(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: x)

@@ -13,7 +13,7 @@ from typing import Any, cast
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.computation.array import Array, ComponentId
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import (
     Extent,
     intersect_extents,
@@ -53,16 +53,15 @@ class GlobalSum(Function):
         axis_name: Hashable | None = None,
     ) -> jax.Array:
         local = jnp.asarray(0.0, dtype=jnp.float64)
+        local_ids = mesh.placement.segments_for_rank(rank)
         for i in range(len(mesh.elements)):
-            cid = ComponentId(i)
-            if cid not in mesh.placement.segments_for_rank(rank):
+            if i not in local_ids:
                 continue
-            block = mesh[cid]
-            interior = block.index_extent
+            interior = mesh[i].index_extent
             overlap = intersect_extents(interior, extent)
             if overlap is None:
                 continue
-            local = local + jnp.sum(field[cid][payload_slices(interior, overlap)])
+            local = local + jnp.sum(field[i][payload_slices(interior, overlap)])
 
         if axis_name is None:
             return local

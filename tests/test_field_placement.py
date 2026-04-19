@@ -19,7 +19,7 @@ from typing import Any
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.computation.array import ComponentId, Placement
+from cosmic_foundry.computation.array import Placement
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import Stencil
 from cosmic_foundry.mesh import covers, partition_domain
@@ -71,27 +71,27 @@ def phi() -> jnp.ndarray:
 
 
 def test_placement_owner_lookup() -> None:
-    p = Placement({ComponentId(0): 0, ComponentId(1): 1})
-    assert p.owner(ComponentId(0)) == 0
-    assert p.owner(ComponentId(1)) == 1
+    p = Placement({0: 0, 1: 1})
+    assert p.owner(0) == 0
+    assert p.owner(1) == 1
 
 
 def test_placement_segments_for_rank() -> None:
-    p = Placement({ComponentId(0): 0, ComponentId(1): 0, ComponentId(2): 1})
-    assert p.segments_for_rank(0) == {ComponentId(0), ComponentId(1)}
-    assert p.segments_for_rank(1) == {ComponentId(2)}
+    p = Placement({0: 0, 1: 0, 2: 1})
+    assert p.segments_for_rank(0) == {0, 1}
+    assert p.segments_for_rank(1) == {2}
     assert p.segments_for_rank(99) == frozenset()
 
 
 def test_placement_rejects_unknown_segment() -> None:
-    p = Placement({ComponentId(0): 0})
+    p = Placement({0: 0})
     with pytest.raises(KeyError):
-        p.owner(ComponentId(99))
+        p.owner(99)
 
 
 def test_placement_rejects_negative_rank() -> None:
     with pytest.raises(ValueError, match="non-negative"):
-        Placement({ComponentId(0): -1})
+        Placement({0: -1})
 
 
 def test_placement_rejects_empty() -> None:
