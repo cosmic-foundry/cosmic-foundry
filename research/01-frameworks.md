@@ -185,7 +185,7 @@ surrounding `ParallelFor`; they are unaware of the pack size.
 The implication for Cosmic Foundry: task sequencing (latency hiding)
 and domain batching (kernel-launch amortization) are separate
 responsibilities that should live in separate layers. See
-`roadmap/epoch-01-kernels.md` §Design constraints.
+`ROADMAP.md`.
 
 ## 1.4 Charm++
 
