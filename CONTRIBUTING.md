@@ -56,8 +56,8 @@ same PR. See [AI.md](AI.md) for the full ADR process.
 
 ## Code standards
 
-See [docs/coding-standards.md](docs/coding-standards.md) for style,
-type-annotation, docstring format, and test requirements.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for style, type-annotation, docstring
+format, and test requirements.
 
 ## Getting help
 

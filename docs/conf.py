@@ -50,7 +50,6 @@ html_static_path = ["_static"]
 html_title = f"Cosmic Foundry {version}"
 
 # Canonical base URL — must match the GitHub Pages subpath.
-# See ADR-0004 §Amendments for the hosting and URL-structure decision.
 html_baseurl = "https://cosmic-foundry.github.io/cosmic-foundry/"
 
 # ---------------------------------------------------------------------------
