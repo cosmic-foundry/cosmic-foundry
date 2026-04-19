@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from cosmic_foundry.function import Function
+from cosmic_foundry.theory.function import Function
 
 
 class Field(Function):

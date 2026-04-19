@@ -14,7 +14,7 @@ import jax.numpy as jnp
 
 from cosmic_foundry.computation.kernels import execute_pointwise
 from cosmic_foundry.descriptor import AccessPattern, Extent, Region
-from cosmic_foundry.function import Function
+from cosmic_foundry.theory.function import Function
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write

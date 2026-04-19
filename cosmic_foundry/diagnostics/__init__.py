@@ -13,10 +13,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.descriptor import Extent, Region
-from cosmic_foundry.function import Function
 from cosmic_foundry.mesh import Patch
 from cosmic_foundry.record import Array, ComponentId, Record
-from cosmic_foundry.sink import Sink
+from cosmic_foundry.theory.function import Function
+from cosmic_foundry.theory.sink import Sink
 
 
 class DiagnosticReducer(Function):

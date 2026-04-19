@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.smooth_manifold import SmoothManifold
+from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 
 class PseudoRiemannianManifold(SmoothManifold):

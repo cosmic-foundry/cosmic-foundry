@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 
 from cosmic_foundry.descriptor import Extent
-from cosmic_foundry.discretization import Discretization
-from cosmic_foundry.indexed_set import IndexedSet
-from cosmic_foundry.located_discretization import LocatedDiscretization
 from cosmic_foundry.mesh import Patch
-from cosmic_foundry.modal_discretization import ModalDiscretization
-from cosmic_foundry.set import Set
-from cosmic_foundry.smooth_manifold import SmoothManifold
+from cosmic_foundry.theory.discretization import Discretization
+from cosmic_foundry.theory.indexed_set import IndexedSet
+from cosmic_foundry.theory.located_discretization import LocatedDiscretization
+from cosmic_foundry.theory.modal_discretization import ModalDiscretization
+from cosmic_foundry.theory.set import Set
+from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 # ---------------------------------------------------------------------------
 # Instantiation guards

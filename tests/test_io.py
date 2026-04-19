@@ -15,9 +15,9 @@ import pytest
 
 from cosmic_foundry.computation.kernels import execute_pointwise
 from cosmic_foundry.descriptor import AccessPattern, Extent, Region
-from cosmic_foundry.function import Function
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
 from cosmic_foundry.observability import StructuredFormatter, configure
+from cosmic_foundry.theory.function import Function
 
 # ---------------------------------------------------------------------------
 # Shared Op

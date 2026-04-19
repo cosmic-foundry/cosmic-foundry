@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.pseudo_riemannian_manifold import PseudoRiemannianManifold
+from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 
 
 class RiemannianManifold(PseudoRiemannianManifold):  # noqa: B024

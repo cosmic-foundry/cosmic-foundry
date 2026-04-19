@@ -24,15 +24,6 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.discretization import Discretization  # noqa: E402
-from cosmic_foundry.field import (  # noqa: E402
-    ContinuousField,
-    Field,
-    ScalarField,
-    TensorField,
-)
-from cosmic_foundry.function import Function  # noqa: E402
-from cosmic_foundry.indexed_set import IndexedSet  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
@@ -40,7 +31,6 @@ from cosmic_foundry.io import (  # noqa: E402
     merge_rank_files,
     write_array,
 )
-from cosmic_foundry.located_discretization import LocatedDiscretization  # noqa: E402
 from cosmic_foundry.mesh import (  # noqa: E402
     PartitionDomain,
     Patch,
@@ -48,17 +38,25 @@ from cosmic_foundry.mesh import (  # noqa: E402
     fill_halo,
     partition_domain,
 )
-from cosmic_foundry.modal_discretization import ModalDiscretization  # noqa: E402
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
-from cosmic_foundry.pseudo_riemannian_manifold import (  # noqa: E402
-    PseudoRiemannianManifold,
-)
 from cosmic_foundry.record import Array, ComponentId, Placement, Record  # noqa: E402
-from cosmic_foundry.riemannian_manifold import RiemannianManifold  # noqa: E402
-from cosmic_foundry.set import Set  # noqa: E402
-from cosmic_foundry.sink import Sink  # noqa: E402
-from cosmic_foundry.smooth_manifold import SmoothManifold  # noqa: E402
-from cosmic_foundry.source import Source  # noqa: E402
+from cosmic_foundry.theory import (  # noqa: E402
+    ContinuousField,
+    Discretization,
+    Field,
+    Function,
+    IndexedSet,
+    LocatedDiscretization,
+    ModalDiscretization,
+    PseudoRiemannianManifold,
+    RiemannianManifold,
+    ScalarField,
+    Set,
+    Sink,
+    SmoothManifold,
+    Source,
+    TensorField,
+)
 
 __all__ = [
     "__version__",
