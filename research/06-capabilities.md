@@ -6,7 +6,7 @@
 > [06-11-visualization.md](06-11-visualization.md);
 > §6.12 (licensing and openness landscape) lives in
 > [06-12-licensing.md](06-12-licensing.md). §-numbers are preserved
-> so cross-references from the roadmap and ADRs remain stable.
+> so cross-references from the roadmap remain stable.
 
 The following list enumerates every capability that appears in at
 least one of the codes above. A simulation engine aiming to be able

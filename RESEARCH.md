@@ -16,8 +16,8 @@ can grow independently without inflating the rest.
 - `research/06-11-visualization.md` — §6.11 visualization and
   science-communication landscape.
 - `research/06-12-licensing.md` — §6.12 licensing landscape.
-- `research/07-implications.md` — §7 implications for Cosmic Foundry.
+- `research/08-vv-methodology.md` — §8 V&amp;V methodology (Roache,
+  Oberkampf &amp; Roy, MMS, PCMM).
 
-See also [`ROADMAP.md`](ROADMAP.md) for the development sequence the
-research is feeding into, and [`ARCHITECTURE.md`](ARCHITECTURE.md)
-for architectural decisions.
+See also [`ROADMAP.md`](ROADMAP.md) for the development sequence and
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for architectural decisions.

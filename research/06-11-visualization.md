@@ -9,11 +9,9 @@
 
 Visualization in the surveyed codes is almost entirely batch,
 post-hoc, and desktop-shaped — plotfiles and HDF5 go out, analysis
-frameworks (yt, VisIt, ParaView, Ascent) come in. Cosmic Foundry
-treats visualization as a first-class engine capability serving
-both scientific publication and public-facing science
-communication, so the relevant landscape is broader than the
-traditional HPC analysis stack surveyed in §6.10.
+frameworks (yt, VisIt, ParaView, Ascent) come in. The landscape
+relevant to a modern engine is broader than that traditional HPC
+analysis stack.
 
 **Python analysis ecosystem.**
 
@@ -48,8 +46,8 @@ traditional HPC analysis stack surveyed in §6.10.
   lightweight in-client re-simulation.
 - `CesiumJS` (Apache-2 library, asset licenses vary) — spherical
   geometry and streaming tiles; relevant for CMB or
-  celestial-sphere visualizations, but asset-licensing footprint
-  requires an explicit ADR before adoption.
+  celestial-sphere visualizations; asset-licensing footprint
+  requires evaluation before adoption.
 - `OpenSeadragon` / DeepZoom / Neuroglancer tile servers — tiled
   pyramids for very large 2-D and 3-D fields.
 
@@ -66,8 +64,8 @@ traditional HPC analysis stack surveyed in §6.10.
   viewer.
 - `Parquet` (Apache-2) — columnar format for particle and halo
   catalogs; streams well to notebook and browser consumers.
-- `ADIOS2` — HPC-grade, excellent I/O but weak browser story;
-  complementary to Zarr, not a substitute.
+- `ADIOS2` — HPC-grade, optimized for high-throughput parallel I/O
+  rather than browser consumers; complementary to Zarr, not a substitute.
 
 **Color and typography.**
 
@@ -79,7 +77,7 @@ traditional HPC analysis stack surveyed in §6.10.
   equally appropriate for astrophysical diverging / cyclic data.
 - Cinematic renders typically call for bespoke palettes informed
   by perceptual uniformity rather than the default `jet`-era
-  rainbows still common in legacy codes.
+  rainbows still common in older codes.
 
 **Unit-aware plotting.**
 
@@ -99,8 +97,8 @@ traditional HPC analysis stack surveyed in §6.10.
   al.); persists pre-rendered viewpoints so exploratory analysis
   is a database query, not a re-render.
 - `ParaView Catalyst` and `VisIt libsim` — historical in-situ
-  APIs; relevant mainly as algorithmic references, since Cosmic
-  Foundry does not link compiled libraries.
+  APIs; relevant mainly as algorithmic references for engines
+  that avoid compiled library dependencies.
 
 **Science-communication surfaces.**
 
@@ -127,14 +125,3 @@ traditional HPC analysis stack surveyed in §6.10.
   comparison is brittle.
 - `reg-viz`-style tooling — browser-side visual diffing for the
   web gallery and explainer pages.
-
-**Implication for Cosmic Foundry.** The engine should (i) commit
-to Zarr alongside HDF5 at the first plotfile writer so that
-browser consumers are first-class; (ii) own a minimal in-engine
-camera / slice-sampler / volume-raymarcher implemented in JAX so
-the same code serves CPU, GPU, and WebGPU rendering; (iii) fix a
-house style in colormaps, units, and typography before the first
-physics module lands; and (iv) treat the science-communication
-site — docs, gallery, explainers — as a product with
-accessibility and performance budgets, not a byproduct of the
-test suite.
