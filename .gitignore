@@ -40,7 +40,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Environment
-miniforge/
+environment/miniforge/
 
 # Tool-specific AI-agent directories. The project-artifact layer
 # (pr-review/) is tracked; any tool-specific files that agents

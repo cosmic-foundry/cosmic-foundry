@@ -163,9 +163,9 @@ DO NOT use system Python or any external `python`/`pytest` command.
 
 ### Setup (One-Time)
 
-If `miniforge/` directory is missing:
+If `environment/miniforge/` directory is missing:
 ```bash
-bash environment/setup_environment.sh
+bash scripts/setup_environment.sh
 ```
 
 ### Before Any Work
@@ -190,7 +190,7 @@ is:
 `start_agent.sh` activates the environment automatically before
 launching the agent. Alternatively, activate manually:
 ```bash
-source environment/activate_environment.sh
+source scripts/activate_environment.sh
 ```
 
 **If the env check passes but either follow-up check fails**, re-run

@@ -76,7 +76,7 @@ In practice this means:
    > session has been restarted this way, or manually activates the
    > env:
    > ```bash
-   > source environment/activate_environment.sh
+   > source scripts/activate_environment.sh
    > ```
    > then re-launches the agent from that shell.
 

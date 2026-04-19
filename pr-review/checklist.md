@@ -76,7 +76,7 @@ when pre-commit now catches them.
 - **Duplicated install/activate steps in docs.** *(pending
   pre-commit)* If the PR adds a manual `pip install -e` or
   `pre-commit install` step to docs, and those already run
-  inside `environment/setup_environment.sh`, the doc should
+  inside `scripts/setup_environment.sh`, the doc should
   point at the script instead.
 
 ## Project framing and tone
