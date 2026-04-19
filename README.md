@@ -50,7 +50,7 @@ Start here:
 | `tests/` | Test suite. `tests/utils/` holds shared stencil and convergence helpers. | — |
 | `benchmarks/` | Performance benchmarks (roofline, throughput). | — |
 | `replication/` | Formula register and replication targets. | `replication/formulas.md` |
-| `derivations/` | SymPy derivation documents for physics capabilities (Lane B/C). | — |
+| `scripts/generate_kernels.py` | Re-runs `_derive()` in each kernel module and splices fresh constants in. | — |
 | `docs/research/` | Research survey — code landscape, capabilities, licensing, V&V methodology. | `docs/research/index.md` |
 | `pr-review/` | Adversarial PR review checklist and architecture stress-review checklist. | `pr-review/README.md` |
 | `scripts/` | Agent health check, PR review wrappers, session startup, environment setup and activation. | `scripts/agent_health_check.sh` |

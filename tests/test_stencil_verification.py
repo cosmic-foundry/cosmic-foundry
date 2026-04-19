@@ -84,11 +84,13 @@ def test_fd_coefficients_rejects_zeroth_derivative() -> None:
 
 def test_seven_point_laplacian_neighbor_weights_match_derivation() -> None:
     """Each of the 6 face-neighbor weights must equal the value derived in
-    derivations/laplacian_stencil.py (Taylor expansion → NEIGHBOR_WEIGHT).
+    cosmic_foundry/computation/laplacian.py (Taylor expansion → NEIGHBOR_WEIGHT).
     Importing the derivation module runs its SymPy assertions as a side-effect.
     """
-    from cosmic_foundry.computation.laplacian import seven_point_laplacian
-    from derivations.laplacian_stencil import NEIGHBOR_WEIGHT
+    from cosmic_foundry.computation.laplacian import (
+        NEIGHBOR_WEIGHT,
+        seven_point_laplacian,
+    )
 
     face_neighbors = [
         (1, 0, 0),
@@ -103,20 +105,22 @@ def test_seven_point_laplacian_neighbor_weights_match_derivation() -> None:
     for offset, w in weights.items():
         assert w == pytest.approx(NEIGHBOR_WEIGHT), (
             f"Neighbor weight at offset {offset} is {w}; "
-            f"expected {NEIGHBOR_WEIGHT} (derivations/laplacian_stencil.py)"
+            f"expected {NEIGHBOR_WEIGHT} (cosmic_foundry/computation/laplacian.py)"
         )
 
 
 def test_seven_point_laplacian_center_weight_matches_derivation() -> None:
     """Center weight must equal the value derived in
-    derivations/laplacian_stencil.py (3 × 1D center = −6).
+    cosmic_foundry/computation/laplacian.py (3 × 1D center = −6).
     Importing the derivation module runs its SymPy assertions as a side-effect.
     """
-    from cosmic_foundry.computation.laplacian import seven_point_laplacian
-    from derivations.laplacian_stencil import CENTER_WEIGHT
+    from cosmic_foundry.computation.laplacian import (
+        CENTER_WEIGHT,
+        seven_point_laplacian,
+    )
 
     weights = probe_operator_weights(seven_point_laplacian, [(0, 0, 0)])
     assert weights[(0, 0, 0)] == pytest.approx(CENTER_WEIGHT), (
         f"Center weight is {weights[(0, 0, 0)]}; "
-        f"expected {CENTER_WEIGHT} (derivations/laplacian_stencil.py)"
+        f"expected {CENTER_WEIGHT} (cosmic_foundry/computation/laplacian.py)"
     )

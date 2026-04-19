@@ -1,7 +1,7 @@
-"""Drift check: generated kernel files must match fresh derivation output.
+"""Drift check: generated constants blocks must match fresh derivation output.
 
-If this test fails, the committed kernel file has drifted from its derivation.
-Regenerate with: python scripts/generate_kernels.py
+If this test fails, the constants in the kernel file have drifted from the
+derivation. Regenerate with: python scripts/generate_kernels.py
 """
 
 from __future__ import annotations
@@ -10,20 +10,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 
+_BEGIN = (
+    "# BEGIN GENERATED — do not edit; regenerate with scripts/generate_kernels.py\n"
+)
+_END = "# END GENERATED\n"
 
-def test_laplacian_kernel_matches_derivation() -> None:
-    """cosmic_foundry/computation/laplacian.py must be the current output of
-    derivations/laplacian_stencil.generate_kernel_source().
 
-    Importing the derivation runs its SymPy assertions as a side-effect,
-    so this test simultaneously verifies the Taylor-expansion algebra and
-    the committed kernel file.
+def _extract_generated_block(path: Path) -> str:
+    source = path.read_text()
+    start = source.index(_BEGIN) + len(_BEGIN)
+    end = source.index(_END)
+    return source[start:end]
+
+
+def test_laplacian_constants_match_derivation() -> None:
+    """The generated constants block in laplacian.py must match a fresh
+    derivation run. Calling generate() runs the SymPy Taylor-expansion
+    assertions as a side-effect, so this test simultaneously verifies the
+    algebra and the committed constants.
     """
-    from derivations.laplacian_stencil import generate_kernel_source
+    from cosmic_foundry.computation.laplacian import generate
 
-    committed = (ROOT / "cosmic_foundry" / "computation" / "laplacian.py").read_text()
-    fresh = generate_kernel_source()
-    assert committed == fresh, (
-        "cosmic_foundry/computation/laplacian.py is out of sync with the derivation. "
-        "Regenerate with: python scripts/generate_kernels.py"
+    committed = _extract_generated_block(
+        ROOT / "cosmic_foundry" / "computation" / "laplacian.py"
+    )
+    assert committed == generate(), (
+        "cosmic_foundry/computation/laplacian.py constants are out of sync "
+        "with the derivation. Regenerate with: python scripts/generate_kernels.py"
     )
