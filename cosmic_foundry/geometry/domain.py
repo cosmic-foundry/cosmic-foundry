@@ -13,8 +13,8 @@ class Domain:
 
     Domain is the continuous description of a simulation region: which
     manifold it lives on (encoding dimension and geometry) and where it
-    sits in physical space.  It replaces the raw keyword arguments
-    previously passed to PartitionDomain.execute.
+    sits in physical space.  PartitionDomain.execute takes a Domain
+    rather than raw origin/size keyword arguments.
 
     Required:
         manifold — the manifold the domain lives on; ndim is derived from it
