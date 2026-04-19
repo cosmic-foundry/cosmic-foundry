@@ -135,9 +135,37 @@ def _slice_length(axis_slice: slice) -> int:
     return length
 
 
+def intersect_extents(a: Extent, b: Extent) -> Extent | None:
+    """Return the intersection of two Extents, or None if they do not overlap."""
+    if a.ndim != b.ndim:
+        msg = "Cannot intersect Extents with different ndim"
+        raise ValueError(msg)
+    slices: list[slice] = []
+    for sa, sb in zip(a.slices, b.slices, strict=False):
+        start = max(sa.start, sb.start)
+        stop = min(sa.stop, sb.stop)
+        if start >= stop:
+            return None
+        slices.append(slice(start, stop))
+    return Extent(tuple(slices))
+
+
+def payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
+    """Return slices that index *child* within an array sized for *parent*."""
+    return tuple(
+        slice(
+            child_slice.start - parent_slice.start,
+            child_slice.stop - parent_slice.start,
+        )
+        for parent_slice, child_slice in zip(parent.slices, child.slices, strict=False)
+    )
+
+
 __all__ = [
     "AccessPattern",
     "Descriptor",
     "Extent",
     "Region",
+    "intersect_extents",
+    "payload_slices",
 ]

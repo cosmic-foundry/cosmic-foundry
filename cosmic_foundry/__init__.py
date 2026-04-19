@@ -19,11 +19,8 @@ from cosmic_foundry.computation.descriptor import (  # noqa: E402
     Extent,
     Region,
 )
-from cosmic_foundry.computation.kernels import (  # noqa: E402
-    GlobalSum,
-    execute_pointwise,  # noqa: E402
-    global_sum,
-)
+from cosmic_foundry.computation.reductions import GlobalSum, global_sum  # noqa: E402
+from cosmic_foundry.computation.stencil import execute_pointwise  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
