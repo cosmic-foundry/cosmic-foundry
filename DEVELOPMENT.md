@@ -85,6 +85,20 @@ discipline.
   Set `COSMIC_FOUNDRY_PR_REPO` to override the default repository
   (`cosmic-foundry/cosmic-foundry`).
 
+### Pre-PR checklist
+
+Before opening or pushing to a PR:
+
+- [ ] Run `pre-commit run --all-files` locally and fix any failures
+- [ ] Read `STATUS.md` to understand the current planned work
+- [ ] Determine if this PR completes any of the planned items
+  - [ ] **If yes:** Add the item to the `## Completed` section with the PR reference
+  - [ ] **If yes:** Horizon-scan the next items — are they fully specified? Flesh out details if needed
+  - [ ] **If yes:** Verify no inconsistencies between this change and the next planned items
+  - [ ] **If no:** Note "No change to roadmap position" in the PR description
+
+This ensures `STATUS.md` stays current: completed items are moved to `Completed` and documented with the PR that finished them; upcoming items are fully specified before the current one lands.
+
 ### Commit size
 
 - Code commits target approximately 150 lines of diff, with a
