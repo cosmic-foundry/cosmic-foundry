@@ -37,7 +37,7 @@ def test_op_execute_runs_kernel() -> None:
     axes = jnp.indices((n, n, n), dtype=jnp.float64)
     phi = axes[0] ** 2 + axes[1] ** 2 + axes[2] ** 2
     extent = Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1)))
-    result = seven_point_laplacian(Array((phi,)), extent=extent)
+    result = seven_point_laplacian.execute(Array((phi,)), extent=extent)
     assert result.shape == (n - 2, n - 2, n - 2)
     assert jnp.allclose(result, 6.0)
 

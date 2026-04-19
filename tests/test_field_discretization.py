@@ -11,7 +11,7 @@ from cosmic_foundry.theory.field import ContinuousField
 
 
 def _mesh_1d(n_cells: int, n_blocks: int) -> Array:
-    return partition_domain(
+    return partition_domain.execute(
         domain_origin=(0.0,),
         domain_size=(1.0,),
         n_cells=(n_cells,),
@@ -23,7 +23,7 @@ def _mesh_2d(
     n_cells: tuple[int, int],
     blocks_per_axis: tuple[int, int],
 ) -> Array:
-    return partition_domain(
+    return partition_domain.execute(
         domain_origin=(0.0, 0.0),
         domain_size=(1.0, 1.0),
         n_cells=n_cells,

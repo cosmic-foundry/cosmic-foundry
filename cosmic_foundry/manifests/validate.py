@@ -38,7 +38,7 @@ def validate_manifest(manifest: dict[str, Any], schema_name: str) -> None:
     Raises jsonschema.ValidationError if the manifest is invalid.
     schema_name: one of 'catalog', 'validation-set', 'artifact-provenance'.
     """
-    schema = load_schema(schema_name)
+    schema = load_schema.execute(schema_name)
     jsonschema.validate(instance=manifest, schema=schema)
 
 

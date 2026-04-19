@@ -100,23 +100,23 @@ def test_provenance_write_sidecar(tmp_path: Path) -> None:
 
 
 def test_load_schema_catalog() -> None:
-    schema = load_schema("catalog")
+    schema = load_schema.execute("catalog")
     assert schema["title"] == "Upstream data catalog manifest"
 
 
 def test_load_schema_validation_set() -> None:
-    schema = load_schema("validation-set")
+    schema = load_schema.execute("validation-set")
     assert schema["title"] == "Validation set manifest"
 
 
 def test_load_schema_artifact_provenance() -> None:
-    schema = load_schema("artifact-provenance")
+    schema = load_schema.execute("artifact-provenance")
     assert schema["title"] == "Validation artifact provenance sidecar"
 
 
 def test_load_schema_unknown_raises() -> None:
     with pytest.raises(FileNotFoundError):
-        load_schema("does-not-exist")
+        load_schema.execute("does-not-exist")
 
 
 def test_validate_manifest_valid_catalog() -> None:

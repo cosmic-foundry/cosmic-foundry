@@ -11,7 +11,7 @@ from cosmic_foundry.theory.field import ContinuousField
 
 
 def _make_1d_mesh() -> Array:
-    return partition_domain(
+    return partition_domain.execute(
         domain_origin=(0.0,),
         domain_size=(8.0,),
         n_cells=(8,),
@@ -51,7 +51,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
 
 def test_single_rank_fill_copies_2d_face_slab() -> None:
     """A full face slab is copied, not only one scalar cell."""
-    mesh = partition_domain(
+    mesh = partition_domain.execute(
         domain_origin=(0.0, 0.0),
         domain_size=(2.0, 3.0),
         n_cells=(4, 3),
