@@ -13,7 +13,7 @@ from typing import Any, cast
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.descriptor import AccessPattern, Region, _checked_bounds
+from cosmic_foundry.computation.descriptor import AccessPattern, Region, _checked_bounds
 
 
 def execute_pointwise(

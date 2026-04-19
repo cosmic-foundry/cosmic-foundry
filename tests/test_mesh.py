@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.computation.array import Array, ComponentId
-from cosmic_foundry.descriptor import Extent
+from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.mesh import Patch, covers, partition_domain
 
 

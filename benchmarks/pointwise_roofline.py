@@ -12,8 +12,8 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
+from cosmic_foundry.computation.descriptor import AccessPattern, Extent, Region
 from cosmic_foundry.computation.kernels import execute_pointwise
-from cosmic_foundry.descriptor import AccessPattern, Extent, Region
 from cosmic_foundry.theory.function import Function
 
 FLOAT64_BYTES = 8

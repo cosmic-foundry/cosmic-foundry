@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cosmic_foundry.descriptor import Extent
+from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.mesh import Patch
 from cosmic_foundry.theory.discretization import Discretization
 from cosmic_foundry.theory.indexed_set import IndexedSet
