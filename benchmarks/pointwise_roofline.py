@@ -14,8 +14,7 @@ import jax.numpy as jnp
 
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.laplacian import seven_point_laplacian
-from cosmic_foundry.computation.stencil import Stencil
+from cosmic_foundry.computation.stencil import Stencil, seven_point_laplacian
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write

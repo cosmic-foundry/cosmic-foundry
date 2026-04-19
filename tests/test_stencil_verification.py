@@ -7,7 +7,7 @@ those confirm the kernel produces correct *output* on a specific function;
 these confirm the kernel encodes correct *weights*, catching coefficient bugs
 that happen to cancel on simple smooth inputs.
 
-The production kernel (cosmic_foundry.computation.laplacian) is generated
+The production kernel (cosmic_foundry.computation.stencil) is generated
 from the derivation; the weight probe tests close the chain by verifying
 the generated kernel's behavior matches the derivation's exported constants.
 
@@ -84,10 +84,10 @@ def test_fd_coefficients_rejects_zeroth_derivative() -> None:
 
 def test_seven_point_laplacian_neighbor_weights_match_derivation() -> None:
     """Each of the 6 face-neighbor weights must equal the value derived in
-    cosmic_foundry/computation/laplacian.py (Taylor expansion → NEIGHBOR_WEIGHT).
+    cosmic_foundry/computation/stencil.py (Taylor expansion → NEIGHBOR_WEIGHT).
     Importing the derivation module runs its SymPy assertions as a side-effect.
     """
-    from cosmic_foundry.computation.laplacian import (
+    from cosmic_foundry.computation.stencil import (
         NEIGHBOR_WEIGHT,
         seven_point_laplacian,
     )
@@ -111,10 +111,10 @@ def test_seven_point_laplacian_neighbor_weights_match_derivation() -> None:
 
 def test_seven_point_laplacian_center_weight_matches_derivation() -> None:
     """Center weight must equal the value derived in
-    cosmic_foundry/computation/laplacian.py (3 × 1D center = −6).
+    cosmic_foundry/computation/stencil.py (3 × 1D center = −6).
     Importing the derivation module runs its SymPy assertions as a side-effect.
     """
-    from cosmic_foundry.computation.laplacian import (
+    from cosmic_foundry.computation.stencil import (
         CENTER_WEIGHT,
         seven_point_laplacian,
     )

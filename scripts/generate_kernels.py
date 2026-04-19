@@ -32,9 +32,9 @@ def splice(path: Path, block: str) -> None:
 
 
 def main() -> None:
-    from cosmic_foundry.computation.laplacian import generate
+    from cosmic_foundry.computation.stencil import generate
 
-    target = ROOT / "cosmic_foundry" / "computation" / "laplacian.py"
+    target = ROOT / "cosmic_foundry" / "computation" / "stencil.py"
     splice(target, generate())
     print(f"wrote {target.relative_to(ROOT)}")
 

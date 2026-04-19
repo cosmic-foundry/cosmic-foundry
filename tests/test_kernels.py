@@ -7,7 +7,7 @@ import pytest
 
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.laplacian import seven_point_laplacian
+from cosmic_foundry.computation.stencil import seven_point_laplacian
 
 
 def test_op_class_exposes_radii() -> None:
