@@ -68,5 +68,5 @@ Every simulation epoch must satisfy this checklist before it is considered verif
 
 ### Infrastructure
 
-1. M2: retire `adr/`; consolidate all live architectural decisions into `ARCHITECTURE.md`; consolidate `docs/`
+1. M2: complete (architectural decisions consolidated into `ARCHITECTURE.md`; `docs/` consolidated to index + API reference)
 2. Apply per-epoch verification standard to simulation Epoch 1 (convergence test for the Laplacian stencil)

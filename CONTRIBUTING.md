@@ -49,10 +49,8 @@ re-run the full setup script.
 
 ## Architectural decisions
 
-New decisions go in the appropriate architecture plane under
-`adr/object-level/` or `adr/meta-level/`. Copy `adr/adr-template.md`,
-fill it in, mark it Proposed, and add a line to `adr/README.md` in the
-same PR. See [AI.md](AI.md) for the full ADR process.
+New decisions go in [`ARCHITECTURE.md`](ARCHITECTURE.md) as a one-paragraph
+claim. See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the full process.
 
 ## Code standards
 
