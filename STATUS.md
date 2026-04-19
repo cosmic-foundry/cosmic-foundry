@@ -13,32 +13,27 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ## Current work
 
-**Generalize the derivation infrastructure into a reusable framework.**
-The sentinel splicing logic, hash computation, and `generate()` contract are
-currently hand-rolled inside `laplacian.py` and `scripts/generate_kernels.py`.
-Before rolling out to additional operators, extract these into shared utilities:
-a `_make_hash(constants)` helper and a `generate_constants_block(constants)`
-formatter in `cosmic_foundry/computation/_codegen.py`; sentinel strings as
-module-level constants shared between the generator script and the drift-check
-test; and `scripts/generate_kernels.py` generalized to discover and splice any
-module that exposes a `generate()` function. Each new kernel module then only
-needs to implement `_derive()` and call the shared utilities — no boilerplate
-to copy.
+**Implement auto-discovery for kernel module generation and testing.**
+`cosmic_foundry/computation/_codegen.py` now provides shared utilities
+(sentinels, hash, splice) and the derivation pattern is proven in
+`laplacian.py` with full kernel function body generation. The next step is to
+generalize the generator script and test suite:
 
-This includes generating the kernel function body itself. Currently
-`_seven_point_fn` is written by hand from the stencil geometry (six
-face-neighbor offsets, one center). The stencil offsets and their weights are
-both outputs of the derivation, so `generate()` should emit the pointwise
-function body — not just the scalar constants — from the derived offset/weight
-pairs. A hand-written kernel function is as much a gap against claim 5 as a
-hand-typed coefficient.
+1. Update `scripts/generate_kernels.py` to auto-discover all modules in
+   `cosmic_foundry/computation/` that expose a `generate()` function (skip
+   private `_*.py` modules), then splice their generated blocks in one pass.
+2. Update `tests/test_generated_kernels.py` to use the same discovery logic,
+   building a parameterized pytest test that verifies each kernel module's
+   generated block matches its derivation (drift check).
+
+Once auto-discovery is in place, the framework is ready to scale: each new
+kernel module only needs to implement `_derive()` and `generate()` with no
+generator/test boilerplate to copy.
 
 **Scale derivation pattern to the full codebase.**
-`cosmic_foundry/computation/laplacian.py` establishes the proof-of-concept:
-derivation (`_derive`), hash-verified generated constants block, and production
-kernel in a single file; `scripts/generate_kernels.py` splices fresh constants
-via `BEGIN GENERATED` / `END GENERATED` sentinels. The next step is to audit
-every existing operator and apply the same pattern: add `_derive()` and
-`generate()`, generate the constants block, and add a drift-check entry in
-`tests/test_generated_kernels.py`. Any operator without a `_derive()` is not
-yet compliant with architectural basis claim 5.
+After auto-discovery is complete, audit every existing operator
+(`cosmic_foundry/computation/*.py` excluding `_codegen.py`) and apply the
+pattern: add `_derive()` that returns constants and stencil structure, and
+`generate()` that emits the full block. The parameterized test will
+automatically verify each one. Any operator without a `_derive()` is not yet
+compliant with architectural basis claim 5.
