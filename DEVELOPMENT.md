@@ -93,12 +93,10 @@ Before opening or pushing to a PR:
 - [ ] Run `pre-commit run --all-files` locally and fix any failures
 - [ ] Read `STATUS.md` to understand the current planned work
 - [ ] Determine if this PR completes any of the planned items
-  - [ ] **If yes:** Remove the item from `STATUS.md` (do not create a "Completed" section; git log is the historical record)
+  - [ ] **If yes:** Remove the item from `STATUS.md`
   - [ ] **If yes:** Horizon-scan the next items — are they fully specified? Flesh out details if needed
   - [ ] **If yes:** Verify no inconsistencies between this change and the next planned items
   - [ ] **If no:** Note "No change to roadmap position" in the PR description
-
-This ensures `STATUS.md` stays current as the immediate implementation queue. Completed items are removed when their PR lands; the git log serves as historical record.
 
 ### Commit size
 
