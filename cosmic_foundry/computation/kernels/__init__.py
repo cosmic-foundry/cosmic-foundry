@@ -1,19 +1,30 @@
-"""Stencil kernel execution engine.
+"""Stencil kernel execution engine and field reductions.
 
 ``execute_pointwise`` applies a stencil Function over a structured-grid
 Region using JAX JIT compilation and optional vmap for block batching.
+
+``GlobalSum`` sums field values over patch interiors with optional
+MPI all-reduce.
 """
 
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
+from dataclasses import dataclass
 from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.computation.descriptor import AccessPattern, Region, _checked_bounds
+from cosmic_foundry.computation.array import Array, ComponentId
+from cosmic_foundry.computation.descriptor import (
+    AccessPattern,
+    Extent,
+    Region,
+    _checked_bounds,
+)
+from cosmic_foundry.theory.function import Function
 
 
 def execute_pointwise(
@@ -107,6 +118,82 @@ def _validate_region_access(
                 raise ValueError(msg)
 
 
+@dataclass(frozen=True)
+class GlobalSum(Function):
+    """Sum field values over local interiors and optionally all-reduce them.
+
+    Function:
+        domain   — (mesh: Array[Patch], f_h : Ω_h^int → ℝ) — block mesh and
+                   a discrete scalar field on interior grid points, intersected
+                   with the given region
+        codomain — ℝ (a real number; field evaluated at a single point)
+        operator — (mesh, f_h, region) ↦ Σ_{x ∈ Ω_h^int ∩ region} f_h(x)
+
+    Unweighted grid-point sum. To approximate ∫_Ω f dΩ, multiply by h^d
+    where h is the grid spacing and d is the spatial dimension.
+
+    Without *axis_name*, returns the rank-local sum. Supplying a JAX
+    parallel-map axis name applies ``jax.lax.psum`` and returns the global
+    sum inside that mapped context.
+
+    Exact: Θ = ∅ — unweighted sum; no approximation introduced.
+    """
+
+    def execute(
+        self,
+        mesh: Any,
+        field: Array[Any],
+        region: Region,
+        rank: int,
+        *,
+        axis_name: Hashable | None = None,
+    ) -> jax.Array:
+        local = jnp.asarray(0.0, dtype=jnp.float64)
+        for i in range(len(mesh.elements)):
+            cid = ComponentId(i)
+            if cid not in mesh.placement.segments_for_rank(rank):
+                continue
+            block = mesh[cid]
+            interior = block.index_extent
+            overlap = _intersect_extents(interior, region.extent)
+            if overlap is None:
+                continue
+            local = local + jnp.sum(field[cid][_payload_slices(interior, overlap)])
+
+        if axis_name is None:
+            return local
+        return cast(jax.Array, jax.lax.psum(local, axis_name))
+
+
+global_sum = GlobalSum()
+
+
+def _payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
+    return tuple(
+        slice(
+            child_slice.start - parent_slice.start,
+            child_slice.stop - parent_slice.start,
+        )
+        for parent_slice, child_slice in zip(parent.slices, child.slices, strict=False)
+    )
+
+
+def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
+    if a.ndim != b.ndim:
+        msg = "Cannot intersect Extents with different ndim"
+        raise ValueError(msg)
+    slices: list[slice] = []
+    for sa, sb in zip(a.slices, b.slices, strict=False):
+        start = max(sa.start, sb.start)
+        stop = min(sa.stop, sb.stop)
+        if start >= stop:
+            return None
+        slices.append(slice(start, stop))
+    return Extent(tuple(slices))
+
+
 __all__ = [
+    "GlobalSum",
     "execute_pointwise",
+    "global_sum",
 ]
