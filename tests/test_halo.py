@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.computation.array import Array, ComponentId
-from cosmic_foundry.computation.descriptor import AccessPattern
 from cosmic_foundry.mesh import fill_halo, partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
@@ -24,7 +23,7 @@ def _make_1d_mesh(n_ranks: int = 1) -> Array:
 def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
     """Ghost cells at the shared face are filled from the neighbor interior."""
     mesh = _make_1d_mesh()
-    access = AccessPattern((1,))
+    access = (1,)
 
     f = ContinuousField(name="phi", fn=lambda x: x)
     field = f.discretize(mesh)
@@ -60,7 +59,7 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
         blocks_per_axis=(2, 1),
         n_ranks=1,
     )
-    access = AccessPattern((1, 1))
+    access = (1, 1)
 
     # f(x, y) = 10*x + y so each block has distinct values
     f = ContinuousField(name="phi", fn=lambda x, y: 10.0 * x + y)
@@ -81,7 +80,7 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
 
 def test_fill_halo_returns_new_array_without_mutating_original() -> None:
     mesh = _make_1d_mesh()
-    access = AccessPattern((1,))
+    access = (1,)
 
     f = ContinuousField(name="phi", fn=lambda x: x)
     field = f.discretize(mesh)
@@ -96,7 +95,7 @@ def test_fill_halo_returns_new_array_without_mutating_original() -> None:
 
 def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> None:
     mesh = _make_1d_mesh(n_ranks=2)
-    access = AccessPattern((1,))
+    access = (1,)
 
     f = ContinuousField(name="phi", fn=lambda x: x)
     field = f.discretize(mesh)
@@ -108,7 +107,7 @@ def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> N
 def test_interior_values_preserved_after_fill() -> None:
     """Interior values in the returned array must equal the original field."""
     mesh = _make_1d_mesh()
-    access = AccessPattern((1,))
+    access = (1,)
 
     f = ContinuousField(name="phi", fn=lambda x: x * x)
     field = f.discretize(mesh)

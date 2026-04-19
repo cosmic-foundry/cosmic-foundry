@@ -10,7 +10,6 @@ import numpy as np
 
 from cosmic_foundry.computation.array import Array, ComponentId, Placement
 from cosmic_foundry.computation.descriptor import (
-    AccessPattern,
     Extent,
     intersect_extents,
     payload_slices,
@@ -143,7 +142,7 @@ def covers(mesh: Array[Patch], extent: Extent) -> bool:
 def fill_halo(
     mesh: Array[Patch],
     field: Array[Any],
-    access_pattern: AccessPattern,
+    radii: tuple[int, ...],
     rank: int,
 ) -> Array[Any]:
     """Return a new Array[T] with halo-expanded payloads.
@@ -152,7 +151,7 @@ def fill_halo(
     from same-rank neighbor interiors.  Each element of *field* must have a
     shape equal to patch.index_extent.shape (i.e. the interior, as returned by
     discretize()).  The returned Array has halo-sized elements:
-    patch.index_extent.expand(access_pattern).shape.  Ghost-cell values are
+    patch.index_extent.expand(radii).shape.  Ghost-cell values are
     copied from the interior of neighboring patches owned by the same rank.
     Multi-rank halo exchange is not implemented; a NotImplementedError is
     raised if a ghost cell's source lives on a different rank.
@@ -165,7 +164,7 @@ def fill_halo(
     for cid in local_ids:
         patch = mesh[cid]
         interior = patch.index_extent
-        halo_extent = interior.expand(access_pattern)
+        halo_extent = interior.expand(radii)
 
         expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].dtype)
         expanded = expanded.at[payload_slices(halo_extent, interior)].set(field[cid])
