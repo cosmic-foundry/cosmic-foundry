@@ -1,102 +1,133 @@
-# Project Status
+# Cosmic Foundry — Status
 
-> **Keep this file current.** Update it as part of any PR that completes a
-> milestone, starts a new epoch, or meaningfully changes what work is next.
-> Maintenance and tooling PRs that do not advance the roadmap may note
-> "No change to roadmap position."
+This file is the navigation anchor for the repository. It tells you
+where to find the authoritative description of each part of the codebase
+and describes planned modules that do not yet have code.
+
+For cross-cutting architectural decisions and open design questions, see
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
+For development workflow and contribution process, see
+[`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 ---
 
-## Current position
+## How to read this repo
 
-**Object-level track:** Epoch 2 — Mesh and AMR — in progress.
+The code is the authoritative architecture description. Start here:
 
-All design prerequisites resolved. Implementation underway per the
-sequencing plan in `roadmap/implementation/epoch-02-mesh.md`.
+| Directory | What it is | Read first |
+|---|---|---|
+| `cosmic_foundry/theory/` | Pure mathematical ABCs — sets, manifolds, discretizations, functions, fields. No JAX dependency. | `theory/__init__.py` |
+| `cosmic_foundry/computation/` | Distance-1 concrete implementations of theory ABCs. JAX-backed. | `computation/__init__.py` |
+| `cosmic_foundry/mesh/` | Spatial partitioning: uniform Cartesian patches, domain partition, halo fill. | `mesh/__init__.py` |
+| `cosmic_foundry/io/` | Array I/O — write to HDF5, merge rank files. | `io/__init__.py` |
+| `cosmic_foundry/observability/` | Structured logging. | `observability/__init__.py` |
+| `cosmic_foundry/manifests/` | Manifest infrastructure — HTTP client, schema validation, provenance. | `manifests/__init__.py` |
+| `cosmic_foundry/cli/` | CLI entry point (`cosmic-foundry`). | `cli/main.py` |
+| `tests/` | Test suite. `tests/utils/` holds shared stencil and convergence helpers. | — |
+| `benchmarks/` | Performance benchmarks (roofline, throughput). | — |
+| `replication/` | Formula register and replication targets. | `replication/formulas.md` |
+| `derivations/` | SymPy derivation documents for physics capabilities (Lane B/C). | — |
+| `research/` | Research notes and reference surveys. | — |
+| `pr-review/` | Adversarial PR review checklist and architecture stress-review checklist. | `pr-review/README.md` |
+| `scripts/` | Agent health check, PR review wrappers, session startup. | `scripts/agent_health_check.sh` |
+| `environment/` | Conda environment setup and activation. | `environment/setup_environment.sh` |
+| `adr/` | Historical architectural decisions. Being retired — live decisions now in `ARCHITECTURE.md`. | — |
+| `roadmap/` | Historical roadmap files. Being retired — current plans now in this file. | — |
 
-**Meta-level track:** Reproducibility meta-generator M3 planned.
-Implement the platform-only capsule convergence slice in
-`roadmap/verification/reproducibility-meta-generator.md`.
+### The mathematical hierarchy at a glance
 
-## Completed epochs
+`theory/` defines an ABC tree; `computation/` and `mesh/` implement it
+at distance 1. The full hierarchy is in `ARCHITECTURE.md §Mathematical
+hierarchy`. The three root ABCs and their concrete children:
 
-| Epoch | Scope | Completed |
-|------:|-------|-----------|
-| 0 | Project scaffolding, packaging, CI, docs, ADR process, visualization scaffolding, `hello` | PR #30 area |
-| 1 | Op / Region / Policy / Dispatch kernel interface; JAX `FlatPolicy`; Field placement; parallel HDF5 I/O | PR #62 (close-out sweep) |
+- **`IndexedFamily`** → `Array[T]` *(computation/)*
+- **`IndexedSet`** → `Extent` *(computation/)* → `Patch` *(mesh/)*
+- **`Function`** → `Stencil`, `Reduction` *(computation/)*, `PartitionDomain` *(mesh/)*
 
-## Completed (pre-Epoch 2)
+---
 
-**Verification infrastructure:**
+## Planned modules
 
-| Item | PR | Status |
-|------|----|--------|
-| ADR-0007 amendment: external grounding for physics capability tests | #63 | Merged |
-| Formula register (`replication/formulas.md`) | #64 | Merged |
-| Convergence-order measurement helper (`tests/utils/convergence.py`) | #69 | Merged |
-| SymPy stencil coefficient verification (`tests/utils/stencils.py`) | #70 | Merged |
-| Epoch 2 design prerequisites: global reduction + diagnostics | #68 | Merged |
+These modules are designed but do not yet have code. The descriptions
+here are the authoritative record until code exists.
 
-**Epoch 2 design prerequisites:**
+### `cosmic_foundry/geometry/`
 
-| Item | PR | Status |
-|------|----|--------|
-| Field name → Dispatch input binding (`BoundOp` protocol, ADR-0010 amendment) | #74, #75 | Merged |
-| Halo fill fence (`HaloFillFence` + `HaloFillPolicy`, ADR-0011) | #76 | Merged |
-| Global reduction primitive for simulation diagnostics (ADR-0012) | #77 | Merged |
+Concrete simulation geometry classes — the first real objects
+implementing the `theory/` manifold ABC chain. Planned contents:
 
-## Epoch 2 progress
+**`FlatManifold(PseudoRiemannianManifold)`** *(first goes in `theory/`)*
+— A pseudo-Riemannian manifold with zero Riemann curvature tensor.
+Branches from `PseudoRiemannianManifold` (not `RiemannianManifold`) so
+that both Euclidean and Minkowski spaces can inherit from it.
 
-Per the implementation plan in `roadmap/implementation/epoch-02-mesh.md`:
+**`EuclideanSpace(RiemannianManifold, FlatManifold)`**
+— ℝⁿ with the standard flat positive-definite metric. Only free
+parameter: `n: int`. `signature = (n, 0)` and `ndim = n` are both
+derived.
 
-| # | Item | PR | Status |
-|---|------|----|--------|
-| 1 | Uniform mesh data model (`Block`, `UniformGrid`) | #85 | Merged |
-| 2 | Field allocation from blocks | #88 | Merged |
-| 3 | `HaloFillPolicy` — single-rank | #90 | Merged |
-| 4 | `DiagnosticReducer` + `DiagnosticSink` | #92 | Merged |
-| 2b | Fields/maps formalism — `Field` ABC, `ContinuousField`, `DiscreteField`, `FieldDiscretization`; Map: on all operator classes; replaces `allocate_field` | #98 | Merged |
-| 5 | Task-graph driver — single-rank | — | Planned |
-| 6 | `HaloFillPolicy` — multi-rank | — | Planned |
+**`MinkowskiSpace(FlatManifold)`**
+— ℝ⁴ with Lorentzian signature `(1, 3)`. Flat pseudo-Riemannian
+background for special-relativistic simulations. No free parameters.
 
-Items 7–13 (AMR hierarchy, I/O, exit criterion) in
-`roadmap/implementation/epoch-02-mesh.md`.
+**`Domain`**
+— A manifold equipped with physical bounds and topology:
+`manifold: SmoothManifold`, `origin: tuple[float, ...]`,
+`size: tuple[float, ...]`. Replaces the raw keyword arguments currently
+passed to `PartitionDomain.execute`. `Domain.manifold.ndim` is the
+source of truth for dimensionality throughout the computation stack.
 
-## Meta-level progress
+### Planned `theory/` additions
 
-Per the meta-level roadmap in `roadmap/verification/README.md`:
+**`FlatManifold(PseudoRiemannianManifold)`** — see above; goes in
+`theory/` before `geometry/` is created.
 
-| ID | Item | PR | Status |
-|----|------|----|--------|
-| M0 | Branch / PR / attribution discipline | #8 area | Merged |
-| M1 | Replication workflow and externally grounded tests | #63, #64, #69, #70 | Merged |
-| M2 | Derivation-first lane | #81 area | Merged |
-| M3 | Convergence coverage — for each implemented physics map with a stated p in its `Map:` block, at least one convergence test confirms that order against an externally grounded solution | — | Current focus |
-| M3b | Reproducibility meta-generator architecture and convergence plan | #93 | Planned; depends on M3 |
-| M4 | Platform validation manifests, provenance, comparison-result schema, sim-spec format | — | Planned |
+**`∂M` (manifold boundary)**
+— An operation or property on `SmoothManifold` returning the boundary
+manifold `∂M`, which has dimension `ndim - 1`. Needed to formally type
+`BoundaryCondition` (below). Concrete discrete form: the set of index
+faces at the boundary of an `Extent`.
 
-## Next planned work
+**`DynamicManifold(PseudoRiemannianManifold)`**
+— A manifold whose signature is fixed but whose metric tensor is a
+dynamical field in the simulation state rather than a structural
+property. Required for full GR simulations. In the 3+1 (ADM) formalism:
+spatial hypersurfaces Σ_t are 3-D Riemannian; the 3-metric `γ_ij` and
+extrinsic curvature `K_ij` are evolved fields.
 
-Next selected PRs should explicitly state which track they advance.
+### Planned `computation/` and `theory/` additions
 
-Meta-level next work: M3 — for each implemented physics map with a stated
-approximation order p, add a convergence test that confirms that order
-against an externally grounded solution. The first target is
-`FieldDiscretization` (p = 1). Capsule tooling (M3b) follows once this
-coverage exists.
+**`BoundaryCondition(Function)`** *(in `theory/`)*
+— A function that operates on `∂M`-indexed data and enforces a
+condition on field values at the boundary. Blocked on `∂M` existing so
+the codimension-1 invariant is enforced at the ABC level. Concrete
+subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`) live in
+`computation/`.
 
-Object-level next work: formalism sweep follow-up PR — add Map: to
-`Placement`, audit `io/` and `manifests/` modules, add MMS tests for
-`FieldDiscretization`, and design the ghost-cell stencil map. Then
-continue Epoch 2 items #5–#6 (task-graph driver, multi-rank halo fill),
-followed by Epoch 3 (Platform Services): manifest infrastructure,
-comparison-result schema, and simulation specification format. See
-`roadmap/implementation/epoch-03-platform-services.md` for the full plan.
+### Threading `ndim` through `computation/`
 
-## Reference
+`SmoothManifold.ndim` exists. It is not yet threaded to `Patch`,
+`Stencil`, or `PartitionDomain`. Planned: `LocatedDiscretization`
+declares an abstract `manifold` property; `Patch` stores the manifold
+and derives `ndim` from `manifold.ndim`; `PartitionDomain.execute`
+takes a `Domain` (above) as input. `Stencil` validates that
+`len(radii) == manifold.ndim` at construction.
 
-Roadmap index: [`roadmap/index.md`](roadmap/index.md)
-Object-level roadmap: `roadmap/implementation/README.md`
-Meta-level roadmap: `roadmap/verification/README.md`
-Per-epoch details: `roadmap/implementation/epoch-NN-*.md`
-Meta-generator roadmap: `roadmap/verification/reproducibility-meta-generator.md`
+---
+
+## Current work
+
+The documentation and architecture are being consolidated:
+
+1. `ARCHITECTURE.md` — written; replaces `adr/` for cross-cutting decisions
+2. `STATUS.md` — this file; replaces `roadmap/` as the planning anchor
+3. `DEVELOPMENT.md` — written; all workflow content extracted from `AI.md`
+4. `AI.md` — updated to reference the above; retains only agent-specific content
+
+Immediate code work (in dependency order):
+1. Add `FlatManifold` to `theory/`
+2. Create `geometry/` with `EuclideanSpace` and `MinkowskiSpace`
+3. Thread `ndim` from manifold through `computation/`
+4. Add `∂M` to `theory/`
+5. Add `BoundaryCondition` ABC
