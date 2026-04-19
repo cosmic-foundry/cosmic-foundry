@@ -27,7 +27,7 @@ class Descriptor(ABC):
 
 
 @dataclass(frozen=True)
-class Extent(Descriptor, IndexedSet):
+class Extent(IndexedSet):
     """Half-open integer index extent — a finite rectangular subset of ℤⁿ."""
 
     slices: tuple[slice, ...]
