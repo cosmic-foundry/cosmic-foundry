@@ -52,14 +52,14 @@ the pattern applies immediately. Operators without a formal derivation (e.g.,
 field sampling, overlap operations) may require a minimal `_derive()` that
 documents why derivation is not applicable.
 
-**Remove generated blocks from `stencil.py`; adopt parameterizable-only API.**
-Once the full codebase is using the derivation pattern, eliminate named
-pre-instantiated objects from `stencil.py` (currently `seven_point_laplacian`).
-`stencil.py` should export only the parameterizable generator
-`derive_laplacian_stencil(order, ndim)` — the single source of truth. Callers
-invoke it directly: `derive_laplacian_stencil(2, 3)` returns the order-2 3D
-stencil. Remove `_derive()`, `generate()`, and the generated block; migrate the
-drift test to verify `derive_laplacian_stencil(2, 3)` weights match the
-derivation. Update all importers (tests, benchmarks) to call the function
-instead of importing a named instance. This eliminates namespace pollution and
-makes the API scale cleanly as new orders and operators are added.
+**Clean up `stencil.py`: remove generated-code infrastructure, push to callers.**
+After auto-discovery and scaling are complete, remove the offline code-gen
+boilerplate from `stencil.py`: delete `_derive()`, `generate()`, and the
+generated block (`_COEFFICIENTS_HASH`, kernel functions, named instances like
+`seven_point_laplacian`). `stencil.py` should export only
+`derive_laplacian_stencil(order, ndim)` — the single parameterizable source of
+truth. Responsibility for invoking the generator moves to callers: test files,
+benchmarks, and any other code that needs a stencil call `derive_laplacian_stencil(2, 3)`
+directly to get what they need. This distributes the code-gen responsibility to
+the edge, keeps `stencil.py` clean and focused, and eliminates the need to name
+and commit every possible concretization.
