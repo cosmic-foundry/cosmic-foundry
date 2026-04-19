@@ -8,10 +8,10 @@ with system Python or a different conda env causes silent misconfiguration.
 ```bash
 # One-time: install miniforge, create the cosmic_foundry conda env,
 # install the package in editable mode, and register the pre-commit hook
-bash environment/setup_environment.sh
+bash scripts/setup_environment.sh
 
 # Every session: activate before doing any work
-source environment/activate_environment.sh
+source scripts/activate_environment.sh
 ```
 
 After a pull that changes `pyproject.toml`, refresh the editable install

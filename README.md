@@ -17,13 +17,13 @@ git clone git@github.com:<your-fork>/cosmic-foundry.git
 cd cosmic-foundry
 
 # One-time setup (~5 min)
-bash environment/setup_environment.sh
+bash scripts/setup_environment.sh
 
 # Start an agent session (activates environment automatically)
 ./scripts/start_agent.sh claude   # or gemini / codex
 
 # Or activate manually and work directly
-source environment/activate_environment.sh
+source scripts/activate_environment.sh
 cosmic-foundry hello
 ```
 

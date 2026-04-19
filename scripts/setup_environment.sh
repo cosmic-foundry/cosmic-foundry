@@ -5,10 +5,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-MINIFORGE_DIR="${REPO_ROOT}/miniforge"
+MINIFORGE_DIR="${REPO_ROOT}/environment/miniforge"
 ENV_FILE="${REPO_ROOT}/environment/cosmic_foundry.yml"
 VERSIONS_FILE="${REPO_ROOT}/environment/versions.yml"
-MINIFORGE_INSTALLER="${REPO_ROOT}/miniforge-installer.sh"
+MINIFORGE_INSTALLER="${REPO_ROOT}/environment/miniforge-installer.sh"
 
 # Parse pinned Miniforge version from YAML, or resolve "latest" from GitHub.
 MINIFORGE_VERSION=$(grep -A 1 "miniforge:" "$VERSIONS_FILE" | grep "version:" | awk '{print $2}' | tr -d '"')
