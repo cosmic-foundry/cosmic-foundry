@@ -5,6 +5,7 @@ from __future__ import annotations
 from cosmic_foundry.theory.discretization import Discretization
 from cosmic_foundry.theory.field import ContinuousField, Field, ScalarField, TensorField
 from cosmic_foundry.theory.function import Function
+from cosmic_foundry.theory.indexed_family import IndexedFamily
 from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 from cosmic_foundry.theory.modal_discretization import ModalDiscretization
@@ -18,6 +19,7 @@ __all__ = [
     "Discretization",
     "Field",
     "Function",
+    "IndexedFamily",
     "IndexedSet",
     "LocatedDiscretization",
     "ModalDiscretization",
