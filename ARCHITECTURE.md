@@ -42,16 +42,10 @@ raw JAX arrays wrapped in `Array[T]`, not `Field` instances.)*
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
 except where the argument is geometric or topological, in which case a
 human-readable derivation is required. Derivations live in `derivations/`.
-*(Current inconsistency: the `derivations/` directory does not exist.
-The Laplacian stencil has no formal derivation document.)*
 
 **Every numerical method is verified against an analytical solution or
 observational data, with the verification test living in this
 repository.**
-*(Current inconsistency: the convergence testing infrastructure exists
-in `tests/utils/convergence.py` but is not applied to any production
-operator. The Laplacian is checked only on a polynomial for which the
-stencil is exact — not a convergence test.)*
 
 **Where external data sources are ingested** (reaction rates, opacity
 tables, observational measurements), **the uncertainty in that data is
