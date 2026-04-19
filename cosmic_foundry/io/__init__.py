@@ -26,8 +26,9 @@ from typing import Any
 import h5py
 import numpy as np
 
+from cosmic_foundry.io.sink import Sink
+from cosmic_foundry.io.source import Source
 from cosmic_foundry.observability import get_logger
-from cosmic_foundry.theory.sink import Sink
 
 _log = get_logger(__name__)
 
@@ -126,6 +127,8 @@ merge_rank_files = MergeRankFiles()
 __all__ = [
     "HAS_PARALLEL_HDF5",
     "MergeRankFiles",
+    "Sink",
+    "Source",
     "WriteArray",
     "merge_rank_files",
     "write_array",

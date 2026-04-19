@@ -27,6 +27,8 @@ from cosmic_foundry.diagnostics import (  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
     MergeRankFiles,
+    Sink,
+    Source,
     WriteArray,
     merge_rank_files,
     write_array,
@@ -52,9 +54,7 @@ from cosmic_foundry.theory import (  # noqa: E402
     RiemannianManifold,
     ScalarField,
     Set,
-    Sink,
     SmoothManifold,
-    Source,
     TensorField,
 )
 
