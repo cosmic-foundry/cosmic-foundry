@@ -2,30 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.stencil import Stencil
-
-
-def _seven_point_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
-    phi = fields[0]
-    return (
-        phi[i - 1, j, k]
-        + phi[i + 1, j, k]
-        + phi[i, j - 1, k]
-        + phi[i, j + 1, k]
-        + phi[i, j, k - 1]
-        + phi[i, j, k + 1]
-        - 6.0 * phi[i, j, k]
-    )
-
-
-seven_point_laplacian = Stencil(fn=_seven_point_fn, radii=(1, 1, 1))
+from cosmic_foundry.computation.laplacian import seven_point_laplacian
 
 
 def test_op_class_exposes_radii() -> None:

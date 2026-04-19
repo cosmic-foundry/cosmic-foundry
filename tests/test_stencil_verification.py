@@ -7,6 +7,10 @@ those confirm the kernel produces correct *output* on a specific function;
 these confirm the kernel encodes correct *weights*, catching coefficient bugs
 that happen to cancel on simple smooth inputs.
 
+The production kernel (cosmic_foundry.computation.laplacian) is generated
+from the derivation; the weight probe tests close the chain by verifying
+the generated kernel's behavior matches the derivation's exported constants.
+
 Example of a bug the analytical test misses but probing catches
 ---------------------------------------------------------------
 If the center weight were -5 instead of -6, the kernel applied to
@@ -71,10 +75,9 @@ def test_fd_coefficients_rejects_zeroth_derivative() -> None:
 # ---------------------------------------------------------------------------
 # Stencil verification: 7-point Laplacian
 # ---------------------------------------------------------------------------
-# The seven_point_laplacian kernel (defined in test_kernels.py and used in
-# production) returns the UN-divided stencil (no h² denominator).  At unit
-# grid spacing h=1, divided and un-divided are numerically identical, so
-# the SymPy rational coefficients apply directly.
+# The seven_point_laplacian kernel returns the UN-divided stencil (no h²
+# denominator).  At unit grid spacing h=1, divided and un-divided are
+# numerically identical, so the derivation constants apply directly.
 #
 # Validity: linear kernel, unit spacing, interior probe point with halo ≥ 1.
 
@@ -84,8 +87,8 @@ def test_seven_point_laplacian_neighbor_weights_match_derivation() -> None:
     derivations/laplacian_stencil.py (Taylor expansion → NEIGHBOR_WEIGHT).
     Importing the derivation module runs its SymPy assertions as a side-effect.
     """
+    from cosmic_foundry.computation.laplacian import seven_point_laplacian
     from derivations.laplacian_stencil import NEIGHBOR_WEIGHT
-    from tests.test_kernels import seven_point_laplacian
 
     face_neighbors = [
         (1, 0, 0),
@@ -109,8 +112,8 @@ def test_seven_point_laplacian_center_weight_matches_derivation() -> None:
     derivations/laplacian_stencil.py (3 × 1D center = −6).
     Importing the derivation module runs its SymPy assertions as a side-effect.
     """
+    from cosmic_foundry.computation.laplacian import seven_point_laplacian
     from derivations.laplacian_stencil import CENTER_WEIGHT
-    from tests.test_kernels import seven_point_laplacian
 
     weights = probe_operator_weights(seven_point_laplacian, [(0, 0, 0)])
     assert weights[(0, 0, 0)] == pytest.approx(CENTER_WEIGHT), (
