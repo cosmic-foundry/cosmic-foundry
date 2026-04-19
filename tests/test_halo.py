@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cosmic_foundry.computation.array import Array, ComponentId
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.mesh import fill_halo, partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
@@ -34,8 +34,8 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
     # Patch 1 interior: [4, 8), values ~4.5, 5.5, 6.5, 7.5
     # Filled block 0 halo-sized array: shape (6,), interior at [1:5]
     # Right ghost (index 5) should be block 1's first interior value (4.5)
-    b0 = filled[ComponentId(0)]
-    b1 = filled[ComponentId(1)]
+    b0 = filled[0]
+    b1 = filled[1]
 
     assert b0.shape == (6,)  # halo-expanded: [-1, 5)
     assert b1.shape == (6,)  # halo-expanded: [3, 9)
@@ -71,8 +71,8 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
     # Patch 1: interior x in [2, 4), y in [0, 3)
     # The right ghost slab of block 0 (halo row 3 in array) should equal
     # block 1's left interior slab (row 0 in block 1's interior array).
-    b0 = filled[ComponentId(0)]
-    b1_interior = field[ComponentId(1)]
+    b0 = filled[0]
+    b1_interior = field[1]
 
     assert b0.shape == (4, 5)  # halo-expanded
     np.testing.assert_allclose(b0[3, 1:4], b1_interior[0, :])
@@ -84,13 +84,13 @@ def test_fill_halo_returns_new_array_without_mutating_original() -> None:
 
     f = ContinuousField(name="phi", fn=lambda x: x)
     field = f.discretize(mesh)
-    original = field[ComponentId(0)].copy()
+    original = field[0].copy()
 
     filled = fill_halo(mesh, field, access, rank=0)
 
     assert filled is not field
-    np.testing.assert_allclose(field[ComponentId(0)], original)
-    assert filled[ComponentId(0)].shape == (6,)
+    np.testing.assert_allclose(field[0], original)
+    assert filled[0].shape == (6,)
 
 
 def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> None:
@@ -115,6 +115,6 @@ def test_interior_values_preserved_after_fill() -> None:
     filled = fill_halo(mesh, field, access, rank=0)
 
     # Patch 0 halo extent [-1, 5): interior at array indices [1:5]
-    np.testing.assert_allclose(filled[ComponentId(0)][1:5], field[ComponentId(0)])
+    np.testing.assert_allclose(filled[0][1:5], field[0])
     # Patch 1 halo extent [3, 9): interior at array indices [1:5]
-    np.testing.assert_allclose(filled[ComponentId(1)][1:5], field[ComponentId(1)])
+    np.testing.assert_allclose(filled[1][1:5], field[1])

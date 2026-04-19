@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from cosmic_foundry.computation.array import Array, ComponentId, Placement
+from cosmic_foundry.computation.array import Array, Placement
 from cosmic_foundry.computation.descriptor import (
     Extent,
     intersect_extents,
@@ -94,7 +94,7 @@ class PartitionDomain(Function):
         cpb = tuple(n_cells[i] // blocks_per_axis[i] for i in range(ndim))
 
         patches: list[Patch] = []
-        owners: dict[ComponentId, int] = {}
+        owners: dict[int, int] = {}
 
         for flat_id, multi_idx in enumerate(
             itertools.product(*(range(blocks_per_axis[i]) for i in range(ndim)))
@@ -114,7 +114,7 @@ class PartitionDomain(Function):
                     cell_spacing=h,
                 )
             )
-            owners[ComponentId(flat_id)] = flat_id % n_ranks
+            owners[flat_id] = flat_id % n_ranks
 
         return Array(elements=tuple(patches), placement=Placement(owners))
 
@@ -159,7 +159,7 @@ def fill_halo(
     import jax.numpy as jnp
 
     local_ids = mesh.placement.segments_for_rank(rank)
-    updated: dict[ComponentId, Any] = {}
+    updated: dict[int, Any] = {}
 
     for cid in local_ids:
         patch = mesh[cid]
@@ -172,37 +172,32 @@ def fill_halo(
         _validate_halo_coverage(cid, halo_extent, interior, mesh, local_ids, rank)
 
         for i in range(len(mesh.elements)):
-            src_cid = ComponentId(i)
-            if src_cid == cid or src_cid not in local_ids:
+            if i == cid or i not in local_ids:
                 continue
             expanded = fill_by_overlap(
-                mesh[src_cid].index_extent, field[src_cid], halo_extent, expanded
+                mesh[i].index_extent, field[i], halo_extent, expanded
             )
 
         updated[cid] = expanded
 
-    new_elements = tuple(
-        updated.get(ComponentId(i), field[ComponentId(i)])
-        for i in range(len(field.elements))
-    )
+    new_elements = tuple(updated.get(i, field[i]) for i in range(len(field.elements)))
     return Array(elements=new_elements, placement=field.placement)
 
 
 def _validate_halo_coverage(
-    target_cid: ComponentId,
+    target_cid: int,
     halo_extent: Extent,
     interior: Extent,
     mesh: Array[Patch],
-    local_ids: frozenset[ComponentId],
+    local_ids: frozenset[int],
     rank: int,
 ) -> None:
     for halo_piece in _subtract_extent(halo_extent, interior):
         all_candidates = [
-            ComponentId(i)
+            i
             for i in range(len(mesh.elements))
-            if ComponentId(i) != target_cid
-            and intersect_extents(mesh[ComponentId(i)].index_extent, halo_piece)
-            is not None
+            if i != target_cid
+            and intersect_extents(mesh[i].index_extent, halo_piece) is not None
         ]
         local_candidates = [c for c in all_candidates if c in local_ids]
         if len(local_candidates) > 1:

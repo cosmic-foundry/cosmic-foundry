@@ -1,4 +1,4 @@
-"""Distributed indexed family: Array[T], ComponentId, Placement."""
+"""Distributed indexed family: Array[T] and Placement."""
 
 from __future__ import annotations
 
@@ -9,54 +9,39 @@ from typing import Any, Generic, TypeVar
 T = TypeVar("T")
 
 
-@dataclass(frozen=True)
-class ComponentId:
-    """Opaque integer identifier for a named simulation component.
-
-    Used wherever a typed, hashable, serializable integer key is needed —
-    mesh blocks, field segments, and any future entity type.  A single class
-    avoids redundant id types for concepts that are structurally identical.
-    """
-
-    value: int
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"value": self.value}
-
-
 class Placement:
-    """Maps each ``ComponentId`` to the process rank that owns it.
+    """Maps each integer component index to the process rank that owns it.
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
     It is the sole authoritative source for process/device ownership within
     a composite ``Array[T]``.
     """
 
-    def __init__(self, owners: Mapping[ComponentId, int]) -> None:
+    def __init__(self, owners: Mapping[int, int]) -> None:
         if not owners:
             msg = "Placement must register at least one segment"
             raise ValueError(msg)
         for sid, rank in owners.items():
             if rank < 0:
-                msg = f"Process rank must be non-negative; got rank={rank} for {sid!r}"
+                msg = f"Process rank must be non-negative; got rank={rank} for {sid}"
                 raise ValueError(msg)
-        self._owners: dict[ComponentId, int] = dict(owners)
+        self._owners: dict[int, int] = dict(owners)
 
-    def owner(self, segment_id: ComponentId) -> int:
+    def owner(self, segment_id: int) -> int:
         """Return the rank that owns *segment_id*."""
         try:
             return self._owners[segment_id]
         except KeyError:
-            msg = f"ComponentId {segment_id!r} is not registered in this Placement"
+            msg = f"Component index {segment_id!r} is not registered in this Placement"
             raise KeyError(msg) from None
 
-    def segments_for_rank(self, rank: int) -> frozenset[ComponentId]:
-        """Return the set of ComponentIds owned by *rank*."""
+    def segments_for_rank(self, rank: int) -> frozenset[int]:
+        """Return the set of component indices owned by *rank*."""
         return frozenset(sid for sid, r in self._owners.items() if r == rank)
 
     @property
-    def component_ids(self) -> frozenset[ComponentId]:
-        """Return all ComponentIds registered in this Placement."""
+    def component_ids(self) -> frozenset[int]:
+        """Return all component indices registered in this Placement."""
         return frozenset(self._owners.keys())
 
     def as_dict(self) -> dict[str, Any]:
@@ -78,7 +63,7 @@ class Placement:
 class Array(Generic[T]):
     """A finite indexed family of elements with distributed ownership.
 
-    Mathematically: a function I → T where I = {ComponentId(0), …, ComponentId(n-1)},
+    Mathematically: a function I → T where I = {0, 1, …, n-1},
     together with a Placement recording which process rank owns each element.
 
     This is the general container for structured collections across the
@@ -90,24 +75,21 @@ class Array(Generic[T]):
     placement: Placement
 
     def __post_init__(self) -> None:
-        expected = frozenset(ComponentId(i) for i in range(len(self.elements)))
+        expected = frozenset(range(len(self.elements)))
         if self.placement.component_ids != expected:
             msg = (
-                f"Placement component IDs {self.placement.component_ids} "
+                f"Placement component indices {self.placement.component_ids} "
                 f"do not match Array indices {expected}"
             )
             raise ValueError(msg)
 
-    def __getitem__(self, component_id: ComponentId) -> T:
-        return self.elements[component_id.value]
+    def __getitem__(self, index: int) -> T:
+        return self.elements[index]
 
     def local(self, rank: int) -> tuple[T, ...]:
         """Return the elements owned by *rank*, in index order."""
         local_ids = self.placement.segments_for_rank(rank)
-        return tuple(
-            self.elements[cid.value]
-            for cid in sorted(local_ids, key=lambda cid: cid.value)
-        )
+        return tuple(self.elements[i] for i in sorted(local_ids))
 
     def as_dict(self) -> dict[str, Any]:
         return {"n": len(self.elements), "placement": self.placement.as_dict()}
@@ -115,6 +97,5 @@ class Array(Generic[T]):
 
 __all__ = [
     "Array",
-    "ComponentId",
     "Placement",
 ]
