@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -14,12 +14,14 @@ from cosmic_foundry.computation.descriptor import (
     payload_slices,
 )
 from cosmic_foundry.computation.overlap import fill_by_overlap
+from cosmic_foundry.geometry.domain import Domain
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
+from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Patch(LocatedDiscretization):
     """One contiguous patch of uniformly-spaced cells — a uniform Cartesian
     LocatedDiscretization.
@@ -27,15 +29,26 @@ class Patch(LocatedDiscretization):
     Owns topology and coordinate metadata only; array payloads live in
     Array[T] for some backend array type T.  The coordinate function φ(i) = origin + i·h
     maps each cell index to its center position in physical space.
+
+    manifold.ndim is the source of truth for dimensionality; index_extent.ndim
+    must match.
     """
 
+    manifold: SmoothManifold = field()
     index_extent: Extent
     origin: tuple[float, ...]  # physical coord of first cell center
     cell_spacing: tuple[float, ...]  # h_i along each axis
 
+    def __post_init__(self) -> None:
+        if self.manifold.ndim != self.index_extent.ndim:
+            raise ValueError(
+                f"manifold.ndim={self.manifold.ndim} does not match "
+                f"index_extent.ndim={self.index_extent.ndim}"
+            )
+
     @property
     def ndim(self) -> int:
-        return self.index_extent.ndim
+        return self.manifold.ndim
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -58,9 +71,8 @@ class PartitionDomain(Function):
     """Partition a continuous domain into a discrete patch grid.
 
     Function:
-        domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
-                   patches_per_axis ∈ ℤⁿ) — a continuous domain specification
-                   and discretization parameters
+        domain   — (Domain, n_cells ∈ ℤⁿ, patches_per_axis ∈ ℤⁿ) — a Domain
+                   (manifold + physical bounds) and discretization parameters
         codomain — Array[Patch]: a finite indexed family of Patches
                    partitioning Ω into ∏ patches_per_axis patches, each
                    covering n_cells/patches_per_axis interior cells with
@@ -68,22 +80,25 @@ class PartitionDomain(Function):
         operator — (Ω, h, patches) ↦ {(P_i, Ω_h^int(P_i))}_i
 
     Θ = {h} — the discrete grid approximates the continuous domain;
-    h = domain_size / n_cells along each axis.
+    h = domain.size / n_cells along each axis.
     """
 
     def execute(
         self,
         *,
-        domain_origin: tuple[float, ...],
-        domain_size: tuple[float, ...],
+        domain: Domain,
         n_cells: tuple[int, ...],
         blocks_per_axis: tuple[int, ...],
     ) -> Array[Patch]:
-        ndim = len(n_cells)
-        if not (len(domain_origin) == len(domain_size) == len(blocks_per_axis) == ndim):
+        ndim = domain.manifold.ndim
+        if len(n_cells) != ndim:
             raise ValueError(
-                "domain_origin, domain_size, n_cells, and blocks_per_axis "
-                "must all have the same length"
+                f"n_cells has {len(n_cells)} entries but domain.manifold.ndim = {ndim}"
+            )
+        if len(blocks_per_axis) != ndim:
+            raise ValueError(
+                f"blocks_per_axis has {len(blocks_per_axis)} entries "
+                f"but domain.manifold.ndim = {ndim}"
             )
         for i in range(ndim):
             if n_cells[i] % blocks_per_axis[i] != 0:
@@ -92,7 +107,7 @@ class PartitionDomain(Function):
                     f"blocks_per_axis[{i}]={blocks_per_axis[i]}"
                 )
 
-        h = tuple(domain_size[i] / n_cells[i] for i in range(ndim))
+        h = tuple(domain.size[i] / n_cells[i] for i in range(ndim))
         cpb = tuple(n_cells[i] // blocks_per_axis[i] for i in range(ndim))
 
         patches: list[Patch] = []
@@ -105,10 +120,11 @@ class PartitionDomain(Function):
                 tuple(slice(starts[i], stops[i]) for i in range(ndim))
             )
             origin = tuple(
-                domain_origin[i] + (starts[i] + 0.5) * h[i] for i in range(ndim)
+                domain.origin[i] + (starts[i] + 0.5) * h[i] for i in range(ndim)
             )
             patches.append(
                 Patch(
+                    manifold=domain.manifold,
                     index_extent=index_extent,
                     origin=origin,
                     cell_spacing=h,

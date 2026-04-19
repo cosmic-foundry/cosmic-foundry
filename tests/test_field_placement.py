@@ -15,6 +15,8 @@ import pytest
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import Stencil
+from cosmic_foundry.geometry.domain import Domain
+from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import covers, partition_domain
 
 N = 8
@@ -49,8 +51,11 @@ def phi() -> jnp.ndarray:
 
 def test_covers_single_block_full_extent() -> None:
     mesh = partition_domain.execute(
-        domain_origin=(0.0, 0.0, 0.0),
-        domain_size=(float(N), float(N), float(N)),
+        domain=Domain(
+            manifold=EuclideanSpace(3),
+            origin=(0.0, 0.0, 0.0),
+            size=(float(N), float(N), float(N)),
+        ),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
     )
@@ -59,8 +64,11 @@ def test_covers_single_block_full_extent() -> None:
 
 def test_covers_two_blocks_cover_split_domain() -> None:
     mesh = partition_domain.execute(
-        domain_origin=(0.0, 0.0, 0.0),
-        domain_size=(float(N), float(N), float(N)),
+        domain=Domain(
+            manifold=EuclideanSpace(3),
+            origin=(0.0, 0.0, 0.0),
+            size=(float(N), float(N), float(N)),
+        ),
         n_cells=(N, N, N),
         blocks_per_axis=(2, 1, 1),
     )
@@ -69,8 +77,11 @@ def test_covers_two_blocks_cover_split_domain() -> None:
 
 def test_covers_rejects_extent_outside_mesh() -> None:
     mesh = partition_domain.execute(
-        domain_origin=(0.0, 0.0, 0.0),
-        domain_size=(float(N), float(N), float(N)),
+        domain=Domain(
+            manifold=EuclideanSpace(3),
+            origin=(0.0, 0.0, 0.0),
+            size=(float(N), float(N), float(N)),
+        ),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
     )
@@ -85,8 +96,11 @@ def test_covers_rejects_extent_outside_mesh() -> None:
 
 def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
     mesh = partition_domain.execute(
-        domain_origin=(0.0, 0.0, 0.0),
-        domain_size=(float(N), float(N), float(N)),
+        domain=Domain(
+            manifold=EuclideanSpace(3),
+            origin=(0.0, 0.0, 0.0),
+            size=(float(N), float(N), float(N)),
+        ),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
     )
