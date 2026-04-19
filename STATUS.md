@@ -29,7 +29,7 @@ The code is the authoritative architecture description. Start here:
 | `benchmarks/` | Performance benchmarks (roofline, throughput). | — |
 | `replication/` | Formula register and replication targets. | `replication/formulas.md` |
 | `derivations/` | SymPy derivation documents for physics capabilities (Lane B/C). | — |
-| `research/` | Research notes and reference surveys. | — |
+| `research/` | Research notes and reference surveys. Planned to migrate into `docs/` as rendered theory content once the Sphinx pipeline is mature. | — |
 | `pr-review/` | Adversarial PR review checklist and architecture stress-review checklist. | `pr-review/README.md` |
 | `scripts/` | Agent health check, PR review wrappers, session startup. | `scripts/agent_health_check.sh` |
 | `environment/` | Conda environment setup and activation. | `environment/setup_environment.sh` |
