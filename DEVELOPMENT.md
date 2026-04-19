@@ -299,7 +299,7 @@ three lanes:
   No derivation document required.
 - **Lane B — Clean-room from paper.** Mandatory when the only
   reference is copyleft-licensed (per
-  [`research/06-12-licensing.md`](research/06-12-licensing.md):
+  [`docs/research/06-12-licensing.md`](docs/research/06-12-licensing.md):
   GADGET-4, RAMSES, MESA, SWIFT, PLUTO, Arepo, ChaNGa, GIZMO-public,
   MPI-AMRVAC, BHAC, koral_lite, Dedalus, ...). The reference source
   tree **must not be opened** — no `git clone`, no source browsing,

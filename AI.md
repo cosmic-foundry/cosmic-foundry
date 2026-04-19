@@ -119,7 +119,7 @@ The three lanes (A, B, C) are defined in
 For any task that touches a physics capability:
 
 1. **Classify the lane.** Look up the reference code's license in
-   `research/06-12-licensing.md`. If no reference code exists, or
+   `docs/research/06-12-licensing.md`. If no reference code exists, or
    the user's framing implies generalization or novel work (phrases
    like "extend," "generalize," "we might need to break new ground,"
    "give us our own version of X"), Lane C applies.

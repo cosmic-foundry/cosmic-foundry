@@ -73,4 +73,28 @@ intersphinx_mapping = {
 # for true external URLs only.
 linkcheck_ignore = [
     r"^https://github\.com/cosmic-foundry/cosmic-foundry/(?:blob|tree|raw)/main/",
+    # Publisher sites that block bots with 403s
+    r"^https://arc\.aiaa\.org/",
+    r"^https://doi\.org/10\.1002/",  # Wiley
+    r"^https://doi\.org/10\.1145/",  # ACM
+    r"^https://doi\.org/10\.1177/",  # SAGE
+    r"^https://dl\.acm\.org/",
+    r"^https://onlinelibrary\.wiley\.com/",
+    r"^https://journals\.sagepub\.com/",
+    # Sites with broken/mismatched SSL certificates
+    r"^https://2sn\.org/",
+    r"^http://plutocode\.ph\.unito\.it/",
+    r"^https://cactuscode\.org/",
+    # NRC site — intermittently unreachable
+    r"^https://www\.nrc\.gov/",
+    # Confirmed-dead links in research/ — to be cleaned up separately
+    r"^https://doi\.org/10\.1016/S0898122100003175$",  # dead DOI
+    r"^https://github\.com/Flash-X/Flash-X$",  # repo moved/deleted
+    r"^https://github\.com/applied-numerical-algorithms-group-lbnl/Chombo$",
+    r"^https://www\.asme\.org/codes-standards/find-codes-standards/v-v-20",
 ]
+
+# doi.org 301/302 redirects to publisher landing pages are expected.
+linkcheck_allowed_redirects = {
+    r"^https://doi\.org/": r".*",
+}

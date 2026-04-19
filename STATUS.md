@@ -29,7 +29,7 @@ The code is the authoritative architecture description. Start here:
 | `benchmarks/` | Performance benchmarks (roofline, throughput). | — |
 | `replication/` | Formula register and replication targets. | `replication/formulas.md` |
 | `derivations/` | SymPy derivation documents for physics capabilities (Lane B/C). | — |
-| `research/` | Research notes and reference surveys. Planned to migrate into `docs/` as rendered theory content once the Sphinx pipeline is mature. | — |
+| `docs/research/` | Research survey — code landscape, capabilities, licensing, V&V methodology. Lives in `docs/` but not yet woven into the Sphinx site; the goal is conceptual integration (cross-links, rendered pages) not just co-location. | `docs/research/index.md` |
 | `pr-review/` | Adversarial PR review checklist and architecture stress-review checklist. | `pr-review/README.md` |
 | `scripts/` | Agent health check, PR review wrappers, session startup, environment setup and activation. | `scripts/agent_health_check.sh` |
 | `environment/` | Conda environment spec files and miniforge install target. | `environment/cosmic_foundry.yml` |

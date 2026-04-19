@@ -20,6 +20,20 @@ set of framework design patterns.
 | 6.12 | [06-12-licensing.md](06-12-licensing.md) | §6.12 — licensing and openness landscape for the surveyed codes. |
 | 8 | [08-vv-methodology.md](08-vv-methodology.md) | §8 — V&V and specification methodology: Roache, Oberkampf & Roy, MMS, PCMM, and what exists (and doesn't) for specification-first code development. |
 
+```{toctree}
+:hidden:
+
+01-frameworks
+02-grid-codes
+03-particle-codes
+04-relativistic-codes
+05-stellar-codes
+06-capabilities
+06-11-visualization
+06-12-licensing
+08-vv-methodology
+```
+
 ## Splitting discipline
 
 The survey was split out of a single 1000+ line `RESEARCH.md` in 2026
