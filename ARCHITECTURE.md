@@ -4,9 +4,61 @@ This document is the authoritative record of live architectural decisions
 for this repository. Each decision is one paragraph. Decisions not yet
 made are listed under *Open questions*. The code is the authoritative
 description of any module's current design; this file records only what
-is not self-evident from reading the code. `STATUS.md` is the navigation
-anchor for the codebase. `DEVELOPMENT.md` covers workflow and process
-decisions (including physics capability lanes).
+is not self-evident from reading the code. `DEVELOPMENT.md` covers
+workflow and process decisions (including physics capability lanes).
+
+---
+
+## Architectural basis
+
+These are the foundational claims about this repository. Each is a
+commitment: the code must satisfy it, tests enforce it where possible,
+and any PR that violates a claim must explicitly revise it here rather
+than quietly breaking it.
+
+**Cosmic Foundry is an organizational platform, not an application.**
+It provides reusable computation infrastructure — kernels, mesh, fields,
+I/O, diagnostics, manifest tooling — on which application repositories
+build domain-specific physics. No domain-specific physics implementation
+and no observational validation data belongs here.
+
+**The engine is Python-only.** No compiled extensions are shipped from
+this repository. Pre-built libraries (JAX, NumPy, h5py) are consumed as
+dependencies; any native code the engine executes is produced at runtime
+by JAX/XLA's code-generation backend. `pybind11` and `ctypes` are
+emergency escapes requiring a documented justification in this file
+before adoption.
+
+**JAX + XLA is the primary kernel backend.** Every kernel is authored
+as a JAX kernel. The Op/Region/Policy/Dispatch interface (see *Operator
+model*) is structured so that secondary backends can be added without
+changing call sites, but no secondary backend is written or exercised.
+
+**float64 is the default precision.** All field arrays default to
+`float64`. Precision exceptions must be explicit and documented at the
+call site.
+
+**`theory/` is strictly third-party-free.** The `theory/` package
+defines pure mathematical ABCs and may not import from any package
+outside the Python standard library. Mathematical concreteness (classes
+parameterized by Python primitives) belongs in `theory/`; computational
+concreteness (JAX, NumPy, HDF5) belongs outside it. Enforced by
+`tests/test_theory_no_third_party_imports.py`.
+
+**`computation/` contains distance-1 implementations.** Every class at
+the top level of `computation/` directly inherits from an ABC in
+`theory/`. Classes two or more steps removed live one level down within
+their package.
+
+**Every physics capability is lane-classified.** Each PR introducing or
+changing a physics capability states its lane (A: port-and-verify, B:
+clean-room from paper, C: first-principles origination) and carries a
+derivation document for Lanes B and C. Defined in `DEVELOPMENT.md
+§Physics capability implementation paths`.
+
+**Host parallelism via `jax.distributed`.** No MPI in the baseline.
+`mpi4py` is available as an optional extra for sites where
+`jax.distributed` cannot initialize over the native interconnect.
 
 ---
 
