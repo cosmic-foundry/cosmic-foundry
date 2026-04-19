@@ -33,11 +33,12 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 |-------|------------|
 | M0 | Branch, PR, commit-size, history, and attribution discipline. ✓ |
 | M1 | Capability specs, formulas register, and externally-grounded tests for each implemented map. ✓ |
-| M2 | Lane A/B/C provenance discipline and derivation documents with SymPy checks for physics capabilities. |
+| M2 | Orthogonal basis: retire `adr/`; every live architectural decision expressed as a one-paragraph claim in `ARCHITECTURE.md`. |
 | M3 | Convergence coverage: each implemented physics map has at least one MMS or analytical convergence test confirming its stated approximation order. |
-| M4 | Reproducibility capsules: collect/dry-run/compare tooling for platform-level capsule generation. Depends on M3. |
+| M4 | Lane A/B/C derivation documents with SymPy checks, accompanying each physics capability as it is implemented. |
 | M5 | Validation manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
-| M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
+| M6 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
+| M7 | Application-repo capsule integration and multi-repository evidence regeneration. |
 
 ---
 
