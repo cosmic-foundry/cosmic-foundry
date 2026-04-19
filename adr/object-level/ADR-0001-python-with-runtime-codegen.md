@@ -3,7 +3,7 @@
 ## Context
 
 Cosmic Foundry's goal (RESEARCH.md §6-§7,
-[`roadmap/implementation/README.md`](../../roadmap/implementation/README.md) §Framing) is a fully self-contained
+[`ROADMAP.md`](../../ROADMAP.md) §Framing) is a fully self-contained
 engine covering the union of capabilities cataloged in RESEARCH.md §6.
 Every published superset of those capabilities today — AMReX / Parthenon /
 Kokkos / Charm++ family, Flash-X, AthenaK, SWIFT, Arepo, MESA — is
@@ -95,8 +95,8 @@ driven from Python source and symbolic descriptions.
 
 ## Cross-references
 
-- [`roadmap/implementation/README.md`](../../roadmap/implementation/README.md) §Technology
+- [`ROADMAP.md`](../../ROADMAP.md) §Technology
   Baseline.
-- [`roadmap/implementation/epoch-00-bootstrap.md`](../../roadmap/implementation/epoch-00-bootstrap.md) §0.6.
+- [`ROADMAP.md`](../../ROADMAP.md) §0.6.
 - RESEARCH.md §7 (Implications for Cosmic Foundry).
 - ADR-0002 (JAX as primary kernel backend) — depends on this decision.

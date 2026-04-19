@@ -8,6 +8,7 @@ For cross-cutting architectural decisions and open design questions, see
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 For development workflow and contribution process, see
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
+For the high-level capability roadmap, see [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -33,7 +34,6 @@ The code is the authoritative architecture description. Start here:
 | `scripts/` | Agent health check, PR review wrappers, session startup. | `scripts/agent_health_check.sh` |
 | `environment/` | Conda environment setup and activation. | `environment/setup_environment.sh` |
 | `adr/` | Historical architectural decisions. Being retired — live decisions now in `ARCHITECTURE.md`. | — |
-| `roadmap/` | Historical roadmap files. Being retired — current plans now in this file. | — |
 
 ### The mathematical hierarchy at a glance
 
@@ -118,14 +118,8 @@ takes a `Domain` (above) as input. `Stencil` validates that
 
 ## Current work
 
-The documentation and architecture are being consolidated:
-
-1. `ARCHITECTURE.md` — written; replaces `adr/` for cross-cutting decisions
-2. `STATUS.md` — this file; replaces `roadmap/` as the planning anchor
-3. `DEVELOPMENT.md` — written; all workflow content extracted from `AI.md`
-4. `AI.md` — updated to reference the above; retains only agent-specific content
-
 Immediate code work (in dependency order):
+
 1. Add `FlatManifold` to `theory/`
 2. Create `geometry/` with `EuclideanSpace` and `MinkowskiSpace`
 3. Thread `ndim` from manifold through `computation/`

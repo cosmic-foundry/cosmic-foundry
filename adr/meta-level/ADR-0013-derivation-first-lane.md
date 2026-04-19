@@ -19,7 +19,7 @@ that story.
   and variant-level transcription drift. Its grain is one equation per
   entry — too fine for capability-level narrative.
 - [`research/06-12-licensing.md`](../../research/06-12-licensing.md) and
-  [`roadmap/implementation/README.md`](../../roadmap/implementation/README.md) state a
+  [`ROADMAP.md`](../../ROADMAP.md) state a
   licensing principle:
   copyleft references (GADGET-4, RAMSES, MESA, SWIFT, PLUTO, Arepo, ...)
   are consulted *through published papers only*; any reimplementation is

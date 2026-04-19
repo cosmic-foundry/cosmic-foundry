@@ -207,66 +207,28 @@ script from the `cosmic-foundry` checkout directory.
 ## Roadmap position
 
 **At the start of every session**, read `STATUS.md` in the repository
-root. It records the current object-level and meta-level positions,
-recently completed milestones, and what work is next. This is the
-fastest way to orient without reading the full roadmap planes.
+root. It is the navigation anchor: the directory map, planned modules
+not yet coded, and the immediate next work. Read `ROADMAP.md` for the
+high-level capability sequence across both the simulation and V&V
+tracks.
 
-Roadmap documentation is split onto two planes:
+Every PR should state whether it advances the simulation track, the
+V&V track, or both. Cross-track dependencies must be explicit in the
+PR description.
 
-- `roadmap/implementation/README.md` — what platform and simulation
-  capabilities the codebase is building.
-- `roadmap/verification/README.md` — how the project verifies,
-  validates, regenerates, and audits object-level claims.
-
-Every PR should state whether it advances the object-level track, the
-meta-level track, or both. Cross-track dependencies must be explicit
-in the PR description and in any `STATUS.md` update.
-
-When a PR completes a milestone or starts a new epoch, update
-`STATUS.md` as part of that PR — including marking the PR's own row
-`Merged` and updating *Next planned work*. Because the `STATUS.md`
-edit is committed inside the PR, it lands atomically on merge, so the
-file is correct the moment the PR closes. The only valid status values
-in the progress table are `Planned` and `Merged`; `Open` is never
-correct to write, since a PR marks itself `Merged` before it can be
-merged. Maintenance and tooling PRs that do not advance the roadmap
-should note "No change to roadmap position" in both the PR description
-and `STATUS.md` (or omit the `STATUS.md` edit entirely if nothing
-changed).
-
-After each PR merges, re-examine the relevant track's implementation
-plan (see *Implementation plans* below). If the merged work changes
-the sequence — new ordering constraints discovered, a planned PR split
-or merged, scope added or dropped — update the plan in the same PR
-that closes the milestone. If the resequencing is cross-cutting and
-independent of the code change, open a standalone `docs(roadmap):` PR
-instead. Simple tick-offs (marking an item complete) can travel with
-the `STATUS.md` update.
+Maintenance and tooling PRs that do not advance either track should
+note "No change to roadmap position" in the PR description.
 
 ---
 
 ## Implementation plans
 
-**At the start of a new object-level epoch** (after retrospective PRs
-land and before the first code PR opens), open one documentation PR
-that appends an **Implementation plan** section to the epoch's roadmap
-file (`roadmap/implementation/epoch-NN-*.md`). For meta-level stages,
-add or update a dedicated implementation plan such as
-`roadmap/verification/reproducibility-meta-generator.md`. The plan is
-a numbered list of proposed PRs with:
-
-- One-line scope per entry
-- Explicit "depends on" notes for ordering constraints
-- No detailed spec — enough to unblock the next 3–5 sessions
-
-The plan is a living document. After each PR merges, re-examine
-the next 3–5 entries and update the plan if the merged work changed
-the picture (see *Roadmap position* above for when to do this inline
-vs. as a standalone PR).
-
-Mark completed items with ✓ and the PR number. Do not delete them
-— the completed list is the running record of what was actually
-built, and it feeds the next epoch retrospective.
+The immediate next work for both tracks is maintained in the
+`## Immediate next work` section of `ROADMAP.md`. Keep it current:
+when a sprint item completes, remove it; when new immediate work
+becomes clear, add it. Do not plan beyond what is concretely
+unblocked — if an item depends on decisions not yet made, it does not
+belong in the immediate section.
 
 ---
 
@@ -298,12 +260,10 @@ The retrospective covers:
    PRs rather than inline retrospective edits; the retrospective
    surfaces the need, the PR executes the change.
 
-3. **Roadmap files** (`roadmap/implementation/README.md`,
-   `roadmap/verification/README.md`, and the relevant per-epoch or
-   meta-stage implementation plans). Does the upcoming object-level or
-   meta-level scope still make sense given what we built? Are the
-   design prerequisites still the right ones? Are the exit criteria
-   still well-defined?
+3. **`ROADMAP.md`**. Does the upcoming simulation or V&V scope still
+   make sense given what we built? Should any epoch one-liner be
+   reworded, reordered, or split? Is the immediate next work section
+   still accurate?
 
 4. **`replication/` and formulas register**. Do the `Map:` blocks on
    implemented physics maps reflect what was actually built? Are there
