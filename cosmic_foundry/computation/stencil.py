@@ -1,43 +1,42 @@
-"""Stencil: pointwise stencil ABC for structured-grid Functions."""
+"""Stencil: concrete parametric pointwise stencil Function."""
 
 from __future__ import annotations
 
 import functools
-from abc import abstractmethod
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
 
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent, _checked_bounds
 from cosmic_foundry.theory.function import Function
 
 
+@dataclass(frozen=True)
 class Stencil(Function):
-    """ABC for pointwise stencil operators on structured grids.
+    """A pointwise stencil operator parametric over a kernel and radii.
 
     Function:
-        domain   — one or more array-valued fields on Ω_h ⊆ ℤⁿ
+        domain   — (fields: Array of field arrays on Ω_h ⊆ ℤⁿ, extent: Extent)
         codomain — an array-valued field on Ω_h^int ⊆ Ω_h
-        operator — pointwise application of _fn over an Extent
+        operator — pointwise application of fn over extent
 
-    Subclasses must define:
-    - ``radii: tuple[int, ...]`` — stencil half-widths per axis
-    - ``_fn(*field_arrays, *index_meshgrids) -> scalar`` — pointwise kernel
+    ``fn(fields, *index_meshgrids) -> scalar`` is the pointwise kernel;
+    ``fields[i]`` accesses the i-th input field. ``radii`` gives the
+    stencil half-widths per axis.
 
-    ``execute(*field_arrays, extent=...)`` is provided automatically.
+    ``execute(fields, extent=...)`` is provided automatically.
     """
 
+    fn: Callable[..., Any]
     radii: tuple[int, ...]
 
-    @abstractmethod
-    def _fn(self, *args: Any) -> Any:
-        """Pointwise stencil kernel evaluated at a single grid point."""
-
-    def execute(self, *field_arrays: Any, extent: Extent) -> Any:
-        _validate_halo_access(extent, self.radii, field_arrays)
-        return _make_jit_kernel(cast(Any, self), extent)(*field_arrays)
+    def execute(self, fields: Array[Any], *, extent: Extent) -> Any:
+        _validate_halo_access(extent, self.radii, fields)
+        return _make_jit_kernel(self.fn, extent)(*fields.elements)
 
 
 @functools.lru_cache(maxsize=256)
@@ -45,7 +44,7 @@ def _make_jit_kernel(fn: Any, extent: Any) -> Callable[..., Any]:
     @jax.jit
     def apply(*jit_inputs: Any) -> Any:
         indices = _region_indices(extent)
-        return fn._fn(*jit_inputs, *indices)
+        return fn(jit_inputs, *indices)
 
     return cast(Callable[..., Any], apply)
 
@@ -61,10 +60,10 @@ def _region_indices(extent: Extent) -> tuple[jax.Array, ...]:
 def _validate_halo_access(
     extent: Extent,
     radii: tuple[int, ...],
-    inputs: tuple[Any, ...],
+    fields: Array[Any],
 ) -> None:
     required = extent.expand(radii)
-    for input_array in inputs:
+    for input_array in fields.elements:
         if not hasattr(input_array, "shape"):
             msg = "Function inputs must expose a shape"
             raise TypeError(msg)
