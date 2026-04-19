@@ -19,15 +19,9 @@ from cosmic_foundry.computation.descriptor import (  # noqa: E402
     Extent,
     Region,
 )
-from cosmic_foundry.computation.kernels import execute_pointwise  # noqa: E402
-from cosmic_foundry.diagnostics import (  # noqa: E402
-    CollectDiagnostics,
-    DiagnosticRecord,
-    DiagnosticReducer,
+from cosmic_foundry.computation.kernels import (  # noqa: E402
     GlobalSum,
-    NullDiagnosticSink,
-    TabSeparatedDiagnosticSink,
-    collect_diagnostics,
+    execute_pointwise,  # noqa: E402
     global_sum,
 )
 from cosmic_foundry.io import (  # noqa: E402
@@ -65,14 +59,18 @@ from cosmic_foundry.theory import (  # noqa: E402
 
 __all__ = [
     "__version__",
-    # diagnostics
-    "CollectDiagnostics",
-    "DiagnosticRecord",
-    "DiagnosticReducer",
+    # computation
+    "AccessPattern",
+    "Array",
+    "ComponentId",
+    "Descriptor",
+    "Extent",
+    "Function",
     "GlobalSum",
-    "NullDiagnosticSink",
-    "TabSeparatedDiagnosticSink",
-    "collect_diagnostics",
+    "Placement",
+    "Record",
+    "Region",
+    "execute_pointwise",
     "global_sum",
     # fields
     "ContinuousField",
@@ -82,20 +80,20 @@ __all__ = [
     # io
     "HAS_PARALLEL_HDF5",
     "MergeRankFiles",
+    "Sink",
+    "Source",
     "WriteArray",
     "merge_rank_files",
     "write_array",
-    # computation
-    "AccessPattern",
-    "Array",
-    "ComponentId",
-    "Descriptor",
-    "Extent",
-    "Function",
-    "Placement",
-    "Record",
-    "Region",
-    "execute_pointwise",
+    # mesh
+    "Patch",
+    "PartitionDomain",
+    "covers",
+    "fill_halo",
+    "partition_domain",
+    # observability
+    "configure",
+    "get_logger",
     # theory
     "Discretization",
     "IndexedSet",
@@ -105,16 +103,4 @@ __all__ = [
     "RiemannianManifold",
     "Set",
     "SmoothManifold",
-    # mesh
-    "Patch",
-    "PartitionDomain",
-    "covers",
-    "fill_halo",
-    "partition_domain",
-    # io ABCs
-    "Sink",
-    "Source",
-    # observability
-    "configure",
-    "get_logger",
 ]

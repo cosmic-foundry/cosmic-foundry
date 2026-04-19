@@ -9,6 +9,7 @@ from cosmic_foundry.computation.descriptor import (
     Extent,
     Region,
 )
+from cosmic_foundry.computation.kernels import GlobalSum, global_sum
 
 __all__ = [
     "AccessPattern",
@@ -16,7 +17,9 @@ __all__ = [
     "ComponentId",
     "Descriptor",
     "Extent",
+    "GlobalSum",
     "Placement",
     "Record",
     "Region",
+    "global_sum",
 ]
