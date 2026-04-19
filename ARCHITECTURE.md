@@ -1,11 +1,11 @@
 # Cosmic Foundry — Architecture
 
 This document is the authoritative record of live architectural decisions
-for this repository. Each decision is one paragraph. Decisions not yet
-made are listed under *Open questions*. The code is the authoritative
-description of any module's current design; this file records only what
-is not self-evident from reading the code. `DEVELOPMENT.md` covers
-workflow and process decisions (including physics capability lanes).
+for this repository. Decisions not yet made are listed under *Open
+questions*. The code is the authoritative description of each module's
+current implementation; this file records only what is not self-evident
+from reading the code. `DEVELOPMENT.md` covers workflow and process
+decisions (including physics capability lanes).
 
 ---
 
@@ -69,13 +69,10 @@ escape hatches only; adopting either requires a documented justification
 here. Pre-built libraries (JAX, NumPy, h5py) are consumed as
 dependencies, not produced by this build.
 
-**JAX + XLA as the primary kernel backend.** Every kernel shipped so far
-is authored as a JAX kernel. The kernel interface (`Stencil`, `Reduction`
-— see `computation/`) is structured so that secondary backends can be
-added without changing call sites. Secondary backends (Numba, Taichi,
-NVIDIA Warp, Triton) are listed as optional extras in `pyproject.toml`
-but no adapter is written or exercised. Adding a secondary backend in
-production requires documenting the workload and performance gap here.
+**JAX + XLA is the current kernel backend.** Every kernel is authored
+as a JAX kernel. The formal model governing backend substitutability and
+kernel composition is an open question (see *Open architectural
+questions*).
 
 **`jax.distributed` + NCCL/GLOO for host parallelism.** No MPI layer in
 the baseline. `mpi4py` is available as an optional extra for sites where
@@ -90,13 +87,6 @@ the baseline. `mpi4py` is available as an optional extra for sites where
 built with Sphinx + MyST-NB. Docstrings follow the NumPy convention. The
 docs build runs with warnings-as-errors; GitHub Actions deploys to GitHub
 Pages. Sphinx-design provides layout components.
-
-**Visualization stack.** Field data is written in HDF5 (current `io/`)
-and Zarr v3 (planned). Browser rendering uses WebGPU primary with a
-WebGL2 fallback; desktop rendering uses pyvista/vispy for local
-inspection. All colormaps are perceptual (cmasher, cmocean); rainbow/jet
-are prohibited. Visual regression tests use pytest-mpl with SSIM
-comparison.
 
 ---
 
@@ -192,20 +182,6 @@ implementation.
 
 ---
 
-## Platform and application split
-
-Cosmic Foundry is the **organizational platform**. Application
-repositories — covering stellar physics, cosmology, galactic dynamics,
-planetary formation, and other domains — build on top of it.
-
-- Reusable computation infrastructure (kernels, mesh, fields, I/O,
-  diagnostics) belongs here.
-- Domain-specific physics implementations and observational validation
-  data belong in application repos.
-- Cross-scale workflows that compose two or more application domains
-  belong in their own repository.
-
----
 
 ## Open architectural questions
 
@@ -231,7 +207,6 @@ computational domain is a 3-D Riemannian spatial hypersurface; the
 3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
 The concrete geometry entry is `Spacetime3Plus1(DynamicManifold)` in
 `geometry/`.
-
 
 **Domain as Array[Domain].**
 `Domain` is currently a single bounded region of a manifold. Multi-patch
