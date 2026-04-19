@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cosmic_foundry.record import Array, ComponentId, Placement
+from cosmic_foundry.computation.array import Array, ComponentId, Placement
 
 # ---------------------------------------------------------------------------
 # Placement.component_ids

@@ -7,6 +7,12 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
+from cosmic_foundry.computation.array import (  # noqa: E402
+    Array,
+    ComponentId,
+    Placement,
+    Record,
+)
 from cosmic_foundry.computation.kernels import execute_pointwise  # noqa: E402
 from cosmic_foundry.descriptor import (  # noqa: E402
     AccessPattern,
@@ -41,7 +47,6 @@ from cosmic_foundry.mesh import (  # noqa: E402
     partition_domain,
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
-from cosmic_foundry.record import Array, ComponentId, Placement, Record  # noqa: E402
 from cosmic_foundry.theory import (  # noqa: E402
     ContinuousField,
     Discretization,

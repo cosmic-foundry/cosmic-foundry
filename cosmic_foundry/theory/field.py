@@ -79,7 +79,7 @@ class ContinuousField(ScalarField):
         """
         import jax.numpy as jnp
 
-        from cosmic_foundry.record import Array
+        from cosmic_foundry.computation.array import Array
 
         elements: list[Any] = []
         for patch in mesh.elements:
