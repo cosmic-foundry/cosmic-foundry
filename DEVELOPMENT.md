@@ -196,6 +196,13 @@ PR description.
 Maintenance and tooling PRs that do not advance either track should
 note "No change to roadmap position" in the PR description.
 
+**When a PR completes a planned item in `STATUS.md`**, that same PR
+must remove the corresponding entry from `STATUS.md` (or from the
+`## Current work` list if it is a sequenced step). Do not leave
+completed items in `STATUS.md` as historical record — the git log
+serves that purpose. The rule is: if the item is done when the PR
+merges, it is gone from `STATUS.md` when the PR merges.
+
 ---
 
 ## Implementation plans
