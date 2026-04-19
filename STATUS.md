@@ -30,10 +30,21 @@ compatibility or provide a thin `derive_laplacian_stencil(order, ndim)` wrapper
 for the 2nd-derivative case. This unblocks future operators (gradients,
 divergences, curls) that can reuse the same framework.
 
+**Clean up `stencil.py`: remove generated-code infrastructure, push to callers.**
+Remove the offline code-gen boilerplate from `stencil.py`: delete `_derive()`,
+`generate()`, and the generated block (`_COEFFICIENTS_HASH`, kernel functions,
+named instances like `seven_point_laplacian`). `stencil.py` should export only
+`derive_stencil(deriv_order, approx_order, ndim)` — the single parameterizable
+source of truth. Responsibility for invoking the generator moves to callers:
+test files, benchmarks, and any other code that needs a stencil call
+`derive_stencil(2, 2, 3)` directly to get what they need. This distributes the
+code-gen responsibility to the edge, keeps `stencil.py` clean and focused, and
+eliminates the need to name and commit every possible concretization.
+
 **Implement auto-discovery for kernel module generation and testing.**
-With the parameterizable stencil derivation proven in `stencil.py`, the next
-step is to generalize the generator script and test suite to auto-discover and
-process all kernel modules in one pass:
+With `stencil.py` cleaned up and the framework proven, generalize the generator
+script and test suite to auto-discover and process all kernel modules in one
+pass:
 
 1. Update `scripts/generate_kernels.py` to auto-discover all modules in
    `cosmic_foundry/computation/` that expose a `generate()` function (skip
@@ -49,27 +60,14 @@ only needs to implement `_derive()` and `generate()` with no generator/test
 boilerplate to copy.
 
 **Scale derivation pattern to the full codebase.**
-After auto-discovery is complete, audit every existing operator
-(`cosmic_foundry/computation/*.py` excluding `_codegen.py`) and apply the
-derivation pattern: add `_derive()` that returns constants and stencil
-structure, and `generate()` that emits the full block. The parameterized test
-will automatically verify each one. Any operator without a `_derive()` is not
-yet compliant with architectural basis claim 5 (every numerical method formally
-derived).
+Audit every existing operator (`cosmic_foundry/computation/*.py` excluding
+`_codegen.py`) and apply the derivation pattern: add `_derive()` that returns
+constants and stencil structure, and `generate()` that emits the full block. The
+parameterized auto-discovery test will automatically verify each one. Any
+operator without a `_derive()` is not yet compliant with architectural basis
+claim 5 (every numerical method formally derived).
 
 Start with operators that have hardcoded constants (stencils, reductions) where
 the pattern applies immediately. Operators without a formal derivation (e.g.,
 field sampling, overlap operations) may require a minimal `_derive()` that
 documents why derivation is not applicable.
-
-**Clean up `stencil.py`: remove generated-code infrastructure, push to callers.**
-After auto-discovery and scaling are complete, remove the offline code-gen
-boilerplate from `stencil.py`: delete `_derive()`, `generate()`, and the
-generated block (`_COEFFICIENTS_HASH`, kernel functions, named instances like
-`seven_point_laplacian`). `stencil.py` should export only
-`derive_laplacian_stencil(order, ndim)` — the single parameterizable source of
-truth. Responsibility for invoking the generator moves to callers: test files,
-benchmarks, and any other code that needs a stencil call `derive_laplacian_stencil(2, 3)`
-directly to get what they need. This distributes the code-gen responsibility to
-the edge, keeps `stencil.py` clean and focused, and eliminates the need to name
-and commit every possible concretization.
