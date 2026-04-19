@@ -87,18 +87,6 @@ Function                — f: A × Θ → B; interface: execute
 └── PartitionDomain     (mesh/) — partitions a Domain into an Array[Patch]
 ```
 
-**`BoundaryCondition` hierarchy.** Three ABCs live in `theory/`:
-`BoundaryCondition(Function)` is the blank root. `LocalBoundaryCondition`
-represents the family `α·f + β·∂f/∂n = g` on a single face — abstract
-properties `alpha: float`, `beta: float`, `constraint: Field`; covers
-Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin. `NonLocalBoundaryCondition`
-spans multiple faces via abstract property `sources: tuple[ManifoldWithBoundary,
-...]`; `FaceIdentification` (periodic, two faces, identity map) is the
-canonical subclass, with anti-periodic and Bloch/Floquet as further
-variants. The codimension-1 invariant is enforced structurally: every
-face in `Domain.boundary` has `ndim = parent.ndim - 1`. Concrete
-subclasses with JAX-backed `execute` live in `computation/`.
-
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
 - `SmoothManifold`: `ndim` is the free parameter (topologically primitive)

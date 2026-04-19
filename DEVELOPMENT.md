@@ -223,10 +223,11 @@ items in `STATUS.md`** and ask two questions for each:
 2. Is anything in the current change inconsistent with it?
 
 If the answer to (1) is no, flesh out the missing details in `STATUS.md`
-(and `ARCHITECTURE.md` if the design is settled) in the same PR. If the
-answer to (2) is yes, resolve the inconsistency before merging. The goal
-is that the next item is always fully specified before the current one
-lands.
+or `ROADMAP.md` in the same PR. Do not update `ARCHITECTURE.md` speculatively
+— it records live decisions only and is updated by the PR that implements
+the change. If the answer to (2) is yes, resolve the inconsistency before
+merging. The goal is that the next item is always fully specified before
+the current one lands.
 
 ---
 
