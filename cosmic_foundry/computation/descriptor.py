@@ -42,6 +42,21 @@ class Extent(IndexedSet):
             expanded.append(slice(start - radii[axis], stop + radii[axis]))
         return Extent(tuple(expanded))
 
+    def intersect(self, other: IndexedSet) -> Extent | None:
+        """Return S ∩ T as an Extent, or None if the extents are disjoint."""
+        if not isinstance(other, Extent):
+            raise TypeError(f"Cannot intersect Extent with {type(other).__name__}")
+        if self.ndim != other.ndim:
+            raise ValueError("Cannot intersect Extents with different ndim")
+        slices: list[slice] = []
+        for sa, sb in zip(self.slices, other.slices, strict=False):
+            start = max(sa.start, sb.start)
+            stop = min(sa.stop, sb.stop)
+            if start >= stop:
+                return None
+            slices.append(slice(start, stop))
+        return Extent(tuple(slices))
+
     def as_dict(self) -> dict[str, Any]:
         return {"slices": [(s.start, s.stop) for s in self.slices]}
 
@@ -65,21 +80,6 @@ def _slice_length(axis_slice: slice) -> int:
     return length
 
 
-def intersect_extents(a: Extent, b: Extent) -> Extent | None:
-    """Return the intersection of two Extents, or None if they do not overlap."""
-    if a.ndim != b.ndim:
-        msg = "Cannot intersect Extents with different ndim"
-        raise ValueError(msg)
-    slices: list[slice] = []
-    for sa, sb in zip(a.slices, b.slices, strict=False):
-        start = max(sa.start, sb.start)
-        stop = min(sa.stop, sb.stop)
-        if start >= stop:
-            return None
-        slices.append(slice(start, stop))
-    return Extent(tuple(slices))
-
-
 def payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
     """Return slices that index *child* within an array sized for *parent*."""
     return tuple(
@@ -93,6 +93,5 @@ def payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
 
 __all__ = [
     "Extent",
-    "intersect_extents",
     "payload_slices",
 ]

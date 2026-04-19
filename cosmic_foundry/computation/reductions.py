@@ -16,7 +16,6 @@ import jax.numpy as jnp
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import (
     Extent,
-    intersect_extents,
     payload_slices,
 )
 from cosmic_foundry.theory.function import Function
@@ -54,7 +53,7 @@ class Reduction(Function):
         result = jnp.asarray(self.identity, dtype=jnp.float64)
         for i in range(len(mesh.elements)):
             interior = mesh[i].index_extent
-            overlap = intersect_extents(interior, extent)
+            overlap = interior.intersect(extent)
             if overlap is None:
                 continue
             result = result + self.operator(field[i][payload_slices(interior, overlap)])
