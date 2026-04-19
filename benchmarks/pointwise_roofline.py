@@ -12,6 +12,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import Stencil
 
@@ -19,36 +20,26 @@ FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
 
 
-@dataclass(frozen=True)
-class SevenPointLaplacian(Stencil):
-    """Seven-point finite-difference Laplacian on a 3-D grid.
-
-    Function:
-        domain   — φ: PatchFunction on Ω_h ⊆ ℝ³
-        codomain — ∇²φ: PatchFunction on Ω_h^int ⊆ Ω_h
-        operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
-                                + φ_{i,j+1,k} + φ_{ij,k-1} + φ_{ij,k+1}
-                                - 6 φ_{ijk}
-
-    Θ = {h}, p = 2 — second-order finite-difference approximation of ∇².
-    Exact for polynomials of degree ≤ 2.
-    """
-
-    radii: tuple[int, ...] = (1, 1, 1)
-
-    def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
-        return (
-            phi[i - 1, j, k]
-            + phi[i + 1, j, k]
-            + phi[i, j - 1, k]
-            + phi[i, j + 1, k]
-            + phi[i, j, k - 1]
-            + phi[i, j, k + 1]
-            - 6.0 * phi[i, j, k]
-        )
+def _seven_point_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
+    phi = fields[0]
+    return (
+        phi[i - 1, j, k]
+        + phi[i + 1, j, k]
+        + phi[i, j - 1, k]
+        + phi[i, j + 1, k]
+        + phi[i, j, k - 1]
+        + phi[i, j, k + 1]
+        - 6.0 * phi[i, j, k]
+    )
 
 
-seven_point_laplacian = SevenPointLaplacian()
+def _triad_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
+    a, b = fields[0], fields[1]
+    return a[i, j, k] + 0.5 * b[i, j, k]
+
+
+seven_point_laplacian = Stencil(fn=_seven_point_fn, radii=(1, 1, 1))
+pointwise_triad = Stencil(fn=_triad_fn, radii=(0, 0, 0))
 
 
 @dataclass(frozen=True)
@@ -76,38 +67,17 @@ def make_phi(n: int) -> jax.Array:
 
 
 def run_laplacian(phi: jax.Array) -> jax.Array:
-    """Run the Laplacian Op over the interior of *phi*."""
+    """Run the Laplacian over the interior of *phi*."""
     n = int(phi.shape[0])
     extent = Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1)))
-    return seven_point_laplacian.execute(phi, extent=extent)
-
-
-@dataclass(frozen=True)
-class PointwiseTriad(Stencil):
-    """STREAM-like pointwise triad: c = a + 0.5 * b.
-
-    Function:
-        domain   — (a, b): two PatchFunctions on Ω_h
-        codomain — c: PatchFunction on Ω_h
-        operator — c_{ijk} = a_{ijk} + 0.5 * b_{ijk}
-
-    Exact: Θ = ∅ — pointwise arithmetic; no approximation.
-    """
-
-    radii: tuple[int, ...] = (0, 0, 0)
-
-    def _fn(self, a: Any, b: Any, i: Any, j: Any, k: Any) -> Any:
-        return a[i, j, k] + 0.5 * b[i, j, k]
-
-
-pointwise_triad = PointwiseTriad()
+    return seven_point_laplacian.execute(Array((phi,)), extent=extent)
 
 
 def run_op_triad(a: jax.Array, b: jax.Array) -> jax.Array:
-    """Run a pointwise triad through the Op path."""
+    """Run a pointwise triad through the Stencil path."""
     n = int(a.shape[0])
     extent = Extent.from_shape((n, n, n))
-    return pointwise_triad.execute(a, b, extent=extent)
+    return pointwise_triad.execute(Array((a, b)), extent=extent)
 
 
 def benchmark(n: int, repeats: int) -> RooflineResult:

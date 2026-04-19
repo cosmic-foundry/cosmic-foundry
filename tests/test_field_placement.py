@@ -1,9 +1,4 @@
-"""Tests for covers() and the Field → Op integration.
-
-covers() tests verify that Array[Patch] correctly reports spatial coverage.
-The integration tests run the seven-point Laplacian on φ = x²+y²+z² and
-verify the expected result (6.0) in both single-process and multi-process modes.
-"""
+"""Tests for covers() and the Field → Op integration."""
 
 from __future__ import annotations
 
@@ -11,13 +6,13 @@ import json
 import socket
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import jax.numpy as jnp
 import pytest
 
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import Stencil
 from cosmic_foundry.mesh import covers, partition_domain
@@ -25,36 +20,20 @@ from cosmic_foundry.mesh import covers, partition_domain
 N = 8
 
 
-@dataclass(frozen=True)
-class SevenPointLaplacian(Stencil):
-    """Seven-point finite-difference Laplacian on a 3-D grid.
-
-    Function:
-        domain   — φ: PatchFunction on Ω_h ⊆ ℝ³
-        codomain — ∇²φ: PatchFunction on Ω_h^int ⊆ Ω_h
-        operator — (∇²φ)_{ijk} = φ_{i-1,jk} + φ_{i+1,jk} + φ_{i,j-1,k}
-                                + φ_{i,j+1,k} + φ_{ij,k-1} + φ_{ij,k+1}
-                                - 6 φ_{ijk}
-
-    Θ = {h}, p = 2 — second-order finite-difference approximation of ∇².
-    Exact for polynomials of degree ≤ 2.
-    """
-
-    radii: tuple[int, ...] = (1, 1, 1)
-
-    def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
-        return (
-            phi[i - 1, j, k]
-            + phi[i + 1, j, k]
-            + phi[i, j - 1, k]
-            + phi[i, j + 1, k]
-            + phi[i, j, k - 1]
-            + phi[i, j, k + 1]
-            - 6.0 * phi[i, j, k]
-        )
+def _seven_point_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
+    phi = fields[0]
+    return (
+        phi[i - 1, j, k]
+        + phi[i + 1, j, k]
+        + phi[i, j - 1, k]
+        + phi[i, j + 1, k]
+        + phi[i, j, k - 1]
+        + phi[i, j, k + 1]
+        - 6.0 * phi[i, j, k]
+    )
 
 
-seven_point_laplacian = SevenPointLaplacian()
+seven_point_laplacian = Stencil(fn=_seven_point_fn, radii=(1, 1, 1))
 
 
 @pytest.fixture()
@@ -75,8 +54,7 @@ def test_covers_single_block_full_extent() -> None:
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
     )
-    full = Extent.from_shape((N, N, N))
-    assert covers(mesh, full)
+    assert covers(mesh, Extent.from_shape((N, N, N)))
 
 
 def test_covers_two_blocks_cover_split_domain() -> None:
@@ -90,15 +68,13 @@ def test_covers_two_blocks_cover_split_domain() -> None:
 
 
 def test_covers_rejects_extent_outside_mesh() -> None:
-    """A mesh covering [0, N) does not cover an extent that exceeds that range."""
     mesh = partition_domain(
         domain_origin=(0.0, 0.0, 0.0),
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
     )
-    full = Extent.from_shape((N, N, N))
-    beyond = full.expand(seven_point_laplacian.radii)
+    beyond = Extent.from_shape((N, N, N)).expand(seven_point_laplacian.radii)
     assert not covers(mesh, beyond)
 
 
@@ -108,21 +84,16 @@ def test_covers_rejects_extent_outside_mesh() -> None:
 
 
 def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
-    """One block, full domain — the degenerate single-rank case."""
     mesh = partition_domain(
         domain_origin=(0.0, 0.0, 0.0),
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
     )
-    full = Extent.from_shape((N, N, N))
-    required = full.expand(seven_point_laplacian.radii)
-    assert not covers(mesh, required)  # mesh doesn't cover the halo ring
-
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
-    assert covers(mesh, interior)  # mesh does cover the interior
+    assert covers(mesh, interior)
 
-    result = seven_point_laplacian.execute(phi, extent=interior)
+    result = seven_point_laplacian.execute(Array((phi,)), extent=interior)
     assert jnp.allclose(result, 6.0)
 
 
