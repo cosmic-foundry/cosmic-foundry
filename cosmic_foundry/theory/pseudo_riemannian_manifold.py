@@ -20,14 +20,19 @@ class PseudoRiemannianManifold(SmoothManifold):
     General relativistic spacetimes are pseudo-Riemannian with Lorentzian
     signature (1, 3) or (3, 1) depending on convention.
 
-    Required (in addition to SmoothManifold.ndim):
-        signature — metric signature as (p, q) with p + q == ndim
+    Required:
+        signature — metric signature as (p, q); ndim is derived as p + q
     """
 
     @property
     @abstractmethod
     def signature(self) -> tuple[int, int]:
         """Metric signature (p, q): p positive, q negative eigenvalues."""
+
+    @property
+    def ndim(self) -> int:
+        """Topological dimension, derived from metric signature as p + q."""
+        return sum(self.signature)
 
 
 __all__ = [

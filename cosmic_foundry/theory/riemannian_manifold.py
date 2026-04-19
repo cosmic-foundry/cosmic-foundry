@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
+
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 
 
-class RiemannianManifold(PseudoRiemannianManifold):  # noqa: B024
+class RiemannianManifold(PseudoRiemannianManifold):
     """A PseudoRiemannianManifold whose metric is positive-definite.
 
     A Riemannian manifold (M, g) specializes the pseudo-Riemannian case to
@@ -18,11 +20,23 @@ class RiemannianManifold(PseudoRiemannianManifold):  # noqa: B024
     tori, etc.) are Riemannian manifolds.  Lorentzian spacetimes are not —
     they live at PseudoRiemannianManifold.
 
-    No additional abstract methods beyond PseudoRiemannianManifold: the
-    positive-definiteness constraint is a restriction on the value of
-    signature, not a new interface requirement.  Concrete subclasses must
-    still implement ndim and signature (which must satisfy q == 0).
+    The positive-definiteness constraint (q = 0) is enforced by deriving
+    signature from ndim.  Concrete subclasses need only declare ndim;
+    signature is not a free parameter at this level.
+
+    Required:
+        ndim — dimension of the manifold; signature = (ndim, 0) follows
     """
+
+    @property
+    @abstractmethod
+    def ndim(self) -> int:
+        """Dimension of this Riemannian manifold."""
+
+    @property
+    def signature(self) -> tuple[int, int]:
+        """Metric signature, derived as (ndim, 0)."""
+        return (self.ndim, 0)
 
 
 __all__ = [
