@@ -9,7 +9,7 @@ jax.config.update("jax_enable_x64", True)
 from cosmic_foundry._version import __version__  # noqa: E402
 from cosmic_foundry.computation.array import Array  # noqa: E402
 from cosmic_foundry.computation.descriptor import Extent  # noqa: E402
-from cosmic_foundry.computation.reductions import GlobalSum, global_sum  # noqa: E402
+from cosmic_foundry.computation.reductions import Reduction, global_sum  # noqa: E402
 from cosmic_foundry.computation.stencil import Stencil  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
@@ -50,7 +50,7 @@ __all__ = [
     "Array",
     "Extent",
     "Function",
-    "GlobalSum",
+    "Reduction",
     "Stencil",
     "global_sum",
     # fields
