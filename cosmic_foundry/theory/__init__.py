@@ -11,9 +11,7 @@ from cosmic_foundry.theory.modal_discretization import ModalDiscretization
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.theory.set import Set
-from cosmic_foundry.theory.sink import Sink
 from cosmic_foundry.theory.smooth_manifold import SmoothManifold
-from cosmic_foundry.theory.source import Source
 
 __all__ = [
     "ContinuousField",
@@ -27,8 +25,6 @@ __all__ = [
     "RiemannianManifold",
     "ScalarField",
     "Set",
-    "Sink",
     "SmoothManifold",
-    "Source",
     "TensorField",
 ]
