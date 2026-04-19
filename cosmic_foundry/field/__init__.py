@@ -1,10 +1,9 @@
 """Field hierarchy.
 
-- ``Field``         — abstract base: f: M → V; inherits Function.
-- ``ScalarField``   — marker for V = ℝ.
-- ``TensorField``   — abstract for V = T^(p,q)M; carries ``tensor_type``.
+- ``Field``          — abstract base: f: M → V; inherits Function.
+- ``ScalarField``    — marker for V = ℝ.
+- ``TensorField``    — abstract for V = T^(p,q)M; carries ``tensor_type``.
 - ``ContinuousField``— concrete scalar field stored as an analytic callable.
-- ``PatchFunction`` — concrete scalar field stored as a JAX array payload.
 """
 
 from __future__ import annotations
@@ -70,32 +69,10 @@ class ContinuousField(ScalarField):
 
         return jnp.asarray(self.fn(*args), dtype=jnp.float64)
 
-    def sample(self, *coordinate_arrays: Any) -> PatchFunction:
-        """Sample f at the given coordinate arrays, returning a PatchFunction."""
-        return PatchFunction(name=self.name, payload=self.execute(*coordinate_arrays))
-
-
-@dataclass(frozen=True)
-class PatchFunction(ScalarField):
-    """A discrete scalar field stored as a JAX array payload.
-
-    The concrete data-side counterpart of ``Patch`` (the geometry).
-    ``payload`` holds the field values at the DOF locations defined by the
-    associated Patch; spatial metadata lives in the Patch, not here.
-    """
-
-    name: str
-    payload: Any
-
-    def execute(self) -> Any:
-        """Return the stored payload array."""
-        return self.payload
-
 
 __all__ = [
     "ContinuousField",
     "Field",
-    "PatchFunction",
     "ScalarField",
     "TensorField",
 ]

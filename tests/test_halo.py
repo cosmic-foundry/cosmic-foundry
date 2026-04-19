@@ -1,4 +1,4 @@
-"""Tests for fill_halo: ghost-cell copy from interior-sized payloads."""
+"""Tests for fill_halo: ghost-cell copy from interior-sized arrays."""
 
 from __future__ import annotations
 
@@ -33,22 +33,22 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
 
     # Patch 0 interior: [0, 4), values ~0.5, 1.5, 2.5, 3.5 (cell centers with h=1)
     # Patch 1 interior: [4, 8), values ~4.5, 5.5, 6.5, 7.5
-    # Filled block 0 halo-sized payload: shape (6,), interior at [1:5]
+    # Filled block 0 halo-sized array: shape (6,), interior at [1:5]
     # Right ghost (index 5) should be block 1's first interior value (4.5)
-    b0_payload = filled[ComponentId(0)].payload
-    b1_payload = filled[ComponentId(1)].payload
+    b0 = filled[ComponentId(0)]
+    b1 = filled[ComponentId(1)]
 
-    assert b0_payload.shape == (6,)  # halo-expanded: [-1, 5)
-    assert b1_payload.shape == (6,)  # halo-expanded: [3, 9)
+    assert b0.shape == (6,)  # halo-expanded: [-1, 5)
+    assert b1.shape == (6,)  # halo-expanded: [3, 9)
 
     # Right ghost of block 0 = left interior of block 1 (global index 4 → 4.5)
-    assert b0_payload[5] == pytest.approx(4.5)
+    assert b0[5] == pytest.approx(4.5)
     # Left ghost of block 0 has no neighbor → zero-filled
-    assert b0_payload[0] == pytest.approx(0.0)
+    assert b0[0] == pytest.approx(0.0)
     # Left ghost of block 1 = right interior of block 0 (global index 3 → 3.5)
-    assert b1_payload[0] == pytest.approx(3.5)
+    assert b1[0] == pytest.approx(3.5)
     # Right ghost of block 1 has no neighbor → zero-filled
-    assert b1_payload[5] == pytest.approx(0.0)
+    assert b1[5] == pytest.approx(0.0)
 
 
 def test_single_rank_fill_copies_2d_face_slab() -> None:
@@ -70,10 +70,10 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
 
     # Patch 0: interior x in [0, 2), y in [0, 3) → shape (2, 3) interior, (4, 5) halo
     # Patch 1: interior x in [2, 4), y in [0, 3)
-    # The right ghost slab of block 0 (halo row 3 in payload) should equal
-    # block 1's left interior slab (row 0 in block 1's interior payload).
-    b0 = filled[ComponentId(0)].payload
-    b1_interior = field[ComponentId(1)].payload
+    # The right ghost slab of block 0 (halo row 3 in array) should equal
+    # block 1's left interior slab (row 0 in block 1's interior array).
+    b0 = filled[ComponentId(0)]
+    b1_interior = field[ComponentId(1)]
 
     assert b0.shape == (4, 5)  # halo-expanded
     np.testing.assert_allclose(b0[3, 1:4], b1_interior[0, :])
@@ -85,13 +85,13 @@ def test_fill_halo_returns_new_array_without_mutating_original() -> None:
 
     f = ContinuousField(name="phi", fn=lambda x: x)
     field = discretize(f, mesh)
-    original_payload = field[ComponentId(0)].payload.copy()
+    original = field[ComponentId(0)].copy()
 
     filled = fill_halo(mesh, field, access, rank=0)
 
     assert filled is not field
-    np.testing.assert_allclose(field[ComponentId(0)].payload, original_payload)
-    assert filled[ComponentId(0)].payload.shape == (6,)
+    np.testing.assert_allclose(field[ComponentId(0)], original)
+    assert filled[ComponentId(0)].shape == (6,)
 
 
 def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> None:
@@ -106,7 +106,7 @@ def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> N
 
 
 def test_interior_values_preserved_after_fill() -> None:
-    """Interior values in the returned payload must equal the original field."""
+    """Interior values in the returned array must equal the original field."""
     mesh = _make_1d_mesh()
     access = AccessPattern((1,))
 
@@ -115,11 +115,7 @@ def test_interior_values_preserved_after_fill() -> None:
 
     filled = fill_halo(mesh, field, access, rank=0)
 
-    # Patch 0 halo extent [-1, 5): interior at payload indices [1:5]
-    np.testing.assert_allclose(
-        filled[ComponentId(0)].payload[1:5], field[ComponentId(0)].payload
-    )
-    # Patch 1 halo extent [3, 9): interior at payload indices [1:5]
-    np.testing.assert_allclose(
-        filled[ComponentId(1)].payload[1:5], field[ComponentId(1)].payload
-    )
+    # Patch 0 halo extent [-1, 5): interior at array indices [1:5]
+    np.testing.assert_allclose(filled[ComponentId(0)][1:5], field[ComponentId(0)])
+    # Patch 1 halo extent [3, 9): interior at array indices [1:5]
+    np.testing.assert_allclose(filled[ComponentId(1)][1:5], field[ComponentId(1)])

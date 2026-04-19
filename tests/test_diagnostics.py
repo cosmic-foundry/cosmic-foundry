@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -18,7 +19,6 @@ from cosmic_foundry.diagnostics import (
     collect_diagnostics,
     global_sum,
 )
-from cosmic_foundry.field import PatchFunction
 from cosmic_foundry.mesh import Patch, partition_domain
 from cosmic_foundry.record import Array, ComponentId, Placement
 
@@ -44,7 +44,7 @@ class SumReducer(DiagnosticReducer):
     def execute(
         self,
         mesh: Array[Patch],
-        fields: dict[str, Array[PatchFunction]],
+        fields: dict[str, Array[Any]],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -60,7 +60,7 @@ class VectorReducer(DiagnosticReducer):
     def execute(
         self,
         mesh: Array[Patch],
-        fields: dict[str, Array[PatchFunction]],
+        fields: dict[str, Array[Any]],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -71,9 +71,7 @@ class VectorReducer(DiagnosticReducer):
 def test_global_sum_returns_jax_scalar() -> None:
     mesh = _make_1d_mesh(n_cells=6, n_blocks=1)
     field = Array(
-        elements=(
-            PatchFunction(name="rho", payload=jnp.arange(6.0, dtype=jnp.float64)),
-        ),
+        elements=(jnp.arange(6.0, dtype=jnp.float64),),
         placement=Placement({ComponentId(0): 0}),
     )
 
@@ -86,11 +84,10 @@ def test_global_sum_returns_jax_scalar() -> None:
 def test_global_sum_sums_over_interior_only() -> None:
     """GlobalSum over both blocks sums interior values, not halos."""
     mesh = _make_1d_mesh(n_cells=8, n_blocks=2)
-    # Patch 0 interior: [0, 4), block 1 interior: [4, 8)
     field = Array(
         elements=(
-            PatchFunction(name="rho", payload=jnp.array([1.0, 2.0, 3.0, 4.0])),
-            PatchFunction(name="rho", payload=jnp.array([5.0, 6.0, 7.0, 8.0])),
+            jnp.array([1.0, 2.0, 3.0, 4.0]),
+            jnp.array([5.0, 6.0, 7.0, 8.0]),
         ),
         placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
     )
@@ -104,14 +101,14 @@ def test_global_sum_restricts_to_region() -> None:
     mesh = _make_1d_mesh(n_cells=8, n_blocks=2)
     field = Array(
         elements=(
-            PatchFunction(name="rho", payload=jnp.array([1.0, 2.0, 3.0, 4.0])),
-            PatchFunction(name="rho", payload=jnp.array([5.0, 6.0, 7.0, 8.0])),
+            jnp.array([1.0, 2.0, 3.0, 4.0]),
+            jnp.array([5.0, 6.0, 7.0, 8.0]),
         ),
         placement=Placement({ComponentId(0): 0, ComponentId(1): 0}),
     )
 
     # Region [2, 6) overlaps block 0 at [2,4) and block 1 at [4,6)
-    # Patch 0 payload[2:4] = [3, 4]; block 1 payload[0:2] = [5, 6]
+    # field[0][2:4] = [3, 4]; field[1][0:2] = [5, 6]
     result = global_sum(mesh, field, Region(Extent((slice(2, 6),))), rank=0)
 
     assert result == pytest.approx(18.0)
@@ -120,9 +117,7 @@ def test_global_sum_restricts_to_region() -> None:
 def test_collect_diagnostics_materializes_one_record() -> None:
     mesh = _make_1d_mesh(n_cells=4, n_blocks=1)
     field = Array(
-        elements=(
-            PatchFunction(name="rho", payload=jnp.arange(4.0, dtype=jnp.float64)),
-        ),
+        elements=(jnp.arange(4.0, dtype=jnp.float64),),
         placement=Placement({ComponentId(0): 0}),
     )
 

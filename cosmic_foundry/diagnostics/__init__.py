@@ -13,7 +13,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from cosmic_foundry.descriptor import Extent, Region
-from cosmic_foundry.field import PatchFunction
 from cosmic_foundry.function import Function
 from cosmic_foundry.mesh import Patch
 from cosmic_foundry.record import Array, ComponentId, Record
@@ -38,7 +37,7 @@ class DiagnosticReducer(Function):
     def execute(
         self,
         mesh: Array[Patch],
-        fields: Mapping[str, Array[PatchFunction]],
+        fields: Mapping[str, Array[Any]],
         region: Region,
         rank: int,
         n_ranks: int,
@@ -129,7 +128,7 @@ class CollectDiagnostics(Function):
         self,
         reducers: Sequence[DiagnosticReducer],
         mesh: Array[Patch],
-        fields: Mapping[str, Array[PatchFunction]],
+        fields: Mapping[str, Array[Any]],
         region: Region,
         *,
         step: int,
@@ -191,7 +190,7 @@ class GlobalSum(Function):
     def execute(
         self,
         mesh: Array[Patch],
-        field: Array[PatchFunction],
+        field: Array[Any],
         region: Region,
         rank: int,
         *,
@@ -207,9 +206,7 @@ class GlobalSum(Function):
             overlap = _intersect_extents(interior, region.extent)
             if overlap is None:
                 continue
-            local = local + jnp.sum(
-                field[cid].payload[_payload_slices(interior, overlap)]
-            )
+            local = local + jnp.sum(field[cid][_payload_slices(interior, overlap)])
 
         if axis_name is None:
             return local
