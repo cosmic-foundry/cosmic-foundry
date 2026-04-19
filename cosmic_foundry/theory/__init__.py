@@ -9,7 +9,6 @@ from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 from cosmic_foundry.theory.modal_discretization import ModalDiscretization
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
-from cosmic_foundry.theory.record import Record
 from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.theory.set import Set
 from cosmic_foundry.theory.smooth_manifold import SmoothManifold
@@ -23,7 +22,6 @@ __all__ = [
     "LocatedDiscretization",
     "ModalDiscretization",
     "PseudoRiemannianManifold",
-    "Record",
     "RiemannianManifold",
     "ScalarField",
     "Set",

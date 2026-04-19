@@ -7,12 +7,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
-from cosmic_foundry.computation.array import (  # noqa: E402
-    Array,
-    ComponentId,
-    Placement,
-    Record,
-)
+from cosmic_foundry.computation.array import Array, ComponentId, Placement  # noqa: E402
 from cosmic_foundry.computation.descriptor import (  # noqa: E402
     Descriptor,
     Extent,
@@ -63,7 +58,6 @@ __all__ = [
     "Function",
     "GlobalSum",
     "Placement",
-    "Record",
     "Region",
     "execute_pointwise",
     "global_sum",

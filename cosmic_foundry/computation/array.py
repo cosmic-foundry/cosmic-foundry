@@ -6,13 +6,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
-from cosmic_foundry.theory.record import Record
-
 T = TypeVar("T")
 
 
 @dataclass(frozen=True)
-class ComponentId(Record):
+class ComponentId:
     """Opaque integer identifier for a named simulation component.
 
     Used wherever a typed, hashable, serializable integer key is needed —
@@ -26,7 +24,7 @@ class ComponentId(Record):
         return {"value": self.value}
 
 
-class Placement(Record):
+class Placement:
     """Maps each ``ComponentId`` to the process rank that owns it.
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
@@ -77,7 +75,7 @@ class Placement(Record):
 
 
 @dataclass(frozen=True)
-class Array(Record, Generic[T]):
+class Array(Generic[T]):
     """A finite indexed family of elements with distributed ownership.
 
     Mathematically: a function I → T where I = {ComponentId(0), …, ComponentId(n-1)},
@@ -119,5 +117,4 @@ __all__ = [
     "Array",
     "ComponentId",
     "Placement",
-    "Record",
 ]
