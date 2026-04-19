@@ -6,12 +6,13 @@ from cosmic_foundry.theory.boundary_condition import BoundaryCondition
 
 
 class NonLocalBoundaryCondition(BoundaryCondition):
-    """A boundary condition whose constraint spans more than one location.
+    """A boundary condition whose constraint is non-local.
 
-    A local boundary condition can be evaluated from field data at a single
-    face in isolation.  A non-local boundary condition cannot — it requires
-    data from multiple locations, which may be boundary faces, the whole
-    boundary, or interior points depending on the concrete type.
+    A local boundary condition depends only on field values in an infinitesimal
+    neighborhood of the boundary point being constrained (the value and its
+    normal derivative at that point).  A non-local boundary condition depends
+    on field values elsewhere — at a distant boundary face, over an integral of
+    the whole boundary, at interior points, or at infinity.
 
     This class makes no claim about the form of the non-locality.  Concrete
     subclasses declare whatever geometric references they need:
