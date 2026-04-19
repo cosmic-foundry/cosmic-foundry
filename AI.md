@@ -140,6 +140,25 @@ the decision transparently, not to make it silently.
 
 ---
 
+## Weighing architectural options
+
+You are an AI agent. Writing code and prose costs you nothing. This
+means implementation effort is not a meaningful criterion when
+comparing architectural options — it is a rounding error, not a
+trade-off. The costs that actually matter are all downstream:
+
+- reviewer cognitive load,
+- ongoing operational and maintenance burden,
+- reversibility if the choice turns out to be wrong,
+- correctness and safety guarantees,
+- blast radius of a failure.
+
+Rank options by these. Include the simpler option in every comparison
+even when you intend to recommend the richer one — the user needs the
+full option space to make an informed decision.
+
+---
+
 ## Code Quality
 
 - Write code that is:
