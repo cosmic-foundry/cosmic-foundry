@@ -182,11 +182,6 @@ operations — EOS evaluations, Riemann solvers, reconstruction — are
 written as ordinary device-callable functions inlined into the
 surrounding `ParallelFor`; they are unaware of the pack size.
 
-The implication for Cosmic Foundry: task sequencing (latency hiding)
-and domain batching (kernel-launch amortization) are separate
-responsibilities that should live in separate layers. See
-`ROADMAP.md`.
-
 ## 1.4 Charm++
 
 Message-driven, over-decomposed asynchronous runtime used by ChaNGa,
@@ -307,11 +302,6 @@ symbolic code generator and emits optimized C or CUDA source. This
 reduces Jacobian cost from O(N²) to O(N) for sparse mechanisms and
 is the primary technique enabling fast implicit solvers for large
 networks on GPUs.
-
-The direct analogy in this engine is SymPy-based Jacobian generation
-(ADR-0001): the same principle — derive the Jacobian analytically
-from the symbolic rate expressions rather than differencing the RHS —
-applies equally to nuclear reaction networks.
 
 ### TChem
 

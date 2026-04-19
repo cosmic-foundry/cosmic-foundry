@@ -3,15 +3,9 @@
 > Part of the [Cosmic Foundry research notes](index.md).
 
 This section surveys the V&V literature across CFD, aerospace, nuclear, and
-computational astrophysics. The research notes previously had no coverage of
-V&V methodology — the gap this section fills. The key question is not whether
-anyone wrote capability specs before implementation, but whether anyone has
-aimed, at any point in their development workflow, for the level of rigor
-Cosmic Foundry is trying to achieve: externally grounded correctness claims
-for every physics capability, convergence verification for every discretization,
-and verification as an ongoing integrated discipline rather than a one-time
-or regulatory exercise. The answer is: partially, in a few places, and never
-consistently in an open-source astrophysics code.
+computational astrophysics, covering the frameworks, standards, and methods
+(MMS, PCMM, Richardson extrapolation) and their application — or absence —
+in open-source simulation codes.
 
 ---
 
@@ -121,8 +115,8 @@ testing. Widely used as a self-contained technical reference.
 
 ## 8.4 Predictive Capability Maturity Model (PCMM)
 
-The closest existing framework to Cosmic Foundry's capability-spec
-discipline is the PCMM, developed at Sandia.
+The PCMM, developed at Sandia, is the closest existing framework to a
+formal capability specification discipline.
 
 **William L. Oberkampf, Martin Pilch, and Timothy G. Trucano**, *Predictive
 Capability Maturity Model for Computational Modeling and Simulation*, Sandia
@@ -158,13 +152,11 @@ verification as a continuous process is also notable. However, the test suite
 was built alongside or after the code, not as a prior specification of
 correctness claims.
 
-**AMReX-Astro / Castro** (see §8.6) has the most systematic ongoing
-verification infrastructure in comp-astro: nightly regression tests,
-manufactured solution tests, and known-answer convergence problems. The
-Castro verification documentation is unusually detailed for the field. Still
-falls short of the level we are targeting: the verification tests are
-defined by what the code does, not by an independent statement of what it
-should do.
+**AMReX-Astro / Castro** (see §8.6) has well-documented ongoing
+verification infrastructure: nightly regression tests, manufactured
+solution tests, and known-answer convergence problems. The verification
+tests are defined by observed code behavior rather than an independent
+prior specification of correctness claims.
 
 **Trilinos** (see §8.6) applied the most rigorous software engineering
 discipline to scientific computing infrastructure: mandatory unit tests,
@@ -190,7 +182,7 @@ coefficient to 1% accuracy") is stated precisely, and the verification is a
 mathematical proof that the code meets it. Uncommon in practice outside
 finite-element structural mechanics.
 
-**The honest summary.** No open-source astrophysics code has applied
+**Summary.** No open-source astrophysics code has applied
 externally grounded verification consistently across its physics capabilities
 as an ongoing development discipline. FLASH and AMReX-Astro come closest but
 are still primarily regression-testing frameworks: they detect drift from a
@@ -270,46 +262,3 @@ A 2025 DOE/NSF joint program funding research into formal methods and
 correctness for scientific computing codes. Signals that the gap between
 software engineering rigor and simulation practice is recognized at the
 funding-agency level.
-
----
-
-## 8.8 Implications for Cosmic Foundry
-
-**What the field has that we should use:**
-
-- **MMS** is the right verification technique for discretization maps.
-  When we implement any PDE discretization, MMS is the primary external
-  grounding method: choose a smooth manufactured solution, compute the
-  source term symbolically (SymPy), verify second-order (or higher)
-  convergence of the solver to that solution. This is the operationalization
-  of "verify the discretization map against the continuous operator."
-
-- **The PCMM** provides a useful checklist of what evidence must exist for
-  a capability to be credible. Used prospectively — filled in before the
-  code is written — it functions as a capability specification template. The
-  six elements (representation fidelity, physics model fidelity, code
-  verification, solution verification, model validation, UQ) map onto the
-  three-track roadmap structure.
-
-- **Goal-oriented error estimation** is the rigorous path to specifying
-  "compute quantity X to accuracy ε" and then verifying the code meets that
-  spec. Worth incorporating once physics capabilities are implemented.
-
-**What the field lacks that we are building:**
-
-No open-source physics simulation code has applied externally grounded
-verification consistently across all its capabilities as an ongoing
-development discipline. The existing V&V frameworks (Oberkampf & Roy,
-PCMM, MMS) describe what rigorous verification looks like and provide the
-tools, but they have not been applied consistently in any astrophysics code
-and only partially in the best CFD codes. The distinction that matters: most
-codes detect drift from a previously established baseline. Cosmic Foundry
-aims to verify against an external correctness claim — an answer that exists
-independently of the code. That is what MMS and the Oberkampf & Roy framework
-call for, and what almost no code sustains in practice.
-
-**The absence from astrophysics is striking.** The comp-astro community has
-not applied the CFD V&V framework systematically. A 2015 survey found that
-90% of astronomers write their own code but only 8% received substantial
-software training. FLASH and AMReX-Astro are the best examples of systematic
-V&V in the field, and even they fall short of the level described in §8.5.

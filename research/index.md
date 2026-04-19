@@ -1,27 +1,10 @@
 # Computational Astrophysics Code Landscape — Research Notes
 
-This document surveys major computational astrophysics codes that are
-relevant to the Cosmic Foundry engine design. For each code it records
-canonical papers, public source location, license, and capabilities.
-The survey culminates in a **union of capabilities** that this
-repository should ultimately be able to cover if the goal is parity
-(or superset) with the physics that any of these codes can simulate.
-
-**Scope note.** Cosmic Foundry is intended to be a fully self-contained
-engine. The frameworks surveyed below (AMReX, Kokkos, Parthenon,
-Charm++, Chombo, Cactus, MPI-AMRVAC) are therefore studied as
-**capability references whose functionality must be replicated inside
-this repository**, not as dependencies to be linked against. Their
-papers are cited because they document the algorithms we would need
-to re-implement — block-structured AMR, performance-portable parallel
-loops, task-based asynchronous drivers, multigrid solvers, particle
-infrastructure, and so on. Where a feature of a downstream physics
-code is attributed to "AMReX" or "Parthenon," read that as shorthand
-for *capabilities the engine must provide natively*.
-
-The survey is organized by infrastructure family rather than strictly
-alphabetically, because most modern codes cluster around a small set
-of these framework design patterns.
+This document surveys major computational astrophysics codes. For each
+code it records canonical papers, public source location, license, and
+capabilities. The survey is organized by infrastructure family rather
+than alphabetically, because most modern codes cluster around a small
+set of framework design patterns.
 
 ## Contents
 
@@ -35,7 +18,6 @@ of these framework design patterns.
 | 6 | [06-capabilities.md](06-capabilities.md) | §6.1–§6.10 — the union of capabilities that a self-contained engine must cover. |
 | 6.11 | [06-11-visualization.md](06-11-visualization.md) | §6.11 — visualization and science-communication landscape (broken out because the section is long and evolves faster than the code survey). |
 | 6.12 | [06-12-licensing.md](06-12-licensing.md) | §6.12 — licensing and openness landscape for the surveyed codes. |
-| 7 | [07-implications.md](07-implications.md) | §7 — implications for Cosmic Foundry. |
 | 8 | [08-vv-methodology.md](08-vv-methodology.md) | §8 — V&V and specification methodology: Roache, Oberkampf & Roy, MMS, PCMM, and what exists (and doesn't) for specification-first code development. |
 
 ## Splitting discipline

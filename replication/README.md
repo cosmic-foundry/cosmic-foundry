@@ -7,6 +7,13 @@ the verification standard documented in `DEVELOPMENT.md` and is itself
 a **living specification**: update this README as we learn from
 each replication target.
 
+> **Epoch scope.** The full golden-data harness (manifest, generators,
+> fixtures, conftest) activates at Epoch 5 (hydrodynamics), when the
+> first physics capable of producing replicable output exists.
+> Epochs 0–4 use analytical and convergence tests rather than
+> target-code comparison. The specs in `targets/` are correctly
+> forward-looking and marked `Proposed`.
+
 ## Layout
 
 ```text
