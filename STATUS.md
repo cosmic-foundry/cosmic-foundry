@@ -20,6 +20,16 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ## Current work
 
+**Generalize `derive_laplacian_stencil` to `derive_stencil(deriv_order, approx_order, ndim)`.**
+Refactor the parameterizable stencil generator to accept derivative order as a
+parameter. This allows computing stencils for any derivative (1st, 2nd, 3rd, ...)
+at any approximation order in any number of dimensions. Current implementation
+is specialized to 2nd derivatives (Laplacian); extract the common logic and
+parameterize by `deriv_order`. Rename to `derive_stencil()`. Maintain backward
+compatibility or provide a thin `derive_laplacian_stencil(order, ndim)` wrapper
+for the 2nd-derivative case. This unblocks future operators (gradients,
+divergences, curls) that can reuse the same framework.
+
 **Implement auto-discovery for kernel module generation and testing.**
 With the parameterizable stencil derivation proven in `stencil.py`, the next
 step is to generalize the generator script and test suite to auto-discover and
