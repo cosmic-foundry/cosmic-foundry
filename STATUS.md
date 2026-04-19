@@ -13,6 +13,16 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ## Current work
 
+**Generalize stencil generation to support any approximation order.**
+The Laplacian derivation in `laplacian.py` is specific to second-order 1D
+stencils extended to 3D. Extract the derivation logic into a parameterizable
+stencil generator (e.g., `cosmic_foundry/computation/stencil.py`) that can
+produce 1D/3D stencils of any approximation order (2nd, 4th, 6th, etc.).
+Move the Laplacian-specific logic into a thin wrapper that calls the generic
+generator with order=2. This becomes the foundation for scaling: higher-order
+stencils (bi-harmonic, compact schemes) can then be derived and generated
+without reimplementing the derivation pattern.
+
 **Implement auto-discovery for kernel module generation and testing.**
 `cosmic_foundry/computation/_codegen.py` now provides shared utilities
 (sentinels, hash, splice) and the derivation pattern is proven in
