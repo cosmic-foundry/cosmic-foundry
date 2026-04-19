@@ -1,4 +1,4 @@
-"""Tests for ContinuousField.discretize: f.discretize(mesh) → Array[T]."""
+"""Tests for discretize: discretize(fn, mesh) → Array[T]."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.computation.array import Array
+from cosmic_foundry.computation.field import discretize
 from cosmic_foundry.geometry.domain import Domain
 from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import partition_domain
-from cosmic_foundry.theory.field import ContinuousField
 
 
 def _mesh_1d(n_cells: int, n_blocks: int) -> Array:
@@ -35,34 +35,29 @@ class TestDiscretizeOperator:
     """Verify f_h(x_i) = f(x_i) — the mathematical claim of the map."""
 
     def test_zero_function_produces_zero_payload(self) -> None:
-        f = ContinuousField(name="phi", fn=lambda x: jnp.zeros_like(x))
-        field = f.discretize(_mesh_1d(8, 2))
+        field = discretize(lambda x: jnp.zeros_like(x), _mesh_1d(8, 2))
         for arr in field.elements:
             assert jnp.all(arr == 0.0)
 
     def test_constant_function_produces_constant_payload(self) -> None:
-        f = ContinuousField(name="phi", fn=lambda x: jnp.full_like(x, 42.0))
-        field = f.discretize(_mesh_1d(8, 2))
+        field = discretize(lambda x: jnp.full_like(x, 42.0), _mesh_1d(8, 2))
         for arr in field.elements:
             assert jnp.all(arr == pytest.approx(42.0))
 
     def test_identity_function_produces_node_positions_1d(self) -> None:
         mesh = _mesh_1d(8, 1)
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(mesh)
+        field = discretize(lambda x: x, mesh)
         assert jnp.allclose(field[0], mesh[0].node_positions(0))
 
     def test_multiblock_each_segment_samples_its_own_block(self) -> None:
         mesh = _mesh_1d(8, 2)
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(mesh)
+        field = discretize(lambda x: x, mesh)
         for i, block in enumerate(mesh.elements):
             assert jnp.allclose(field[i], block.node_positions(0))
 
     def test_2d_function_evaluated_at_cell_center_meshgrid(self) -> None:
         mesh = _mesh_2d((4, 6), (1, 1))
-        f = ContinuousField(name="phi", fn=lambda x, y: x + y)
-        field = f.discretize(mesh)
+        field = discretize(lambda x, y: x + y, mesh)
         block = mesh[0]
         xs = block.node_positions(0)
         ys = block.node_positions(1)
@@ -75,32 +70,27 @@ class TestDiscretizeCodomain:
 
     def test_payload_shape_matches_block_interior(self) -> None:
         mesh = _mesh_1d(8, 2)
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(mesh)
+        field = discretize(lambda x: x, mesh)
         for i, block in enumerate(mesh.elements):
             assert field[i].shape == block.shape
 
     def test_payload_dtype_is_float64(self) -> None:
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(_mesh_1d(8, 2))
+        field = discretize(lambda x: x, _mesh_1d(8, 2))
         for arr in field.elements:
             assert arr.dtype == jnp.float64
 
     def test_payload_is_finite(self) -> None:
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(_mesh_1d(8, 2))
+        field = discretize(lambda x: x, _mesh_1d(8, 2))
         for arr in field.elements:
             assert jnp.all(jnp.isfinite(arr))
 
     def test_result_is_array(self) -> None:
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(_mesh_1d(8, 1))
+        field = discretize(lambda x: x, _mesh_1d(8, 1))
         assert isinstance(field, Array)
 
 
 class TestDiscretizeIdentity:
     def test_element_count_matches_block_count(self) -> None:
         mesh = _mesh_2d((8, 8), (2, 2))
-        f = ContinuousField(name="phi", fn=lambda x, y: x)
-        field = f.discretize(mesh)
+        field = discretize(lambda x, y: x, mesh)
         assert len(field.elements) == len(mesh.elements)

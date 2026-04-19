@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.computation.array import Array
+from cosmic_foundry.computation.field import discretize
 from cosmic_foundry.geometry.domain import Domain
 from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import fill_halo, partition_domain
-from cosmic_foundry.theory.field import ContinuousField
 
 
 def _make_1d_mesh() -> Array:
@@ -25,8 +25,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
     mesh = _make_1d_mesh()
     access = (1,)
 
-    f = ContinuousField(name="phi", fn=lambda x: x)
-    field = f.discretize(mesh)
+    field = discretize(lambda x: x, mesh)
 
     filled = fill_halo(mesh, field, access)
 
@@ -60,8 +59,7 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
     access = (1, 1)
 
     # f(x, y) = 10*x + y so each block has distinct values
-    f = ContinuousField(name="phi", fn=lambda x, y: 10.0 * x + y)
-    field = f.discretize(mesh)
+    field = discretize(lambda x, y: 10.0 * x + y, mesh)
 
     filled = fill_halo(mesh, field, access)
 
@@ -80,8 +78,7 @@ def test_fill_halo_returns_new_array_without_mutating_original() -> None:
     mesh = _make_1d_mesh()
     access = (1,)
 
-    f = ContinuousField(name="phi", fn=lambda x: x)
-    field = f.discretize(mesh)
+    field = discretize(lambda x: x, mesh)
     original = field[0].copy()
 
     filled = fill_halo(mesh, field, access)
@@ -96,8 +93,7 @@ def test_interior_values_preserved_after_fill() -> None:
     mesh = _make_1d_mesh()
     access = (1,)
 
-    f = ContinuousField(name="phi", fn=lambda x: x * x)
-    field = f.discretize(mesh)
+    field = discretize(lambda x: x * x, mesh)
 
     filled = fill_halo(mesh, field, access)
 

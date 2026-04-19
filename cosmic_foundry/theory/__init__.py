@@ -10,7 +10,7 @@ library) belongs in computation/, mesh/, or geometry/.
 from __future__ import annotations
 
 from cosmic_foundry.theory.discretization import Discretization
-from cosmic_foundry.theory.field import ContinuousField, Field, ScalarField, TensorField
+from cosmic_foundry.theory.field import Field, ScalarField, TensorField
 from cosmic_foundry.theory.flat_manifold import FlatManifold
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.indexed_family import IndexedFamily
@@ -23,7 +23,6 @@ from cosmic_foundry.theory.set import Set
 from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 __all__ = [
-    "ContinuousField",
     "Discretization",
     "Field",
     "FlatManifold",
