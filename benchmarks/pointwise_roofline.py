@@ -14,23 +14,11 @@ import jax.numpy as jnp
 
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
+from cosmic_foundry.computation.laplacian import seven_point_laplacian
 from cosmic_foundry.computation.stencil import Stencil
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
-
-
-def _seven_point_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
-    phi = fields[0]
-    return (
-        phi[i - 1, j, k]
-        + phi[i + 1, j, k]
-        + phi[i, j - 1, k]
-        + phi[i, j + 1, k]
-        + phi[i, j, k - 1]
-        + phi[i, j, k + 1]
-        - 6.0 * phi[i, j, k]
-    )
 
 
 def _triad_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
@@ -38,7 +26,6 @@ def _triad_fn(fields: tuple[Any, ...], i: Any, j: Any, k: Any) -> Any:
     return a[i, j, k] + 0.5 * b[i, j, k]
 
 
-seven_point_laplacian = Stencil(fn=_seven_point_fn, radii=(1, 1, 1))
 pointwise_triad = Stencil(fn=_triad_fn, radii=(0, 0, 0))
 
 

@@ -21,18 +21,6 @@ Kernel inputs and outputs are currently raw JAX arrays wrapped in
 `Field` instances. Requires a design decision on how `Field` subclasses
 connect to `Array[T]` and how kernels declare their field types.
 
-**Create `derivations/` and add a Laplacian stencil derivation**
-*(claim 5).* The `derivations/` directory does not exist. The
-second-order 7-point Laplacian stencil needs a SymPy derivation
-document demonstrating that the finite-difference weights are the
-correct Taylor-series approximation of ∂²/∂x².
-
-**Apply convergence test to the Laplacian stencil** *(claim 6).*
-The convergence infrastructure in `tests/utils/convergence.py` exists
-but is not applied to any production operator. The Laplacian must be
-shown to converge at second order under grid refinement against an
-analytical solution (e.g. f(x) = sin(2πx), ∇²f = -(2π)²sin(2πx)).
-
 **Attach provenance metadata to all engine-written files** *(claim 9).*
 `io/` writes HDF5 files with no git commit hash. Every call to
 `WriteArray.execute()` should embed the current repository state

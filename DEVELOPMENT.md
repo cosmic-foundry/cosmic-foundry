@@ -329,8 +329,10 @@ three lanes:
   document is required; principled disagreements with the literature
   are recorded inside it.
 
-Lanes B and C require a derivation document under `derivations/`
-with executable SymPy checks on load-bearing algebraic steps.
+Lanes B and C require a `_derive()` function in the production module
+with executable SymPy checks on load-bearing algebraic steps. A paired
+`generate()` function produces the runtime constants block; running
+`scripts/generate_kernels.py` splices it back into the module.
 Infrastructure capabilities (dispatch, mesh topology, I/O, field
 placement) are out of scope.
 

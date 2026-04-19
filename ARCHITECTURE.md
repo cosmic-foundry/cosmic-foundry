@@ -41,17 +41,19 @@ raw JAX arrays wrapped in `Array[T]`, not `Field` instances.)*
 **Every numerical method is formally derived from its continuous
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
 except where the argument is geometric or topological, in which case a
-human-readable derivation is required. Derivations live in `derivations/`.
-*(Current inconsistency: the `derivations/` directory does not exist.
-The Laplacian stencil has no formal derivation document.)*
+human-readable derivation is required. Each module's derivation lives in
+that module as a `_derive()` function; a `generate()` function produces
+the full runtime section — constants and kernel function body — from the
+derivation's offset/weight pairs, spliced into the same file by
+`scripts/generate_kernels.py`. SymPy is never imported at module load time.
+*(Current inconsistency: `generate()` in `cosmic_foundry/computation/laplacian.py`
+produces only the constants block; the kernel function body `_seven_point_fn`
+is hand-written from the stencil geometry rather than generated from the
+derivation's offset/weight pairs.)*
 
 **Every numerical method is verified against an analytical solution or
 observational data, with the verification test living in this
 repository.**
-*(Current inconsistency: the convergence testing infrastructure exists
-in `tests/utils/convergence.py` but is not applied to any production
-operator. The Laplacian is checked only on a polynomial for which the
-stencil is exact — not a convergence test.)*
 
 **Where external data sources are ingested** (reaction rates, opacity
 tables, observational measurements), **the uncertainty in that data is

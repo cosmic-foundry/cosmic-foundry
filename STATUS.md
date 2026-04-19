@@ -13,4 +13,32 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ## Current work
 
-*No immediate work queued. See `ROADMAP.md` for the next unspecified items.*
+**Generalize the derivation infrastructure into a reusable framework.**
+The sentinel splicing logic, hash computation, and `generate()` contract are
+currently hand-rolled inside `laplacian.py` and `scripts/generate_kernels.py`.
+Before rolling out to additional operators, extract these into shared utilities:
+a `_make_hash(constants)` helper and a `generate_constants_block(constants)`
+formatter in `cosmic_foundry/computation/_codegen.py`; sentinel strings as
+module-level constants shared between the generator script and the drift-check
+test; and `scripts/generate_kernels.py` generalized to discover and splice any
+module that exposes a `generate()` function. Each new kernel module then only
+needs to implement `_derive()` and call the shared utilities — no boilerplate
+to copy.
+
+This includes generating the kernel function body itself. Currently
+`_seven_point_fn` is written by hand from the stencil geometry (six
+face-neighbor offsets, one center). The stencil offsets and their weights are
+both outputs of the derivation, so `generate()` should emit the pointwise
+function body — not just the scalar constants — from the derived offset/weight
+pairs. A hand-written kernel function is as much a gap against claim 5 as a
+hand-typed coefficient.
+
+**Scale derivation pattern to the full codebase.**
+`cosmic_foundry/computation/laplacian.py` establishes the proof-of-concept:
+derivation (`_derive`), hash-verified generated constants block, and production
+kernel in a single file; `scripts/generate_kernels.py` splices fresh constants
+via `BEGIN GENERATED` / `END GENERATED` sentinels. The next step is to audit
+every existing operator and apply the same pattern: add `_derive()` and
+`generate()`, generate the constants block, and add a drift-check entry in
+`tests/test_generated_kernels.py`. Any operator without a `_derive()` is not
+yet compliant with architectural basis claim 5.
