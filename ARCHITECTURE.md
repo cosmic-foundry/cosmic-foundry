@@ -1,12 +1,76 @@
 # Cosmic Foundry — Architecture
 
 This document is the authoritative record of live architectural decisions
-for this repository. Each decision is one paragraph. Decisions not yet
-made are listed under *Open questions*. The code is the authoritative
-description of any module's current design; this file records only what
-is not self-evident from reading the code. `STATUS.md` is the navigation
-anchor for the codebase. `DEVELOPMENT.md` covers workflow and process
-decisions (including physics capability lanes).
+for this repository. Decisions not yet made are listed under *Open
+questions*. The code is designed to make its own structure self-evident;
+ARCHITECTURE.md records the decisions and reasoning behind that
+structure, not a description of it. `DEVELOPMENT.md` covers workflow and
+process decisions (including physics capability lanes).
+
+---
+
+## Architectural basis
+
+These are the foundational claims about this repository. Each is a
+commitment: the code must satisfy it, tests enforce it where possible,
+and any PR that violates a claim must explicitly revise it here rather
+than quietly breaking it.
+
+**Cosmic Foundry is a general-purpose PDE simulation engine, optimized
+for astrophysical use cases.** It provides reusable computation
+infrastructure — kernels, mesh, fields, I/O, diagnostics, manifest
+tooling — on which application repositories build domain-specific
+physics. No domain-specific physics implementation and no observational
+validation data belongs here.
+
+**The architecture is defined independently of any implementation
+language.** The current Python implementation is one realization of the
+architecture, not the architecture itself.
+
+**The mathematical language of the architecture is differential geometry
+on spatio-temporal manifolds, with PDE theory as the application layer.**
+*(Tension: the current implementation uses only spatial manifolds;
+no temporal or spacetime computations are implemented yet.)*
+
+**Physical quantities are represented as instances of formal mathematical
+abstractions.** Any concrete representation is an implementation detail.
+*(Current inconsistency: `Field` and its subclasses are defined in
+`theory/` but are not used in computation. Kernel inputs and outputs are
+raw JAX arrays wrapped in `Array[T]`, not `Field` instances.)*
+
+**Every numerical method is formally derived from its continuous
+mathematical counterpart.** The derivation is machine-checkable (SymPy)
+except where the argument is geometric or topological, in which case a
+human-readable derivation is required. Derivations live in `derivations/`.
+*(Current inconsistency: the `derivations/` directory does not exist.
+The Laplacian stencil has no formal derivation document.)*
+
+**Every numerical method is verified against an analytical solution or
+observational data, with the verification test living in this
+repository.**
+*(Current inconsistency: the convergence testing infrastructure exists
+in `tests/utils/convergence.py` but is not applied to any production
+operator. The Laplacian is checked only on a polynomial for which the
+stencil is exact — not a convergence test.)*
+
+**Where external data sources are ingested** (reaction rates, opacity
+tables, observational measurements), **the uncertainty in that data is
+explicitly quantified and propagated.**
+
+**The architecture is scale-agnostic.** The physics implementation is
+independent of the deployment scale; any difference in outputs across
+scales is attributable to non-deterministic order of operations, not to
+architectural constraints.
+
+**Every file the engine writes carries provenance metadata** identifying
+the exact repository state from which it was generated.
+*(Current inconsistency: `io/` writes HDF5 files with no git commit
+hash or repository state attached. The `Provenance` class in
+`manifests/` covers external data ingestion only.)*
+
+**The engine is dimensionless internally.** Units are attached at the
+boundary where results are compared against analytical solutions or
+observational data.
 
 ---
 
@@ -19,13 +83,10 @@ escape hatches only; adopting either requires a documented justification
 here. Pre-built libraries (JAX, NumPy, h5py) are consumed as
 dependencies, not produced by this build.
 
-**JAX + XLA as the primary kernel backend.** Every kernel shipped so far
-is authored as a JAX kernel. The kernel interface (`Stencil`, `Reduction`
-— see `computation/`) is structured so that secondary backends can be
-added without changing call sites. Secondary backends (Numba, Taichi,
-NVIDIA Warp, Triton) are listed as optional extras in `pyproject.toml`
-but no adapter is written or exercised. Adding a secondary backend in
-production requires documenting the workload and performance gap here.
+**JAX + XLA is the current kernel backend.** Every kernel is authored
+as a JAX kernel. The formal model governing backend substitutability and
+kernel composition is an open question (see *Open architectural
+questions*).
 
 **`jax.distributed` + NCCL/GLOO for host parallelism.** No MPI layer in
 the baseline. `mpi4py` is available as an optional extra for sites where
@@ -41,26 +102,23 @@ built with Sphinx + MyST-NB. Docstrings follow the NumPy convention. The
 docs build runs with warnings-as-errors; GitHub Actions deploys to GitHub
 Pages. Sphinx-design provides layout components.
 
-**Visualization stack.** Field data is written in HDF5 (current `io/`)
-and Zarr v3 (planned). Browser rendering uses WebGPU primary with a
-WebGL2 fallback; desktop rendering uses pyvista/vispy for local
-inspection. All colormaps are perceptual (cmasher, cmocean); rainbow/jet
-are prohibited. Visual regression tests use pytest-mpl with SSIM
-comparison.
-
 ---
 
 ## Mathematical hierarchy
 
-The design principle governing `theory/` and `computation/`:
+**`theory/` is strictly third-party-free.** The `theory/` package
+defines pure mathematical ABCs and may not import from any package
+outside the Python standard library. Mathematical concreteness (classes
+parameterized by Python primitives) belongs in `theory/`; computational
+concreteness (JAX, NumPy, HDF5) belongs outside it. Enforced by
+`tests/test_theory_no_third_party_imports.py`.
 
-> Every class at the top level of `computation/` is exactly one step
-> removed from `theory/` — it directly inherits from an ABC. Any class
-> that is two steps removed must live one level down within `computation/`.
+**`computation/` contains distance-1 implementations.** Every class at
+the top level of `computation/` directly inherits from an ABC in
+`theory/`. Classes two or more steps removed live one level down within
+their package.
 
-The `theory/` package defines pure mathematical ABCs with no JAX
-dependency. The `computation/` package contains the first concrete
-implementations. The current ABC hierarchy:
+The current ABC hierarchy:
 
 ```
 Set
@@ -116,14 +174,11 @@ operation on any indexed set and lives as an `@abstractmethod` on
 
 ## Operator model
 
-**Kernel abstraction (Op / Region / Policy / Dispatch).** The kernel
-layer separates four independent axes: Op (the computation), Region (the
-spatial domain), Policy (the execution strategy), and Dispatch (the
-assembly and run). Any Op can be composed with any Region under any
-Policy without changing call sites. `Stencil` (pointwise) and `Reduction`
-(fold) are the two concrete Op types; `Extent` is the Region type;
-`FlatPolicy` is the only implemented Policy. Dispatch runs the Op over
-the Region via `op.execute(region, policy)`.
+**Kernel primitives.** `Stencil` (pointwise) and `Reduction` (fold) are
+the two concrete kernel types, both in `computation/`. Each exposes an
+`execute` method. A formal model separating the kernel computation from
+the spatial region and execution policy is a design goal but is not yet
+realized; see *Open architectural questions*.
 
 **Global reduction primitive.** `Reduction(operator, identity)` is the
 primitive for field-level folds. It returns a 0-dimensional JAX array
@@ -141,26 +196,20 @@ implementation.
 
 ---
 
-## Platform and application split
-
-Cosmic Foundry is the **organizational platform**. Application
-repositories — covering stellar physics, cosmology, galactic dynamics,
-planetary formation, and other domains — build on top of it.
-
-- Reusable computation infrastructure (kernels, mesh, fields, I/O,
-  diagnostics) belongs here.
-- Domain-specific physics implementations and observational validation
-  data belong in application repos.
-- Cross-scale workflows that compose two or more application domains
-  belong in their own repository.
-
----
 
 ## Open architectural questions
 
 These are decisions we know we need to make but have not yet made.
 When a question is resolved, move it into the appropriate section above
 and update the affected modules.
+
+**Kernel composition model.**
+A backend-agnostic interface separating kernel computation (Op) from
+spatial region (Region) and execution policy (Policy) is a design goal.
+The earlier Op/Region/Policy/Dispatch framing was dropped before it was
+realized. The current `Stencil` and `Reduction` primitives expose
+`execute` directly; the formal model governing composition, backend
+substitutability, and dispatch is unsettled.
 
 **`DynamicManifold` for full GR.**
 Full GR simulations cannot use a fixed-metric manifold: the metric
@@ -172,7 +221,6 @@ computational domain is a 3-D Riemannian spatial hypersurface; the
 3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
 The concrete geometry entry is `Spacetime3Plus1(DynamicManifold)` in
 `geometry/`.
-
 
 **Domain as Array[Domain].**
 `Domain` is currently a single bounded region of a manifold. Multi-patch

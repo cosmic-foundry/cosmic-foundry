@@ -1,13 +1,8 @@
 # Cosmic Foundry
 
-A computational astrophysics engine for multi-physics simulation.
-
-Cosmic Foundry is a Python engine for numerical astrophysics, targeting
-the capability set surveyed in [`docs/research/`](docs/research/index.md) — hydrodynamics
-through numerical relativity, radiation transport, gravity, N-body,
-microphysics, and cosmology. It is being built incrementally toward a
-code that can replicate published astrophysics results. JAX powers the
-numerical kernels (see `ARCHITECTURE.md` for the technology baseline).
+Cosmic Foundry is a general-purpose PDE simulation engine, optimized
+for astrophysical use cases. The foundational commitments governing its
+design are in [**Architectural basis**](ARCHITECTURE.md#architectural-basis).
 
 ## Quick start
 
@@ -40,7 +35,7 @@ sphinx-build -W docs docs/_build/html
 
 ## Repository layout
 
-The code is the authoritative architecture description. Start here:
+Start here:
 
 | Directory | What it is | Read first |
 |---|---|---|

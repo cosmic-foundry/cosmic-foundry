@@ -299,6 +299,12 @@ architecture stress-review checklist at
 `pr-review/architecture-checklist.md`. Include the stress-review result
 in the PR description or review report.
 
+Any architecture review should also include a subjective pass over the
+`*(Current inconsistency: ...)*` annotations in `ARCHITECTURE.md
+§Architectural basis`. For each one, ask: has recent work resolved this
+inconsistency? If yes, remove the annotation and close or update the
+corresponding ROADMAP.md gap-closure item.
+
 ---
 
 ## Physics capability implementation paths

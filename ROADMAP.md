@@ -10,6 +10,47 @@ unblocked, it moves to `STATUS.md`.
 
 ---
 
+## Architectural basis gap closure
+
+Items required to bring the codebase into consistency with the
+foundational claims in `ARCHITECTURE.md §Architectural basis`.
+
+**Wire `Field` instances to the computation layer** *(claim 4).*
+Kernel inputs and outputs are currently raw JAX arrays wrapped in
+`Array[T]`. The design intention is that physical quantities are
+`Field` instances. Requires a design decision on how `Field` subclasses
+connect to `Array[T]` and how kernels declare their field types.
+
+**Create `derivations/` and add a Laplacian stencil derivation**
+*(claim 5).* The `derivations/` directory does not exist. The
+second-order 7-point Laplacian stencil needs a SymPy derivation
+document demonstrating that the finite-difference weights are the
+correct Taylor-series approximation of ∂²/∂x².
+
+**Apply convergence test to the Laplacian stencil** *(claim 6).*
+The convergence infrastructure in `tests/utils/convergence.py` exists
+but is not applied to any production operator. The Laplacian must be
+shown to converge at second order under grid refinement against an
+analytical solution (e.g. f(x) = sin(2πx), ∇²f = -(2π)²sin(2πx)).
+
+**Attach provenance metadata to all engine-written files** *(claim 9).*
+`io/` writes HDF5 files with no git commit hash. Every call to
+`WriteArray.execute()` should embed the current repository state
+(git commit hash, dirty-tree flag) as HDF5 attributes. Planned
+alongside M3 (validation infrastructure).
+
+---
+
+## Planned visualization stack
+
+Field data is written in HDF5 (current `io/`) and Zarr v3 (planned).
+Browser rendering uses WebGPU primary with a WebGL2 fallback; desktop
+rendering uses pyvista/vispy for local inspection. All colormaps are
+perceptual (cmasher, cmocean); rainbow/jet are prohibited. Visual
+regression tests use pytest-mpl with SSIM comparison.
+
+---
+
 ## Planned theory additions
 
 **`DynamicManifold(PseudoRiemannianManifold)`**
@@ -56,7 +97,7 @@ reproducibility tooling:
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
 | M1 | Verification infrastructure: Function:/Source:/Sink: block convention, formulas register, convergence testing helpers, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions as one-paragraph claims in a single file; docs/ as a minimal index with API reference. ✓ |
-| M3 | Validation infrastructure: manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
+| M3 | Validation infrastructure: manifests, provenance sidecars (git commit hash on every engine-written file), and comparison-result schema. Planned alongside simulation Epoch 3. |
 | M4 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
 | M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
 
@@ -66,6 +107,6 @@ Every simulation epoch must satisfy this checklist before it is considered verif
 
 - Function:/Source:/Sink: block on every operator class introduced
 - Entry in the formulas register (`replication/formulas.md`) for each physics formula
-- At least one externally-grounded test (analytical solution or published benchmark — not an engine-generated golden file)
+- At least one externally-grounded test against an analytical solution or observational data (not an engine-generated golden file, and not the output of another simulation code)
 - At least one convergence test confirming the stated approximation order p
 - Lane A/B/C classification stated; derivation document with SymPy checks for Lanes B and C
