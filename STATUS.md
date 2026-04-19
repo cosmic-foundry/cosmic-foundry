@@ -28,11 +28,13 @@ Remove the offline code-gen boilerplate from `stencil.py`: delete `_derive()`,
 `generate()`, and the generated block (`_COEFFICIENTS_HASH`, kernel functions,
 named instances like `seven_point_laplacian`). `stencil.py` should export only
 the parameterizable generator `derive_stencil(deriv_order, approx_order, ndim)`.
-Responsibility for invoking the generator moves to callers: test files,
-benchmarks, and any other code that needs a stencil call
-`derive_stencil(2, 2, 3)` directly. This distributes the code-gen responsibility
-to the edge, keeps `stencil.py` clean and focused, and eliminates the need to
-name and commit every possible concretization.
+Workflow: every invoker of stencil functionality — test files, benchmarks,
+application code — must invoke code generation directly: call
+`derive_stencil(deriv_order, approx_order, ndim)` to get weights, then construct
+a Stencil instance. No pre-generated named instances are imported; each callsite
+derives what it needs. This distributes code-gen responsibility to the edge,
+keeps `stencil.py` clean and focused, and eliminates the need to name and commit
+every possible concretization.
 
 **Implement auto-discovery for kernel module generation and testing.**
 With `stencil.py` cleaned up and the framework proven, generalize the generator
