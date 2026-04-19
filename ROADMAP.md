@@ -107,6 +107,6 @@ Every simulation epoch must satisfy this checklist before it is considered verif
 
 - Function:/Source:/Sink: block on every operator class introduced
 - Entry in the formulas register (`replication/formulas.md`) for each physics formula
-- At least one externally-grounded test (analytical solution or published benchmark — not an engine-generated golden file)
+- At least one externally-grounded test against an analytical solution or observational data (not an engine-generated golden file, and not the output of another simulation code)
 - At least one convergence test confirming the stated approximation order p
 - Lane A/B/C classification stated; derivation document with SymPy checks for Lanes B and C
