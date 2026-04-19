@@ -93,9 +93,7 @@ __all__ = ["Stencil", "derive_stencil", "seven_point_laplacian"]
 # ---------------------------------------------------------------------------
 
 
-def derive_stencil(
-    deriv_order: int, approx_order: int, ndim: int = 3
-) -> dict[str, Any]:
+def derive_stencil(deriv_order: int, approx_order: int, ndim: int) -> dict[str, Any]:
     """Derive exact rational weights for an ndim stencil of given derivative order.
 
     Uses SymPy finite-difference weights. Computes 1D derivative weights of the
@@ -113,8 +111,8 @@ def derive_stencil(
         r = approx_order // 2 and point set size r + r + 1. Must exceed
         deriv_order - 1 to have enough points.
     ndim
-        Number of spatial dimensions (1, 2, 3, ...). Extends 1D weights to ndim
-        by axis-sum; for single-axis derivatives, use ndim=1.
+        Number of spatial dimensions (1, 2, 3, ...). Required. Extends 1D weights
+        to ndim by axis-sum; for single-axis derivatives, use ndim=1.
 
     Returns
     -------

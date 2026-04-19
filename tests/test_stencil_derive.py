@@ -142,7 +142,7 @@ def test_weights_sum_to_zero(deriv_order: int, approx_order: int) -> None:
     This is a necessary condition: applying the stencil to a constant field
     must return zero.
     """
-    result = derive_stencil(deriv_order, approx_order, ndim=3)
+    result = derive_stencil(deriv_order, approx_order, 3)
     weight_sum = sum(w for _, w in result["terms"])
     assert weight_sum == 0, (
         f"deriv_order {deriv_order}, approx_order {approx_order}: "
