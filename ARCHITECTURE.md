@@ -192,10 +192,14 @@ enforced. Planned: add `∂M` to `theory/` once the n-dimensional
 `Extent` machinery is in place. `BoundaryCondition(Function)` in
 `theory/` follows, with `execute` operating on `∂M`-indexed data.
 
-**`ContinuousField` relocation.**
-`ContinuousField` is a concrete class with a JAX import inside
-`theory/`. It is a candidate for relocation to `computation/` or
-`geometry/` to keep `theory/` free of runtime dependencies.
+**Domain as Array[Domain].**
+`Domain` is currently a single bounded region of a manifold. Multi-patch
+or non-rectangular simulation domains may eventually require `Domain` to
+be an `Array[Domain]` — a finite indexed family of sub-domains — rather
+than a single object. If so, `PartitionDomain` dissolves: the domain
+decomposition IS the domain. This generalization is deferred until a
+concrete use case requires it; the single-`Domain` design is coherent for
+all planned physics capabilities.
 
 **Halo fill fence.**
 The halo-fill operation — ghost-cell exchange for stencil footprints
