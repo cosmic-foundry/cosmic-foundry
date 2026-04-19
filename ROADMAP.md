@@ -10,6 +10,16 @@ unblocked, it moves to `STATUS.md`.
 
 ---
 
+## Planned visualization stack
+
+Field data is written in HDF5 (current `io/`) and Zarr v3 (planned).
+Browser rendering uses WebGPU primary with a WebGL2 fallback; desktop
+rendering uses pyvista/vispy for local inspection. All colormaps are
+perceptual (cmasher, cmocean); rainbow/jet are prohibited. Visual
+regression tests use pytest-mpl with SSIM comparison.
+
+---
+
 ## Planned theory additions
 
 **`DynamicManifold(PseudoRiemannianManifold)`**
