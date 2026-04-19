@@ -29,10 +29,11 @@ by JAX/XLA's code-generation backend. `pybind11` and `ctypes` are
 emergency escapes requiring a documented justification in this file
 before adoption.
 
-**JAX + XLA is the primary kernel backend.** Every kernel is authored
-as a JAX kernel. The Op/Region/Policy/Dispatch interface (see *Operator
-model*) is structured so that secondary backends can be added without
-changing call sites, but no secondary backend is written or exercised.
+**JAX + XLA is the current kernel backend.** Every kernel is authored
+as a JAX kernel. A backend-agnostic kernel interface is a design goal
+but is not yet realized; the formal model governing how kernels compose
+with spatial regions and execution policies is an open question (see
+*Open architectural questions*).
 
 **float64 is the default precision.** All field arrays default to
 `float64`. Precision exceptions must be explicit and documented at the
@@ -168,14 +169,11 @@ operation on any indexed set and lives as an `@abstractmethod` on
 
 ## Operator model
 
-**Kernel abstraction (Op / Region / Policy / Dispatch).** The kernel
-layer separates four independent axes: Op (the computation), Region (the
-spatial domain), Policy (the execution strategy), and Dispatch (the
-assembly and run). Any Op can be composed with any Region under any
-Policy without changing call sites. `Stencil` (pointwise) and `Reduction`
-(fold) are the two concrete Op types; `Extent` is the Region type;
-`FlatPolicy` is the only implemented Policy. Dispatch runs the Op over
-the Region via `op.execute(region, policy)`.
+**Kernel primitives.** `Stencil` (pointwise) and `Reduction` (fold) are
+the two concrete kernel types, both in `computation/`. Each exposes an
+`execute` method. A formal model separating the kernel computation from
+the spatial region and execution policy is a design goal but is not yet
+realized; see *Open architectural questions*.
 
 **Global reduction primitive.** `Reduction(operator, identity)` is the
 primitive for field-level folds. It returns a 0-dimensional JAX array
@@ -213,6 +211,14 @@ planetary formation, and other domains — build on top of it.
 These are decisions we know we need to make but have not yet made.
 When a question is resolved, move it into the appropriate section above
 and update the affected modules.
+
+**Kernel composition model.**
+A backend-agnostic interface separating kernel computation (Op) from
+spatial region (Region) and execution policy (Policy) is a design goal.
+The earlier Op/Region/Policy/Dispatch framing was dropped before it was
+realized. The current `Stencil` and `Reduction` primitives expose
+`execute` directly; the formal model governing composition, backend
+substitutability, and dispatch is unsettled.
 
 **`DynamicManifold` for full GR.**
 Full GR simulations cannot use a fixed-metric manifold: the metric
