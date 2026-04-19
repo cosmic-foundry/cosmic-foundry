@@ -7,6 +7,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
+from cosmic_foundry.computation.kernels import execute_pointwise  # noqa: E402
 from cosmic_foundry.descriptor import (  # noqa: E402
     AccessPattern,
     Descriptor,
@@ -30,7 +31,7 @@ from cosmic_foundry.field import (  # noqa: E402
     ScalarField,
     TensorField,
 )
-from cosmic_foundry.function import Function, execute_pointwise  # noqa: E402
+from cosmic_foundry.function import Function  # noqa: E402
 from cosmic_foundry.indexed_set import IndexedSet  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
     HAS_PARALLEL_HDF5,
