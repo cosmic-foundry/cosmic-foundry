@@ -38,8 +38,8 @@ reproducibility tooling:
 | Milestone | Capability |
 |-----------|------------|
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
-| M1 | Verification infrastructure: Function:/Source:/Sink: block convention, formulas register, convergence testing helpers, externally-grounded test pattern demonstrated on Epoch 1 kernel. ✓ |
-| M2 | Documentation architecture: all live architectural decisions as one-paragraph claims in a single file; docs/ consolidated to index + API reference. |
+| M1 | Verification infrastructure: Function:/Source:/Sink: block convention, formulas register, convergence testing helpers, externally-grounded test pattern. ✓ |
+| M2 | Documentation architecture: all live architectural decisions as one-paragraph claims in a single file; docs/ as a minimal index with API reference. ✓ |
 | M3 | Validation infrastructure: manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
 | M4 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
 | M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
@@ -68,5 +68,4 @@ Every simulation epoch must satisfy this checklist before it is considered verif
 
 ### Infrastructure
 
-1. M2: complete (architectural decisions consolidated into `ARCHITECTURE.md`; `docs/` consolidated to index + API reference)
-2. Apply per-epoch verification standard to simulation Epoch 1 (convergence test for the Laplacian stencil)
+1. Apply per-epoch verification standard to simulation Epoch 1 (convergence test for the Laplacian stencil)
