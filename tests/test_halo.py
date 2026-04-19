@@ -6,14 +6,15 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.computation.array import Array
+from cosmic_foundry.geometry.domain import Domain
+from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import fill_halo, partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
 
 def _make_1d_mesh() -> Array:
     return partition_domain.execute(
-        domain_origin=(0.0,),
-        domain_size=(8.0,),
+        domain=Domain(manifold=EuclideanSpace(1), origin=(0.0,), size=(8.0,)),
         n_cells=(8,),
         blocks_per_axis=(2,),
     )
@@ -52,8 +53,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
 def test_single_rank_fill_copies_2d_face_slab() -> None:
     """A full face slab is copied, not only one scalar cell."""
     mesh = partition_domain.execute(
-        domain_origin=(0.0, 0.0),
-        domain_size=(2.0, 3.0),
+        domain=Domain(manifold=EuclideanSpace(2), origin=(0.0, 0.0), size=(2.0, 3.0)),
         n_cells=(4, 3),
         blocks_per_axis=(2, 1),
     )

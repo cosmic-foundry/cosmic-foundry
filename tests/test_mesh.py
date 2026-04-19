@@ -7,12 +7,15 @@ import pytest
 
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
+from cosmic_foundry.geometry.domain import Domain
+from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import Patch, covers, partition_domain
 
 
 class TestPatch:
     def _make_patch(self) -> Patch:
         return Patch(
+            manifold=EuclideanSpace(3),
             index_extent=Extent((slice(0, 8), slice(0, 8), slice(0, 8))),
             origin=(0.0625, 0.0625, 0.0625),
             cell_spacing=(0.125, 0.125, 0.125),
@@ -26,6 +29,7 @@ class TestPatch:
     def test_node_positions_values(self):
         h = 0.25
         patch = Patch(
+            manifold=EuclideanSpace(1),
             index_extent=Extent((slice(0, 4),)),
             origin=(0.5 * h,),
             cell_spacing=(h,),
@@ -44,8 +48,9 @@ class TestPatch:
 class TestPartitionDomain:
     def _make_2d(self, **kwargs) -> Array[Patch]:
         defaults = dict(
-            domain_origin=(0.0, 0.0),
-            domain_size=(1.0, 1.0),
+            domain=Domain(
+                manifold=EuclideanSpace(2), origin=(0.0, 0.0), size=(1.0, 1.0)
+            ),
             n_cells=(8, 8),
             blocks_per_axis=(2, 2),
         )
@@ -59,8 +64,7 @@ class TestPartitionDomain:
     def test_non_divisible_raises(self):
         with pytest.raises(ValueError, match="not divisible"):
             partition_domain.execute(
-                domain_origin=(0.0,),
-                domain_size=(1.0,),
+                domain=Domain(manifold=EuclideanSpace(1), origin=(0.0,), size=(1.0,)),
                 n_cells=(7,),
                 blocks_per_axis=(2,),
             )
@@ -68,8 +72,9 @@ class TestPartitionDomain:
     def test_mismatched_lengths_raises(self):
         with pytest.raises(ValueError):
             partition_domain.execute(
-                domain_origin=(0.0,),
-                domain_size=(1.0, 1.0),
+                domain=Domain(
+                    manifold=EuclideanSpace(2), origin=(0.0, 0.0), size=(1.0, 1.0)
+                ),
                 n_cells=(8,),
                 blocks_per_axis=(2,),
             )
@@ -77,8 +82,9 @@ class TestPartitionDomain:
     def test_index_extents_tile_domain(self):
         n_cells = (8, 12)
         mesh = partition_domain.execute(
-            domain_origin=(0.0, 0.0),
-            domain_size=(1.0, 1.0),
+            domain=Domain(
+                manifold=EuclideanSpace(2), origin=(0.0, 0.0), size=(1.0, 1.0)
+            ),
             n_cells=n_cells,
             blocks_per_axis=(2, 3),
         )
@@ -90,8 +96,7 @@ class TestPartitionDomain:
     def test_node_positions_cover_domain(self):
         """First and last node positions sit h/2 from the domain edges."""
         mesh = partition_domain.execute(
-            domain_origin=(0.0,),
-            domain_size=(1.0,),
+            domain=Domain(manifold=EuclideanSpace(1), origin=(0.0,), size=(1.0,)),
             n_cells=(4,),
             blocks_per_axis=(2,),
         )
@@ -105,8 +110,9 @@ class TestPartitionDomain:
     def test_3d_tiling(self):
         n_cells = (8, 8, 8)
         mesh = partition_domain.execute(
-            domain_origin=(0.0, 0.0, 0.0),
-            domain_size=(1.0, 1.0, 1.0),
+            domain=Domain(
+                manifold=EuclideanSpace(3), origin=(0.0, 0.0, 0.0), size=(1.0, 1.0, 1.0)
+            ),
             n_cells=n_cells,
             blocks_per_axis=(2, 2, 2),
         )
@@ -130,8 +136,7 @@ class TestPartitionDomain:
 class TestCovers:
     def test_single_patch_covers_its_own_extent(self):
         mesh = partition_domain.execute(
-            domain_origin=(0.0,),
-            domain_size=(1.0,),
+            domain=Domain(manifold=EuclideanSpace(1), origin=(0.0,), size=(1.0,)),
             n_cells=(8,),
             blocks_per_axis=(1,),
         )
@@ -139,8 +144,7 @@ class TestCovers:
 
     def test_two_patches_cover_full_domain(self):
         mesh = partition_domain.execute(
-            domain_origin=(0.0,),
-            domain_size=(1.0,),
+            domain=Domain(manifold=EuclideanSpace(1), origin=(0.0,), size=(1.0,)),
             n_cells=(8,),
             blocks_per_axis=(2,),
         )
@@ -150,11 +154,13 @@ class TestCovers:
         """A mesh missing the middle rows does not cover the full extent."""
         patches = (
             Patch(
+                manifold=EuclideanSpace(1),
                 index_extent=Extent((slice(0, 3),)),
                 origin=(0.5,),
                 cell_spacing=(1.0,),
             ),
             Patch(
+                manifold=EuclideanSpace(1),
                 index_extent=Extent((slice(5, 8),)),
                 origin=(5.5,),
                 cell_spacing=(1.0,),

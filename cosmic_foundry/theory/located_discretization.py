@@ -6,6 +6,7 @@ from abc import abstractmethod
 from typing import Any
 
 from cosmic_foundry.theory.discretization import Discretization
+from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 
 class LocatedDiscretization(Discretization):
@@ -23,9 +24,14 @@ class LocatedDiscretization(Discretization):
     - ParticleSet: φ(i) = positions[i]  (explicit array)
 
     Required:
-        node_positions(axis) — 1-D coordinate array of DOF positions
-                               along *axis* in physical space
+        manifold       — the SmoothManifold this discretization approximates
+        node_positions — 1-D coordinate array of DOF positions along *axis*
     """
+
+    @property
+    @abstractmethod
+    def manifold(self) -> SmoothManifold:
+        """The manifold this discretization approximates."""
 
     @abstractmethod
     def node_positions(self, axis: int) -> Any:

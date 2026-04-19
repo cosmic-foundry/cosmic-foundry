@@ -6,14 +6,15 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.computation.array import Array
+from cosmic_foundry.geometry.domain import Domain
+from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
 
 def _mesh_1d(n_cells: int, n_blocks: int) -> Array:
     return partition_domain.execute(
-        domain_origin=(0.0,),
-        domain_size=(1.0,),
+        domain=Domain(manifold=EuclideanSpace(1), origin=(0.0,), size=(1.0,)),
         n_cells=(n_cells,),
         blocks_per_axis=(n_blocks,),
     )
@@ -24,8 +25,7 @@ def _mesh_2d(
     blocks_per_axis: tuple[int, int],
 ) -> Array:
     return partition_domain.execute(
-        domain_origin=(0.0, 0.0),
-        domain_size=(1.0, 1.0),
+        domain=Domain(manifold=EuclideanSpace(2), origin=(0.0, 0.0), size=(1.0, 1.0)),
         n_cells=n_cells,
         blocks_per_axis=blocks_per_axis,
     )

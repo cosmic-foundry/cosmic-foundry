@@ -16,8 +16,10 @@ discipline.
 ### Branches and PRs
 
 - Only work on a fork of the upstream repository.
-- Every change lands via a pull request; no direct commits to
-  `upstream/main`.
+- Every change lands via a pull request. **Never commit directly to
+  any `main` branch** — neither `upstream/main` nor `origin/main`
+  (the fork). `main` on both remotes is a read-only integration
+  target; all work happens on topic branches.
 - Create topic branches from `origin/main` (the fork's main), not
   from `upstream/main` directly. Syncing `origin/main` to
   `upstream/main` is an explicit separate step.
@@ -195,6 +197,13 @@ PR description.
 
 Maintenance and tooling PRs that do not advance either track should
 note "No change to roadmap position" in the PR description.
+
+**When a PR completes a planned item in `STATUS.md`**, that same PR
+must remove the corresponding entry from `STATUS.md` (or from the
+`## Current work` list if it is a sequenced step). Do not leave
+completed items in `STATUS.md` as historical record — the git log
+serves that purpose. The rule is: if the item is done when the PR
+merges, it is gone from `STATUS.md` when the PR merges.
 
 ---
 

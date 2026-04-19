@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from cosmic_foundry.computation.descriptor import Extent
+from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import Patch
 from cosmic_foundry.theory.discretization import Discretization
 from cosmic_foundry.theory.indexed_set import IndexedSet
@@ -35,6 +36,7 @@ def test_modal_discretization_is_abstract() -> None:
 
 def test_patch_isinstance_chain() -> None:
     patch = Patch(
+        manifold=EuclideanSpace(1),
         index_extent=Extent((slice(0, 4),)),
         origin=(0.125,),
         cell_spacing=(0.25,),
@@ -63,6 +65,7 @@ def test_patch_node_positions() -> None:
     import numpy as np
 
     patch = Patch(
+        manifold=EuclideanSpace(1),
         index_extent=Extent((slice(0, 4),)),
         origin=(0.125,),
         cell_spacing=(0.25,),
@@ -73,6 +76,7 @@ def test_patch_node_positions() -> None:
 
 def test_patch_ndim_and_shape() -> None:
     patch = Patch(
+        manifold=EuclideanSpace(3),
         index_extent=Extent((slice(0, 8), slice(0, 8), slice(0, 8))),
         origin=(0.0625, 0.0625, 0.0625),
         cell_spacing=(0.125, 0.125, 0.125),
