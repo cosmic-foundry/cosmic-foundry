@@ -14,7 +14,6 @@ import jax
 import jax.numpy as jnp
 
 from cosmic_foundry.computation.descriptor import (
-    AccessPattern,
     Region,
     _checked_bounds,
 )
@@ -30,12 +29,12 @@ def execute_pointwise(
     ``fn`` must be hashable (for JIT caching) and expose:
 
     - ``_fn(*field_arrays, *index_meshgrids) -> scalar``
-    - ``access_pattern: AccessPattern``
+    - ``radii: tuple[int, ...]``
 
     When ``region.n_blocks > 1`` the kernel is lifted with ``jax.vmap``
     so ``_fn`` remains unaware of the batch dimension.
     """
-    _validate_region_access(region, fn.access_pattern, field_arrays)
+    _validate_region_access(region, fn.radii, field_arrays)
     return _make_jit_kernel(cast(Any, fn), region)(*field_arrays)
 
 
@@ -81,10 +80,10 @@ def _region_indices(region: Region) -> tuple[jax.Array, ...]:
 
 def _validate_region_access(
     region: Region,
-    access_pattern: AccessPattern,
+    radii: tuple[int, ...],
     inputs: tuple[Any, ...],
 ) -> None:
-    required = region.extent.expand(access_pattern)
+    required = region.extent.expand(radii)
     batched = region.n_blocks > 1
     for input_array in inputs:
         if not hasattr(input_array, "shape"):

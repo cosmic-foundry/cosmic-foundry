@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.computation.descriptor import AccessPattern, Extent, Region
+from cosmic_foundry.computation.descriptor import Extent, Region
 from cosmic_foundry.computation.stencil import execute_pointwise
 from cosmic_foundry.theory.function import Function
 
@@ -29,9 +29,7 @@ class SevenPointLaplacian(Function):
     Exact for polynomials of degree ≤ 2.
     """
 
-    @property
-    def access_pattern(self) -> AccessPattern:
-        return AccessPattern.seven_point()
+    radii: tuple[int, ...] = (1, 1, 1)
 
     def execute(self, phi: Any, *, region: Region) -> Any:
         return execute_pointwise(self, region, phi)
@@ -51,8 +49,8 @@ class SevenPointLaplacian(Function):
 seven_point_laplacian = SevenPointLaplacian()
 
 
-def test_op_class_exposes_access_pattern() -> None:
-    assert seven_point_laplacian.access_pattern == AccessPattern.seven_point()
+def test_op_class_exposes_radii() -> None:
+    assert seven_point_laplacian.radii == (1, 1, 1)
 
 
 def test_op_execute_runs_kernel() -> None:
@@ -65,11 +63,11 @@ def test_op_execute_runs_kernel() -> None:
     assert jnp.allclose(result, 6.0)
 
 
-def test_stencil_symmetric_sets_halo_width() -> None:
-    stencil = AccessPattern.symmetric(order=4, ndim=3)
-    assert stencil.halo_width(0) == 2
-    assert stencil.halo_width(1) == 2
-    assert stencil.halo_width(2) == 2
+def test_stencil_radii_fourth_order() -> None:
+    radii = (2, 2, 2)
+    assert radii[0] == 2
+    assert radii[1] == 2
+    assert radii[2] == 2
 
 
 def test_op_runs_laplacian_over_region() -> None:

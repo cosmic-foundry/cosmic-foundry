@@ -14,7 +14,6 @@ from cosmic_foundry.computation.array import (  # noqa: E402
     Record,
 )
 from cosmic_foundry.computation.descriptor import (  # noqa: E402
-    AccessPattern,
     Descriptor,
     Extent,
     Region,
@@ -57,7 +56,6 @@ from cosmic_foundry.theory import (  # noqa: E402
 __all__ = [
     "__version__",
     # computation
-    "AccessPattern",
     "Array",
     "ComponentId",
     "Descriptor",

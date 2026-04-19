@@ -20,7 +20,7 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.computation.array import ComponentId, Placement
-from cosmic_foundry.computation.descriptor import AccessPattern, Extent, Region
+from cosmic_foundry.computation.descriptor import Extent, Region
 from cosmic_foundry.computation.stencil import execute_pointwise
 from cosmic_foundry.mesh import covers, partition_domain
 from cosmic_foundry.theory.function import Function
@@ -44,8 +44,8 @@ class SevenPointLaplacian(Function):
     """
 
     @property
-    def access_pattern(self) -> AccessPattern:
-        return AccessPattern.seven_point()
+    def radii(self) -> tuple[int, ...]:
+        return (1, 1, 1)
 
     def execute(self, phi: Any, *, region: Region) -> Any:
         return execute_pointwise(self, region, phi)
@@ -144,7 +144,7 @@ def test_covers_rejects_extent_outside_mesh() -> None:
     )
     # Expand [0, N)^3 by 1 → [-1, N+1)^3 which the mesh cannot cover
     full = Extent.from_shape((N, N, N))
-    beyond = full.expand(seven_point_laplacian.access_pattern)
+    beyond = full.expand(seven_point_laplacian.radii)
     assert not covers(mesh, beyond)
 
 
@@ -163,7 +163,7 @@ def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
         n_ranks=1,
     )
     full = Extent.from_shape((N, N, N))
-    required = full.expand(seven_point_laplacian.access_pattern)
+    required = full.expand(seven_point_laplacian.radii)
     assert not covers(mesh, required)  # mesh doesn't cover the halo ring
 
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))

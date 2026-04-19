@@ -27,39 +27,6 @@ class Descriptor(ABC):
 
 
 @dataclass(frozen=True)
-class AccessPattern(Descriptor):
-    """Concrete descriptor specifying the locality contract for an Op.
-
-    ``radii[i]`` is the ghost-cell depth required on axis ``i``.
-    """
-
-    radii: tuple[int, ...]
-
-    def halo_width(self, axis: int) -> int:
-        """Return the ghost-cell depth required on one axis."""
-        return self.radii[axis]
-
-    @classmethod
-    def seven_point(cls) -> AccessPattern:
-        """Return the 3-D seven-point nearest-neighbor access pattern."""
-        return cls((1, 1, 1))
-
-    @classmethod
-    def symmetric(cls, order: int, ndim: int = 3) -> AccessPattern:
-        """Return a symmetric access pattern for an even finite-difference order."""
-        if order <= 0 or order % 2 != 0:
-            msg = "symmetric order must be a positive even integer"
-            raise ValueError(msg)
-        if ndim <= 0:
-            msg = "ndim must be positive"
-            raise ValueError(msg)
-        return cls((order // 2,) * ndim)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"type": "AccessPattern", "radii": list(self.radii)}
-
-
-@dataclass(frozen=True)
 class Extent(Descriptor, IndexedSet):
     """Half-open integer index extent — a finite rectangular subset of ℤⁿ."""
 
@@ -84,13 +51,12 @@ class Extent(Descriptor, IndexedSet):
         """Shape implied by the extent."""
         return tuple(_slice_length(axis_slice) for axis_slice in self.slices)
 
-    def expand(self, access_pattern: AccessPattern) -> Extent:
-        """Return the extent plus the halo required by an access pattern."""
+    def expand(self, radii: tuple[int, ...]) -> Extent:
+        """Return the extent grown by *radii* ghost cells on each axis."""
         expanded = []
         for axis, axis_slice in enumerate(self.slices):
             start, stop = _checked_bounds(axis_slice)
-            halo = access_pattern.halo_width(axis)
-            expanded.append(slice(start - halo, stop + halo))
+            expanded.append(slice(start - radii[axis], stop + radii[axis]))
         return Extent(tuple(expanded))
 
     def as_dict(self) -> dict[str, Any]:
@@ -164,7 +130,6 @@ def payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
 
 
 __all__ = [
-    "AccessPattern",
     "Descriptor",
     "Extent",
     "Region",
