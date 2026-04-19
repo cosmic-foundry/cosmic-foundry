@@ -15,7 +15,7 @@ import jax.numpy as jnp
 
 from cosmic_foundry.computation.array import Array, ComponentId
 from cosmic_foundry.computation.descriptor import (
-    Region,
+    Extent,
     intersect_extents,
     payload_slices,
 )
@@ -29,9 +29,9 @@ class GlobalSum(Function):
     Function:
         domain   — (mesh: Array[Patch], f_h : Ω_h^int → ℝ) — block mesh and
                    a discrete scalar field on interior grid points, intersected
-                   with the given region
+                   with the given extent
         codomain — ℝ (a real number; field evaluated at a single point)
-        operator — (mesh, f_h, region) ↦ Σ_{x ∈ Ω_h^int ∩ region} f_h(x)
+        operator — (mesh, f_h, extent) ↦ Σ_{x ∈ Ω_h^int ∩ extent} f_h(x)
 
     Unweighted grid-point sum. To approximate ∫_Ω f dΩ, multiply by h^d
     where h is the grid spacing and d is the spatial dimension.
@@ -47,7 +47,7 @@ class GlobalSum(Function):
         self,
         mesh: Any,
         field: Array[Any],
-        region: Region,
+        extent: Extent,
         rank: int,
         *,
         axis_name: Hashable | None = None,
@@ -59,7 +59,7 @@ class GlobalSum(Function):
                 continue
             block = mesh[cid]
             interior = block.index_extent
-            overlap = intersect_extents(interior, region.extent)
+            overlap = intersect_extents(interior, extent)
             if overlap is None:
                 continue
             local = local + jnp.sum(field[cid][payload_slices(interior, overlap)])

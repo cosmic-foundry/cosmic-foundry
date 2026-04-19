@@ -41,7 +41,7 @@ def main() -> None:
 
         import jax.numpy as jnp
 
-        from cosmic_foundry.computation.descriptor import Extent, Region
+        from cosmic_foundry.computation.descriptor import Extent
         from cosmic_foundry.computation.stencil import execute_pointwise
         from cosmic_foundry.theory.function import Function
 
@@ -59,9 +59,7 @@ def main() -> None:
         else:
             local_phi = phi_full[half - 1 :]  # global rows 3..7
 
-        owned_region = Region(
-            Extent((slice(1, half), slice(1, n - 1), slice(1, n - 1)))
-        )
+        owned_extent = Extent((slice(1, half), slice(1, n - 1), slice(1, n - 1)))
 
         from dataclasses import dataclass
         from typing import Any
@@ -72,8 +70,8 @@ def main() -> None:
             def radii(self) -> tuple[int, ...]:
                 return (1, 1, 1)
 
-            def execute(self, phi: Any, *, region: Region) -> Any:
-                return execute_pointwise(self, region, phi)
+            def execute(self, phi: Any, *, extent: Extent) -> Any:
+                return execute_pointwise(self, extent, phi)
 
             def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
                 return (
@@ -88,7 +86,7 @@ def main() -> None:
 
         laplacian = Laplacian()
 
-        result = laplacian.execute(local_phi, region=owned_region)
+        result = laplacian.execute(local_phi, extent=owned_extent)
         all_close = bool(jnp.allclose(result, 6.0))
         print(json.dumps({"rank": rank, "ok": True, "all_close_6": all_close}))
 

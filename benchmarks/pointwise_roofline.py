@@ -12,7 +12,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.computation.descriptor import Extent, Region
+from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import execute_pointwise
 from cosmic_foundry.theory.function import Function
 
@@ -39,8 +39,8 @@ class SevenPointLaplacian(Function):
     def radii(self) -> tuple[int, ...]:
         return (1, 1, 1)
 
-    def execute(self, phi: Any, *, region: Region) -> Any:
-        return execute_pointwise(self, region, phi)
+    def execute(self, phi: Any, *, extent: Extent) -> Any:
+        return execute_pointwise(self, extent, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -85,7 +85,7 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
     """Run the Laplacian Op over the interior of *phi*."""
     n = int(phi.shape[0])
     extent = Extent((slice(1, n - 1), slice(1, n - 1), slice(1, n - 1)))
-    return seven_point_laplacian.execute(phi, region=Region(extent))
+    return seven_point_laplacian.execute(phi, extent=extent)
 
 
 @dataclass(frozen=True)
@@ -104,8 +104,8 @@ class PointwiseTriad(Function):
     def radii(self) -> tuple[int, ...]:
         return (0, 0, 0)
 
-    def execute(self, a: Any, b: Any, *, region: Region) -> Any:
-        return execute_pointwise(self, region, a, b)
+    def execute(self, a: Any, b: Any, *, extent: Extent) -> Any:
+        return execute_pointwise(self, extent, a, b)
 
     def _fn(self, a: Any, b: Any, i: Any, j: Any, k: Any) -> Any:
         return a[i, j, k] + 0.5 * b[i, j, k]
@@ -118,7 +118,7 @@ def run_op_triad(a: jax.Array, b: jax.Array) -> jax.Array:
     """Run a pointwise triad through the Op path."""
     n = int(a.shape[0])
     extent = Extent.from_shape((n, n, n))
-    return pointwise_triad.execute(a, b, region=Region(extent))
+    return pointwise_triad.execute(a, b, extent=extent)
 
 
 def benchmark(n: int, repeats: int) -> RooflineResult:

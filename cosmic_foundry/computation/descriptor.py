@@ -1,29 +1,12 @@
-"""Descriptor ABC and concrete descriptor types."""
+"""Extent: finite rectangular subset of ℤⁿ."""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from cosmic_foundry.theory.indexed_set import IndexedSet
-
-
-class Descriptor(ABC):
-    """Abstract base for all computation-configuring value objects.
-
-    A Descriptor is an immutable object that specifies *how* computation is
-    performed — coordinate extents, iteration regions, access patterns, field
-    bindings, data placement. Descriptors are distinct from Maps (which *perform*
-    computation).
-
-    Every Descriptor must be serializable to a plain dict.
-    """
-
-    @abstractmethod
-    def as_dict(self) -> dict[str, Any]:
-        """Return a plain-dict representation of this descriptor."""
 
 
 @dataclass(frozen=True)
@@ -61,27 +44,6 @@ class Extent(IndexedSet):
 
     def as_dict(self) -> dict[str, Any]:
         return {"slices": [(s.start, s.stop) for s in self.slices]}
-
-
-@dataclass(frozen=True)
-class Region(Descriptor):
-    """Iteration coordinates for a Function execution.
-
-    ``n_blocks`` signals a batched region: inputs are expected to carry a
-    leading batch axis of that size, and ``execute_pointwise`` lowers the
-    kernel with ``jax.vmap`` so the Function remains unaware of the batch dimension.
-    """
-
-    extent: Extent
-    n_blocks: int = 1
-
-    def __post_init__(self) -> None:
-        if self.n_blocks < 1:
-            msg = "Region.n_blocks must be a positive integer"
-            raise ValueError(msg)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"extent": self.extent.as_dict(), "n_blocks": self.n_blocks}
 
 
 def _checked_bounds(axis_slice: slice) -> tuple[int, int]:
@@ -130,9 +92,7 @@ def payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
 
 
 __all__ = [
-    "Descriptor",
     "Extent",
-    "Region",
     "intersect_extents",
     "payload_slices",
 ]
