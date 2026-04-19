@@ -65,33 +65,8 @@ property. Required for full GR simulations. In the 3+1 (ADM) formalism:
 spatial hypersurfaces Σ_t are 3-D Riemannian; the 3-metric `γ_ij` and
 extrinsic curvature `K_ij` are evolved fields.
 
-### Planned `computation/` and `theory/` additions
-
-**`BoundaryCondition` hierarchy** *(in `theory/`)*
-Three ABCs, all in `theory/`, no third-party dependencies:
-
-- `BoundaryCondition(Function)` — root ABC; blank beyond `Function.execute`.
-  `execute(domain: Domain, face: ManifoldWithBoundary, field_data)` is the
-  intended concrete signature but is left as `*args/**kwargs` at this level.
-
-- `LocalBoundaryCondition(BoundaryCondition)` — constraint on a single face;
-  represents `α·f + β·∂f/∂n = g`. Abstract properties: `alpha: float`,
-  `beta: float`, `constraint: Field`. Dirichlet: `alpha=1, beta=0`.
-  Neumann: `alpha=0, beta=1`. Robin: both non-zero.
-
-- `NonLocalBoundaryCondition(BoundaryCondition)` — constraint spanning
-  multiple faces. Abstract property: `sources: tuple[ManifoldWithBoundary, ...]`.
-  Periodic (`FaceIdentification`) is the canonical concrete subclass:
-  two faces, identity map. Anti-periodic and Bloch/Floquet are further
-  concrete subclasses.
-
-Concrete subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`, etc.) live in
-`computation/` and may carry JAX-backed `execute` implementations.
-
 ---
 
 ## Current work
 
 Immediate code work (in dependency order):
-
-1. Add `BoundaryCondition`, `LocalBoundaryCondition`, `NonLocalBoundaryCondition` ABCs to `theory/`
