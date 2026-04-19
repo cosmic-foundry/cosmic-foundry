@@ -25,6 +25,14 @@ module that exposes a `generate()` function. Each new kernel module then only
 needs to implement `_derive()` and call the shared utilities — no boilerplate
 to copy.
 
+This includes generating the kernel function body itself. Currently
+`_seven_point_fn` is written by hand from the stencil geometry (six
+face-neighbor offsets, one center). The stencil offsets and their weights are
+both outputs of the derivation, so `generate()` should emit the pointwise
+function body — not just the scalar constants — from the derived offset/weight
+pairs. A hand-written kernel function is as much a gap against claim 5 as a
+hand-typed coefficient.
+
 **Scale derivation pattern to the full codebase.**
 `cosmic_foundry/computation/laplacian.py` establishes the proof-of-concept:
 derivation (`_derive`), hash-verified generated constants block, and production
