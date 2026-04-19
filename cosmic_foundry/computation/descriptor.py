@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from cosmic_foundry.theory.indexed_set import IndexedSet
+
 
 class Descriptor(ABC):
     """Abstract base for all computation-configuring value objects.
@@ -58,8 +60,8 @@ class AccessPattern(Descriptor):
 
 
 @dataclass(frozen=True)
-class Extent(Descriptor):
-    """Half-open integer index extent."""
+class Extent(Descriptor, IndexedSet):
+    """Half-open integer index extent — a finite rectangular subset of ℤⁿ."""
 
     slices: tuple[slice, ...]
 
