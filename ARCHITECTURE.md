@@ -29,18 +29,29 @@ architecture, not the architecture itself.
 
 **The mathematical language of the architecture is differential geometry
 on spatio-temporal manifolds, with PDE theory as the application layer.**
+*(Tension: the current implementation uses only spatial manifolds;
+no temporal or spacetime computations are implemented yet.)*
 
 **Physical quantities are represented as instances of formal mathematical
 abstractions.** Any concrete representation is an implementation detail.
+*(Current inconsistency: `Field` and its subclasses are defined in
+`theory/` but are not used in computation. Kernel inputs and outputs are
+raw JAX arrays wrapped in `Array[T]`, not `Field` instances.)*
 
 **Every numerical method is formally derived from its continuous
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
 except where the argument is geometric or topological, in which case a
 human-readable derivation is required. Derivations live in `derivations/`.
+*(Current inconsistency: the `derivations/` directory does not exist.
+The Laplacian stencil has no formal derivation document.)*
 
 **Every numerical method is verified against an analytical solution or
 observational data, with the verification test living in this
 repository.**
+*(Current inconsistency: the convergence testing infrastructure exists
+in `tests/utils/convergence.py` but is not applied to any production
+operator. The Laplacian is checked only on a polynomial for which the
+stencil is exact — not a convergence test.)*
 
 **Where external data sources are ingested** (reaction rates, opacity
 tables, observational measurements), **the uncertainty in that data is
@@ -53,6 +64,9 @@ architectural constraints.
 
 **Every file the engine writes carries provenance metadata** identifying
 the exact repository state from which it was generated.
+*(Current inconsistency: `io/` writes HDF5 files with no git commit
+hash or repository state attached. The `Provenance` class in
+`manifests/` covers external data ingestion only.)*
 
 **The engine is dimensionless internally.** Units are attached at the
 boundary where results are compared against analytical solutions or
