@@ -89,6 +89,7 @@ discipline.
 
 Before opening or pushing to a PR:
 
+- [ ] Read `DEVELOPMENT.md` (this file) and `ARCHITECTURE.md` to understand the rules and decisions that govern the PR
 - [ ] Run `pre-commit run --all-files` locally and fix any failures
 - [ ] Read `STATUS.md` to understand the current planned work
 - [ ] Determine if this PR completes any of the planned items
