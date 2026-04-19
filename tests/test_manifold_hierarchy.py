@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from cosmic_foundry.theory.flat_manifold import FlatManifold
 from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
@@ -30,9 +31,22 @@ def test_riemannian_manifold_is_abstract() -> None:
         RiemannianManifold()  # type: ignore[abstract]
 
 
+def test_flat_manifold_is_abstract() -> None:
+    with pytest.raises(TypeError):
+        FlatManifold()  # type: ignore[abstract]
+
+
 # ---------------------------------------------------------------------------
 # Concrete subclasses satisfy the hierarchy
 # ---------------------------------------------------------------------------
+
+
+class FlatLorentzian(FlatManifold):
+    """Minimal flat Lorentzian manifold for hierarchy tests."""
+
+    @property
+    def signature(self) -> tuple[int, int]:
+        return (1, 3)
 
 
 class FlatR3(RiemannianManifold):
@@ -84,3 +98,29 @@ def test_minkowski_is_pseudo_riemannian_not_riemannian() -> None:
 def test_manifold_branch_disjoint_from_indexed_set_branch() -> None:
     assert not issubclass(SmoothManifold, IndexedSet)
     assert not issubclass(IndexedSet, SmoothManifold)
+
+
+# ---------------------------------------------------------------------------
+# FlatManifold hierarchy
+# ---------------------------------------------------------------------------
+
+
+def test_flat_lorentzian_isinstance_chain() -> None:
+    m = FlatLorentzian()
+    assert isinstance(m, FlatManifold)
+    assert isinstance(m, PseudoRiemannianManifold)
+    assert isinstance(m, SmoothManifold)
+    assert isinstance(m, Set)
+
+
+def test_flat_lorentzian_is_not_riemannian() -> None:
+    assert not isinstance(FlatLorentzian(), RiemannianManifold)
+
+
+def test_flat_lorentzian_ndim_derived_from_signature() -> None:
+    assert FlatLorentzian().ndim == 4
+
+
+def test_flat_manifold_is_pseudo_riemannian_not_riemannian() -> None:
+    assert issubclass(FlatManifold, PseudoRiemannianManifold)
+    assert not issubclass(FlatManifold, RiemannianManifold)
