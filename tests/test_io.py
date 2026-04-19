@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from cosmic_foundry.computation.descriptor import Extent, Region
+from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import execute_pointwise
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
 from cosmic_foundry.observability import StructuredFormatter, configure
@@ -45,8 +45,8 @@ class SevenPointLaplacian(Function):
     def radii(self) -> tuple[int, ...]:
         return (1, 1, 1)
 
-    def execute(self, phi: Any, *, region: Region) -> Any:
-        return execute_pointwise(self, region, phi)
+    def execute(self, phi: Any, *, extent: Extent) -> Any:
+        return execute_pointwise(self, extent, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -71,8 +71,8 @@ def phi() -> jnp.ndarray:
 
 @pytest.fixture()
 def laplacian_result(phi: jnp.ndarray) -> jnp.ndarray:
-    region = Region(Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1))))
-    return seven_point_laplacian.execute(phi, region=region)
+    extent = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
+    return seven_point_laplacian.execute(phi, extent=extent)
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ def test_merge_rank_files_concatenates_along_axis0(tmp_path: Path) -> None:
 
     # Simulate two ranks computing their interior half.
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
-    full_result = seven_point_laplacian.execute(phi, region=Region(interior))
+    full_result = seven_point_laplacian.execute(phi, extent=interior)
 
     rank0_result = full_result[:half]
     rank1_result = full_result[half:]

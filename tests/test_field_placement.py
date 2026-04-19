@@ -20,7 +20,7 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.computation.array import ComponentId, Placement
-from cosmic_foundry.computation.descriptor import Extent, Region
+from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import execute_pointwise
 from cosmic_foundry.mesh import covers, partition_domain
 from cosmic_foundry.theory.function import Function
@@ -47,8 +47,8 @@ class SevenPointLaplacian(Function):
     def radii(self) -> tuple[int, ...]:
         return (1, 1, 1)
 
-    def execute(self, phi: Any, *, region: Region) -> Any:
-        return execute_pointwise(self, region, phi)
+    def execute(self, phi: Any, *, extent: Extent) -> Any:
+        return execute_pointwise(self, extent, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -169,7 +169,7 @@ def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
     interior = Extent((slice(1, N - 1), slice(1, N - 1), slice(1, N - 1)))
     assert covers(mesh, interior)  # mesh does cover the interior
 
-    result = seven_point_laplacian.execute(phi, region=Region(interior))
+    result = seven_point_laplacian.execute(phi, extent=interior)
     assert jnp.allclose(result, 6.0)
 
 
