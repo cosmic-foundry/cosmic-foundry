@@ -11,16 +11,6 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
-## Completed
-
-**[PR #181] Generalize stencil generation to support any approximation order.**
-✅ Extracted parameterizable stencil derivation into `stencil.py` via `derive_laplacian_stencil(order, ndim)` using SymPy `finite_diff_weights`, supporting arbitrary approximation orders (2, 4, 6, ...). Moved codegen pattern (`_derive()`, `generate()`, generated block) from `laplacian.py` into `stencil.py`, following the convention that codegen lives alongside what it produces. Deleted `laplacian.py`; updated all importers (4 files + generator script). Added comprehensive tests in `test_stencil_derive.py` for orders 2 and 4 in 1D and 3D; verified weights-sum-to-zero invariant. Generated block output for order=2 is bit-for-bit identical to original (drift test confirms). No regressions; all tests pass.
-
-**[PR #182] Generalize stencil derivation to any derivative order.**
-✅ Renamed `derive_laplacian_stencil(order, ndim)` to `derive_stencil(deriv_order, approx_order, ndim)`. Parameterized by derivative order, supporting 1st, 2nd, 3rd, ... derivatives at any approximation order. Changed SymPy `finite_diff_weights(2, ...)` call to `finite_diff_weights(deriv_order, ...)` with matching index. Added validation: require `len(points) > deriv_order`. Return dict includes both `deriv_order` and `approx_order`. Updated `_derive()` call site. Added 5 new tests: `test_deriv1_order2_ndim1`, `test_deriv1_order4_ndim1`, `test_validation_too_few_points`, and extended `test_weights_sum_to_zero` parametrization. All 11 tests pass (10 new + existing drift test). Unblocks gradients, divergences, higher-order operators.
-
----
-
 ## Current work
 
 **Clean up `stencil.py`: remove generated-code infrastructure, push to callers.**
