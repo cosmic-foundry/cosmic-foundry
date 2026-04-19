@@ -13,15 +13,14 @@ import jax
 import jax.numpy as jnp
 
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.stencil import execute_pointwise
-from cosmic_foundry.theory.function import Function
+from cosmic_foundry.computation.stencil import Stencil
 
 FLOAT64_BYTES = 8
 TRIAD_BYTES_PER_CELL = 3 * FLOAT64_BYTES  # two reads, one write
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Function):
+class SevenPointLaplacian(Stencil):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Function:
@@ -35,12 +34,7 @@ class SevenPointLaplacian(Function):
     Exact for polynomials of degree ≤ 2.
     """
 
-    @property
-    def radii(self) -> tuple[int, ...]:
-        return (1, 1, 1)
-
-    def execute(self, phi: Any, *, extent: Extent) -> Any:
-        return execute_pointwise(self, extent, phi)
+    radii: tuple[int, ...] = (1, 1, 1)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (
@@ -89,7 +83,7 @@ def run_laplacian(phi: jax.Array) -> jax.Array:
 
 
 @dataclass(frozen=True)
-class PointwiseTriad(Function):
+class PointwiseTriad(Stencil):
     """STREAM-like pointwise triad: c = a + 0.5 * b.
 
     Function:
@@ -100,12 +94,7 @@ class PointwiseTriad(Function):
     Exact: Θ = ∅ — pointwise arithmetic; no approximation.
     """
 
-    @property
-    def radii(self) -> tuple[int, ...]:
-        return (0, 0, 0)
-
-    def execute(self, a: Any, b: Any, *, extent: Extent) -> Any:
-        return execute_pointwise(self, extent, a, b)
+    radii: tuple[int, ...] = (0, 0, 0)
 
     def _fn(self, a: Any, b: Any, i: Any, j: Any, k: Any) -> Any:
         return a[i, j, k] + 0.5 * b[i, j, k]

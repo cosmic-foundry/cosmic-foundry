@@ -9,12 +9,11 @@ import jax.numpy as jnp
 import pytest
 
 from cosmic_foundry.computation.descriptor import Extent
-from cosmic_foundry.computation.stencil import execute_pointwise
-from cosmic_foundry.theory.function import Function
+from cosmic_foundry.computation.stencil import Stencil
 
 
 @dataclass(frozen=True)
-class SevenPointLaplacian(Function):
+class SevenPointLaplacian(Stencil):
     """Seven-point finite-difference Laplacian on a 3-D grid.
 
     Function:
@@ -29,9 +28,6 @@ class SevenPointLaplacian(Function):
     """
 
     radii: tuple[int, ...] = (1, 1, 1)
-
-    def execute(self, phi: Any, *, extent: Extent) -> Any:
-        return execute_pointwise(self, extent, phi)
 
     def _fn(self, phi: Any, i: Any, j: Any, k: Any) -> Any:
         return (

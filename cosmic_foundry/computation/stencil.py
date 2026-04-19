@@ -1,44 +1,47 @@
-"""Stencil kernel execution engine.
-
-``execute_pointwise`` applies a stencil Function over a structured-grid
-Extent using JAX JIT compilation.
-"""
+"""Stencil: pointwise stencil ABC for structured-grid Functions."""
 
 from __future__ import annotations
 
 import functools
+from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
 
-from cosmic_foundry.computation.descriptor import (
-    Extent,
-    _checked_bounds,
-)
+from cosmic_foundry.computation.descriptor import Extent, _checked_bounds
+from cosmic_foundry.theory.function import Function
 
 
-def execute_pointwise(
-    fn: Any,
-    extent: Extent,
-    *field_arrays: Any,
-) -> Any:
-    """Apply a stencil fn over extent with JAX JIT and input validation.
+class Stencil(Function):
+    """ABC for pointwise stencil operators on structured grids.
 
-    ``fn`` must be hashable (for JIT caching) and expose:
+    Function:
+        domain   — one or more array-valued fields on Ω_h ⊆ ℤⁿ
+        codomain — an array-valued field on Ω_h^int ⊆ Ω_h
+        operator — pointwise application of _fn over an Extent
 
-    - ``_fn(*field_arrays, *index_meshgrids) -> scalar``
-    - ``radii: tuple[int, ...]``
+    Subclasses must define:
+    - ``radii: tuple[int, ...]`` — stencil half-widths per axis
+    - ``_fn(*field_arrays, *index_meshgrids) -> scalar`` — pointwise kernel
+
+    ``execute(*field_arrays, extent=...)`` is provided automatically.
     """
-    _validate_region_access(extent, fn.radii, field_arrays)
-    return _make_jit_kernel(cast(Any, fn), extent)(*field_arrays)
+
+    radii: tuple[int, ...]
+
+    @abstractmethod
+    def _fn(self, *args: Any) -> Any:
+        """Pointwise stencil kernel evaluated at a single grid point."""
+
+    def execute(self, *field_arrays: Any, extent: Extent) -> Any:
+        _validate_halo_access(extent, self.radii, field_arrays)
+        return _make_jit_kernel(cast(Any, self), extent)(*field_arrays)
 
 
 @functools.lru_cache(maxsize=256)
 def _make_jit_kernel(fn: Any, extent: Any) -> Callable[..., Any]:
-    """Return a cached JIT-compiled kernel for *(fn, extent)*."""
-
     @jax.jit
     def apply(*jit_inputs: Any) -> Any:
         indices = _region_indices(extent)
@@ -55,7 +58,7 @@ def _region_indices(extent: Extent) -> tuple[jax.Array, ...]:
     return tuple(jnp.meshgrid(*axes, indexing="ij"))
 
 
-def _validate_region_access(
+def _validate_halo_access(
     extent: Extent,
     radii: tuple[int, ...],
     inputs: tuple[Any, ...],
@@ -76,4 +79,4 @@ def _validate_region_access(
                 raise ValueError(msg)
 
 
-__all__ = ["execute_pointwise"]
+__all__ = ["Stencil"]
