@@ -16,8 +16,10 @@ discipline.
 ### Branches and PRs
 
 - Only work on a fork of the upstream repository.
-- Every change lands via a pull request; no direct commits to
-  `upstream/main`.
+- Every change lands via a pull request. **Never commit directly to
+  any `main` branch** — neither `upstream/main` nor `origin/main`
+  (the fork). `main` on both remotes is a read-only integration
+  target; all work happens on topic branches.
 - Create topic branches from `origin/main` (the fork's main), not
   from `upstream/main` directly. Syncing `origin/main` to
   `upstream/main` is an explicit separate step.
