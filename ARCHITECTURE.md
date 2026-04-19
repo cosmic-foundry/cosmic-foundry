@@ -16,50 +16,47 @@ commitment: the code must satisfy it, tests enforce it where possible,
 and any PR that violates a claim must explicitly revise it here rather
 than quietly breaking it.
 
-**Cosmic Foundry is an organizational platform, not an application.**
-It provides reusable computation infrastructure — kernels, mesh, fields,
-I/O, diagnostics, manifest tooling — on which application repositories
-build domain-specific physics. No domain-specific physics implementation
-and no observational validation data belongs here.
+**Cosmic Foundry is a general-purpose PDE simulation engine, optimized
+for astrophysical use cases.** It provides reusable computation
+infrastructure — kernels, mesh, fields, I/O, diagnostics, manifest
+tooling — on which application repositories build domain-specific
+physics. No domain-specific physics implementation and no observational
+validation data belongs here.
 
-**The engine is Python-only.** No compiled extensions are shipped from
-this repository. Pre-built libraries (JAX, NumPy, h5py) are consumed as
-dependencies; any native code the engine executes is produced at runtime
-by JAX/XLA's code-generation backend. `pybind11` and `ctypes` are
-emergency escapes requiring a documented justification in this file
-before adoption.
+**The architecture is defined independently of any implementation
+language.** The current Python implementation is one realization of the
+architecture, not the architecture itself.
 
-**JAX + XLA is the current kernel backend.** Every kernel is authored
-as a JAX kernel. A backend-agnostic kernel interface is a design goal
-but is not yet realized; the formal model governing how kernels compose
-with spatial regions and execution policies is an open question (see
-*Open architectural questions*).
+**The mathematical language of the architecture is differential geometry
+on spatio-temporal manifolds, with PDE theory as the application layer.**
 
-**float64 is the default precision.** All field arrays default to
-`float64`. Precision exceptions must be explicit and documented at the
-call site.
+**Physical quantities are represented as instances of formal mathematical
+abstractions.** Any concrete representation is an implementation detail.
 
-**`theory/` is strictly third-party-free.** The `theory/` package
-defines pure mathematical ABCs and may not import from any package
-outside the Python standard library. Mathematical concreteness (classes
-parameterized by Python primitives) belongs in `theory/`; computational
-concreteness (JAX, NumPy, HDF5) belongs outside it. Enforced by
-`tests/test_theory_no_third_party_imports.py`.
+**Every numerical method is formally derived from its continuous
+mathematical counterpart.** The derivation is machine-checkable (SymPy)
+except where the argument is geometric or topological, in which case a
+human-readable derivation is required. Derivations live in `derivations/`.
 
-**`computation/` contains distance-1 implementations.** Every class at
-the top level of `computation/` directly inherits from an ABC in
-`theory/`. Classes two or more steps removed live one level down within
-their package.
+**Every numerical method is verified against an analytical solution or
+observational data, with the verification test living in this
+repository.**
 
-**Every physics capability is lane-classified.** Each PR introducing or
-changing a physics capability states its lane (A: port-and-verify, B:
-clean-room from paper, C: first-principles origination) and carries a
-derivation document for Lanes B and C. Defined in `DEVELOPMENT.md
-§Physics capability implementation paths`.
+**Where external data sources are ingested** (reaction rates, opacity
+tables, observational measurements), **the uncertainty in that data is
+explicitly quantified and propagated.**
 
-**Host parallelism via `jax.distributed`.** No MPI in the baseline.
-`mpi4py` is available as an optional extra for sites where
-`jax.distributed` cannot initialize over the native interconnect.
+**The architecture is scale-agnostic.** The physics implementation is
+independent of the deployment scale; any difference in outputs across
+scales is attributable to non-deterministic order of operations, not to
+architectural constraints.
+
+**Every file the engine writes carries provenance metadata** identifying
+the exact repository state from which it was generated.
+
+**The engine is dimensionless internally.** Units are attached at the
+boundary where results are compared against analytical solutions or
+observational data.
 
 ---
 
@@ -105,15 +102,19 @@ comparison.
 
 ## Mathematical hierarchy
 
-The design principle governing `theory/` and `computation/`:
+**`theory/` is strictly third-party-free.** The `theory/` package
+defines pure mathematical ABCs and may not import from any package
+outside the Python standard library. Mathematical concreteness (classes
+parameterized by Python primitives) belongs in `theory/`; computational
+concreteness (JAX, NumPy, HDF5) belongs outside it. Enforced by
+`tests/test_theory_no_third_party_imports.py`.
 
-> Every class at the top level of `computation/` is exactly one step
-> removed from `theory/` — it directly inherits from an ABC. Any class
-> that is two steps removed must live one level down within `computation/`.
+**`computation/` contains distance-1 implementations.** Every class at
+the top level of `computation/` directly inherits from an ABC in
+`theory/`. Classes two or more steps removed live one level down within
+their package.
 
-The `theory/` package defines pure mathematical ABCs with no JAX
-dependency. The `computation/` package contains the first concrete
-implementations. The current ABC hierarchy:
+The current ABC hierarchy:
 
 ```
 Set
