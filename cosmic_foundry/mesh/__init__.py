@@ -15,6 +15,7 @@ from cosmic_foundry.computation.descriptor import (
     intersect_extents,
     payload_slices,
 )
+from cosmic_foundry.computation.overlap import fill_by_overlap
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 
@@ -160,6 +161,7 @@ def fill_halo(
 
     local_ids = mesh.placement.segments_for_rank(rank)
     updated: dict[ComponentId, Any] = {}
+
     for cid in local_ids:
         patch = mesh[cid]
         interior = patch.index_extent
@@ -168,16 +170,18 @@ def fill_halo(
         expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].dtype)
         expanded = expanded.at[payload_slices(halo_extent, interior)].set(field[cid])
 
-        updated[cid] = _fill_patch_halo(
-            target_cid=cid,
-            target_interior=interior,
-            target_halo_extent=halo_extent,
-            expanded_payload=expanded,
-            mesh=mesh,
-            field=field,
-            rank=rank,
-            local_ids=local_ids,
-        )
+        _validate_halo_coverage(cid, halo_extent, interior, mesh, local_ids, rank)
+
+        for i in range(len(mesh.elements)):
+            src_cid = ComponentId(i)
+            if src_cid == cid or src_cid not in local_ids:
+                continue
+            expanded = fill_by_overlap(
+                mesh[src_cid].index_extent, field[src_cid], halo_extent, expanded
+            )
+
+        updated[cid] = expanded
+
     new_elements = tuple(
         updated.get(ComponentId(i), field[ComponentId(i)])
         for i in range(len(field.elements))
@@ -185,49 +189,32 @@ def fill_halo(
     return Array(elements=new_elements, placement=field.placement)
 
 
-def _fill_patch_halo(
-    *,
+def _validate_halo_coverage(
     target_cid: ComponentId,
-    target_interior: Extent,
-    target_halo_extent: Extent,
-    expanded_payload: Any,
+    halo_extent: Extent,
+    interior: Extent,
     mesh: Array[Patch],
-    field: Array[Any],
-    rank: int,
     local_ids: frozenset[ComponentId],
-) -> Any:
-    payload = expanded_payload
-    for halo_piece in _subtract_extent(target_halo_extent, target_interior):
-        candidates: list[tuple[ComponentId, Extent]] = []
-        for i in range(len(mesh.elements)):
-            src_cid = ComponentId(i)
-            if src_cid == target_cid:
-                continue
-            overlap = intersect_extents(mesh[src_cid].index_extent, halo_piece)
-            if overlap is not None:
-                candidates.append((src_cid, overlap))
-
-        local_candidates = [(c, ov) for c, ov in candidates if c in local_ids]
-
+    rank: int,
+) -> None:
+    for halo_piece in _subtract_extent(halo_extent, interior):
+        all_candidates = [
+            ComponentId(i)
+            for i in range(len(mesh.elements))
+            if ComponentId(i) != target_cid
+            and intersect_extents(mesh[ComponentId(i)].index_extent, halo_piece)
+            is not None
+        ]
+        local_candidates = [c for c in all_candidates if c in local_ids]
         if len(local_candidates) > 1:
             msg = "Multiple same-rank source patches overlap one halo region"
             raise ValueError(msg)
-        if len(local_candidates) == 0:
-            if candidates:
-                msg = (
-                    f"fill_halo cannot fill from rank {rank}; "
-                    "multi-rank halo exchange is not implemented"
-                )
-                raise NotImplementedError(msg)
-            continue
-
-        src_cid, overlap = local_candidates[0]
-        src_interior = mesh[src_cid].index_extent
-        payload = payload.at[payload_slices(target_halo_extent, overlap)].set(
-            field[src_cid][payload_slices(src_interior, overlap)]
-        )
-
-    return payload
+        if not local_candidates and all_candidates:
+            msg = (
+                f"fill_halo cannot fill from rank {rank}; "
+                "multi-rank halo exchange is not implemented"
+            )
+            raise NotImplementedError(msg)
 
 
 def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
