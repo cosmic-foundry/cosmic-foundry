@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.computation.array import Array, ComponentId, Placement, Record
+from cosmic_foundry.computation.array import Array, ComponentId, Placement
 from cosmic_foundry.computation.descriptor import (
     AccessPattern,
     Descriptor,
@@ -10,6 +10,7 @@ from cosmic_foundry.computation.descriptor import (
     Region,
 )
 from cosmic_foundry.computation.kernels import GlobalSum, global_sum
+from cosmic_foundry.theory.record import Record
 
 __all__ = [
     "AccessPattern",
