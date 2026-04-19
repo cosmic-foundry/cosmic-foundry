@@ -54,12 +54,6 @@ here are the authoritative record until code exists.
 
 ### Planned `theory/` additions
 
-**`∂M` (manifold boundary)**
-— An operation or property on `SmoothManifold` returning the boundary
-manifold `∂M`, which has dimension `ndim - 1`. Needed to formally type
-`BoundaryCondition` (below). Concrete discrete form: the set of index
-faces at the boundary of an `Extent`.
-
 **`DynamicManifold(PseudoRiemannianManifold)`**
 — A manifold whose signature is fixed but whose metric tensor is a
 dynamical field in the simulation state rather than a structural
@@ -69,12 +63,26 @@ extrinsic curvature `K_ij` are evolved fields.
 
 ### Planned `computation/` and `theory/` additions
 
-**`BoundaryCondition(Function)`** *(in `theory/`)*
-— A function that operates on `∂M`-indexed data and enforces a
-condition on field values at the boundary. Blocked on `∂M` existing so
-the codimension-1 invariant is enforced at the ABC level. Concrete
-subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`) live in
-`computation/`.
+**`BoundaryCondition` hierarchy** *(in `theory/`)*
+Three ABCs, all in `theory/`, no third-party dependencies:
+
+- `BoundaryCondition(Function)` — root ABC; blank beyond `Function.execute`.
+  `execute(domain: Domain, face: ManifoldWithBoundary, field_data)` is the
+  intended concrete signature but is left as `*args/**kwargs` at this level.
+
+- `LocalBoundaryCondition(BoundaryCondition)` — constraint on a single face;
+  represents `α·f + β·∂f/∂n = g`. Abstract properties: `alpha: float`,
+  `beta: float`, `constraint: Field`. Dirichlet: `alpha=1, beta=0`.
+  Neumann: `alpha=0, beta=1`. Robin: both non-zero.
+
+- `NonLocalBoundaryCondition(BoundaryCondition)` — constraint spanning
+  multiple faces. Abstract property: `sources: tuple[ManifoldWithBoundary, ...]`.
+  Periodic (`FaceIdentification`) is the canonical concrete subclass:
+  two faces, identity map. Anti-periodic and Bloch/Floquet are further
+  concrete subclasses.
+
+Concrete subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`, etc.) live in
+`computation/` and may carry JAX-backed `execute` implementations.
 
 ---
 
@@ -82,4 +90,4 @@ subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`) live in
 
 Immediate code work (in dependency order):
 
-1. Add `BoundaryCondition` ABC
+1. Add `BoundaryCondition`, `LocalBoundaryCondition`, `NonLocalBoundaryCondition` ABCs to `theory/`

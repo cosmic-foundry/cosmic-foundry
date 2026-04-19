@@ -217,6 +217,17 @@ completed items in `STATUS.md` as historical record — the git log
 serves that purpose. The rule is: if the item is done when the PR
 merges, it is gone from `STATUS.md` when the PR merges.
 
+**Before merging a completing PR, horizon-scan the next well-defined
+items in `STATUS.md`** and ask two questions for each:
+1. Does it have enough detail to be implementable without further design discussion?
+2. Is anything in the current change inconsistent with it?
+
+If the answer to (1) is no, flesh out the missing details in `STATUS.md`
+(and `ARCHITECTURE.md` if the design is settled) in the same PR. If the
+answer to (2) is yes, resolve the inconsistency before merging. The goal
+is that the next item is always fully specified before the current one
+lands.
+
 ---
 
 ## Implementation plans
