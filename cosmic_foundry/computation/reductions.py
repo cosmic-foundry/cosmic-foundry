@@ -24,7 +24,7 @@ from cosmic_foundry.theory.function import Function
 
 @dataclass(frozen=True)
 class GlobalSum(Function):
-    """Sum field values over local interiors and optionally all-reduce them.
+    """Sum field values over patch interiors and optionally all-reduce them.
 
     Function:
         domain   — (mesh: Array[Patch], f_h : Ω_h^int → ℝ) — block mesh and
@@ -36,7 +36,7 @@ class GlobalSum(Function):
     Unweighted grid-point sum. To approximate ∫_Ω f dΩ, multiply by h^d
     where h is the grid spacing and d is the spatial dimension.
 
-    Without *axis_name*, returns the rank-local sum. Supplying a JAX
+    Without *axis_name*, returns the local sum. Supplying a JAX
     parallel-map axis name applies ``jax.lax.psum`` and returns the global
     sum inside that mapped context.
 
@@ -48,15 +48,11 @@ class GlobalSum(Function):
         mesh: Any,
         field: Array[Any],
         extent: Extent,
-        rank: int,
         *,
         axis_name: Hashable | None = None,
     ) -> jax.Array:
         local = jnp.asarray(0.0, dtype=jnp.float64)
-        local_ids = mesh.placement.segments_for_rank(rank)
         for i in range(len(mesh.elements)):
-            if i not in local_ids:
-                continue
             interior = mesh[i].index_extent
             overlap = intersect_extents(interior, extent)
             if overlap is None:

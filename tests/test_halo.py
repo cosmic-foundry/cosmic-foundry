@@ -10,13 +10,12 @@ from cosmic_foundry.mesh import fill_halo, partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
 
-def _make_1d_mesh(n_ranks: int = 1) -> Array:
+def _make_1d_mesh() -> Array:
     return partition_domain(
         domain_origin=(0.0,),
         domain_size=(8.0,),
         n_cells=(8,),
         blocks_per_axis=(2,),
-        n_ranks=n_ranks,
     )
 
 
@@ -28,7 +27,7 @@ def test_single_rank_fill_copies_1d_neighbor_ghosts() -> None:
     f = ContinuousField(name="phi", fn=lambda x: x)
     field = f.discretize(mesh)
 
-    filled = fill_halo(mesh, field, access, rank=0)
+    filled = fill_halo(mesh, field, access)
 
     # Patch 0 interior: [0, 4), values ~0.5, 1.5, 2.5, 3.5 (cell centers with h=1)
     # Patch 1 interior: [4, 8), values ~4.5, 5.5, 6.5, 7.5
@@ -57,7 +56,6 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
         domain_size=(2.0, 3.0),
         n_cells=(4, 3),
         blocks_per_axis=(2, 1),
-        n_ranks=1,
     )
     access = (1, 1)
 
@@ -65,7 +63,7 @@ def test_single_rank_fill_copies_2d_face_slab() -> None:
     f = ContinuousField(name="phi", fn=lambda x, y: 10.0 * x + y)
     field = f.discretize(mesh)
 
-    filled = fill_halo(mesh, field, access, rank=0)
+    filled = fill_halo(mesh, field, access)
 
     # Patch 0: interior x in [0, 2), y in [0, 3) → shape (2, 3) interior, (4, 5) halo
     # Patch 1: interior x in [2, 4), y in [0, 3)
@@ -86,22 +84,11 @@ def test_fill_halo_returns_new_array_without_mutating_original() -> None:
     field = f.discretize(mesh)
     original = field[0].copy()
 
-    filled = fill_halo(mesh, field, access, rank=0)
+    filled = fill_halo(mesh, field, access)
 
     assert filled is not field
     np.testing.assert_allclose(field[0], original)
     assert filled[0].shape == (6,)
-
-
-def test_fill_halo_rejects_off_rank_neighbor_until_multi_rank_implemented() -> None:
-    mesh = _make_1d_mesh(n_ranks=2)
-    access = (1,)
-
-    f = ContinuousField(name="phi", fn=lambda x: x)
-    field = f.discretize(mesh)
-
-    with pytest.raises(NotImplementedError, match="multi-rank"):
-        fill_halo(mesh, field, access, rank=0)
 
 
 def test_interior_values_preserved_after_fill() -> None:
@@ -112,7 +99,7 @@ def test_interior_values_preserved_after_fill() -> None:
     f = ContinuousField(name="phi", fn=lambda x: x * x)
     field = f.discretize(mesh)
 
-    filled = fill_halo(mesh, field, access, rank=0)
+    filled = fill_halo(mesh, field, access)
 
     # Patch 0 halo extent [-1, 5): interior at array indices [1:5]
     np.testing.assert_allclose(filled[0][1:5], field[0])

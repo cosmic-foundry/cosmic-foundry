@@ -1,6 +1,5 @@
-"""Tests for Placement, covers(), and the Field → Op integration.
+"""Tests for covers() and the Field → Op integration.
 
-Placement unit tests verify the ComponentId→rank mapping API.
 covers() tests verify that Array[Patch] correctly reports spatial coverage.
 The integration tests run the seven-point Laplacian on φ = x²+y²+z² and
 verify the expected result (6.0) in both single-process and multi-process modes.
@@ -19,7 +18,6 @@ from typing import Any
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.computation.array import Placement
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.computation.stencil import Stencil
 from cosmic_foundry.mesh import covers, partition_domain
@@ -66,40 +64,6 @@ def phi() -> jnp.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# Placement unit tests
-# ---------------------------------------------------------------------------
-
-
-def test_placement_owner_lookup() -> None:
-    p = Placement({0: 0, 1: 1})
-    assert p.owner(0) == 0
-    assert p.owner(1) == 1
-
-
-def test_placement_segments_for_rank() -> None:
-    p = Placement({0: 0, 1: 0, 2: 1})
-    assert p.segments_for_rank(0) == {0, 1}
-    assert p.segments_for_rank(1) == {2}
-    assert p.segments_for_rank(99) == frozenset()
-
-
-def test_placement_rejects_unknown_segment() -> None:
-    p = Placement({0: 0})
-    with pytest.raises(KeyError):
-        p.owner(99)
-
-
-def test_placement_rejects_negative_rank() -> None:
-    with pytest.raises(ValueError, match="non-negative"):
-        Placement({0: -1})
-
-
-def test_placement_rejects_empty() -> None:
-    with pytest.raises(ValueError, match="at least one"):
-        Placement({})
-
-
-# ---------------------------------------------------------------------------
 # covers() tests
 # ---------------------------------------------------------------------------
 
@@ -110,7 +74,6 @@ def test_covers_single_block_full_extent() -> None:
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
-        n_ranks=1,
     )
     full = Extent.from_shape((N, N, N))
     assert covers(mesh, full)
@@ -122,7 +85,6 @@ def test_covers_two_blocks_cover_split_domain() -> None:
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
         blocks_per_axis=(2, 1, 1),
-        n_ranks=1,
     )
     assert covers(mesh, Extent.from_shape((N, N, N)))
 
@@ -134,9 +96,7 @@ def test_covers_rejects_extent_outside_mesh() -> None:
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
-        n_ranks=1,
     )
-    # Expand [0, N)^3 by 1 → [-1, N+1)^3 which the mesh cannot cover
     full = Extent.from_shape((N, N, N))
     beyond = full.expand(seven_point_laplacian.radii)
     assert not covers(mesh, beyond)
@@ -154,7 +114,6 @@ def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
         blocks_per_axis=(1, 1, 1),
-        n_ranks=1,
     )
     full = Extent.from_shape((N, N, N))
     required = full.expand(seven_point_laplacian.radii)

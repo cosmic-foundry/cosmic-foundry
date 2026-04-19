@@ -72,10 +72,9 @@ class ContinuousField(ScalarField):
     def discretize(self, mesh: Any) -> Any:
         """Sample f at each patch's node positions, returning Array[T].
 
-        T is the backend array type.  The returned Array has the same
-        Placement as the mesh: element i is the array of field values on
-        patch i, with shape equal to patch.index_extent.shape and no ghost
-        cells.
+        T is the backend array type.  Element i of the returned Array is
+        the array of field values on patch i, with shape equal to
+        patch.index_extent.shape and no ghost cells.
         """
         import jax.numpy as jnp
 
@@ -86,7 +85,7 @@ class ContinuousField(ScalarField):
             axes = [patch.node_positions(axis) for axis in range(patch.ndim)]
             coords = jnp.meshgrid(*axes, indexing="ij")
             elements.append(self.execute(*coords))
-        return Array(elements=tuple(elements), placement=mesh.placement)
+        return Array(elements=tuple(elements))
 
 
 __all__ = [
