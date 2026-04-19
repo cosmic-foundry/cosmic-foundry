@@ -2,30 +2,23 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
-
 from cosmic_foundry.theory.boundary_condition import BoundaryCondition
-from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
 
 
 class NonLocalBoundaryCondition(BoundaryCondition):
-    """A boundary condition whose constraint spans multiple faces of ∂Ω.
+    """A boundary condition whose constraint spans more than one location.
 
-    NonLocalBoundaryCondition reads field data from more than one face and
-    cannot be evaluated from a single face in isolation.  The canonical
-    concrete subclass is FaceIdentification (periodic BC): two faces, identity
-    map.  Further variants include anti-periodic (negation map) and
-    Bloch/Floquet (phase map, used in photonics and solid-state).
+    A local boundary condition can be evaluated from field data at a single
+    face in isolation.  A non-local boundary condition cannot — it requires
+    data from multiple locations, which may be boundary faces, the whole
+    boundary, or interior points depending on the concrete type.
 
-    Required:
-        sources — the faces involved in the constraint, each a member of
-                  Domain.boundary (and therefore of dimension ndim-1)
+    This class makes no claim about the form of the non-locality.  Concrete
+    subclasses declare whatever geometric references they need:
+    FaceIdentification carries a pair of boundary faces; a Dirichlet-to-Neumann
+    map carries the full boundary; a radiation condition may reference interior
+    data.
     """
-
-    @property
-    @abstractmethod
-    def sources(self) -> tuple[ManifoldWithBoundary, ...]:
-        """The boundary faces this condition reads from."""
 
 
 __all__ = ["NonLocalBoundaryCondition"]

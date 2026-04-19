@@ -62,12 +62,10 @@ class _NeumannBC(LocalBoundaryCondition):
 
 
 class _FaceIdentification(NonLocalBoundaryCondition):
-    def __init__(self, face_a: ManifoldWithBoundary, face_b: ManifoldWithBoundary):
-        self._sources = (face_a, face_b)
+    """Periodic BC: identifies two boundary faces. Carries its own geometry."""
 
-    @property
-    def sources(self) -> tuple[ManifoldWithBoundary, ...]:
-        return self._sources
+    def __init__(self, face_a: ManifoldWithBoundary, face_b: ManifoldWithBoundary):
+        self.faces = (face_a, face_b)
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         return None
@@ -128,19 +126,19 @@ def test_local_constraint_is_field() -> None:
 
 
 # ---------------------------------------------------------------------------
-# NonLocalBoundaryCondition property tests
+# NonLocalBoundaryCondition — concrete subclass carries its own geometry
 # ---------------------------------------------------------------------------
 
 
-def test_face_identification_sources(euclidean_domain_3d: Any) -> None:
+def test_face_identification_faces(euclidean_domain_3d: Any) -> None:
     faces = euclidean_domain_3d.boundary
     bc = _FaceIdentification(faces[0], faces[1])
-    assert len(bc.sources) == 2
-    assert all(isinstance(f, ManifoldWithBoundary) for f in bc.sources)
+    assert len(bc.faces) == 2
+    assert all(isinstance(f, ManifoldWithBoundary) for f in bc.faces)
 
 
 def test_face_identification_codimension(euclidean_domain_3d: Any) -> None:
     faces = euclidean_domain_3d.boundary
     bc = _FaceIdentification(faces[0], faces[1])
-    for face in bc.sources:
+    for face in bc.faces:
         assert face.ndim == euclidean_domain_3d.ndim - 1
