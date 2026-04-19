@@ -41,8 +41,9 @@ def main() -> None:
 
         import jax.numpy as jnp
 
+        from cosmic_foundry.computation.kernels import execute_pointwise
         from cosmic_foundry.descriptor import AccessPattern, Extent, Region
-        from cosmic_foundry.function import Function, execute_pointwise
+        from cosmic_foundry.function import Function
 
         n = 8
         half = n // 2  # 4
