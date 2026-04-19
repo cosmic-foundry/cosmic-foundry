@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from cosmic_foundry.computation.array import Array, ComponentId
 from cosmic_foundry.descriptor import Extent
 from cosmic_foundry.mesh import Patch, covers, partition_domain
-from cosmic_foundry.record import Array, ComponentId
 
 
 class TestPatch:
@@ -169,7 +169,7 @@ class TestCovers:
 
     def test_gap_in_coverage_detected(self):
         """A mesh missing the middle rows does not cover the full extent."""
-        from cosmic_foundry.record import Placement
+        from cosmic_foundry.computation.array import Placement
 
         patches = (
             Patch(

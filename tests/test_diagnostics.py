@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from cosmic_foundry.computation.array import Array, ComponentId, Placement
 from cosmic_foundry.descriptor import Extent, Region
 from cosmic_foundry.diagnostics import (
     DiagnosticRecord,
@@ -20,7 +21,6 @@ from cosmic_foundry.diagnostics import (
     global_sum,
 )
 from cosmic_foundry.mesh import Patch, partition_domain
-from cosmic_foundry.record import Array, ComponentId, Placement
 
 
 def _make_1d_mesh(

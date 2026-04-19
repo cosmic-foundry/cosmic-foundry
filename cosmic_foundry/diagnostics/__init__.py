@@ -12,10 +12,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from cosmic_foundry.computation.array import Array, ComponentId, Record
 from cosmic_foundry.descriptor import Extent, Region
 from cosmic_foundry.io.sink import Sink
 from cosmic_foundry.mesh import Patch
-from cosmic_foundry.record import Array, ComponentId, Record
 from cosmic_foundry.theory.function import Function
 
 

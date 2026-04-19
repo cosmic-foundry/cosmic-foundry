@@ -19,10 +19,10 @@ from typing import Any
 import jax.numpy as jnp
 import pytest
 
+from cosmic_foundry.computation.array import ComponentId, Placement
 from cosmic_foundry.computation.kernels import execute_pointwise
 from cosmic_foundry.descriptor import AccessPattern, Extent, Region
 from cosmic_foundry.mesh import covers, partition_domain
-from cosmic_foundry.record import ComponentId, Placement
 from cosmic_foundry.theory.function import Function
 
 N = 8

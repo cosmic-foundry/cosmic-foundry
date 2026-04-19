@@ -5,8 +5,8 @@ from __future__ import annotations
 import jax.numpy as jnp
 import pytest
 
+from cosmic_foundry.computation.array import Array, ComponentId
 from cosmic_foundry.mesh import partition_domain
-from cosmic_foundry.record import Array, ComponentId
 from cosmic_foundry.theory.field import ContinuousField
 
 

@@ -1,4 +1,4 @@
-"""Record ABC and concrete record types."""
+"""Distributed indexed family: Array[T], ComponentId, Placement, Record."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ class Placement(Record):
 
     ``Placement`` carries no physical meaning and no kernel-lowering logic.
     It is the sole authoritative source for process/device ownership within
-    a composite ``PatchFunction``.
+    a composite ``Array[T]``.
     """
 
     def __init__(self, owners: Mapping[ComponentId, int]) -> None:
@@ -101,7 +101,7 @@ class Array(Record, Generic[T]):
 
     This is the general container for structured collections across the
     simulation: Array[Patch] represents a partitioned spatial domain;
-    Array[PatchFunction] represents a distributed discrete field.
+    Array[jax.Array] represents a distributed discrete field (MultiFab pattern).
     """
 
     elements: tuple[T, ...]

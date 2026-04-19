@@ -8,8 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from cosmic_foundry.computation.array import Array, ComponentId, Placement
 from cosmic_foundry.descriptor import AccessPattern, Extent
-from cosmic_foundry.record import Array, ComponentId, Placement
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 
