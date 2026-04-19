@@ -9,6 +9,7 @@ jax.config.update("jax_enable_x64", True)
 from cosmic_foundry._version import __version__  # noqa: E402
 from cosmic_foundry.computation.array import Array  # noqa: E402
 from cosmic_foundry.computation.descriptor import Extent  # noqa: E402
+from cosmic_foundry.computation.field import discretize  # noqa: E402
 from cosmic_foundry.computation.reductions import Reduction, global_sum  # noqa: E402
 from cosmic_foundry.computation.stencil import Stencil  # noqa: E402
 from cosmic_foundry.io import (  # noqa: E402
@@ -29,7 +30,6 @@ from cosmic_foundry.mesh import (  # noqa: E402
 )
 from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 from cosmic_foundry.theory import (  # noqa: E402
-    ContinuousField,
     Discretization,
     Field,
     Function,
@@ -53,8 +53,9 @@ __all__ = [
     "Reduction",
     "Stencil",
     "global_sum",
+    # computation
+    "discretize",
     # fields
-    "ContinuousField",
     "Field",
     "ScalarField",
     "TensorField",

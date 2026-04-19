@@ -1,17 +1,13 @@
 """Field hierarchy.
 
-- ``Field``          — abstract base: f: M → V; inherits Function.
-- ``ScalarField``    — marker for V = ℝ.
-- ``TensorField``    — abstract for V = T^(p,q)M; carries ``tensor_type``.
-- ``ContinuousField``— concrete scalar field stored as an analytic callable.
+- ``Field``       — abstract base: f: M → V; inherits Function.
+- ``ScalarField`` — marker for V = ℝ.
+- ``TensorField`` — abstract for V = T^(p,q)M; carries ``tensor_type``.
 """
 
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any
 
 from cosmic_foundry.theory.function import Function
 
@@ -51,45 +47,7 @@ class TensorField(Field):
         """Return (p, q) where p is contravariant and q is covariant rank."""
 
 
-@dataclass(frozen=True)
-class ContinuousField(ScalarField):
-    """A continuous scalar field f: M → ℝ represented by an analytic callable.
-
-    Exact representation — the callable *is* the field, not an approximation.
-    Evaluated at a point by calling fn(*coords) where each coord is a JAX
-    array of positions along one axis of M.
-    """
-
-    name: str
-    fn: Callable[..., Any]
-
-    def execute(self, *args: Any) -> Any:
-        """Evaluate the field at the given coordinates."""
-        import jax.numpy as jnp
-
-        return jnp.asarray(self.fn(*args), dtype=jnp.float64)
-
-    def discretize(self, mesh: Any) -> Any:
-        """Sample f at each patch's node positions, returning Array[T].
-
-        T is the backend array type.  Element i of the returned Array is
-        the array of field values on patch i, with shape equal to
-        patch.index_extent.shape and no ghost cells.
-        """
-        import jax.numpy as jnp
-
-        from cosmic_foundry.computation.array import Array
-
-        elements: list[Any] = []
-        for patch in mesh.elements:
-            axes = [patch.node_positions(axis) for axis in range(patch.ndim)]
-            coords = jnp.meshgrid(*axes, indexing="ij")
-            elements.append(self.execute(*coords))
-        return Array(elements=tuple(elements))
-
-
 __all__ = [
-    "ContinuousField",
     "Field",
     "ScalarField",
     "TensorField",
