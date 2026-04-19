@@ -1,12 +1,12 @@
 """Field reductions.
 
-``GlobalSum`` sums field values over patch interiors with optional
-MPI all-reduce.
+``Reduction`` folds field values over patch interiors using a caller-supplied
+aggregation function and identity element, with optional all-reduce.
 """
 
 from __future__ import annotations
 
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -23,25 +23,25 @@ from cosmic_foundry.theory.function import Function
 
 
 @dataclass(frozen=True)
-class GlobalSum(Function):
-    """Sum field values over patch interiors and optionally all-reduce them.
+class Reduction(Function):
+    """A field reduction parametric over an aggregation operator and identity.
 
     Function:
-        domain   — (mesh: Array[Patch], f_h : Ω_h^int → ℝ) — block mesh and
-                   a discrete scalar field on interior grid points, intersected
-                   with the given extent
-        codomain — ℝ (a real number; field evaluated at a single point)
-        operator — (mesh, f_h, extent) ↦ Σ_{x ∈ Ω_h^int ∩ extent} f_h(x)
+        domain   — (mesh: Array[Patch], f_h : Ω_h^int → ℝ, extent: Extent)
+        codomain — ℝ
+        operator — (mesh, f_h, extent) ↦
+                       fold_{x ∈ Ω_h^int ∩ extent} f_h(x)
+                   where fold is defined by (operator, identity)
 
-    Unweighted grid-point sum. To approximate ∫_Ω f dΩ, multiply by h^d
-    where h is the grid spacing and d is the spatial dimension.
+    Θ = ∅ — the reduction is exact given the operator and identity.
 
-    Without *axis_name*, returns the local sum. Supplying a JAX
-    parallel-map axis name applies ``jax.lax.psum`` and returns the global
-    sum inside that mapped context.
-
-    Exact: Θ = ∅ — unweighted sum; no approximation introduced.
+    Without *axis_name*, returns the local reduced value. Supplying a JAX
+    parallel-map axis name applies ``jax.lax.psum`` after the local fold
+    (valid when operator is addition).
     """
+
+    operator: Callable[..., jax.Array]
+    identity: float
 
     def execute(
         self,
@@ -51,19 +51,19 @@ class GlobalSum(Function):
         *,
         axis_name: Hashable | None = None,
     ) -> jax.Array:
-        local = jnp.asarray(0.0, dtype=jnp.float64)
+        result = jnp.asarray(self.identity, dtype=jnp.float64)
         for i in range(len(mesh.elements)):
             interior = mesh[i].index_extent
             overlap = intersect_extents(interior, extent)
             if overlap is None:
                 continue
-            local = local + jnp.sum(field[i][payload_slices(interior, overlap)])
+            result = result + self.operator(field[i][payload_slices(interior, overlap)])
 
         if axis_name is None:
-            return local
-        return cast(jax.Array, jax.lax.psum(local, axis_name))
+            return result
+        return cast(jax.Array, jax.lax.psum(result, axis_name))
 
 
-global_sum = GlobalSum()
+global_sum = Reduction(operator=jnp.sum, identity=0.0)
 
-__all__ = ["GlobalSum", "global_sum"]
+__all__ = ["Reduction", "global_sum"]
