@@ -69,6 +69,25 @@ class ContinuousField(ScalarField):
 
         return jnp.asarray(self.fn(*args), dtype=jnp.float64)
 
+    def discretize(self, mesh: Any) -> Any:
+        """Sample f at each patch's node positions, returning Array[T].
+
+        T is the backend array type.  The returned Array has the same
+        Placement as the mesh: element i is the array of field values on
+        patch i, with shape equal to patch.index_extent.shape and no ghost
+        cells.
+        """
+        import jax.numpy as jnp
+
+        from cosmic_foundry.record import Array
+
+        elements: list[Any] = []
+        for patch in mesh.elements:
+            axes = [patch.node_positions(axis) for axis in range(patch.ndim)]
+            coords = jnp.meshgrid(*axes, indexing="ij")
+            elements.append(self.execute(*coords))
+        return Array(elements=tuple(elements), placement=mesh.placement)
+
 
 __all__ = [
     "ContinuousField",

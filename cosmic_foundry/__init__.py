@@ -44,7 +44,6 @@ from cosmic_foundry.mesh import (  # noqa: E402
     PartitionDomain,
     Patch,
     covers,
-    discretize,
     fill_halo,
     partition_domain,
 )
@@ -107,7 +106,6 @@ __all__ = [
     "Patch",
     "PartitionDomain",
     "covers",
-    "discretize",
     "fill_halo",
     "partition_domain",
     # observability

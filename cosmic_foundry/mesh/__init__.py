@@ -9,7 +9,6 @@ from typing import Any
 import numpy as np
 
 from cosmic_foundry.descriptor import AccessPattern, Extent
-from cosmic_foundry.field import ContinuousField
 from cosmic_foundry.function import Function
 from cosmic_foundry.located_discretization import LocatedDiscretization
 from cosmic_foundry.record import Array, ComponentId, Placement
@@ -116,23 +115,6 @@ class PartitionDomain(Function):
 
 
 partition_domain = PartitionDomain()
-
-
-def discretize(f: ContinuousField, mesh: Array[Patch]) -> Array[Any]:
-    """Sample *f* at each patch's node positions, returning Array[T].
-
-    T is the backend array type (currently jax.Array).  The returned Array
-    has the same Placement as the mesh: element i is the array of field values
-    on patch i, with shape equal to patch.index_extent.shape and no ghost cells.
-    """
-    import jax.numpy as jnp
-
-    elements: list[Any] = []
-    for patch in mesh.elements:
-        axes = [patch.node_positions(axis) for axis in range(patch.ndim)]
-        coords = jnp.meshgrid(*axes, indexing="ij")
-        elements.append(f.execute(*coords))
-    return Array(elements=tuple(elements), placement=mesh.placement)
 
 
 def covers(mesh: Array[Patch], extent: Extent) -> bool:
@@ -292,7 +274,6 @@ __all__ = [
     "Patch",
     "PartitionDomain",
     "covers",
-    "discretize",
     "fill_halo",
     "partition_domain",
 ]
