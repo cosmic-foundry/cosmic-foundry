@@ -85,7 +85,7 @@ def _validate_halo_access(
                 raise ValueError(msg)
 
 
-__all__ = ["Stencil", "derive_laplacian_stencil", "seven_point_laplacian"]
+__all__ = ["Stencil", "derive_stencil", "seven_point_laplacian"]
 
 
 # ---------------------------------------------------------------------------
@@ -93,20 +93,26 @@ __all__ = ["Stencil", "derive_laplacian_stencil", "seven_point_laplacian"]
 # ---------------------------------------------------------------------------
 
 
-def derive_laplacian_stencil(order: int, ndim: int = 3) -> dict[str, Any]:
-    """Derive exact rational weights for an ndim Laplacian stencil of given order.
+def derive_stencil(deriv_order: int, approx_order: int, ndim: int) -> dict[str, Any]:
+    """Derive exact rational weights for an ndim stencil of given derivative order.
 
-    Uses SymPy finite-difference weights. Computes 1D second-derivative weights
-    and extends to ndim by axis-sum: each axis contributes independently, and
-    the center point receives contributions from all axes.
+    Uses SymPy finite-difference weights. Computes 1D derivative weights of the
+    specified order at the requested approximation order, then extends to ndim by
+    axis-sum: each axis contributes independently, and the center point receives
+    contributions from all axes. This axis-sum extension is appropriate for
+    Laplacian-like operators (sum of nth-order directional derivatives).
 
     Parameters
     ----------
-    order
+    deriv_order
+        Derivative order (1, 2, 3, ...). The order of the derivative to approximate.
+    approx_order
         Approximation order (2, 4, 6, ...). Determines the stencil radius
-        r = order // 2 and point set size r + r + 1.
+        r = approx_order // 2 and point set size r + r + 1. Must exceed
+        deriv_order - 1 to have enough points.
     ndim
-        Number of spatial dimensions (1, 2, 3, ...).
+        Number of spatial dimensions (1, 2, 3, ...). Required. Extends 1D weights
+        to ndim by axis-sum; for single-axis derivatives, use ndim=1.
 
     Returns
     -------
@@ -116,6 +122,8 @@ def derive_laplacian_stencil(order: int, ndim: int = 3) -> dict[str, Any]:
             Sorted by offset tuple.
         "radii" : tuple[int,...]
             Half-widths per axis; length == ndim.
+        "deriv_order" : int
+            The requested derivative order.
         "approx_order" : int
             The requested approximation order.
 
@@ -129,10 +137,17 @@ def derive_laplacian_stencil(order: int, ndim: int = 3) -> dict[str, Any]:
         finite_diff_weights as _fdw,
     )
 
-    r = order // 2
+    r = approx_order // 2
     points = list(range(-r, r + 1))
 
-    _weights_1d = _fdw(2, points, 0)[2][-1]
+    if len(points) <= deriv_order:
+        msg = (
+            f"approx_order={approx_order} gives {len(points)} points, "
+            f"need > {deriv_order} for deriv_order={deriv_order}"
+        )
+        raise ValueError(msg)
+
+    _weights_1d = _fdw(deriv_order, points, 0)[deriv_order][-1]
 
     _weights_1d_exact = [sp.Rational(w) for w in _weights_1d]
 
@@ -158,7 +173,8 @@ def derive_laplacian_stencil(order: int, ndim: int = 3) -> dict[str, Any]:
     return {
         "terms": terms,
         "radii": radii,
-        "approx_order": order,
+        "deriv_order": deriv_order,
+        "approx_order": approx_order,
     }
 
 
@@ -175,7 +191,7 @@ def _derive() -> dict[str, Any]:
 
     Lane C — first-principles origination.
     """
-    result = derive_laplacian_stencil(order=2, ndim=3)
+    result = derive_stencil(deriv_order=2, approx_order=2, ndim=3)
     terms = dict(result["terms"])
 
     center = terms[(0, 0, 0)]

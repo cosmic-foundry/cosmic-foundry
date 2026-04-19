@@ -11,35 +11,20 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
-## Completed
-
-**[PR #181] Generalize stencil generation to support any approximation order.**
-✅ Extracted parameterizable stencil derivation into `stencil.py` via `derive_laplacian_stencil(order, ndim)` using SymPy `finite_diff_weights`, supporting arbitrary approximation orders (2, 4, 6, ...). Moved codegen pattern (`_derive()`, `generate()`, generated block) from `laplacian.py` into `stencil.py`, following the convention that codegen lives alongside what it produces. Deleted `laplacian.py`; updated all importers (4 files + generator script). Added comprehensive tests in `test_stencil_derive.py` for orders 2 and 4 in 1D and 3D; verified weights-sum-to-zero invariant. Generated block output for order=2 is bit-for-bit identical to original (drift test confirms). No regressions; all tests pass.
-
----
-
 ## Current work
-
-**Generalize `derive_laplacian_stencil` to `derive_stencil(deriv_order, approx_order, ndim)`.**
-Refactor the parameterizable stencil generator to accept derivative order as a
-parameter. This allows computing stencils for any derivative (1st, 2nd, 3rd, ...)
-at any approximation order in any number of dimensions. Current implementation
-is specialized to 2nd derivatives (Laplacian); extract the common logic and
-parameterize by `deriv_order`. Rename to `derive_stencil()`. Maintain backward
-compatibility or provide a thin `derive_laplacian_stencil(order, ndim)` wrapper
-for the 2nd-derivative case. This unblocks future operators (gradients,
-divergences, curls) that can reuse the same framework.
 
 **Clean up `stencil.py`: remove generated-code infrastructure, push to callers.**
 Remove the offline code-gen boilerplate from `stencil.py`: delete `_derive()`,
 `generate()`, and the generated block (`_COEFFICIENTS_HASH`, kernel functions,
 named instances like `seven_point_laplacian`). `stencil.py` should export only
-`derive_stencil(deriv_order, approx_order, ndim)` — the single parameterizable
-source of truth. Responsibility for invoking the generator moves to callers:
-test files, benchmarks, and any other code that needs a stencil call
-`derive_stencil(2, 2, 3)` directly to get what they need. This distributes the
-code-gen responsibility to the edge, keeps `stencil.py` clean and focused, and
-eliminates the need to name and commit every possible concretization.
+the parameterizable generator `derive_stencil(deriv_order, approx_order, ndim)`.
+Workflow: every invoker of stencil functionality — test files, benchmarks,
+application code — must invoke code generation directly: call
+`derive_stencil(deriv_order, approx_order, ndim)` to get weights, then construct
+a Stencil instance. No pre-generated named instances are imported; each callsite
+derives what it needs. This distributes code-gen responsibility to the edge,
+keeps `stencil.py` clean and focused, and eliminates the need to name and commit
+every possible concretization.
 
 **Implement auto-discovery for kernel module generation and testing.**
 With `stencil.py` cleaned up and the framework proven, generalize the generator
