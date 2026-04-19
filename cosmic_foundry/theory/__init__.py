@@ -1,4 +1,11 @@
-"""Pure mathematical theory: ABCs for sets, manifolds, discretizations, functions."""
+"""Pure mathematical theory: ABCs for sets, manifolds, discretizations, functions.
+
+Boundary rule: this package may not import from any third-party package.
+That boundary is the precise definition of the abstract-to-concrete transition:
+mathematical concreteness (classes parameterized by Python primitives) is allowed
+here; computational concreteness (JAX, NumPy, HDF5, or any other third-party
+library) belongs in computation/, mesh/, or geometry/.
+"""
 
 from __future__ import annotations
 
