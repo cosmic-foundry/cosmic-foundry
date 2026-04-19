@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.set import Set
+from cosmic_foundry.theory.manifold import Manifold
 
 
-class SmoothManifold(Set):
-    """A Set equipped with a smooth (C∞) structure.
+class SmoothManifold(Manifold):
+    """A Manifold equipped with a smooth (C∞) structure.
 
     A smooth manifold M is a topological space that locally looks like ℝⁿ,
     with smooth transition maps between overlapping coordinate charts.  The

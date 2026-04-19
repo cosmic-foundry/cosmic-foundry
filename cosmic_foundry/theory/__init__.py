@@ -16,6 +16,8 @@ from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.indexed_family import IndexedFamily
 from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
+from cosmic_foundry.theory.manifold import Manifold
+from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
 from cosmic_foundry.theory.modal_discretization import ModalDiscretization
 from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
 from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
@@ -30,6 +32,8 @@ __all__ = [
     "IndexedFamily",
     "IndexedSet",
     "LocatedDiscretization",
+    "Manifold",
+    "ManifoldWithBoundary",
     "ModalDiscretization",
     "PseudoRiemannianManifold",
     "RiemannianManifold",

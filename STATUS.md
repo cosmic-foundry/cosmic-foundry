@@ -82,5 +82,5 @@ subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`) live in
 
 Immediate code work (in dependency order):
 
-1. Add `∂M` to `theory/`
+1. Move `EuclideanSpace` and `MinkowskiSpace` to `theory/`; make `Domain` a `ManifoldWithBoundary`
 2. Add `BoundaryCondition` ABC
