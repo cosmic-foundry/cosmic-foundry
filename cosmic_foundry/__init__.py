@@ -13,13 +13,13 @@ from cosmic_foundry.computation.array import (  # noqa: E402
     Placement,
     Record,
 )
-from cosmic_foundry.computation.kernels import execute_pointwise  # noqa: E402
-from cosmic_foundry.descriptor import (  # noqa: E402
+from cosmic_foundry.computation.descriptor import (  # noqa: E402
     AccessPattern,
     Descriptor,
     Extent,
     Region,
 )
+from cosmic_foundry.computation.kernels import execute_pointwise  # noqa: E402
 from cosmic_foundry.diagnostics import (  # noqa: E402
     CollectDiagnostics,
     DiagnosticRecord,
@@ -85,12 +85,18 @@ __all__ = [
     "WriteArray",
     "merge_rank_files",
     "write_array",
-    # kernels
+    # computation
     "AccessPattern",
     "Array",
     "ComponentId",
     "Descriptor",
+    "Extent",
+    "Function",
     "Placement",
+    "Record",
+    "Region",
+    "execute_pointwise",
+    # theory
     "Discretization",
     "IndexedSet",
     "LocatedDiscretization",
@@ -99,19 +105,15 @@ __all__ = [
     "RiemannianManifold",
     "Set",
     "SmoothManifold",
-    "Extent",
-    "Function",
-    "Record",
-    "Region",
-    "Sink",
-    "Source",
-    "execute_pointwise",
     # mesh
     "Patch",
     "PartitionDomain",
     "covers",
     "fill_halo",
     "partition_domain",
+    # io ABCs
+    "Sink",
+    "Source",
     # observability
     "configure",
     "get_logger",
