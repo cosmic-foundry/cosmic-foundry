@@ -235,10 +235,13 @@ belong in the immediate section.
 ## Epoch retrospective
 
 **When an epoch is declared complete**, before opening any code PR for
-the next epoch, perform a retrospective review. This is a read-only
-survey of the whole repository — no code changes, no new features —
-that asks: *what did we learn during this epoch that should update our
-plans?*
+the next epoch, perform a retrospective review. The retrospective
+produces only documentation changes — ADR edits, roadmap updates,
+process document corrections. It does not introduce code changes or
+new features. Any code issue discovered during the retrospective
+becomes a separate PR with its own spec and tests. The question the
+retrospective asks is: *what did we learn during this epoch that
+should update our plans?*
 
 The retrospective covers:
 
@@ -279,11 +282,8 @@ The retrospective covers:
    updates to `DEVELOPMENT.md` or `AI.md` — wherever the lesson is
    most actionable for the next epoch.
 
-The output is one or more PRs amending affected documents before Epoch
-N+1 code begins. These are documentation-only PRs; the retrospective
-itself does not introduce code. If a surprise reveals a design mistake
-that requires changing existing code, that is a separate PR with its
-own spec and tests, not part of the retrospective sweep.
+The output is one or more documentation PRs landing before Epoch N+1
+code begins.
 
 ---
 
