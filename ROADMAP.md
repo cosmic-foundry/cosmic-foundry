@@ -29,15 +29,15 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 
 ## V&V capabilities
 
-| Stage | Capability |
+| Epoch | Capability |
 |-------|------------|
 | M0 | Branch, PR, commit-size, history, and attribution discipline. ✓ |
 | M1 | Capability specs, formulas register, and externally-grounded tests for each implemented map. ✓ |
 | M2 | Lane A/B/C provenance discipline and derivation documents with SymPy checks for physics capabilities. |
 | M3 | Convergence coverage: each implemented physics map has at least one MMS or analytical convergence test confirming its stated approximation order. |
-| M3b | Reproducibility capsules: collect/dry-run/compare tooling for platform-level capsule generation. Depends on M3. |
-| M4 | Validation manifests, provenance sidecars, and comparison-result schema. Planned alongside Epoch 3. |
-| M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
+| M4 | Reproducibility capsules: collect/dry-run/compare tooling for platform-level capsule generation. Depends on M3. |
+| M5 | Validation manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
+| M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
 
 ---
 
@@ -53,4 +53,4 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 
 ### V&V
 
-1. M3 convergence coverage for each currently implemented physics map
+1. M3: convergence coverage for each currently implemented physics map
