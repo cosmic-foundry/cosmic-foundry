@@ -51,3 +51,15 @@ Start with operators that have hardcoded constants (stencils, reductions) where
 the pattern applies immediately. Operators without a formal derivation (e.g.,
 field sampling, overlap operations) may require a minimal `_derive()` that
 documents why derivation is not applicable.
+
+**Remove generated blocks from `stencil.py`; adopt parameterizable-only API.**
+Once the full codebase is using the derivation pattern, eliminate named
+pre-instantiated objects from `stencil.py` (currently `seven_point_laplacian`).
+`stencil.py` should export only the parameterizable generator
+`derive_laplacian_stencil(order, ndim)` — the single source of truth. Callers
+invoke it directly: `derive_laplacian_stencil(2, 3)` returns the order-2 3D
+stencil. Remove `_derive()`, `generate()`, and the generated block; migrate the
+drift test to verify `derive_laplacian_stencil(2, 3)` weights match the
+derivation. Update all importers (tests, benchmarks) to call the function
+instead of importing a named instance. This eliminates namespace pollution and
+makes the API scale cleanly as new orders and operators are added.
