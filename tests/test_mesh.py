@@ -8,8 +8,8 @@ import pytest
 from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import Extent
 from cosmic_foundry.geometry.domain import Domain
-from cosmic_foundry.geometry.euclidean_space import EuclideanSpace
 from cosmic_foundry.mesh import Patch, covers, partition_domain
+from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 
 
 class TestPatch:

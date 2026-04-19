@@ -64,27 +64,28 @@ implementations. The current ABC hierarchy:
 
 ```
 Set
-├── IndexedFamily       — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
-│   └── Array[T]        (computation/) — tuple-backed finite indexed family
-├── IndexedSet          — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
-│   └── Extent          (computation/) — half-open integer index extent
-│   └── Discretization  — IndexedSet approximating functions on a manifold
+├── IndexedFamily           — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
+│   └── Array[T]            (computation/) — tuple-backed finite indexed family
+├── IndexedSet              — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
+│   └── Extent              (computation/) — half-open integer index extent
+│   └── Discretization      — IndexedSet approximating functions on a manifold
 │       └── LocatedDiscretization — DOFs at specific points; interface: node_positions
-│           └── Patch   (mesh/) — uniform Cartesian LocatedDiscretization
-└── SmoothManifold      — smooth (C∞) structure; interface: ndim
-    └── PseudoRiemannianManifold  — adds indefinite metric; free: signature, derived: ndim = sum(signature)
-        └── RiemannianManifold    — positive-definite metric; free: ndim, derived: signature = (ndim, 0)
+│           └── Patch       (mesh/) — uniform Cartesian LocatedDiscretization
+└── Manifold                — topological manifold; interface: ndim
+    ├── SmoothManifold      — smooth (C∞) structure
+    │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
+    │       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
+    │       └── FlatManifold         — zero curvature
+    │           ├── EuclideanSpace   (theory/) — ℝⁿ; free: ndim
+    │           └── MinkowskiSpace   (theory/) — signature (1,3); no free parameters
+    └── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
+        └── Domain           (geometry/) — finite region of a SmoothManifold with origin and size
 
 Function                — f: A × Θ → B; interface: execute
 ├── Stencil             (computation/) — parametric pointwise stencil; parameters: fn, radii
 ├── Reduction           (computation/) — parametric field fold; parameters: operator, identity
-├── ContinuousField     (theory/) — analytic scalar field stored as a callable [*]
-└── PartitionDomain     (mesh/) — partitions a domain into an Array[Patch]
+└── PartitionDomain     (mesh/) — partitions a Domain into an Array[Patch]
 ```
-
-[*] `ContinuousField` is a concrete class inside `theory/` because it
-carries a JAX import at call time; it is a candidate for relocation to
-`computation/` or `geometry/` in a future pass.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
@@ -146,32 +147,6 @@ planetary formation, and other domains — build on top of it.
 These are decisions we know we need to make but have not yet made.
 When a question is resolved, move it into the appropriate section above
 and update the affected modules.
-
-**How does `ndim` propagate from manifold to computation?**
-`SmoothManifold.ndim` exists in `theory/`. It is not yet threaded
-through to `Patch`, `Stencil`, or `PartitionDomain`. Currently,
-`Patch.ndim` derives from `index_extent.ndim`, and `Stencil.radii` has
-its length checked at execute time — but neither is linked to an explicit
-manifold object. The intended design: `LocatedDiscretization` declares
-an abstract `manifold` property returning `SmoothManifold`; `Patch`
-stores the manifold and derives `ndim` from `manifold.ndim`;
-`PartitionDomain.execute` takes a manifold as input. Blocked on
-`geometry/` existing first.
-
-**`geometry/` module — concrete simulation geometries.**
-Planned top-level module to hold the first concrete manifold classes
-and a `Domain` type wrapping a manifold with physical bounds. Planned
-contents:
-- `EuclideanSpace(RiemannianManifold, FlatManifold)` — ℝⁿ, flat,
-  positive-definite; only free parameter is `n: int`
-- `MinkowskiSpace(FlatManifold)` — signature (1, 3), flat Lorentzian
-- `Domain` — manifold + physical origin + size; replaces the raw
-  keyword arguments currently passed to `PartitionDomain.execute`
-
-`FlatManifold(PseudoRiemannianManifold)` must first be added to
-`theory/`, branching from `PseudoRiemannianManifold` (not
-`RiemannianManifold`) so that both `EuclideanSpace` and `MinkowskiSpace`
-can inherit from it.
 
 **`DynamicManifold` for full GR.**
 Full GR simulations cannot use a fixed-metric manifold: the metric
