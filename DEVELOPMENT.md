@@ -198,8 +198,7 @@ script from the `cosmic-foundry` checkout directory.
 ## Roadmap position
 
 **At the start of every session**, read `STATUS.md` in the repository
-root. It is the navigation anchor: the directory map, planned modules
-not yet coded, and the immediate implementation queue. Read `ROADMAP.md`
+root. It is the immediate implementation queue. Read `ROADMAP.md`
 for the long-horizon capability sequence (epochs, milestones, verification
 standard) — items there are not yet specified well enough to implement
 without further design discussion. When an item becomes fully specified
