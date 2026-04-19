@@ -13,4 +13,12 @@ For the long-horizon capability sequence, see [`ROADMAP.md`](ROADMAP.md).
 
 ## Current work
 
-*No immediate work queued. See `ROADMAP.md` for the next unspecified items.*
+**Scale derivation pattern to the full codebase.**
+`cosmic_foundry/computation/laplacian.py` establishes the proof-of-concept:
+derivation (`_derive`), hash-verified generated constants block, and production
+kernel in a single file; `scripts/generate_kernels.py` splices fresh constants
+via `BEGIN GENERATED` / `END GENERATED` sentinels. The next step is to audit
+every existing operator and apply the same pattern: add `_derive()` and
+`generate()`, generate the constants block, and add a drift-check entry in
+`tests/test_generated_kernels.py`. Any operator without a `_derive()` is not
+yet compliant with architectural basis claim 5.
