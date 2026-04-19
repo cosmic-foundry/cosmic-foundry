@@ -1,0 +1,210 @@
+# Cosmic Foundry — Architecture
+
+This document records cross-cutting architectural decisions and open
+design questions. It is not a substitute for reading the code: the
+authoritative description of any module's current design is in that
+module's `__init__.py` docstring and the docstrings of its classes.
+`STATUS.md` describes how to navigate the repo and what planned modules
+do not yet have code.
+
+---
+
+## Technology baseline
+
+These are firm commitments. Changing any of them requires revisiting
+this document and updating affected modules.
+
+**Python-only engine.** No compiled extensions are shipped from this
+repository. Any native code the engine executes is produced at runtime
+by a code-generation backend. `pybind11` and `ctypes` are emergency
+escape hatches only; adopting either requires a documented justification
+here. Pre-built libraries (JAX, NumPy, h5py) are consumed as
+dependencies, not produced by this build.
+
+**JAX + XLA as the primary kernel backend.** Every kernel shipped so far
+is authored as a JAX kernel. The kernel interface (`Stencil`, `Reduction`
+— see `computation/`) is structured so that secondary backends can be
+added without changing call sites. Secondary backends (Numba, Taichi,
+NVIDIA Warp, Triton) are listed as optional extras in `pyproject.toml`
+but no adapter is written or exercised. Adding a secondary backend in
+production requires documenting the workload and performance gap here.
+
+**`jax.distributed` + NCCL/GLOO for host parallelism.** No MPI layer in
+the baseline. `mpi4py` is available as an optional extra for sites where
+`jax.distributed` cannot initialize over the native interconnect.
+
+**float64 as the default precision.** All field arrays default to
+`float64`. Precision exceptions must be explicit and documented.
+
+**Python ≥ 3.11.** Single source language end-to-end.
+
+---
+
+## Mathematical hierarchy
+
+The design principle governing `theory/` and `computation/`:
+
+> Every class at the top level of `computation/` is exactly one step
+> removed from `theory/` — it directly inherits from an ABC. Any class
+> that is two steps removed must live one level down within `computation/`.
+
+The `theory/` package defines pure mathematical ABCs with no JAX
+dependency. The `computation/` package contains the first concrete
+implementations. The current ABC hierarchy:
+
+```
+Set
+├── IndexedFamily       — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
+│   └── Array[T]        (computation/) — tuple-backed finite indexed family
+├── IndexedSet          — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
+│   └── Extent          (computation/) — half-open integer index extent
+│   └── Discretization  — IndexedSet approximating functions on a manifold
+│       └── LocatedDiscretization — DOFs at specific points; interface: node_positions
+│           └── Patch   (mesh/) — uniform Cartesian LocatedDiscretization
+└── SmoothManifold      — smooth (C∞) structure; interface: ndim
+    └── PseudoRiemannianManifold  — adds indefinite metric; free: signature, derived: ndim = sum(signature)
+        └── RiemannianManifold    — positive-definite metric; free: ndim, derived: signature = (ndim, 0)
+
+Function                — f: A × Θ → B; interface: execute
+├── Stencil             (computation/) — parametric pointwise stencil; parameters: fn, radii
+├── Reduction           (computation/) — parametric field fold; parameters: operator, identity
+├── ContinuousField     (theory/) — analytic scalar field stored as a callable [*]
+└── PartitionDomain     (mesh/) — partitions a domain into an Array[Patch]
+```
+
+[*] `ContinuousField` is a concrete class inside `theory/` because it
+carries a JAX import at call time; it is a candidate for relocation to
+`computation/` or `geometry/` in a future pass.
+
+**Derivation chain across the pseudo-Riemannian hierarchy.** At each
+level, tighter constraints allow more to be derived:
+- `SmoothManifold`: `ndim` is the free parameter (topologically primitive)
+- `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`
+- `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
+
+**`intersect` on `IndexedSet`.** Set intersection is a fundamental
+operation on any indexed set and lives as an `@abstractmethod` on
+`IndexedSet`. `Extent` implements it directly; `Patch` delegates to
+`self.index_extent.intersect(other)`.
+
+---
+
+## Platform and application split
+
+Cosmic Foundry is the **organizational platform**. Application
+repositories — covering stellar physics, cosmology, galactic dynamics,
+planetary formation, and other domains — build on top of it.
+
+- Reusable computation infrastructure (kernels, mesh, fields, I/O,
+  diagnostics) belongs here.
+- Domain-specific physics implementations and observational validation
+  data belong in application repos.
+- Cross-scale workflows that compose two or more application domains
+  belong in their own repository.
+
+---
+
+## Physics capability licensing
+
+Per the derivation-first lane policy (documented in `AI.md`):
+
+- **Lane A** — port-and-verify from a permissively-licensed reference
+  with attribution.
+- **Lane B** — clean-room from paper; mandatory for copyleft references
+  (GADGET-4, RAMSES, MESA, SWIFT, Arepo, and others listed in
+  `research/06-12-licensing.md`). Source tree must not be opened.
+- **Lane C** — first-principles origination for generalizations, novel
+  work, or cases where deep understanding is the goal.
+
+The lane must be stated in the PR description for any physics capability.
+
+---
+
+## Long-term physics capability goals
+
+These are goals, not a delivery timeline. Sequencing is in `STATUS.md`.
+
+| Capability | Notes |
+|---|---|
+| Uniform structured mesh | Done — `mesh/` |
+| Newtonian hydrodynamics | Finite-volume Godunov, HLLC/HLLE Riemann solvers |
+| Self-gravity | Multigrid Poisson, particle infrastructure, tree gravity |
+| Microphysics | EOS interface, reaction networks, cooling tables, opacities |
+| MHD | Ideal and non-ideal; constrained transport |
+| Radiation transport | Gray/multigroup FLD, two-moment M1 |
+| Special relativity | SR hydro and MHD |
+| General relativity | Full NR via 3+1 (ADM/BSSN); dynamical spacetime |
+| SPH / meshless | Particle cosmology, halo finders |
+| Moving mesh | Arepo-class Voronoi |
+| Stellar evolution | 1-D Lagrangian solver |
+| Subgrid / observables | Synthetic observable hooks |
+
+GR is listed explicitly because it drives a concrete architectural
+requirement: `DynamicManifold` (see Open Questions below).
+
+---
+
+## Open architectural questions
+
+These are decisions we know we need to make but have not yet made.
+When a question is resolved, move it into the appropriate section above
+and update the affected modules.
+
+**How does `ndim` propagate from manifold to computation?**
+`SmoothManifold.ndim` exists in `theory/`. It is not yet threaded
+through to `Patch`, `Stencil`, or `PartitionDomain`. Currently,
+`Patch.ndim` derives from `index_extent.ndim`, and `Stencil.radii` has
+its length checked at execute time — but neither is linked to an explicit
+manifold object. The intended design: `LocatedDiscretization` declares
+an abstract `manifold` property returning `SmoothManifold`; `Patch`
+stores the manifold and derives `ndim` from `manifold.ndim`;
+`PartitionDomain.execute` takes a manifold as input. Blocked on
+`geometry/` existing first.
+
+**`geometry/` module — concrete simulation geometries.**
+Planned top-level module to hold the first concrete manifold classes
+and a `Domain` type wrapping a manifold with physical bounds. Planned
+contents:
+- `EuclideanSpace(RiemannianManifold, FlatManifold)` — ℝⁿ, flat,
+  positive-definite; only free parameter is `n: int`
+- `MinkowskiSpace(FlatManifold)` — signature (1, 3), flat Lorentzian
+- `Domain` — manifold + physical origin + size; replaces the raw
+  keyword arguments currently passed to `PartitionDomain.execute`
+
+`FlatManifold(PseudoRiemannianManifold)` must first be added to
+`theory/`, branching from `PseudoRiemannianManifold` (not
+`RiemannianManifold`) so that both `EuclideanSpace` and `MinkowskiSpace`
+can inherit from it.
+
+**`DynamicManifold` for full GR.**
+Full GR simulations cannot use a fixed-metric manifold: the metric
+tensor `g_μν` is the dynamical variable evolved by the Einstein
+equations. Planned: `DynamicManifold(PseudoRiemannianManifold)` in
+`theory/` — signature is fixed (Lorentzian for GR), but the metric is
+a field in the simulation state. In the 3+1 (ADM) formalism the
+computational domain is a 3-D Riemannian spatial hypersurface; the
+3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
+The concrete geometry entry is `Spacetime3Plus1(DynamicManifold)` in
+`geometry/`.
+
+**`∂M` and `BoundaryCondition`.**
+A `BoundaryCondition` operates on `∂Ω` — a manifold of codimension 1
+relative to `Ω`. Without `∂M` as a first-class concept in `theory/`,
+the codimension-1 invariant can only be stated by convention, not
+enforced. Planned: add `∂M` to `theory/` once the n-dimensional
+`Extent` machinery is in place. `BoundaryCondition(Function)` in
+`theory/` follows, with `execute` operating on `∂M`-indexed data.
+
+**`ContinuousField` relocation.**
+`ContinuousField` is a concrete class with a JAX import inside
+`theory/`. It is a candidate for relocation to `computation/` or
+`geometry/` to keep `theory/` free of runtime dependencies.
+
+**Verification framework evolution.**
+The external grounding rule (expected answers must come from outside the
+codebase — analytical solutions, symbolic derivations, or published
+benchmarks, not engine-generated golden files) applies to all physics
+capability tests. The convergence testing infrastructure
+(`tests/utils/convergence.py`, `tests/utils/stencils.py`) supports MMS
+verification. Capsule-based reproducibility tooling is deferred until
+convergence coverage exists for implemented physics maps.
