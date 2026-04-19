@@ -24,7 +24,7 @@ when pre-commit now catches them.
 ## Docs integrity
 
 - **Index entries missing.** Adding a research-notes subsection
-  requires a link from `research/index.md`. Adding a capability epoch
+  requires a link from `docs/research/index.md`. Adding a capability epoch
   requires a row in `ROADMAP.md`. Adding an architectural decision
   requires a paragraph in `ARCHITECTURE.md`. Check these manually —
   they are not automated.
