@@ -50,7 +50,7 @@ class TestPartitionDomain:
             blocks_per_axis=(2, 2),
         )
         defaults.update(kwargs)
-        return partition_domain(**defaults)
+        return partition_domain.execute(**defaults)
 
     def test_patch_count(self):
         mesh = self._make_2d()
@@ -58,7 +58,7 @@ class TestPartitionDomain:
 
     def test_non_divisible_raises(self):
         with pytest.raises(ValueError, match="not divisible"):
-            partition_domain(
+            partition_domain.execute(
                 domain_origin=(0.0,),
                 domain_size=(1.0,),
                 n_cells=(7,),
@@ -67,7 +67,7 @@ class TestPartitionDomain:
 
     def test_mismatched_lengths_raises(self):
         with pytest.raises(ValueError):
-            partition_domain(
+            partition_domain.execute(
                 domain_origin=(0.0,),
                 domain_size=(1.0, 1.0),
                 n_cells=(8,),
@@ -76,7 +76,7 @@ class TestPartitionDomain:
 
     def test_index_extents_tile_domain(self):
         n_cells = (8, 12)
-        mesh = partition_domain(
+        mesh = partition_domain.execute(
             domain_origin=(0.0, 0.0),
             domain_size=(1.0, 1.0),
             n_cells=n_cells,
@@ -89,7 +89,7 @@ class TestPartitionDomain:
 
     def test_node_positions_cover_domain(self):
         """First and last node positions sit h/2 from the domain edges."""
-        mesh = partition_domain(
+        mesh = partition_domain.execute(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(4,),
@@ -104,7 +104,7 @@ class TestPartitionDomain:
 
     def test_3d_tiling(self):
         n_cells = (8, 8, 8)
-        mesh = partition_domain(
+        mesh = partition_domain.execute(
             domain_origin=(0.0, 0.0, 0.0),
             domain_size=(1.0, 1.0, 1.0),
             n_cells=n_cells,
@@ -129,7 +129,7 @@ class TestPartitionDomain:
 
 class TestCovers:
     def test_single_patch_covers_its_own_extent(self):
-        mesh = partition_domain(
+        mesh = partition_domain.execute(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(8,),
@@ -138,7 +138,7 @@ class TestCovers:
         assert covers(mesh, Extent((slice(0, 8),)))
 
     def test_two_patches_cover_full_domain(self):
-        mesh = partition_domain(
+        mesh = partition_domain.execute(
             domain_origin=(0.0,),
             domain_size=(1.0,),
             n_cells=(8,),

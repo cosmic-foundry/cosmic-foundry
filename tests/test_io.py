@@ -62,7 +62,7 @@ def test_write_array_round_trips_laplacian(
     tmp_path: Path, laplacian_result: jnp.ndarray
 ) -> None:
     dest = tmp_path / "laplacian.h5"
-    write_array(dest, laplacian_result)
+    write_array.execute(dest, laplacian_result)
 
     with h5py.File(dest, "r") as f:
         stored = f["data"][()]
@@ -75,7 +75,7 @@ def test_write_array_custom_dataset_name(
     tmp_path: Path, laplacian_result: jnp.ndarray
 ) -> None:
     dest = tmp_path / "out.h5"
-    write_array(dest, laplacian_result, dataset="laplacian_phi")
+    write_array.execute(dest, laplacian_result, dataset="laplacian_phi")
 
     with h5py.File(dest, "r") as f:
         assert "laplacian_phi" in f
@@ -85,7 +85,7 @@ def test_write_array_custom_dataset_name(
 def test_write_array_accepts_numpy(tmp_path: Path) -> None:
     arr = np.ones((4, 4, 4))
     dest = tmp_path / "ones.h5"
-    write_array(dest, arr)
+    write_array.execute(dest, arr)
 
     with h5py.File(dest, "r") as f:
         assert np.array_equal(f["data"][()], arr)
@@ -109,11 +109,11 @@ def test_merge_rank_files_concatenates_along_axis0(tmp_path: Path) -> None:
 
     path0 = tmp_path / "rank0.h5"
     path1 = tmp_path / "rank1.h5"
-    write_array(path0, rank0_result)
-    write_array(path1, rank1_result)
+    write_array.execute(path0, rank0_result)
+    write_array.execute(path1, rank1_result)
 
     merged_path = tmp_path / "merged.h5"
-    merge_rank_files([path0, path1], merged_path)
+    merge_rank_files.execute([path0, path1], merged_path)
 
     with h5py.File(merged_path, "r") as f:
         merged = f["data"][()]
@@ -124,7 +124,7 @@ def test_merge_rank_files_concatenates_along_axis0(tmp_path: Path) -> None:
 
 def test_merge_rank_files_rejects_empty_list(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="at least one"):
-        merge_rank_files([], tmp_path / "out.h5")
+        merge_rank_files.execute([], tmp_path / "out.h5")
 
 
 def test_has_parallel_hdf5_is_bool() -> None:
@@ -166,7 +166,7 @@ def test_write_array_emits_log_record(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     with caplog.at_level(logging.DEBUG, logger="cosmic_foundry.io"):
-        write_array(tmp_path / "out.h5", laplacian_result)
+        write_array.execute(tmp_path / "out.h5", laplacian_result)
 
     events = [r.message for r in caplog.records]
     assert "io.write_array" in events
@@ -179,11 +179,11 @@ def test_merge_rank_files_emits_log_record(
 ) -> None:
     p0, p1 = tmp_path / "r0.h5", tmp_path / "r1.h5"
     half = laplacian_result.shape[0] // 2
-    write_array(p0, laplacian_result[:half])
-    write_array(p1, laplacian_result[half:])
+    write_array.execute(p0, laplacian_result[:half])
+    write_array.execute(p1, laplacian_result[half:])
 
     with caplog.at_level(logging.DEBUG, logger="cosmic_foundry.io"):
-        merge_rank_files([p0, p1], tmp_path / "merged.h5")
+        merge_rank_files.execute([p0, p1], tmp_path / "merged.h5")
 
     events = [r.message for r in caplog.records]
     assert "io.merge_rank_files" in events

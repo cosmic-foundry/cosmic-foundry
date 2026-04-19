@@ -48,7 +48,7 @@ def phi() -> jnp.ndarray:
 
 
 def test_covers_single_block_full_extent() -> None:
-    mesh = partition_domain(
+    mesh = partition_domain.execute(
         domain_origin=(0.0, 0.0, 0.0),
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
@@ -58,7 +58,7 @@ def test_covers_single_block_full_extent() -> None:
 
 
 def test_covers_two_blocks_cover_split_domain() -> None:
-    mesh = partition_domain(
+    mesh = partition_domain.execute(
         domain_origin=(0.0, 0.0, 0.0),
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
@@ -68,7 +68,7 @@ def test_covers_two_blocks_cover_split_domain() -> None:
 
 
 def test_covers_rejects_extent_outside_mesh() -> None:
-    mesh = partition_domain(
+    mesh = partition_domain.execute(
         domain_origin=(0.0, 0.0, 0.0),
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
@@ -84,7 +84,7 @@ def test_covers_rejects_extent_outside_mesh() -> None:
 
 
 def test_single_process_field_op_laplacian(phi: jnp.ndarray) -> None:
-    mesh = partition_domain(
+    mesh = partition_domain.execute(
         domain_origin=(0.0, 0.0, 0.0),
         domain_size=(float(N), float(N), float(N)),
         n_cells=(N, N, N),
