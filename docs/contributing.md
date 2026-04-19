@@ -8,6 +8,6 @@ not mirrored into these docs.
 
 See also
 [`AI.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/AI.md)
-for the agent-specific guidelines that apply to AI contributors, and the
-[ADR index](adr/index.md) for the architectural decisions those guidelines
-flow from.
+for the agent-specific guidelines that apply to AI contributors, and
+[`ARCHITECTURE.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ARCHITECTURE.md)
+for the architectural decisions those guidelines flow from.

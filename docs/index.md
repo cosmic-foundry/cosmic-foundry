@@ -33,12 +33,6 @@ gallery/index
 accessibility
 ```
 
-```{toctree}
-:maxdepth: 1
-:caption: Architecture
-
-adr/index
-```
 
 ## Overview
 
