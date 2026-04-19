@@ -27,7 +27,6 @@ from cosmic_foundry.discretization import Discretization  # noqa: E402
 from cosmic_foundry.field import (  # noqa: E402
     ContinuousField,
     Field,
-    PatchFunction,
     ScalarField,
     TensorField,
 )
@@ -75,7 +74,6 @@ __all__ = [
     # fields
     "ContinuousField",
     "Field",
-    "PatchFunction",
     "ScalarField",
     "TensorField",
     # io

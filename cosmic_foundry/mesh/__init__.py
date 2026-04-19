@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 from cosmic_foundry.descriptor import AccessPattern, Extent
-from cosmic_foundry.field import ContinuousField, PatchFunction
+from cosmic_foundry.field import ContinuousField
 from cosmic_foundry.function import Function
 from cosmic_foundry.located_discretization import LocatedDiscretization
 from cosmic_foundry.record import Array, ComponentId, Placement
@@ -21,7 +21,7 @@ class Patch(LocatedDiscretization):
     LocatedDiscretization.
 
     Owns topology and coordinate metadata only; array payloads live in
-    Array[PatchFunction].  The coordinate function φ(i) = origin + i·h
+    Array[T] for some backend array type T.  The coordinate function φ(i) = origin + i·h
     maps each cell index to its center position in physical space.
     """
 
@@ -118,21 +118,20 @@ class PartitionDomain(Function):
 partition_domain = PartitionDomain()
 
 
-def discretize(f: ContinuousField, mesh: Array[Patch]) -> Array[PatchFunction]:
-    """Sample *f* at each patch's node positions, returning Array[PatchFunction].
+def discretize(f: ContinuousField, mesh: Array[Patch]) -> Array[Any]:
+    """Sample *f* at each patch's node positions, returning Array[T].
 
-    The returned Array has the same Placement as the mesh: element i is the
-    PatchFunction on patch i.  Each payload has shape equal to the patch's
-    index_extent.shape and no ghost cells.
+    T is the backend array type (currently jax.Array).  The returned Array
+    has the same Placement as the mesh: element i is the array of field values
+    on patch i, with shape equal to patch.index_extent.shape and no ghost cells.
     """
     import jax.numpy as jnp
 
-    elements: list[PatchFunction] = []
+    elements: list[Any] = []
     for patch in mesh.elements:
         axes = [patch.node_positions(axis) for axis in range(patch.ndim)]
         coords = jnp.meshgrid(*axes, indexing="ij")
-        payload = f.sample(*coords).payload
-        elements.append(PatchFunction(name=f.name, payload=payload))
+        elements.append(f.execute(*coords))
     return Array(elements=tuple(elements), placement=mesh.placement)
 
 
@@ -155,16 +154,16 @@ def covers(mesh: Array[Patch], extent: Extent) -> bool:
 
 def fill_halo(
     mesh: Array[Patch],
-    field: Array[PatchFunction],
+    field: Array[Any],
     access_pattern: AccessPattern,
     rank: int,
-) -> Array[PatchFunction]:
-    """Return a new Array[PatchFunction] with halo-expanded payloads.
+) -> Array[Any]:
+    """Return a new Array[T] with halo-expanded payloads.
 
-    Ghost cells are filled from same-rank neighbor interiors.
-    Each element of *field* must have a payload whose shape equals
-    patch.index_extent.shape (i.e. the interior, as returned by discretize()).
-    The returned Array has halo-sized payloads:
+    T is the backend array type (currently jax.Array).  Ghost cells are filled
+    from same-rank neighbor interiors.  Each element of *field* must have a
+    shape equal to patch.index_extent.shape (i.e. the interior, as returned by
+    discretize()).  The returned Array has halo-sized elements:
     patch.index_extent.expand(access_pattern).shape.  Ghost-cell values are
     copied from the interior of neighboring patches owned by the same rank.
     Multi-rank halo exchange is not implemented; a NotImplementedError is
@@ -173,18 +172,16 @@ def fill_halo(
     import jax.numpy as jnp
 
     local_ids = mesh.placement.segments_for_rank(rank)
-    updated: dict[ComponentId, PatchFunction] = {}
+    updated: dict[ComponentId, Any] = {}
     for cid in local_ids:
         patch = mesh[cid]
         interior = patch.index_extent
         halo_extent = interior.expand(access_pattern)
 
-        expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].payload.dtype)
-        expanded = expanded.at[_payload_slices(halo_extent, interior)].set(
-            field[cid].payload
-        )
+        expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].dtype)
+        expanded = expanded.at[_payload_slices(halo_extent, interior)].set(field[cid])
 
-        updated_payload = _fill_patch_halo(
+        updated[cid] = _fill_patch_halo(
             target_cid=cid,
             target_interior=interior,
             target_halo_extent=halo_extent,
@@ -194,7 +191,6 @@ def fill_halo(
             rank=rank,
             local_ids=local_ids,
         )
-        updated[cid] = PatchFunction(name=field[cid].name, payload=updated_payload)
     new_elements = tuple(
         updated.get(ComponentId(i), field[ComponentId(i)])
         for i in range(len(field.elements))
@@ -209,7 +205,7 @@ def _fill_patch_halo(
     target_halo_extent: Extent,
     expanded_payload: Any,
     mesh: Array[Patch],
-    field: Array[PatchFunction],
+    field: Array[Any],
     rank: int,
     local_ids: frozenset[ComponentId],
 ) -> Any:
@@ -241,7 +237,7 @@ def _fill_patch_halo(
         src_cid, overlap = local_candidates[0]
         src_interior = mesh[src_cid].index_extent
         payload = payload.at[_payload_slices(target_halo_extent, overlap)].set(
-            field[src_cid].payload[_payload_slices(src_interior, overlap)]
+            field[src_cid][_payload_slices(src_interior, overlap)]
         )
 
     return payload

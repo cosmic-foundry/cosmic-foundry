@@ -1,11 +1,11 @@
-"""Tests for discretize: (ContinuousField, Array[Patch]) → Array[PatchFunction]."""
+"""Tests for discretize: (ContinuousField, Array[Patch]) → Array[T]."""
 
 from __future__ import annotations
 
 import jax.numpy as jnp
 import pytest
 
-from cosmic_foundry.field import ContinuousField, PatchFunction
+from cosmic_foundry.field import ContinuousField
 from cosmic_foundry.mesh import discretize, partition_domain
 from cosmic_foundry.record import Array, ComponentId
 
@@ -40,21 +40,21 @@ class TestDiscretizeOperator:
     def test_zero_function_produces_zero_payload(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: jnp.zeros_like(x))
         field = discretize(f, _mesh_1d(8, 2))
-        for df in field.elements:
-            assert jnp.all(df.payload == 0.0)
+        for arr in field.elements:
+            assert jnp.all(arr == 0.0)
 
     def test_constant_function_produces_constant_payload(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: jnp.full_like(x, 42.0))
         field = discretize(f, _mesh_1d(8, 2))
-        for df in field.elements:
-            assert jnp.all(df.payload == pytest.approx(42.0))
+        for arr in field.elements:
+            assert jnp.all(arr == pytest.approx(42.0))
 
     def test_identity_function_produces_node_positions_1d(self) -> None:
         mesh = _mesh_1d(8, 1)
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, mesh)
         assert jnp.allclose(
-            field[ComponentId(0)].payload, mesh[ComponentId(0)].node_positions(0)
+            field[ComponentId(0)], mesh[ComponentId(0)].node_positions(0)
         )
 
     def test_multiblock_each_segment_samples_its_own_block(self) -> None:
@@ -63,7 +63,7 @@ class TestDiscretizeOperator:
         field = discretize(f, mesh)
         for i, block in enumerate(mesh.elements):
             cid = ComponentId(i)
-            assert jnp.allclose(field[cid].payload, block.node_positions(0))
+            assert jnp.allclose(field[cid], block.node_positions(0))
 
     def test_2d_function_evaluated_at_cell_center_meshgrid(self) -> None:
         mesh = _mesh_2d((4, 6), (1, 1))
@@ -73,7 +73,7 @@ class TestDiscretizeOperator:
         xs = block.node_positions(0)
         ys = block.node_positions(1)
         X, Y = jnp.meshgrid(xs, ys, indexing="ij")
-        assert jnp.allclose(field[ComponentId(0)].payload, X + Y)
+        assert jnp.allclose(field[ComponentId(0)], X + Y)
 
 
 class TestDiscretizeCodomain:
@@ -84,25 +84,24 @@ class TestDiscretizeCodomain:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, mesh)
         for i, block in enumerate(mesh.elements):
-            assert field[ComponentId(i)].payload.shape == block.shape
+            assert field[ComponentId(i)].shape == block.shape
 
     def test_payload_dtype_is_float64(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, _mesh_1d(8, 2))
-        for df in field.elements:
-            assert df.payload.dtype == jnp.float64
+        for arr in field.elements:
+            assert arr.dtype == jnp.float64
 
     def test_payload_is_finite(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, _mesh_1d(8, 2))
-        for df in field.elements:
-            assert jnp.all(jnp.isfinite(df.payload))
+        for arr in field.elements:
+            assert jnp.all(jnp.isfinite(arr))
 
-    def test_result_is_array_of_discrete_field(self) -> None:
+    def test_result_is_array(self) -> None:
         f = ContinuousField(name="phi", fn=lambda x: x)
         field = discretize(f, _mesh_1d(8, 1))
         assert isinstance(field, Array)
-        assert all(isinstance(df, PatchFunction) for df in field.elements)
 
 
 class TestDiscretizeIdentity:
@@ -111,11 +110,6 @@ class TestDiscretizeIdentity:
         f = ContinuousField(name="phi", fn=lambda x, y: x)
         field = discretize(f, mesh)
         assert len(field.elements) == len(mesh.elements)
-
-    def test_field_name_inherited_from_continuous_field(self) -> None:
-        f = ContinuousField(name="density", fn=lambda x: x)
-        field = discretize(f, _mesh_1d(8, 1))
-        assert all(df.name == "density" for df in field.elements)
 
     def test_placement_mirrors_mesh_placement(self) -> None:
         mesh = _mesh_1d(8, 4, n_ranks=2)
