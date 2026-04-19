@@ -29,16 +29,28 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 
 ## V&V capabilities
 
-| Epoch | Capability |
-|-------|------------|
-| M0 | Branch, PR, commit-size, history, and attribution discipline. ✓ |
-| M1 | Capability specs, formulas register, and externally-grounded tests for each implemented map. ✓ |
+### Infrastructure milestones
+
+One-time deliveries that establish the verification foundation:
+
+| Milestone | Capability |
+|-----------|------------|
+| M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
+| M1 | Verification infrastructure: Function:/Source:/Sink: block convention, formulas register, convergence testing helpers, externally-grounded test pattern demonstrated on Epoch 1 kernel. ✓ |
 | M2 | Minimal architectural basis: all live architectural decisions expressed as a complete, orthogonal set of one-paragraph claims in a single file. |
-| M3 | Convergence coverage: each implemented physics map has at least one MMS or analytical convergence test confirming its stated approximation order. |
-| M4 | Lane A/B/C derivation documents with SymPy checks, accompanying each physics capability as it is implemented. |
-| M5 | Validation manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
-| M6 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
-| M7 | Application-repo capsule integration and multi-repository evidence regeneration. |
+| M3 | Validation infrastructure: manifests, provenance sidecars, and comparison-result schema. Planned alongside simulation Epoch 3. |
+| M4 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
+| M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
+
+### Per-epoch verification standard
+
+Every simulation epoch must satisfy this checklist before it is considered verified:
+
+- Function:/Source:/Sink: block on every operator class introduced
+- Entry in the formulas register (`replication/formulas.md`) for each physics formula
+- At least one externally-grounded test (analytical solution or published benchmark — not an engine-generated golden file)
+- At least one convergence test confirming the stated approximation order p
+- Lane A/B/C classification stated; derivation document with SymPy checks for Lanes B and C
 
 ---
 
@@ -54,4 +66,5 @@ For the current codebase state and planned modules, see [`STATUS.md`](STATUS.md)
 
 ### V&V
 
-1. M3: convergence coverage for each currently implemented physics map
+1. M2: retire `adr/`; consolidate all live architectural decisions into `ARCHITECTURE.md`
+2. Apply per-epoch verification standard to simulation Epoch 1 (convergence test for the Laplacian stencil)
