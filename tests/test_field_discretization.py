@@ -10,27 +10,24 @@ from cosmic_foundry.mesh import partition_domain
 from cosmic_foundry.theory.field import ContinuousField
 
 
-def _mesh_1d(n_cells: int, n_blocks: int, n_ranks: int = 1) -> Array:
+def _mesh_1d(n_cells: int, n_blocks: int) -> Array:
     return partition_domain(
         domain_origin=(0.0,),
         domain_size=(1.0,),
         n_cells=(n_cells,),
         blocks_per_axis=(n_blocks,),
-        n_ranks=n_ranks,
     )
 
 
 def _mesh_2d(
     n_cells: tuple[int, int],
     blocks_per_axis: tuple[int, int],
-    n_ranks: int = 1,
 ) -> Array:
     return partition_domain(
         domain_origin=(0.0, 0.0),
         domain_size=(1.0, 1.0),
         n_cells=n_cells,
         blocks_per_axis=blocks_per_axis,
-        n_ranks=n_ranks,
     )
 
 
@@ -107,9 +104,3 @@ class TestDiscretizeIdentity:
         f = ContinuousField(name="phi", fn=lambda x, y: x)
         field = f.discretize(mesh)
         assert len(field.elements) == len(mesh.elements)
-
-    def test_placement_mirrors_mesh_placement(self) -> None:
-        mesh = _mesh_1d(8, 4, n_ranks=2)
-        f = ContinuousField(name="phi", fn=lambda x: x)
-        field = f.discretize(mesh)
-        assert field.placement == mesh.placement

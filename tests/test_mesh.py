@@ -48,7 +48,6 @@ class TestPartitionDomain:
             domain_size=(1.0, 1.0),
             n_cells=(8, 8),
             blocks_per_axis=(2, 2),
-            n_ranks=2,
         )
         defaults.update(kwargs)
         return partition_domain(**defaults)
@@ -64,7 +63,6 @@ class TestPartitionDomain:
                 domain_size=(1.0,),
                 n_cells=(7,),
                 blocks_per_axis=(2,),
-                n_ranks=1,
             )
 
     def test_mismatched_lengths_raises(self):
@@ -74,7 +72,6 @@ class TestPartitionDomain:
                 domain_size=(1.0, 1.0),
                 n_cells=(8,),
                 blocks_per_axis=(2,),
-                n_ranks=1,
             )
 
     def test_index_extents_tile_domain(self):
@@ -84,7 +81,6 @@ class TestPartitionDomain:
             domain_size=(1.0, 1.0),
             n_cells=n_cells,
             blocks_per_axis=(2, 3),
-            n_ranks=1,
         )
         covered = np.zeros(n_cells, dtype=int)
         for patch in mesh.elements:
@@ -98,7 +94,6 @@ class TestPartitionDomain:
             domain_size=(1.0,),
             n_cells=(4,),
             blocks_per_axis=(2,),
-            n_ranks=1,
         )
         all_positions = np.concatenate(
             [np.asarray(p.node_positions(0)) for p in mesh.elements]
@@ -107,19 +102,6 @@ class TestPartitionDomain:
         assert all_positions[0] == pytest.approx(0.5 * h)
         assert all_positions[-1] == pytest.approx(1.0 - 0.5 * h)
 
-    def test_round_robin_placement(self):
-        mesh = partition_domain(
-            domain_origin=(0.0,),
-            domain_size=(1.0,),
-            n_cells=(8,),
-            blocks_per_axis=(4,),
-            n_ranks=2,
-        )
-        assert mesh.placement.owner(0) == 0
-        assert mesh.placement.owner(1) == 1
-        assert mesh.placement.owner(2) == 0
-        assert mesh.placement.owner(3) == 1
-
     def test_3d_tiling(self):
         n_cells = (8, 8, 8)
         mesh = partition_domain(
@@ -127,7 +109,6 @@ class TestPartitionDomain:
             domain_size=(1.0, 1.0, 1.0),
             n_cells=n_cells,
             blocks_per_axis=(2, 2, 2),
-            n_ranks=4,
         )
         assert len(mesh.elements) == 8
         covered = np.zeros(n_cells, dtype=int)
@@ -153,7 +134,6 @@ class TestCovers:
             domain_size=(1.0,),
             n_cells=(8,),
             blocks_per_axis=(1,),
-            n_ranks=1,
         )
         assert covers(mesh, Extent((slice(0, 8),)))
 
@@ -163,14 +143,11 @@ class TestCovers:
             domain_size=(1.0,),
             n_cells=(8,),
             blocks_per_axis=(2,),
-            n_ranks=1,
         )
         assert covers(mesh, Extent((slice(0, 8),)))
 
     def test_gap_in_coverage_detected(self):
         """A mesh missing the middle rows does not cover the full extent."""
-        from cosmic_foundry.computation.array import Placement
-
         patches = (
             Patch(
                 index_extent=Extent((slice(0, 3),)),
@@ -183,8 +160,5 @@ class TestCovers:
                 cell_spacing=(1.0,),
             ),
         )
-        mesh: Array[Patch] = Array(
-            elements=patches,
-            placement=Placement({0: 0, 1: 0}),
-        )
+        mesh: Array[Patch] = Array(elements=patches)
         assert not covers(mesh, Extent((slice(0, 8),)))

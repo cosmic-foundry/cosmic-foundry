@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from cosmic_foundry.computation.array import Array, Placement
+from cosmic_foundry.computation.array import Array
 from cosmic_foundry.computation.descriptor import (
     Extent,
     intersect_extents,
@@ -56,13 +56,13 @@ class PartitionDomain(Function):
 
     Function:
         domain   — (Ω = ∏ᵢ [oᵢ, oᵢ+Lᵢ], n_cells ∈ ℤⁿ,
-                   patches_per_axis ∈ ℤⁿ, n_ranks ∈ ℤ) — a continuous
-                   domain specification and discretization parameters
+                   patches_per_axis ∈ ℤⁿ) — a continuous domain specification
+                   and discretization parameters
         codomain — Array[Patch]: a finite indexed family of Patches
                    partitioning Ω into ∏ patches_per_axis patches, each
                    covering n_cells/patches_per_axis interior cells with
-                   spacing h = L/n_cells, assigned to ranks round-robin
-        operator — (Ω, h, patches) ↦ {(P_i, Ω_h^int(P_i), rank_i)}_i
+                   spacing h = L/n_cells
+        operator — (Ω, h, patches) ↦ {(P_i, Ω_h^int(P_i))}_i
 
     Θ = {h} — the discrete grid approximates the continuous domain;
     h = domain_size / n_cells along each axis.
@@ -75,7 +75,6 @@ class PartitionDomain(Function):
         domain_size: tuple[float, ...],
         n_cells: tuple[int, ...],
         blocks_per_axis: tuple[int, ...],
-        n_ranks: int,
     ) -> Array[Patch]:
         ndim = len(n_cells)
         if not (len(domain_origin) == len(domain_size) == len(blocks_per_axis) == ndim):
@@ -94,10 +93,8 @@ class PartitionDomain(Function):
         cpb = tuple(n_cells[i] // blocks_per_axis[i] for i in range(ndim))
 
         patches: list[Patch] = []
-        owners: dict[int, int] = {}
-
-        for flat_id, multi_idx in enumerate(
-            itertools.product(*(range(blocks_per_axis[i]) for i in range(ndim)))
+        for multi_idx in itertools.product(
+            *(range(blocks_per_axis[i]) for i in range(ndim))
         ):
             starts = tuple(multi_idx[i] * cpb[i] for i in range(ndim))
             stops = tuple(starts[i] + cpb[i] for i in range(ndim))
@@ -114,9 +111,8 @@ class PartitionDomain(Function):
                     cell_spacing=h,
                 )
             )
-            owners[flat_id] = flat_id % n_ranks
 
-        return Array(elements=tuple(patches), placement=Placement(owners))
+        return Array(elements=tuple(patches))
 
 
 partition_domain = PartitionDomain()
@@ -143,25 +139,20 @@ def fill_halo(
     mesh: Array[Patch],
     field: Array[Any],
     radii: tuple[int, ...],
-    rank: int,
 ) -> Array[Any]:
     """Return a new Array[T] with halo-expanded payloads.
 
     T is the backend array type (currently jax.Array).  Ghost cells are filled
-    from same-rank neighbor interiors.  Each element of *field* must have a
-    shape equal to patch.index_extent.shape (i.e. the interior, as returned by
+    from patch interior neighbors.  Each element of *field* must have a shape
+    equal to patch.index_extent.shape (i.e. the interior, as returned by
     discretize()).  The returned Array has halo-sized elements:
-    patch.index_extent.expand(radii).shape.  Ghost-cell values are
-    copied from the interior of neighboring patches owned by the same rank.
-    Multi-rank halo exchange is not implemented; a NotImplementedError is
-    raised if a ghost cell's source lives on a different rank.
+    patch.index_extent.expand(radii).shape.
     """
     import jax.numpy as jnp
 
-    local_ids = mesh.placement.segments_for_rank(rank)
     updated: dict[int, Any] = {}
 
-    for cid in local_ids:
+    for cid in range(len(mesh.elements)):
         patch = mesh[cid]
         interior = patch.index_extent
         halo_extent = interior.expand(radii)
@@ -169,10 +160,10 @@ def fill_halo(
         expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].dtype)
         expanded = expanded.at[payload_slices(halo_extent, interior)].set(field[cid])
 
-        _validate_halo_coverage(cid, halo_extent, interior, mesh, local_ids, rank)
+        _validate_halo_coverage(cid, halo_extent, interior, mesh)
 
         for i in range(len(mesh.elements)):
-            if i == cid or i not in local_ids:
+            if i == cid:
                 continue
             expanded = fill_by_overlap(
                 mesh[i].index_extent, field[i], halo_extent, expanded
@@ -181,7 +172,7 @@ def fill_halo(
         updated[cid] = expanded
 
     new_elements = tuple(updated.get(i, field[i]) for i in range(len(field.elements)))
-    return Array(elements=new_elements, placement=field.placement)
+    return Array(elements=new_elements)
 
 
 def _validate_halo_coverage(
@@ -189,26 +180,17 @@ def _validate_halo_coverage(
     halo_extent: Extent,
     interior: Extent,
     mesh: Array[Patch],
-    local_ids: frozenset[int],
-    rank: int,
 ) -> None:
     for halo_piece in _subtract_extent(halo_extent, interior):
-        all_candidates = [
+        candidates = [
             i
             for i in range(len(mesh.elements))
             if i != target_cid
             and intersect_extents(mesh[i].index_extent, halo_piece) is not None
         ]
-        local_candidates = [c for c in all_candidates if c in local_ids]
-        if len(local_candidates) > 1:
-            msg = "Multiple same-rank source patches overlap one halo region"
+        if len(candidates) > 1:
+            msg = "Multiple source patches overlap one halo region"
             raise ValueError(msg)
-        if not local_candidates and all_candidates:
-            msg = (
-                f"fill_halo cannot fill from rank {rank}; "
-                "multi-rank halo exchange is not implemented"
-            )
-            raise NotImplementedError(msg)
 
 
 def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
