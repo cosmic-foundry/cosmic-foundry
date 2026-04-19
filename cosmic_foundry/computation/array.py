@@ -1,18 +1,25 @@
-"""Distributed indexed family: Array[T]."""
+"""Finite indexed family: Array[T]."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
+from cosmic_foundry.theory.function import Function
+
 T = TypeVar("T")
 
 
 @dataclass(frozen=True)
-class Array(Generic[T]):
-    """A finite indexed family of elements.
+class Array(Function, Generic[T]):
+    """A finite indexed family — a function {0, 1, …, n-1} → T.
 
-    Mathematically: a function {0, 1, …, n-1} → T.
+    Function:
+        domain   — i ∈ {0, 1, …, n-1} ⊂ ℤ
+        codomain — T
+        operator — i ↦ elements[i]
+
+    Θ = ∅ — exact lookup; no approximation.
 
     This is the general container for structured collections across the
     simulation: Array[Patch] represents a partitioned spatial domain;
@@ -26,8 +33,11 @@ class Array(Generic[T]):
             msg = "Array must have at least one element"
             raise ValueError(msg)
 
-    def __getitem__(self, index: int) -> T:
+    def execute(self, index: int) -> T:
         return self.elements[index]
+
+    def __getitem__(self, index: int) -> T:
+        return self.execute(index)
 
     def as_dict(self) -> dict[str, Any]:
         return {"n": len(self.elements)}
