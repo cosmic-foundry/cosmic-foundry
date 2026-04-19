@@ -20,6 +20,7 @@ The code is the authoritative architecture description. Start here:
 |---|---|---|
 | `cosmic_foundry/theory/` | Pure mathematical ABCs — sets, manifolds, discretizations, functions, fields. No JAX dependency. | `theory/__init__.py` |
 | `cosmic_foundry/computation/` | Distance-1 concrete implementations of theory ABCs. JAX-backed. | `computation/__init__.py` |
+| `cosmic_foundry/geometry/` | Concrete manifolds and simulation domains: `EuclideanSpace`, `MinkowskiSpace`, `Domain`. | `geometry/__init__.py` |
 | `cosmic_foundry/mesh/` | Spatial partitioning: uniform Cartesian patches, domain partition, halo fill. | `mesh/__init__.py` |
 | `cosmic_foundry/io/` | Array I/O — write to HDF5, merge rank files. | `io/__init__.py` |
 | `cosmic_foundry/observability/` | Structured logging. | `observability/__init__.py` |
@@ -51,36 +52,7 @@ hierarchy`. The three root ABCs and their concrete children:
 These modules are designed but do not yet have code. The descriptions
 here are the authoritative record until code exists.
 
-### `cosmic_foundry/geometry/`
-
-Concrete simulation geometry classes — the first real objects
-implementing the `theory/` manifold ABC chain. Planned contents:
-
-**`FlatManifold(PseudoRiemannianManifold)`** *(first goes in `theory/`)*
-— A pseudo-Riemannian manifold with zero Riemann curvature tensor.
-Branches from `PseudoRiemannianManifold` (not `RiemannianManifold`) so
-that both Euclidean and Minkowski spaces can inherit from it.
-
-**`EuclideanSpace(RiemannianManifold, FlatManifold)`**
-— ℝⁿ with the standard flat positive-definite metric. Only free
-parameter: `n: int`. `signature = (n, 0)` and `ndim = n` are both
-derived.
-
-**`MinkowskiSpace(FlatManifold)`**
-— ℝ⁴ with Lorentzian signature `(1, 3)`. Flat pseudo-Riemannian
-background for special-relativistic simulations. No free parameters.
-
-**`Domain`**
-— A manifold equipped with physical bounds and topology:
-`manifold: SmoothManifold`, `origin: tuple[float, ...]`,
-`size: tuple[float, ...]`. Replaces the raw keyword arguments currently
-passed to `PartitionDomain.execute`. `Domain.manifold.ndim` is the
-source of truth for dimensionality throughout the computation stack.
-
 ### Planned `theory/` additions
-
-**`FlatManifold(PseudoRiemannianManifold)`** — see above; goes in
-`theory/` before `geometry/` is created.
 
 **`∂M` (manifold boundary)**
 — An operation or property on `SmoothManifold` returning the boundary
@@ -104,23 +76,11 @@ the codimension-1 invariant is enforced at the ABC level. Concrete
 subclasses (`DirichletBC`, `NeumannBC`, `PeriodicBC`) live in
 `computation/`.
 
-### Threading `ndim` through `computation/`
-
-`SmoothManifold.ndim` exists. It is not yet threaded to `Patch`,
-`Stencil`, or `PartitionDomain`. Planned: `LocatedDiscretization`
-declares an abstract `manifold` property; `Patch` stores the manifold
-and derives `ndim` from `manifold.ndim`; `PartitionDomain.execute`
-takes a `Domain` (above) as input. `Stencil` validates that
-`len(radii) == manifold.ndim` at construction.
-
 ---
 
 ## Current work
 
 Immediate code work (in dependency order):
 
-1. Add `FlatManifold` to `theory/`
-2. Create `geometry/` with `EuclideanSpace` and `MinkowskiSpace`
-3. Thread `ndim` from manifold through `computation/`
-4. Add `∂M` to `theory/`
-5. Add `BoundaryCondition` ABC
+1. Add `∂M` to `theory/`
+2. Add `BoundaryCondition` ABC
