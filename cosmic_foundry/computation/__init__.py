@@ -9,7 +9,7 @@ from cosmic_foundry.computation.descriptor import (
     Extent,
     Region,
 )
-from cosmic_foundry.computation.kernels import GlobalSum, global_sum
+from cosmic_foundry.computation.reductions import GlobalSum, global_sum
 from cosmic_foundry.theory.record import Record
 
 __all__ = [

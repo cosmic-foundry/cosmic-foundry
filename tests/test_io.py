@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from cosmic_foundry.computation.descriptor import AccessPattern, Extent, Region
-from cosmic_foundry.computation.kernels import execute_pointwise
+from cosmic_foundry.computation.stencil import execute_pointwise
 from cosmic_foundry.io import HAS_PARALLEL_HDF5, merge_rank_files, write_array
 from cosmic_foundry.observability import StructuredFormatter, configure
 from cosmic_foundry.theory.function import Function
