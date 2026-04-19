@@ -23,12 +23,11 @@ when pre-commit now catches them.
 
 ## Docs integrity
 
-- **Index entries missing.** Adding an ADR requires a line in
-  `adr/README.md` (enforced by `check_adr_index.py`). Adding a
-  research-notes subsection requires a link from
-  `research/index.md`. Adding a capability epoch requires a row in
-  `ROADMAP.md`. Check the latter two manually — they are not yet
-  automated.
+- **Index entries missing.** Adding a research-notes subsection
+  requires a link from `research/index.md`. Adding a capability epoch
+  requires a row in `ROADMAP.md`. Adding an architectural decision
+  requires a paragraph in `ARCHITECTURE.md`. Check these manually —
+  they are not automated.
 - **Cross-references broken by renames/moves.** If the PR
   renames or moves a file, grep the repo for the old path.
   `check_markdown_links.py` validates own-repo GitHub URLs but
@@ -83,16 +82,15 @@ when pre-commit now catches them.
 ## Project framing and tone
 
 - **Tech-stack-first framing.** Top-level descriptions (README,
-  `docs/index.md`, ADR motivations, roadmap epoch summaries)
-  should lead with the *physics / mission* goal, not "built on
-  JAX" or similar. JAX, unyt, Zarr, etc. belong in ADRs and
-  deeper docs.
+  `docs/index.md`, roadmap epoch summaries) should lead with the
+  *physics / mission* goal, not "built on JAX" or similar. JAX,
+  unyt, Zarr, etc. belong in `ARCHITECTURE.md` and deeper docs.
 - **Backwards-compatibility cruft.** The project has not cut a
   stable API. If the PR preserves legacy names, adds
   deprecation warnings, or keeps a shim "just in case", push
   back — the expected mode is structural edits.
 - **Conversational or agent-session prose.** Code comments,
-  docstrings, ADR text, and roadmap prose must read as durable
+  docstrings, `ARCHITECTURE.md`, and roadmap prose must read as durable
   documentation, not transcribed conversation. Flag: first- or
   second-person voice ("we decided", "you should", "I think"),
   phrases that presuppose a live exchange ("as discussed", "as

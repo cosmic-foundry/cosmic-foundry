@@ -3,7 +3,7 @@
 This directory holds the workflow, specs, plans, and golden-data
 harnesses for replicating other astrophysics codes' results to
 within numerical roundoff. The workflow is governed by
-[ADR-0007](../adr/meta-level/ADR-0007-replication-workflow.md) and is itself
+the verification standard documented in `DEVELOPMENT.md` and is itself
 a **living specification**: update this README as we learn from
 each replication target.
 
@@ -35,7 +35,7 @@ and the current register.
 **Maps** are the physics operators the engine implements. What a map
 computes is described by its `Map:` block in the implementing module
 (domain, codomain, operator, Θ, p). Before implementing a map, write
-its `Map:` block — that is the spec. For Lane B/C maps (ADR-0013),
+its `Map:` block — that is the spec. For Lane B/C maps,
 also commit a derivation document under `derivations/` before code.
 
 **Problems** are the test cases we replicate from a target code
@@ -48,7 +48,7 @@ the maps each requires.
 ### Map spec (physics operator)
 
 The spec for a physics map lives in the implementing module as a
-`Map:` block (ADR-0016). Before writing code, write the `Map:` block:
+`Map:` block. Before writing code, write the `Map:` block:
 
 ```python
 class MyPhysicsMap:
@@ -66,8 +66,8 @@ class MyPhysicsMap:
     """
 ```
 
-For Lane B/C maps (ADR-0013), also commit a derivation document
-under `derivations/` before opening the implementation PR.
+For Lane B/C maps, also commit a derivation document under
+`derivations/` before opening the implementation PR.
 
 ### Problem spec
 
@@ -131,8 +131,8 @@ before further work in the area.
   fixture absent from the manifest is a test failure, not a
   warning.
 - **Storage.** Small fixtures (<~1 MB) are checked in directly.
-  Larger fixtures route through Git LFS, consistent with
-  ADR-0006's visual-regression assets policy.
+  Larger fixtures route through Git LFS (see `ARCHITECTURE.md §Documentation
+  and visualization stack` for the assets policy).
 - **Tolerances are explicit.** The manifest carries a default
   tolerance per fixture; tests may tighten but should not
   silently loosen it.
@@ -141,8 +141,8 @@ before further work in the area.
   They do not establish correctness on their own: a fixture
   generated from a wrong implementation encodes a wrong answer.
   Every physics capability must also have at least one
-  externally grounded test (see ADR-0007 §Amendments and the
-  External reference field in the capability spec template).
+  externally grounded test (see the External reference field in
+  the capability spec template and `DEVELOPMENT.md`).
 
 ## Exceptions to the bounded-increment rule
 
@@ -170,9 +170,9 @@ relaxed and why.
 4. **Trivial changes.** Typo fixes, dependency bumps,
    formatting. No spec needed; verification is "tests still
    pass."
-5. **Pure scaffolding.** The harness itself, ADRs, plan docs,
-   and this README. No numerical claim to verify, so PR size
-   may exceed 100 lines.
+5. **Pure scaffolding.** The harness itself, plan docs, and this
+   README. No numerical claim to verify, so PR size may exceed
+   100 lines.
 
 **Invariant across all exceptions:** never both skip the spec
 and skip the verification. One of them must exist for the
@@ -180,13 +180,13 @@ change to land.
 
 ## Living-spec discipline
 
-This README and ADR-0007 will be wrong about something within
-the first few replication targets. When a rule turns out to be
-unworkable or insufficient:
+This README will be wrong about something within the first few
+replication targets. When a rule turns out to be unworkable or
+insufficient:
 
 - Open a PR amending this README and link it from the
   replication target whose experience motivated the change.
 - For load-bearing changes (e.g. a new exception class, a
-  redefinition of "verification artifact"), open a follow-on
-  ADR superseding the relevant section of ADR-0007 rather than
-  silently editing this file.
+  redefinition of "verification artifact"), also update
+  `ARCHITECTURE.md` or `DEVELOPMENT.md` as appropriate rather
+  than silently editing this file.

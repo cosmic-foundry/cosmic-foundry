@@ -19,5 +19,5 @@ can grow independently without inflating the rest.
 - `research/07-implications.md` — §7 implications for Cosmic Foundry.
 
 See also [`ROADMAP.md`](ROADMAP.md) for the development sequence the
-research is feeding into, and [`adr/`](adr/) for architectural
-decision records.
+research is feeding into, and [`ARCHITECTURE.md`](ARCHITECTURE.md)
+for architectural decisions.

@@ -1,18 +1,16 @@
 # Cosmic Foundry — Architecture
 
-This document records cross-cutting architectural decisions and open
-design questions. It is not a substitute for reading the code: the
-authoritative description of any module's current design is in that
-module's `__init__.py` docstring and the docstrings of its classes.
-`STATUS.md` describes how to navigate the repo and what planned modules
-do not yet have code.
+This document is the authoritative record of live architectural decisions
+for this repository. Each decision is one paragraph. Decisions not yet
+made are listed under *Open questions*. The code is the authoritative
+description of any module's current design; this file records only what
+is not self-evident from reading the code. `STATUS.md` is the navigation
+anchor for the codebase. `DEVELOPMENT.md` covers workflow and process
+decisions (including physics capability lanes).
 
 ---
 
 ## Technology baseline
-
-These are firm commitments. Changing any of them requires revisiting
-this document and updating affected modules.
 
 **Python-only engine.** No compiled extensions are shipped from this
 repository. Any native code the engine executes is produced at runtime
@@ -37,6 +35,18 @@ the baseline. `mpi4py` is available as an optional extra for sites where
 `float64`. Precision exceptions must be explicit and documented.
 
 **Python ≥ 3.11.** Single source language end-to-end.
+
+**Sphinx + MyST-NB documentation stack.** All narrative documentation is
+built with Sphinx + MyST-NB. Docstrings follow the NumPy convention. The
+docs build runs with warnings-as-errors; GitHub Actions deploys to GitHub
+Pages. Sphinx-design provides layout components.
+
+**Visualization stack.** Field data is written in HDF5 (current `io/`)
+and Zarr v3 (planned). Browser rendering uses WebGPU primary with a
+WebGL2 fallback; desktop rendering uses pyvista/vispy for local
+inspection. All colormaps are perceptual (cmasher, cmocean); rainbow/jet
+are prohibited. Visual regression tests use pytest-mpl with SSIM
+comparison.
 
 ---
 
@@ -89,6 +99,33 @@ operation on any indexed set and lives as an `@abstractmethod` on
 
 ---
 
+## Operator model
+
+**Kernel abstraction (Op / Region / Policy / Dispatch).** The kernel
+layer separates four independent axes: Op (the computation), Region (the
+spatial domain), Policy (the execution strategy), and Dispatch (the
+assembly and run). Any Op can be composed with any Region under any
+Policy without changing call sites. `Stencil` (pointwise) and `Reduction`
+(fold) are the two concrete Op types; `Extent` is the Region type;
+`FlatPolicy` is the only implemented Policy. Dispatch runs the Op over
+the Region via `op.execute(region, policy)`.
+
+**Global reduction primitive.** `Reduction(operator, identity)` is the
+primitive for field-level folds. It returns a 0-dimensional JAX array
+rather than a Python scalar so XLA can fuse the reduction into
+surrounding computation. The identity element is required for correctness
+under `jit`.
+
+**Operator documentation convention.** Every operator class carries a
+structured docstring block declaring its mathematical contract.
+`Function:` blocks state domain, codomain, and approximation parameters
+Θ and order p. `Source:` blocks document reads from external state
+(files, network). `Sink:` blocks document writes to external state. This
+convention makes each class's contract auditable without reading its
+implementation.
+
+---
+
 ## Platform and application split
 
 Cosmic Foundry is the **organizational platform**. Application
@@ -101,46 +138,6 @@ planetary formation, and other domains — build on top of it.
   data belong in application repos.
 - Cross-scale workflows that compose two or more application domains
   belong in their own repository.
-
----
-
-## Physics capability licensing
-
-Per the derivation-first lane policy (documented in `AI.md`):
-
-- **Lane A** — port-and-verify from a permissively-licensed reference
-  with attribution.
-- **Lane B** — clean-room from paper; mandatory for copyleft references
-  (GADGET-4, RAMSES, MESA, SWIFT, Arepo, and others listed in
-  `research/06-12-licensing.md`). Source tree must not be opened.
-- **Lane C** — first-principles origination for generalizations, novel
-  work, or cases where deep understanding is the goal.
-
-The lane must be stated in the PR description for any physics capability.
-
----
-
-## Long-term physics capability goals
-
-These are goals, not a delivery timeline. Sequencing is in `STATUS.md`.
-
-| Capability | Notes |
-|---|---|
-| Uniform structured mesh | Done — `mesh/` |
-| Newtonian hydrodynamics | Finite-volume Godunov, HLLC/HLLE Riemann solvers |
-| Self-gravity | Multigrid Poisson, particle infrastructure, tree gravity |
-| Microphysics | EOS interface, reaction networks, cooling tables, opacities |
-| MHD | Ideal and non-ideal; constrained transport |
-| Radiation transport | Gray/multigroup FLD, two-moment M1 |
-| Special relativity | SR hydro and MHD |
-| General relativity | Full NR via 3+1 (ADM/BSSN); dynamical spacetime |
-| SPH / meshless | Particle cosmology, halo finders |
-| Moving mesh | Arepo-class Voronoi |
-| Stellar evolution | 1-D Lagrangian solver |
-| Subgrid / observables | Synthetic observable hooks |
-
-GR is listed explicitly because it drives a concrete architectural
-requirement: `DynamicManifold` (see Open Questions below).
 
 ---
 
@@ -200,11 +197,17 @@ enforced. Planned: add `∂M` to `theory/` once the n-dimensional
 `theory/`. It is a candidate for relocation to `computation/` or
 `geometry/` to keep `theory/` free of runtime dependencies.
 
-**Verification framework evolution.**
-The external grounding rule (expected answers must come from outside the
-codebase — analytical solutions, symbolic derivations, or published
-benchmarks, not engine-generated golden files) applies to all physics
-capability tests. The convergence testing infrastructure
-(`tests/utils/convergence.py`, `tests/utils/stencils.py`) supports MMS
-verification. Capsule-based reproducibility tooling is deferred until
-convergence coverage exists for implemented physics maps.
+**Halo fill fence.**
+The halo-fill operation — ghost-cell exchange for stencil footprints
+that cross patch boundaries — has a designed but not yet implemented
+interface: `HaloFillFence` as a descriptor and `HaloFillPolicy` as the
+execution unit. The driver inserts fences before dispatches whose stencil
+radii exceed the local interior. The design is settled; implementation is
+Epoch 2.
+
+**Numerical transcription discipline.**
+Physics capabilities sourced from reference tables (EOS polynomial fits,
+reaction networks, opacity tables) need a discipline governing how
+numeric tables are transcribed, verified, and updated independently of
+the derivation-first lane policy. This decision is deferred to Epoch 7
+(microphysics), when the first such capability lands.

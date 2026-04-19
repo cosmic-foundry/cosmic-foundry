@@ -33,7 +33,6 @@ The code is the authoritative architecture description. Start here:
 | `pr-review/` | Adversarial PR review checklist and architecture stress-review checklist. | `pr-review/README.md` |
 | `scripts/` | Agent health check, PR review wrappers, session startup. | `scripts/agent_health_check.sh` |
 | `environment/` | Conda environment setup and activation. | `environment/setup_environment.sh` |
-| `adr/` | Historical architectural decisions. Being retired — live decisions now in `ARCHITECTURE.md`. | — |
 
 ### The mathematical hierarchy at a glance
 

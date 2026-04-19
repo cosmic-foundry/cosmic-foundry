@@ -20,5 +20,5 @@
 
 ## Test plan
 <!-- Executable verification steps. For PRs with numerical claims, follow the
-     verification-first bounded-increment workflow in adr/ADR-0007-replication-workflow.md. -->
+     verification-first bounded-increment workflow in DEVELOPMENT.md. -->
 - [ ]

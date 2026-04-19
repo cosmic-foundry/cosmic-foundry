@@ -46,12 +46,6 @@ repos:
         language: system
         pass_filenames: false
         files: \.md$
-      - id: adr-index-consistency
-        name: ADR index consistency
-        entry: python scripts/ci/check_adr_index.py
-        language: system
-        pass_filenames: false
-        files: ^adr/.*\.md$
       - id: action-version-downgrade
         name: GitHub Actions version downgrade check
         entry: python scripts/ci/check_action_versions.py

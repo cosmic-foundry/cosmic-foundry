@@ -3,58 +3,35 @@
 A computational astrophysics engine for multi-physics simulation.
 
 ```{toctree}
-:maxdepth: 2
-:caption: Getting started
-
-getting-started
-contributing
-coding-standards
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Theory
-
-theory/index
-```
-
-```{toctree}
 :maxdepth: 1
 :caption: API reference
 
 api/index
 ```
 
-```{toctree}
-:maxdepth: 1
-:caption: Gallery
-
-gallery/index
-accessibility
-```
-
-```{toctree}
-:maxdepth: 1
-:caption: Architecture
-
-adr/index
-```
-
 ## Overview
 
-Cosmic Foundry is a Python engine for numerical astrophysics, targeting
-the capability set surveyed in
-[`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
-— hydrodynamics through numerical relativity, radiation transport, gravity,
-N-body, microphysics, and cosmology. It is being built incrementally through
-a roadmap of staged capabilities toward a code that can replicate published
-astrophysics results.
+Cosmic Foundry is a Python engine for numerical astrophysics. The simulation
+capability sequence — hydrodynamics through numerical relativity, radiation
+transport, gravity, N-body, microphysics, and cosmology — is defined in
+[`ROADMAP.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
+Current development status and the immediate next steps for both the simulation
+and verification tracks are in
+[`STATUS.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/STATUS.md).
 
-For the full design survey and development plan, see
-[`RESEARCH.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/RESEARCH.md)
-and the
-[development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
-Architectural decisions are recorded in
-[`adr/README.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/README.md).
-The numerical kernels run on JAX; see
-[ADR-0002](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/adr/object-level/ADR-0002-jax-primary-kernel-backend.md).
+## Architecture
+
+All live architectural decisions are recorded as one-paragraph claims in
+[`ARCHITECTURE.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ARCHITECTURE.md).
+That file is the single authoritative source for platform structure, the
+kernel and field abstractions, the operator model, the mesh layer, I/O,
+diagnostics, and the documentation and visualization stacks.
+
+## Development
+
+The full developer workflow — environment setup, branch and PR discipline,
+commit size, physics capability lanes, verification standards, and epoch
+retrospectives — is in
+[`DEVELOPMENT.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/DEVELOPMENT.md).
+Agent-specific guidelines (session startup, PR review, lane selection) are in
+[`AI.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/AI.md).

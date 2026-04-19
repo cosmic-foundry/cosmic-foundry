@@ -1,6 +1,6 @@
 # Architecture stress-review checklist
 
-Use this checklist for ADRs, roadmap decisions, and PRs that introduce
+Use this checklist for architectural changes, roadmap decisions, and PRs that introduce
 or reshape architectural abstractions. The goal is to force the design
 through the same adversarial questions a domain expert would ask before
 human review.
@@ -14,7 +14,7 @@ usable API shape, and defensible long-term boundaries.
 
 Run this checklist when a PR does any of the following:
 
-- adds or amends an ADR;
+- adds or amends an architectural claim in `ARCHITECTURE.md`;
 - changes a roadmap epoch's architectural contract;
 - introduces a named abstraction, protocol, base class, dispatch layer,
   task-graph concept, backend interface, storage model, or public API
@@ -31,8 +31,8 @@ becomes vocabulary.
 The reviewer must produce an architecture stress-review note with these
 sections. For a PR review, include the note under the normal review
 report's relevant severity section or in the checklist walkthrough. For
-an author self-review, include the note in the PR description or in the
-ADR before requesting human review.
+an author self-review, include the note in the PR description before
+requesting human review.
 
 ### 1. Problem Boundary
 
@@ -124,8 +124,8 @@ Check:
 - Does the proposed API express the workflow without hidden global
   state, magical ordering, or manual reconstruction of internal
   objects?
-- Does the natural code shape match the names in the ADR?
-- Does the workflow require a concept that the ADR forgot to name?
+- Does the natural code shape match the names in `ARCHITECTURE.md`?
+- Does the workflow require a concept that `ARCHITECTURE.md` forgot to name?
 - Does any example rely on behavior the design only permits as a
   transparent optimization?
 
@@ -196,8 +196,8 @@ even if the design seems clean:
 - What would be serialized unnecessarily?
 - What ordering dependency would be missed?
 - What optimization could change semantics if a boundary is implicit?
-- What would a backend, driver, or physics author need that the ADR
-  does not specify?
+- What would a backend, driver, or physics author need that
+  `ARCHITECTURE.md` does not specify?
 - What simpler option was rejected, and is the rejection based on
   downstream cost rather than implementation effort?
 
