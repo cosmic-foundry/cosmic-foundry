@@ -20,9 +20,10 @@ import jax.numpy as jnp
 from cosmic_foundry.computation.array import Array, ComponentId
 from cosmic_foundry.computation.descriptor import (
     AccessPattern,
-    Extent,
     Region,
     _checked_bounds,
+    intersect_extents,
+    payload_slices,
 )
 from cosmic_foundry.theory.function import Function
 
@@ -155,10 +156,10 @@ class GlobalSum(Function):
                 continue
             block = mesh[cid]
             interior = block.index_extent
-            overlap = _intersect_extents(interior, region.extent)
+            overlap = intersect_extents(interior, region.extent)
             if overlap is None:
                 continue
-            local = local + jnp.sum(field[cid][_payload_slices(interior, overlap)])
+            local = local + jnp.sum(field[cid][payload_slices(interior, overlap)])
 
         if axis_name is None:
             return local
@@ -166,30 +167,6 @@ class GlobalSum(Function):
 
 
 global_sum = GlobalSum()
-
-
-def _payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
-    return tuple(
-        slice(
-            child_slice.start - parent_slice.start,
-            child_slice.stop - parent_slice.start,
-        )
-        for parent_slice, child_slice in zip(parent.slices, child.slices, strict=False)
-    )
-
-
-def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
-    if a.ndim != b.ndim:
-        msg = "Cannot intersect Extents with different ndim"
-        raise ValueError(msg)
-    slices: list[slice] = []
-    for sa, sb in zip(a.slices, b.slices, strict=False):
-        start = max(sa.start, sb.start)
-        stop = min(sa.stop, sb.stop)
-        if start >= stop:
-            return None
-        slices.append(slice(start, stop))
-    return Extent(tuple(slices))
 
 
 __all__ = [

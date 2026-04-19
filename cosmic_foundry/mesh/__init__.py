@@ -9,7 +9,12 @@ from typing import Any
 import numpy as np
 
 from cosmic_foundry.computation.array import Array, ComponentId, Placement
-from cosmic_foundry.computation.descriptor import AccessPattern, Extent
+from cosmic_foundry.computation.descriptor import (
+    AccessPattern,
+    Extent,
+    intersect_extents,
+    payload_slices,
+)
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 
@@ -123,7 +128,7 @@ def covers(mesh: Array[Patch], extent: Extent) -> bool:
     origin = tuple(s.start for s in extent.slices)
     covered = np.zeros(shape, dtype=bool)
     for patch in mesh.elements:
-        intersection = _intersect_extents(patch.index_extent, extent)
+        intersection = intersect_extents(patch.index_extent, extent)
         if intersection is None:
             continue
         local_idx = tuple(
@@ -161,7 +166,7 @@ def fill_halo(
         halo_extent = interior.expand(access_pattern)
 
         expanded = jnp.zeros(halo_extent.shape, dtype=field[cid].dtype)
-        expanded = expanded.at[_payload_slices(halo_extent, interior)].set(field[cid])
+        expanded = expanded.at[payload_slices(halo_extent, interior)].set(field[cid])
 
         updated[cid] = _fill_patch_halo(
             target_cid=cid,
@@ -198,7 +203,7 @@ def _fill_patch_halo(
             src_cid = ComponentId(i)
             if src_cid == target_cid:
                 continue
-            overlap = _intersect_extents(mesh[src_cid].index_extent, halo_piece)
+            overlap = intersect_extents(mesh[src_cid].index_extent, halo_piece)
             if overlap is not None:
                 candidates.append((src_cid, overlap))
 
@@ -218,8 +223,8 @@ def _fill_patch_halo(
 
         src_cid, overlap = local_candidates[0]
         src_interior = mesh[src_cid].index_extent
-        payload = payload.at[_payload_slices(target_halo_extent, overlap)].set(
-            field[src_cid][_payload_slices(src_interior, overlap)]
+        payload = payload.at[payload_slices(target_halo_extent, overlap)].set(
+            field[src_cid][payload_slices(src_interior, overlap)]
         )
 
     return payload
@@ -227,7 +232,7 @@ def _fill_patch_halo(
 
 def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
     """Return pieces of *extent* that lie outside *removed*."""
-    overlap = _intersect_extents(extent, removed)
+    overlap = intersect_extents(extent, removed)
     if overlap is None:
         return (extent,)
     axis_parts: list[list[tuple[slice, bool]]] = []
@@ -247,27 +252,6 @@ def _subtract_extent(extent: Extent, removed: Extent) -> tuple[Extent, ...]:
         if all(s.start < s.stop for s in slices):
             pieces.append(Extent(slices))
     return tuple(pieces)
-
-
-def _payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
-    return tuple(
-        slice(c.start - p.start, c.stop - p.start)
-        for p, c in zip(parent.slices, child.slices, strict=False)
-    )
-
-
-def _intersect_extents(a: Extent, b: Extent) -> Extent | None:
-    if a.ndim != b.ndim:
-        msg = "Cannot intersect Extents with different ndim"
-        raise ValueError(msg)
-    slices: list[slice] = []
-    for sa, sb in zip(a.slices, b.slices, strict=False):
-        start = max(sa.start, sb.start)
-        stop = min(sa.stop, sb.stop)
-        if start >= stop:
-            return None
-        slices.append(slice(start, stop))
-    return Extent(tuple(slices))
 
 
 __all__ = [
