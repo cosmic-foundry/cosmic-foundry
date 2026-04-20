@@ -98,9 +98,6 @@ The current ABC hierarchy:
 Set
 ├── IndexedFamily           — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
 ├── IndexedSet              — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
-│   └── Discretization      — IndexedSet approximating functions on a manifold
-│       ├── LocatedDiscretization — DOFs at specific points; interface: manifold, node_positions
-│       └── ModalDiscretization  — DOFs as basis function coefficients; interface: basis_functions
 └── Manifold                — topological manifold; interface: ndim
     ├── SmoothManifold      — smooth (C∞) structure
     │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
