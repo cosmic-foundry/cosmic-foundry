@@ -41,16 +41,17 @@ class WriteArray(Sink):
     """Write a single array to a new HDF5 file.
 
     Sink:
-        domain — (array: array-like, path: Path, dataset: str) — a numeric
-                 array and a destination HDF5 path with a dataset name
-        effect — HDF5 file created at path; array stored under dataset name;
-                 any existing file at path is overwritten
+        domain   — (array: array-like, path: Path, dataset: str) — a numeric
+                   array and a destination HDF5 path with a dataset name
+        codomain — None
+        effect   — HDF5 file created at path; array stored under dataset name;
+                   any existing file at path is overwritten
 
     *array* may be a JAX array or a NumPy array; it is converted to NumPy
     before the write so no JAX-specific serialization is required.
     """
 
-    def execute(
+    def __call__(
         self,
         path: str | Path,
         array: Any,
@@ -78,18 +79,19 @@ class MergeRankFiles(Sink):
     """Concatenate per-rank HDF5 files into a single output file.
 
     Sink:
-        domain — ([f_i: HDF5 file]_i, output_path: Path) — an ordered
-                 sequence of per-rank HDF5 files each containing dataset,
-                 and a destination path
-        effect — single HDF5 file written at output_path; per-rank arrays
-                 concatenated in rank order along axis
+        domain   — ([f_i: HDF5 file]_i, output_path: Path) — an ordered
+                   sequence of per-rank HDF5 files each containing dataset,
+                   and a destination path
+        codomain — None
+        effect   — single HDF5 file written at output_path; per-rank arrays
+                   concatenated in rank order along axis
 
     Each file in *rank_paths* must contain a dataset named *dataset*.  This
     is the post-processing merge step for the ``HAS_PARALLEL_HDF5=False``
     write path.
     """
 
-    def execute(
+    def __call__(
         self,
         rank_paths: Sequence[str | Path],
         output_path: str | Path,

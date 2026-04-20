@@ -23,7 +23,7 @@ from cosmic_foundry.theory.non_local_boundary_condition import (
 class _ConstantField(Field):
     name: str = "constant"
 
-    def execute(self, *args: Any, **kwargs: Any) -> float:
+    def __call__(self, *args: Any, **kwargs: Any) -> float:
         return 0.0
 
 
@@ -40,7 +40,7 @@ class _DirichletBC(LocalBoundaryCondition):
     def constraint(self) -> Field:
         return _ConstantField()
 
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return None
 
 
@@ -57,7 +57,7 @@ class _NeumannBC(LocalBoundaryCondition):
     def constraint(self) -> Field:
         return _ConstantField()
 
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return None
 
 
@@ -67,7 +67,7 @@ class _FaceIdentification(NonLocalBoundaryCondition):
     def __init__(self, face_a: ManifoldWithBoundary, face_b: ManifoldWithBoundary):
         self.faces = (face_a, face_b)
 
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return None
 
 

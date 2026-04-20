@@ -16,10 +16,10 @@ class LoadSchema(Source):
 
     Source:
         origin   — JSON schema file at schemas/{name}.schema.json
-        produces — schema dict suitable for jsonschema.validate
+        codomain — dict suitable for jsonschema.validate
     """
 
-    def execute(self, name: str) -> dict[str, Any]:
+    def __call__(self, name: str) -> dict[str, Any]:
         path = _SCHEMAS_DIR / f"{name}.schema.json"
         if not path.exists():
             raise FileNotFoundError(
@@ -38,7 +38,7 @@ def validate_manifest(manifest: dict[str, Any], schema_name: str) -> None:
     Raises jsonschema.ValidationError if the manifest is invalid.
     schema_name: one of 'catalog', 'validation-set', 'artifact-provenance'.
     """
-    schema = load_schema.execute(schema_name)
+    schema = load_schema(schema_name)
     jsonschema.validate(instance=manifest, schema=schema)
 
 

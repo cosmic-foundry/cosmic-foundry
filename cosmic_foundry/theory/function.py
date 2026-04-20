@@ -7,17 +7,15 @@ from typing import Any
 
 
 class Function(ABC):
-    """Abstract base for all function classes: f: A × Θ → B.
+    """A callable with a formal mathematical contract.
 
-    Every concrete Function subclass carries a ``Function:`` block in its
-    class docstring specifying domain, codomain, operator, Θ, and
-    approximation order p.  Subclasses that carry no parameters should use
-    ``@dataclass(frozen=True)`` so that instances are hashable.
+    Subclasses declare: domain, codomain, parameters Θ, approximation order p.
+    All concrete Function instances should use ``@dataclass(frozen=True)``
+    for hashability when they carry no mutable state.
     """
 
     @abstractmethod
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the function and return the result."""
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 __all__ = [

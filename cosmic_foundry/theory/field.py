@@ -1,6 +1,6 @@
-"""Field hierarchy.
+"""Field hierarchy: f: M → V.
 
-- ``Field``       — abstract base: f: M → V; inherits Function.
+- ``Field``       — abstract base; inherits Function (__call__ is abstract).
 - ``ScalarField`` — marker for V = ℝ.
 - ``TensorField`` — abstract for V = T^(p,q)M; carries ``tensor_type``.
 """
@@ -30,7 +30,7 @@ class Field(Function):
 class ScalarField(Field):  # noqa: B024
     """A field with codomain V = ℝ.
 
-    Marker subclass; ``execute`` remains abstract from ``Function``.
+    Marker subclass; ``__call__`` remains abstract from ``Function``.
     """
 
 

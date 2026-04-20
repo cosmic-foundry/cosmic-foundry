@@ -6,12 +6,10 @@ from cosmic_foundry.theory.function import Function
 
 
 class Sink(Function):
-    """Abstract base for all sink classes: S: A → external state.
+    """Abstract base for all sink classes: A → external state.
 
-    Every concrete Sink subclass carries a ``Sink:`` block in its class
-    docstring specifying the domain consumed and the external effect produced.
-    Subclasses that carry no parameters should use
-    ``@dataclass(frozen=True)`` so that instances are hashable.
+    Concrete subclasses carry a ``Sink:`` block specifying the domain,
+    codomain (usually None), and external effect produced.
     """
 
 
