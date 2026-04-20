@@ -128,12 +128,3 @@ trade-off. The costs that actually matter are all downstream:
 Rank options by these. Include the simpler option in every comparison
 even when you intend to recommend the richer one — the user needs the
 full option space to make an informed decision.
-
----
-
-## Code Quality
-
-- Write code that is:
-  - Self-documenting (clear variable names, simple logic)
-  - Minimal (only what's needed, no over-engineering)
-  - Testable (existing tests must pass, new features need tests)

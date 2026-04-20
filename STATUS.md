@@ -1,15 +1,5 @@
 # Cosmic Foundry — Status
 
-The repository is organized into four packages with a strict dependency order:
-
-- **Foundation** (`foundation/`) — `Set`, `Function`, `IndexedSet`, `IndexedFamily`.
-- **Continuous** (`continuous/`) — manifolds, fields, operators, boundary conditions.
-- **Discrete** (`discrete/`) — scheme description on finite index sets; symbolic.
-- **Numerical** (`computation/`) — JAX evaluates the discrete description.
-
-`foundation/`, `continuous/`, and `discrete/` are symbolic-reasoning layers:
-no floats, no numerical packages; SymPy is approved.
-
 ## Near-term work
 
 

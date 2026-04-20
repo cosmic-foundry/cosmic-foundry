@@ -34,8 +34,6 @@ no temporal or spacetime computations are implemented yet.)*
 
 **Physical quantities are represented as instances of formal mathematical
 abstractions.** Any concrete representation is an implementation detail.
-*(Current inconsistency: `Field` and its subclasses are defined in
-`theory/` but are not yet used in computation.)*
 
 **Every numerical method is formally derived from its continuous
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
@@ -218,7 +216,7 @@ substitutability, and dispatch is unsettled.
 Full GR simulations cannot use a fixed-metric manifold: the metric
 tensor `g_μν` is the dynamical variable evolved by the Einstein
 equations. Planned: `DynamicManifold(PseudoRiemannianManifold)` in
-`theory/` — signature is fixed (Lorentzian for GR), but the metric is
+`continuous/` — signature is fixed (Lorentzian for GR), but the metric is
 a field in the simulation state. In the 3+1 (ADM) formalism the
 computational domain is a 3-D Riemannian spatial hypersurface; the
 3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
@@ -238,3 +236,32 @@ reaction networks, opacity tables) need a discipline governing how
 numeric tables are transcribed, verified, and updated independently of
 the derivation-first lane policy. This decision is deferred to Epoch 7
 (microphysics), when the first such capability lands.
+
+**Is scheme choice a first-class concept?**
+A finite-difference discretization of ∇² is a precise mathematical act: choose
+a grid, choose an approximation order, derive stencil coefficients. The
+`approximates` property on `DiscreteField` establishes the has-a link between
+a discrete object and its continuous counterpart, but does not make scheme choice
+(e.g. "second-order centered finite difference of the Laplacian") a first-class
+object. An open question is whether a formal `Discretization` — a callable that
+maps a `DifferentialOperator` + grid + order to a discrete stencil — belongs in
+`discrete/`, or whether scheme choice remains implicit in how discrete objects
+are constructed. The chart on the ambient manifold provides the coordinate map
+that grounds the derivation; a first-class `Discretization` would reference it.
+
+**What is the formal PDE object in the continuous layer?**
+Conservation laws like ∂ρ/∂t + ∇·(ρv) = 0 are statements about continuous
+fields. Before discretizing, we may want to express them as formal objects in
+`continuous/`. The right interface is unclear and may only become clear once we
+have a working discretization to invert from.
+
+**What do SymPy-backed continuous objects look like?**
+The symbolic-reasoning identity makes SymPy available in `continuous/` and
+`discrete/`. The natural use is analytical field representations — a concrete
+`ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)` — which
+would make `approximates` algebraically live: stencil derivation and truncation
+error analysis could be done in code rather than in documentation. The coordinate
+symbols `x, y` in such an expression are tied to a specific chart: the chart's
+component functions x¹, …, xⁿ are exactly the coordinate symbols the expression
+uses. The interface for SymPy-backed fields (evaluatable analytical forms,
+coordinate-to-chart binding) is not yet designed.

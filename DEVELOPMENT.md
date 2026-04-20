@@ -176,7 +176,7 @@ note "No change to roadmap position" in the PR description.
 
 **When a PR completes a planned item in `STATUS.md`**, that same PR
 must remove the corresponding entry from `STATUS.md` (or from the
-`## Current work` list if it is a sequenced step). Do not leave
+`## Near-term work` list if it is a sequenced step). Do not leave
 completed items in `STATUS.md` as historical record — the git log
 serves that purpose. The rule is: if the item is done when the PR
 merges, it is gone from `STATUS.md` when the PR merges.
@@ -192,17 +192,6 @@ in the same PR (moving the item from `ROADMAP.md` if it lives there). Do not upd
 the change. If the answer to (2) is yes, resolve the inconsistency before
 merging. The goal is that the next item is always fully specified before
 the current one lands.
-
----
-
-## Implementation plans
-
-The immediate next work for both tracks is maintained in the
-`## Current work` section of `STATUS.md`. Keep it current:
-when an item completes, remove it from `STATUS.md`; when new immediate
-work becomes fully specified and unblocked, move it from `ROADMAP.md`
-to `STATUS.md`. Do not add items to `STATUS.md` that depend on decisions
-not yet made — those belong in `ROADMAP.md`.
 
 ---
 

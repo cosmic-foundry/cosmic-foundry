@@ -45,16 +45,6 @@ re-run the full setup script.
 - AI-agent commits carry a `Co-Authored-By` trailer.
 - No local absolute paths in commit messages or PR descriptions.
 
-## Architectural decisions
-
-New decisions go in [`ARCHITECTURE.md`](ARCHITECTURE.md) as a one-paragraph
-claim. See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the full process.
-
-## Code standards
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for style, type-annotation, docstring
-format, and test requirements.
-
 ## Getting help
 
 Open a GitHub issue on `cosmic-foundry/cosmic-foundry`.
