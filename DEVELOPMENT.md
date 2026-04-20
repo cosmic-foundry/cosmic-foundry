@@ -15,49 +15,34 @@ discipline.
 
 ### Branches and PRs
 
-- Only work on a fork of the upstream repository.
 - Every change lands via a pull request. **Never commit directly to
-  any `main` branch** — neither `upstream/main` nor `origin/main`
-  (the fork). `main` on both remotes is a read-only integration
-  target; all work happens on topic branches.
-- Create topic branches from `origin/main` (the fork's main), not
-  from `upstream/main` directly. Syncing `origin/main` to
-  `upstream/main` is an explicit separate step.
-- **Syncing `origin/main` after a merge.** There is no named
-  `upstream` remote in this repo (omitted to prevent accidental
-  pushes). Use `gh repo sync` instead:
+  `main`.** `main` is a read-only integration target; all work happens
+  on topic branches.
+- Create topic branches from `main`:
   ```bash
-  gh repo sync cosmic-foundry-development/cosmic-foundry \
-    --source cosmic-foundry/cosmic-foundry --branch main
+  git checkout -b feat/my-change main
+  ```
+- **After a PR merges**, pull main before starting the next branch:
+  ```bash
   git checkout main && git pull origin main
   ```
-- **Check PR state before pushing follow-up commits.** The user
-  sometimes merges a PR without telling the agent, and sometimes
-  forgets to sync `origin/main` afterward. Before pushing additional
-  commits to a branch that already has a PR, verify the PR is still
-  open:
+- **Check PR state before pushing follow-up commits.** Verify a PR is
+  still open before pushing to its branch:
   ```bash
   gh pr view --repo cosmic-foundry/cosmic-foundry \
     --json state --jq .state
   ```
   If the result is `MERGED` or `CLOSED`, do not push to that branch.
-  Instead: delete the local branch if it exists (`git branch -D
-  <branch>`), sync `origin/main` (see above), check out `main`, and
-  create a new topic branch for the new work. Also check whether
-  `STATUS.md` lists this PR as `Open` and update the entry to
-  `Merged` if so.
-- **Open pull requests against `upstream/main`**, not against the
-  fork. Push the topic branch to `origin`, then open the PR so it
-  merges into the upstream repository's `main`. Do not rely on
+  Delete the local branch (`git branch -D <branch>`), pull main, and
+  create a new topic branch for the new work.
+- **Open pull requests** with `gh pr create`. Do not rely on
   `gh`'s default-repo inference — state it explicitly:
   ```
   gh pr create \
     --repo cosmic-foundry/cosmic-foundry \
-    --base main \
-    --head <fork-owner>:<topic-branch>
+    --base main
   ```
-- CI's `pre-commit` job is a required status check on
-  `upstream/main`; PRs cannot merge red.
+- CI's `pre-commit` job is a required status check; PRs cannot merge red.
 - **Run `pre-commit run --all-files` before pushing.** CI runs the
   same hooks; catching failures locally avoids a round-trip. If the
   command is not found, the working copy's env is stale or the git

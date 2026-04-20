@@ -7,8 +7,8 @@ design are in [**Architectural basis**](ARCHITECTURE.md#architectural-basis).
 ## Quick start
 
 ```bash
-# Clone the fork
-git clone git@github.com:<your-fork>/cosmic-foundry.git
+# Clone the repo
+git clone git@github.com:cosmic-foundry/cosmic-foundry.git
 cd cosmic-foundry
 
 # One-time setup (~5 min)

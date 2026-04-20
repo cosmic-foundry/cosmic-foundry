@@ -20,24 +20,22 @@ re-run the full setup script.
 
 ## Workflow
 
-1. **Fork** the upstream repo (`cosmic-foundry/cosmic-foundry`).
-2. **Branch** from `origin/main` (your fork's main), not from `upstream/main`:
+1. **Branch** from `main`:
    ```bash
-   git checkout -b feat/my-change origin/main
+   git checkout -b feat/my-change main
    ```
-3. **Make changes.** Target ~150 lines of diff per commit, ceiling ~400.
+2. **Make changes.** Target ~150 lines of diff per commit, ceiling ~400.
    Documentation diffs, generated files, and pure scaffolding are exempt.
-4. **Check before pushing:**
+3. **Check before pushing:**
    ```bash
    pre-commit run --all-files
    pytest -q
    ```
-5. **Open a PR against `upstream/main`** (not against the fork):
+4. **Open a PR against `main`**:
    ```bash
    gh pr create \
      --repo cosmic-foundry/cosmic-foundry \
-     --base main \
-     --head <fork-owner>:<branch>
+     --base main
    ```
 
 ## Commit style
