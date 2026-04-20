@@ -136,9 +136,8 @@ Manifold(Set)
 │   │   interface: ndim, atlas → Atlas
 │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
 │       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
-│       └── FlatManifold         — zero curvature
-│           ├── EuclideanSpace   — ℝⁿ; free: ndim; atlas: one global IdentityChart
-│           └── MinkowskiSpace   — signature (1,3); no free parameters; atlas: one global IdentityChart
+│       │   └── EuclideanSpace  — ℝⁿ; free: ndim; atlas: one global IdentityChart
+│       └── MinkowskiSpace       — signature (1,3); no free parameters; atlas: one global IdentityChart
 
 Chart(Function)         — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
                           interface: domain → SmoothManifold, codomain → EuclideanSpace, inverse → Function

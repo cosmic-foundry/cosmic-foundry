@@ -12,12 +12,6 @@ no floats, no numerical packages; SymPy is approved.
 
 ## Near-term work
 
-**Resolve the BoundaryCondition hierarchy.**
-One open question remains:
-
-`LocalBoundaryCondition.constraint` is a `Field`, but the manifold it is
-defined on is unspecified. The constraint lives on the boundary face; the
-continuous layer has no formal type for a boundary face.
 
 **M2.5 design session: mathematical narrative documentation.**
 What does the first notebook look like, and how does it hook into CI? Concrete

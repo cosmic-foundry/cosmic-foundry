@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.continuous.flat_manifold import FlatManifold
 from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 
 
-class EuclideanSpace(RiemannianManifold, FlatManifold):
+class EuclideanSpace(RiemannianManifold):
     """ℝⁿ with the standard flat positive-definite metric.
 
     The only free parameter is the dimension n.  signature = (n, 0) and
     ndim = n are both derived — signature from RiemannianManifold, ndim
     from this class.
-
-    MRO: EuclideanSpace → RiemannianManifold → FlatManifold →
-         PseudoRiemannianManifold → SmoothManifold → Set
 
     Required:
         n — dimension of the Euclidean space

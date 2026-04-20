@@ -23,7 +23,6 @@ from cosmic_foundry.continuous.field import (
     TensorField,
     VectorField,
 )
-from cosmic_foundry.continuous.flat_manifold import FlatManifold
 from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.continuous.manifold import Manifold
@@ -49,7 +48,6 @@ __all__ = [
     "DifferentialOperator",
     "EuclideanSpace",
     "Field",
-    "FlatManifold",
     "IdentityChart",
     "LocalBoundaryCondition",
     "Manifold",

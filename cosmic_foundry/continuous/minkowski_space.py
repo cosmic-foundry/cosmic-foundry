@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.continuous.flat_manifold import FlatManifold
 from cosmic_foundry.continuous.identity_chart import IdentityChart
+from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
+    PseudoRiemannianManifold,
+)
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 
 
-class MinkowskiSpace(FlatManifold):
+class MinkowskiSpace(PseudoRiemannianManifold):
     """ℝ⁴ with Lorentzian signature (1, 3).
 
     The flat pseudo-Riemannian background for special-relativistic
