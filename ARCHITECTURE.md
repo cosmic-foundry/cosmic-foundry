@@ -139,8 +139,6 @@ Manifold(Set)
 │       └── FlatManifold         — zero curvature
 │           ├── EuclideanSpace   — ℝⁿ; free: ndim; atlas: one global IdentityChart
 │           └── MinkowskiSpace   — signature (1,3); no free parameters; atlas: one global IdentityChart
-└── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
-    └── Region           — compact, connected Ω ⊂ M; interface: ambient_manifold → SmoothManifold; derived: ndim
 
 Chart(Function)         — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
                           interface: domain → SmoothManifold, codomain → EuclideanSpace, inverse → Function
@@ -185,9 +183,7 @@ represents `α·f + β·∂f/∂n = g` on a single face — abstract properties
 is also blank beyond the root — it signals that the constraint depends on
 field values outside the immediate neighborhood of the boundary point, but
 makes no claim about the form of that non-locality;
-concrete subclasses declare whatever geometric references they need. The
-codimension-1 invariant is enforced structurally: every face of a
-`ManifoldWithBoundary` has `ndim = parent.ndim - 1`.
+concrete subclasses declare whatever geometric references they need.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
@@ -211,7 +207,7 @@ and update the affected modules.
 **Kernel composition model.**
 A backend-agnostic interface separating kernel computation (Op) from
 spatial domain and execution policy (Policy) is a design goal.
-The earlier Op/Region/Policy/Dispatch framing was dropped before it was
+The earlier Op/Policy/Dispatch framing was dropped before it was
 realized. The current `Stencil` and `Reduction` primitives expose
 `execute` directly; the formal model governing composition, backend
 substitutability, and dispatch is unsettled.

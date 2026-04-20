@@ -11,7 +11,6 @@ from cosmic_foundry.continuous.differential_form import ScalarField
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
-from cosmic_foundry.continuous.manifold_with_boundary import ManifoldWithBoundary
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
@@ -21,33 +20,6 @@ from cosmic_foundry.foundation.function import Function
 # ---------------------------------------------------------------------------
 # Minimal concrete stubs
 # ---------------------------------------------------------------------------
-
-
-class _Face(ManifoldWithBoundary):
-    """Codimension-1 face stub."""
-
-    def __init__(self, ndim: int) -> None:
-        self._ndim = ndim
-
-    @property
-    def ndim(self) -> int:
-        return self._ndim
-
-    @property
-    def boundary(self) -> tuple[ManifoldWithBoundary, ...]:
-        return ()
-
-
-class _Box(ManifoldWithBoundary):
-    """3-D box with 6 faces."""
-
-    @property
-    def ndim(self) -> int:
-        return 3
-
-    @property
-    def boundary(self) -> tuple[ManifoldWithBoundary, ...]:
-        return tuple(_Face(2) for _ in range(6))
 
 
 class _ConstantField(ScalarField):
@@ -93,11 +65,18 @@ class _NeumannBC(LocalBoundaryCondition[Any, None]):
         return None
 
 
-class _FaceIdentification(NonLocalBoundaryCondition[Any, None]):
-    """Periodic BC: identifies two boundary faces. Carries its own geometry."""
+class _PeriodicBC(NonLocalBoundaryCondition[Any, None]):
+    """Periodic BC: identifies face_a with face_b separated by period L.
 
-    def __init__(self, face_a: ManifoldWithBoundary, face_b: ManifoldWithBoundary):
-        self.faces = (face_a, face_b)
+    Representative of the minimal geometry a real periodic BC carries:
+    which two faces are identified, and the translation distance between them.
+    Concrete computation/ subclasses will use these to copy ghost cells.
+    """
+
+    def __init__(self, face_a: str, face_b: str, period: float) -> None:
+        self.face_a = face_a
+        self.face_b = face_b
+        self.period = period
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
@@ -162,17 +141,23 @@ def test_local_constraint_is_field() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_face_identification_faces() -> None:
-    box = _Box()
-    faces = box.boundary
-    bc = _FaceIdentification(faces[0], faces[1])
-    assert len(bc.faces) == 2
-    assert all(isinstance(f, ManifoldWithBoundary) for f in bc.faces)
+def test_periodic_bc_is_non_local() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert isinstance(bc, NonLocalBoundaryCondition)
+    assert isinstance(bc, BoundaryCondition)
 
 
-def test_face_identification_codimension() -> None:
-    box = _Box()
-    faces = box.boundary
-    bc = _FaceIdentification(faces[0], faces[1])
-    for face in bc.faces:
-        assert face.ndim == box.ndim - 1
+def test_periodic_bc_is_not_local() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert not isinstance(bc, LocalBoundaryCondition)
+
+
+def test_periodic_bc_identifies_faces() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert bc.face_a == "xmin"
+    assert bc.face_b == "xmax"
+
+
+def test_periodic_bc_carries_period() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=2.5)
+    assert bc.period == 2.5

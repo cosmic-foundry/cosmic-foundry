@@ -15,8 +15,7 @@ class Manifold(Set):
     is the topological dimension, shared by all points.
 
     Subclasses add structure:
-    - SmoothManifold     — C∞ transition maps; calculus is possible
-    - ManifoldWithBoundary — has a codimension-1 boundary ∂M
+    - SmoothManifold — C∞ transition maps; calculus is possible
 
     Required:
         ndim — topological dimension of this manifold
