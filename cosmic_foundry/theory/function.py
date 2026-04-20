@@ -28,6 +28,23 @@ class Function(ABC, Generic[D, C]):
     def __call__(self, *args: Any, **kwargs: Any) -> C: ...
 
 
+class Sink(Function[D, None]):
+    """Abstract base for all sink classes: D → external state (None).
+
+    Codomain is always None; the effect is external side effects.
+    Subclasses bind D to a specific domain type.
+    """
+
+
+class Source(Function[D, C]):
+    """Abstract base for all source classes: external state (D) → C.
+
+    Subclasses bind D (external state/query) and C (output type).
+    """
+
+
 __all__ = [
     "Function",
+    "Sink",
+    "Source",
 ]

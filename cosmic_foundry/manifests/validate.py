@@ -5,7 +5,7 @@ from typing import Any
 
 import jsonschema  # type: ignore
 
-from cosmic_foundry.io.source import Source
+from cosmic_foundry.theory.function import Source
 
 # Domain and codomain for LoadSchema
 _SchemaDict = dict[str, Any]

@@ -14,7 +14,7 @@ from cosmic_foundry.theory.discretization import Discretization
 from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 from cosmic_foundry.theory.field import Field, ScalarField, TensorField
 from cosmic_foundry.theory.flat_manifold import FlatManifold
-from cosmic_foundry.theory.function import Function
+from cosmic_foundry.theory.function import Function, Sink, Source
 from cosmic_foundry.theory.indexed_family import IndexedFamily
 from cosmic_foundry.theory.indexed_set import IndexedSet
 from cosmic_foundry.theory.local_boundary_condition import LocalBoundaryCondition
@@ -49,6 +49,8 @@ __all__ = [
     "RiemannianManifold",
     "ScalarField",
     "Set",
+    "Sink",
     "SmoothManifold",
+    "Source",
     "TensorField",
 ]
