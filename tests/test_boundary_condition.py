@@ -6,17 +6,17 @@ from typing import Any
 
 import pytest
 
-from cosmic_foundry.theory.boundary_condition import BoundaryCondition
-from cosmic_foundry.theory.differential_form import ScalarField
-from cosmic_foundry.theory.euclidean_space import EuclideanSpace
-from cosmic_foundry.theory.field import Field
-from cosmic_foundry.theory.function import Function
-from cosmic_foundry.theory.local_boundary_condition import LocalBoundaryCondition
-from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
-from cosmic_foundry.theory.non_local_boundary_condition import (
+from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.continuous.differential_form import ScalarField
+from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
+from cosmic_foundry.continuous.field import Field
+from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
+from cosmic_foundry.continuous.manifold_with_boundary import ManifoldWithBoundary
+from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.foundation.function import Function
 
 # ---------------------------------------------------------------------------
 # Minimal concrete stubs

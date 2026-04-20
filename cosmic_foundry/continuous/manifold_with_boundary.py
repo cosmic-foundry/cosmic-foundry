@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.manifold import Manifold
+from cosmic_foundry.continuous.manifold import Manifold
 
 
 class ManifoldWithBoundary(Manifold):

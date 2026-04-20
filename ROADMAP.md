@@ -11,17 +11,32 @@ Once an item is fully specified and unblocked, it moves to `STATUS.md`.
 
 ## Architecture
 
-The codebase is organized around three layers, each with a distinct role:
+The codebase is organized into four packages with a strict dependency order:
 
-**Continuous (`theory/`)** — the problem in its true mathematical form.
+**Foundation (`foundation/`)** — primitive mathematical abstractions shared by
+all layers: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. No floats.
+
+**Continuous (`continuous/`)** — the problem in its true mathematical form.
 Manifolds, smooth fields, differential operators, boundary conditions. Everything
 is infinite-dimensional and coordinate-free. No arrays, no grids, no floats.
 
-**Discrete** — a chosen discretization of the continuous problem. A grid is a
-concrete `Region` with a finite cell count and exact spacing. Stencil coefficients
-are exact rationals derived from the continuous operator. Discrete fields are
-indexed families of values, one per cell. This layer is still symbolic: it
+**Discrete (`discrete/`)** — scheme description on finite index sets. A
+`DiscreteField` is a `Function[IndexedSet, V]`; it inherits from `foundation/`
+vertically (is-a) and optionally references `continuous/` horizontally (has-a)
+via the `approximates` property. When `approximates` is set, the discrete object
+declares itself a finite approximation of the named continuous object, enabling
+automatic convergence checks at computation time. When `approximates` is `None`,
+the discrete object is a primary mathematical object — the data IS the object,
+with no continuous antecedent (e.g. a field loaded from a MESA progenitor).
+Stencil coefficients are exact rationals. This layer is still symbolic: it
 describes the discretization without evaluating it.
+
+`foundation/`, `continuous/`, and `discrete/` are **symbolic-reasoning layers**.
+Their shared identity: they describe mathematical structure symbolically, without
+numerical evaluation. They may import from stdlib, `cosmic_foundry`, or approved
+symbolic-reasoning packages (`sympy`). JAX, NumPy, and other numerical packages
+are excluded by identity, not by a blanket third-party ban. Adding a package to
+the approved list requires justification against the symbolic-reasoning identity.
 
 **Numerical (`computation/`)** — JAX evaluates the discrete description. Cell
 values become `jax.Array`; stencil application becomes a JIT-compiled kernel;
@@ -36,27 +51,35 @@ evaluator.
 
 ## Open architectural questions
 
-**What does the continuous-to-discrete transition look like as code?**
+**Is scheme choice a first-class concept?**
 A finite-difference discretization of ∇² is a precise mathematical act: choose
-a grid, choose an approximation order, derive stencil coefficients. Should that
-be a formal object (a `Discretization` that maps a `DifferentialOperator` to a
-discrete stencil), or is the discrete layer just built directly without a formal
-bridge? This determines whether scheme choice is a first-class concept.
-
-**Does a discrete field know its continuous counterpart?**
-A cell-centered density array approximates a `ScalarField`. Should the discrete
-field carry a reference to the continuous field it approximates — establishing a
-formal approximation relationship — or are they separate objects that share an ABC?
+a grid, choose an approximation order, derive stencil coefficients. The
+`approximates` property on `DiscreteField` establishes the has-a link between
+a discrete object and its continuous counterpart, but does not make scheme choice
+(e.g. "second-order centered finite difference of the Laplacian") a first-class
+object. An open question is whether a formal `Discretization` — a callable that
+maps a `DifferentialOperator` + grid + order to a discrete stencil — belongs in
+`discrete/`, or whether scheme choice remains implicit in how discrete objects
+are constructed.
 
 **What is the formal PDE object in the continuous layer?**
 Conservation laws like ∂ρ/∂t + ∇·(ρv) = 0 are statements about continuous
 fields. Before discretizing, we may want to express them as formal objects in
-`theory/`. The right interface is unclear and may only become clear once we have
-a working discretization to invert from.
+`continuous/`. The right interface is unclear and may only become clear once we
+have a working discretization to invert from.
+
+**What do SymPy-backed continuous objects look like?**
+The symbolic-reasoning identity makes SymPy available in `continuous/` and
+`discrete/`. The natural use is analytical field representations — a concrete
+`ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)` — which
+would make `approximates` algebraically live: stencil derivation and truncation
+error analysis could be done in code rather than in documentation. The interface
+for SymPy-backed fields (evaluatable analytical forms, coordinate handling) is
+not yet designed.
 
 ---
 
-## Planned theory additions
+## Planned continuous/ additions
 
 **`DynamicManifold(PseudoRiemannianManifold)`**
 — A manifold whose metric tensor is a dynamical field in the simulation state.
@@ -80,9 +103,9 @@ the discrete and numerical layers evaluate.
 | Epoch | Layer | Capability |
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
-| 1 | Continuous | `theory/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric. ✓ |
-| 2 | Discrete | Cartesian grid as a concrete `Region`; coordinate geometry; cell and face structure. Discrete scalar and vector fields indexed by the grid. |
-| 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators; formal operator composition on the grid. |
+| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric. `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
+| 2 | Discrete | Cartesian grid as a concrete `IndexedSet` with coordinate geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField` backed by the grid. |
+| 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators via SymPy; truncation error verified algebraically; formal operator composition on the grid. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
 ### Physics
@@ -127,5 +150,7 @@ Every physics epoch must satisfy this checklist before it is considered verified
 - Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
 - Entry in the formulas register (`replication/formulas.md`) for each physics formula
 - At least one externally-grounded convergence test against an analytical solution
-  or observational data (not an engine-generated golden file)
+  or observational data (not an engine-generated golden file); where an analytical
+  solution exists, the relevant `DiscreteField.approximates` is set so the check
+  runs automatically
 - Lane A/B/C classification stated in the PR description

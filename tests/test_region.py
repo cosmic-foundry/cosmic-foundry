@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from cosmic_foundry.theory.euclidean_space import EuclideanSpace
-from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
-from cosmic_foundry.theory.region import Region
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
+from cosmic_foundry.continuous.manifold_with_boundary import ManifoldWithBoundary
+from cosmic_foundry.continuous.region import Region
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 
 
 class _Face(ManifoldWithBoundary):

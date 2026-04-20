@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.field import SymmetricTensorField
-from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
+from cosmic_foundry.continuous.field import SymmetricTensorField
+from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
+    PseudoRiemannianManifold,
+)
 
 
 class MetricTensor(SymmetricTensorField):  # noqa: B024

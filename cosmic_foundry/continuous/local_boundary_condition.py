@@ -5,8 +5,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TypeVar
 
-from cosmic_foundry.theory.boundary_condition import BoundaryCondition
-from cosmic_foundry.theory.field import Field
+from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.continuous.field import Field
 
 D = TypeVar("D")  # Domain
 C = TypeVar("C")  # Codomain

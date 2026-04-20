@@ -14,9 +14,9 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TypeVar
 
-from cosmic_foundry.theory.function import Function
-from cosmic_foundry.theory.manifold import Manifold
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.foundation.function import Function
 
 D = TypeVar("D")  # Domain (point in manifold)
 C = TypeVar("C")  # Codomain (value type)

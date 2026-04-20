@@ -6,21 +6,21 @@ from typing import Any
 
 import pytest
 
-from cosmic_foundry.theory.differential_form import (
+from cosmic_foundry.continuous.differential_form import (
     CovectorField,
     DifferentialForm,
     ScalarField,
 )
-from cosmic_foundry.theory.euclidean_space import EuclideanSpace
-from cosmic_foundry.theory.field import (
+from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
+from cosmic_foundry.continuous.field import (
     Field,
     SymmetricTensorField,
     TensorField,
     VectorField,
 )
-from cosmic_foundry.theory.function import Function
-from cosmic_foundry.theory.manifold import Manifold
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.foundation.function import Function
 
 # ---------------------------------------------------------------------------
 # Minimal concrete stubs
