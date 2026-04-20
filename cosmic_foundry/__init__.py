@@ -18,7 +18,6 @@ from cosmic_foundry.io import (  # noqa: E402
     merge_rank_files,
     write_array,
 )
-from cosmic_foundry.observability import configure, get_logger  # noqa: E402
 from cosmic_foundry.theory import (  # noqa: E402
     Discretization,
     Field,
@@ -51,9 +50,6 @@ __all__ = [
     "WriteArray",
     "merge_rank_files",
     "write_array",
-    # observability
-    "configure",
-    "get_logger",
     # theory
     "Discretization",
     "Function",

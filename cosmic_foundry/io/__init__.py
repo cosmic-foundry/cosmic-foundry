@@ -28,15 +28,12 @@ import numpy as np
 
 from cosmic_foundry.io.sink import Sink
 from cosmic_foundry.io.source import Source
-from cosmic_foundry.observability import get_logger
 
 # Type aliases for domain types
 _WriteArrayDomain = tuple[str | Path, Any]  # (path, array)
 _MergeRankFilesDomain = tuple[
     Sequence[str | Path], str | Path
 ]  # (rank_paths, output_path)
-
-_log = get_logger(__name__)
 
 #: True when h5py was built with MPI support (parallel HDF5 available).
 HAS_PARALLEL_HDF5: bool = bool(h5py.h5.get_config().mpi)
@@ -65,14 +62,6 @@ class WriteArray(Sink[_WriteArrayDomain]):
     ) -> None:
         np_array = np.asarray(array)
         dest = Path(path)
-        _log.debug(
-            "io.write_array",
-            extra={
-                "path": str(dest),
-                "dataset": dataset,
-                "shape": list(np_array.shape),
-            },
-        )
         with h5py.File(dest, "w") as f:
             f.create_dataset(dataset, data=np_array)
 
@@ -116,15 +105,6 @@ class MergeRankFiles(Sink[_MergeRankFilesDomain]):
 
         merged = np.concatenate(slabs, axis=axis)
         dest = Path(output_path)
-        _log.debug(
-            "io.merge_rank_files",
-            extra={
-                "n_ranks": len(rank_paths),
-                "output_path": str(dest),
-                "dataset": dataset,
-                "merged_shape": list(merged.shape),
-            },
-        )
         with h5py.File(dest, "w") as f:
             f.create_dataset(dataset, data=merged)
 
