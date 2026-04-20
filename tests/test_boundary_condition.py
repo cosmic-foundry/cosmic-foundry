@@ -1,4 +1,4 @@
-"""Tests for BoundaryCondition, LocalBoundaryCondition, NonLocalBoundaryCondition."""
+"""Tests for the Constraint ABC and BoundaryCondition hierarchy."""
 
 from __future__ import annotations
 
@@ -7,19 +7,22 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.continuous.constraint import Constraint
 from cosmic_foundry.continuous.differential_form import ScalarField
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
+from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
 from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
-from cosmic_foundry.foundation.function import Function
 
 # ---------------------------------------------------------------------------
 # Minimal concrete stubs
 # ---------------------------------------------------------------------------
+
+_BOUNDARY = EuclideanSpace(2)  # stand-in for a boundary manifold
 
 
 class _ConstantField(ScalarField):
@@ -31,7 +34,11 @@ class _ConstantField(ScalarField):
         return 0.0
 
 
-class _DirichletBC(LocalBoundaryCondition[Any, None]):
+class _DirichletBC(LocalBoundaryCondition):
+    @property
+    def support(self) -> Manifold:
+        return _BOUNDARY
+
     @property
     def alpha(self) -> float:
         return 1.0
@@ -44,11 +51,12 @@ class _DirichletBC(LocalBoundaryCondition[Any, None]):
     def constraint(self) -> Field:
         return _ConstantField()
 
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        return None
 
+class _NeumannBC(LocalBoundaryCondition):
+    @property
+    def support(self) -> Manifold:
+        return _BOUNDARY
 
-class _NeumannBC(LocalBoundaryCondition[Any, None]):
     @property
     def alpha(self) -> float:
         return 0.0
@@ -61,25 +69,18 @@ class _NeumannBC(LocalBoundaryCondition[Any, None]):
     def constraint(self) -> Field:
         return _ConstantField()
 
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        return None
 
-
-class _PeriodicBC(NonLocalBoundaryCondition[Any, None]):
-    """Periodic BC: identifies face_a with face_b separated by period L.
-
-    Representative of the minimal geometry a real periodic BC carries:
-    which two faces are identified, and the translation distance between them.
-    Concrete computation/ subclasses will use these to copy ghost cells.
-    """
+class _PeriodicBC(NonLocalBoundaryCondition):
+    """Periodic BC: identifies face_a with face_b separated by period L."""
 
     def __init__(self, face_a: str, face_b: str, period: float) -> None:
         self.face_a = face_a
         self.face_b = face_b
         self.period = period
 
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        return None
+    @property
+    def support(self) -> Manifold:
+        return _BOUNDARY
 
 
 # ---------------------------------------------------------------------------
@@ -87,8 +88,8 @@ class _PeriodicBC(NonLocalBoundaryCondition[Any, None]):
 # ---------------------------------------------------------------------------
 
 
-def test_boundary_condition_is_function() -> None:
-    assert issubclass(BoundaryCondition, Function)
+def test_boundary_condition_is_constraint() -> None:
+    assert issubclass(BoundaryCondition, Constraint)
 
 
 def test_local_is_boundary_condition() -> None:
@@ -112,6 +113,21 @@ def test_local_boundary_condition_is_abstract() -> None:
 def test_non_local_boundary_condition_is_abstract() -> None:
     with pytest.raises(TypeError):
         NonLocalBoundaryCondition()  # type: ignore[abstract]
+
+
+# ---------------------------------------------------------------------------
+# Constraint.support
+# ---------------------------------------------------------------------------
+
+
+def test_dirichlet_support_is_manifold() -> None:
+    bc = _DirichletBC()
+    assert isinstance(bc.support, Manifold)
+
+
+def test_periodic_support_is_manifold() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert isinstance(bc.support, Manifold)
 
 
 # ---------------------------------------------------------------------------
