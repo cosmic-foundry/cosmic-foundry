@@ -1,7 +1,7 @@
-"""Enforce that foundation/ and continuous/ contain no third-party imports.
+"""Enforce that foundation/, continuous/, and discrete/ contain no third-party imports.
 
 The abstract-to-concrete boundary in this codebase is defined precisely
-by the third-party import boundary: foundation/ and continuous/ may only
+by the third-party import boundary: all three pre-computation layers may only
 import from the Python standard library or from within cosmic_foundry.
 """
 
@@ -15,6 +15,7 @@ PACKAGE_ROOT = Path(__file__).parent.parent / "cosmic_foundry"
 PURE_PACKAGES = [
     PACKAGE_ROOT / "foundation",
     PACKAGE_ROOT / "continuous",
+    PACKAGE_ROOT / "discrete",
 ]
 STDLIB = sys.stdlib_module_names
 
@@ -51,7 +52,9 @@ def test_pure_packages_have_no_third_party_imports() -> None:
                 failures[str(rel)] = violations
 
     if failures:
-        lines = ["foundation/ and continuous/ must not import third-party packages:"]
+        lines = [
+            "foundation/, continuous/, and discrete/ must not import third-party packages:"  # noqa: E501
+        ]
         for file, imports in failures.items():
             lines.append(f"  {file}: {', '.join(imports)}")
         raise AssertionError("\n".join(lines))

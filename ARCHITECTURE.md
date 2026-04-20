@@ -104,9 +104,11 @@ operators, boundary conditions. Imports only from `foundation/` and the
 standard library. Enforced alongside `foundation/` by
 `tests/test_theory_no_third_party_imports.py`.
 
-**`discrete/`** — scheme description on finite index sets. Imports from
-`foundation/` (vertical, is-a) and optionally from `continuous/`
-(horizontal, has-a) via the `approximates` property. The `approximates`
+**`discrete/` is strictly third-party-free.** Scheme description on finite
+index sets. Imports from `foundation/` (vertical, is-a) and optionally from
+`continuous/` (horizontal, has-a) via the `approximates` property. Enforced
+alongside `foundation/` and `continuous/` by
+`tests/test_theory_no_third_party_imports.py`. The `approximates`
 property on each discrete type is `Optional[<continuous counterpart>]`:
 when set, it declares that the discrete object is a finite approximation
 of the named continuous object, enabling automatic convergence checks at
