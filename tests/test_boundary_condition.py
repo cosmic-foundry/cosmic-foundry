@@ -66,10 +66,17 @@ class _NeumannBC(LocalBoundaryCondition[Any, None]):
 
 
 class _PeriodicBC(NonLocalBoundaryCondition[Any, None]):
-    """Periodic BC: identifies two boundary faces. Carries its own geometry."""
+    """Periodic BC: identifies face_a with face_b separated by period L.
 
-    def __init__(self, face_a: Any, face_b: Any) -> None:
-        self.faces = (face_a, face_b)
+    Representative of the minimal geometry a real periodic BC carries:
+    which two faces are identified, and the translation distance between them.
+    Concrete computation/ subclasses will use these to copy ghost cells.
+    """
+
+    def __init__(self, face_a: str, face_b: str, period: float) -> None:
+        self.face_a = face_a
+        self.face_b = face_b
+        self.period = period
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
@@ -134,7 +141,23 @@ def test_local_constraint_is_field() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_periodic_bc_carries_geometry() -> None:
-    bc = _PeriodicBC("xmin", "xmax")
-    assert len(bc.faces) == 2
-    assert bc.faces == ("xmin", "xmax")
+def test_periodic_bc_is_non_local() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert isinstance(bc, NonLocalBoundaryCondition)
+    assert isinstance(bc, BoundaryCondition)
+
+
+def test_periodic_bc_is_not_local() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert not isinstance(bc, LocalBoundaryCondition)
+
+
+def test_periodic_bc_identifies_faces() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=1.0)
+    assert bc.face_a == "xmin"
+    assert bc.face_b == "xmax"
+
+
+def test_periodic_bc_carries_period() -> None:
+    bc = _PeriodicBC("xmin", "xmax", period=2.5)
+    assert bc.period == 2.5
