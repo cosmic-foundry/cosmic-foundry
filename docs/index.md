@@ -22,9 +22,8 @@ Cosmic Foundry is a Python engine for numerical astrophysics. The simulation
 capability sequence — hydrodynamics through numerical relativity, radiation
 transport, gravity, N-body, microphysics, and cosmology — is defined in
 [`ROADMAP.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
-Current development status and the immediate next steps for both the simulation
-and verification tracks are in
-[`STATUS.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/STATUS.md).
+The current work queue and long-horizon epoch sequence are in
+[`ROADMAP.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
 
 ## Architecture
 
@@ -40,5 +39,6 @@ The full developer workflow — environment setup, branch and PR discipline,
 commit size, physics capability lanes, verification standards, and epoch
 retrospectives — is in
 [`DEVELOPMENT.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/DEVELOPMENT.md).
-Agent-specific guidelines (session startup, PR review, lane selection) are in
-[`AI.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/AI.md).
+Agent-specific guidelines (session startup, lane selection) are in the
+[`## For AI agents`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/DEVELOPMENT.md#for-ai-agents)
+section of `DEVELOPMENT.md`.

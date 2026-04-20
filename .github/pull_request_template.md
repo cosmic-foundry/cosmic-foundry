@@ -5,7 +5,7 @@
 ## Roadmap position
 <!-- After this PR merges, where does the project stand?
      Examples: "Epoch 1 complete", "Epoch 2 step 2 of 5 done", "No change — maintenance PR".
-     If this advances an epoch or completes a milestone, update STATUS.md in this PR. -->
+     If this advances an epoch or completes a milestone, update ROADMAP.md in this PR. -->
 
 ## Physics review
 <!-- Complete this section only if the PR introduces or modifies a physical

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Startup health checks for agent sessions.
 #
-# Contract (see AI.md "Before Any Work"):
+# Contract (see DEVELOPMENT.md "Before Any Work"):
 #   1. cosmic_foundry conda env is active
 #   2. pre_commit Python package is importable
 #   3. .git/hooks/pre-commit is installed

@@ -35,7 +35,7 @@ sphinx-build -W docs docs/_build/html
   code landscape that informs the design.
 - [`ROADMAP.md`](ROADMAP.md) — epoch-by-epoch development plan.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — architectural decisions.
-- [`STATUS.md`](STATUS.md) — immediate implementation queue.
+- [`ROADMAP.md`](ROADMAP.md) — epoch sequence and current work queue.
 
 ## License
 

@@ -1,10 +1,9 @@
 # Cosmic Foundry — Development Guide
 
 This document covers the development workflow for all contributors
-to this repository, human or agent. For AI-agent-specific session
-instructions, see [`AI.md`](AI.md). For cross-cutting architectural
-decisions and open design questions, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
-For the current status and planned work, see [`STATUS.md`](STATUS.md).
+to this repository. For cross-cutting architectural decisions and open
+design questions, see [`ARCHITECTURE.md`](ARCHITECTURE.md). For the
+planned work and roadmap, see [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -53,9 +52,9 @@ Before opening or pushing to a PR:
 
 - [ ] Read `DEVELOPMENT.md` (this file) and `ARCHITECTURE.md` to understand the rules and decisions that govern the PR
 - [ ] Run `pre-commit run --all-files` locally and fix any failures
-- [ ] Read `STATUS.md` to understand the current planned work
+- [ ] Read `## Current work` in `ROADMAP.md` to understand the current planned work
 - [ ] Determine if this PR completes any of the planned items
-  - [ ] **If yes:** Remove the item from `STATUS.md`
+  - [ ] **If yes:** Remove the item from `ROADMAP.md`
   - [ ] **If yes:** Horizon-scan the next items — are they fully specified? Flesh out details if needed
   - [ ] **If yes:** Verify no inconsistencies between this change and the next planned items
   - [ ] **If no:** Note "No change to roadmap position" in the PR description
@@ -70,7 +69,7 @@ Before opening or pushing to a PR:
 - Generated files, lock files, fixtures / golden data, and pure
   deletions don't count toward the target or ceiling.
 - Documentation diffs (research notes, roadmap edits,
-  README / AI.md / similar) are exempt from the guideline.
+  README / DEVELOPMENT.md / similar) are exempt from the guideline.
 
 ### History
 
@@ -160,12 +159,12 @@ script from the `cosmic-foundry` checkout directory.
 
 ## Roadmap position
 
-**At the start of every session**, read `STATUS.md` in the repository
-root. It is the immediate implementation queue. Read `ROADMAP.md`
-for the long-horizon capability sequence (epochs, milestones, verification
+**At the start of every session**, read `## Current work` in `ROADMAP.md`.
+It is the immediate implementation queue. The rest of `ROADMAP.md` covers
+the long-horizon capability sequence (epochs, milestones, verification
 standard) — items there are not yet specified well enough to implement
 without further design discussion. When an item becomes fully specified
-and unblocked, move it from `ROADMAP.md` to `STATUS.md`.
+and unblocked, move it into `## Current work`.
 
 Every PR should state whether it advances the simulation track, the
 V&V track, or both. Cross-track dependencies must be explicit in the
@@ -174,24 +173,23 @@ PR description.
 Maintenance and tooling PRs that do not advance either track should
 note "No change to roadmap position" in the PR description.
 
-**When a PR completes a planned item in `STATUS.md`**, that same PR
-must remove the corresponding entry from `STATUS.md` (or from the
-`## Near-term work` list if it is a sequenced step). Do not leave
-completed items in `STATUS.md` as historical record — the git log
-serves that purpose. The rule is: if the item is done when the PR
-merges, it is gone from `STATUS.md` when the PR merges.
+**When a PR completes a planned item**, that same PR must remove the
+corresponding entry from `ROADMAP.md ## Current work`. Do not leave
+completed items there as historical record — the git log serves that
+purpose. The rule is: if the item is done when the PR merges, it is
+gone from `ROADMAP.md` when the PR merges.
 
 **Before merging a completing PR, horizon-scan the next well-defined
-items in `STATUS.md`** and ask two questions for each:
+items in `## Current work`** and ask two questions for each:
 1. Does it have enough detail to be implementable without further design discussion?
 2. Is anything in the current change inconsistent with it?
 
-If the answer to (1) is no, flesh out the missing details in `STATUS.md`
-in the same PR (moving the item from `ROADMAP.md` if it lives there). Do not update `ARCHITECTURE.md` speculatively
-— it records live decisions only and is updated by the PR that implements
-the change. If the answer to (2) is yes, resolve the inconsistency before
-merging. The goal is that the next item is always fully specified before
-the current one lands.
+If the answer to (1) is no, flesh out the missing details in `ROADMAP.md`
+in the same PR (moving the item from later in the file if it lives there).
+Do not update `ARCHITECTURE.md` speculatively — it records live decisions
+only and is updated by the PR that implements the change. If the answer
+to (2) is yes, resolve the inconsistency before merging. The goal is that
+the next item is always fully specified before the current one lands.
 
 ---
 
@@ -217,15 +215,15 @@ The retrospective covers:
    reworded, reordered, or split? Is the immediate next work section
    still accurate?
 
-3. **Process documents** (`AI.md`, `DEVELOPMENT.md`). Did any
+3. **Process documents** (`DEVELOPMENT.md`, `ROADMAP.md`). Did any
    development rules prove unworkable, insufficient, or in need of
    precision?
 
 4. **Surprises and pain points**. What was harder than expected? What
    design decisions caused rework? What would have been better to
-   decide earlier? Capture these as updates to `ARCHITECTURE.md`,
-   `DEVELOPMENT.md`, or `AI.md` — wherever the lesson is most
-   actionable for the next epoch.
+   decide earlier? Capture these as updates to `ARCHITECTURE.md` or
+   `DEVELOPMENT.md` — wherever the lesson is most actionable for the
+   next epoch.
 
 The output is one or more documentation PRs landing before Epoch N+1
 code begins.
@@ -281,3 +279,124 @@ placement) are out of scope.
 The lane must be stated in the PR description for any physics
 capability, e.g. `Lane C (origination). Reference papers: [...]`.
 For Lane B, explicitly record that reference source was not consulted.
+
+---
+
+## For AI agents
+
+The following guidelines supplement the workflow rules above and apply
+to all AI agents working on this repository, regardless of platform
+(Claude Code, Codex, Gemini, or others).
+
+### Platform role
+
+Cosmic Foundry is the **organizational platform** for the simulation
+ecosystem. Application repositories — covering stellar physics,
+cosmology, galactic dynamics, planetary formation, and other domains
+— build on top of it. The platform/application split is documented in
+`ARCHITECTURE.md §Platform and application split`.
+
+In practice this means:
+
+- Reusable computation infrastructure (kernels, mesh, fields, I/O,
+  diagnostics) belongs here.
+- Domain-specific physics implementations and observational validation
+  data belong in the relevant application repo.
+- If a task spans the platform and an application repo, use separate
+  branches and pull requests for each repository. Keep the platform
+  change minimal and self-contained; the application repo change
+  depends on it.
+- Cross-scale workflows that compose two or more application domains
+  belong in their own repository, not here.
+- **This file is the authoritative source for all contributor and
+  AI-agent behavior across the organization.** Application repo
+  `DEVELOPMENT.md` files are intentionally thin: they delegate here
+  for workflow rules and agent behavior, adding only what genuinely
+  differs for that repo.
+
+### Session startup
+
+**At the start of every session**, in this order:
+
+1. **Run the health check:**
+   ```bash
+   ./scripts/agent_health_check.sh
+   ```
+   The script verifies that (a) the `cosmic_foundry` conda environment
+   is active, (b) `pre_commit` is importable, and (c) the git
+   pre-commit hook is installed.
+
+   **If the env check fails** (script prints `✗ WRONG ENVIRONMENT` and
+   exits non-zero), stop immediately and warn the user:
+
+   > ⚠️ The `cosmic_foundry` conda environment is not active. All
+   > Python commands in this repo (`python`, `pytest`, `mypy`,
+   > `pre-commit`, `sphinx-build`) must run inside this environment.
+   > Using the wrong environment causes silent misconfiguration errors.
+   >
+   > The correct way to start an agent session is:
+   > ```bash
+   > ./scripts/start_agent.sh claude   # or gemini / codex
+   > ```
+   > `start_agent.sh` activates the environment automatically before
+   > launching the agent. Do not proceed until the user confirms the
+   > session has been restarted this way, or manually activates the
+   > env:
+   > ```bash
+   > source scripts/activate_environment.sh
+   > ```
+   > then re-launches the agent from that shell.
+
+   **If the env check passes but either follow-up check fails**, re-run
+   `setup_environment.sh` or the remediation commands printed by the
+   script.
+
+2. **Read `## Current work` in `ROADMAP.md`** — current planned work
+   and navigation anchor.
+
+3. **Read `ARCHITECTURE.md`** — all live architectural decisions. When
+   work touches a topic documented there, read it before making changes.
+
+### Physics lane selection
+
+The three lanes (A, B, C) are defined in
+[§Physics capability implementation paths](#physics-capability-implementation-paths).
+
+For any task that touches a physics capability:
+
+1. **Classify the lane.** Look up the reference code's license in
+   `docs/research/06-12-licensing.md`. If no reference code exists, or
+   the user's framing implies generalization or novel work (phrases
+   like "extend," "generalize," "we might need to break new ground,"
+   "give us our own version of X"), Lane C applies.
+2. **Propose the derivation-first lane when it appears to apply.**
+   If the default would be Lane A but the task framing suggests Lane C,
+   propose Lane C to the user before writing code. If the reference is
+   copyleft, Lane B is not a proposal — state it as the required lane
+   and confirm the user agrees before proceeding.
+3. **Record the lane in the PR description** in the first paragraph,
+   e.g. `Lane C (origination). Reference papers: [...]`. For Lane B,
+   explicitly record that reference source was not consulted.
+4. **When uncertain, propose the derivation-first lane (B or C,
+   whichever fits) and ask the user to confirm** rather than defaulting
+   silently to Lane A.
+
+The lane choice is the user's decision; the agent's job is to surface
+the decision transparently, not to make it silently.
+
+### Weighing architectural options
+
+You are an AI agent. Writing code and prose costs you nothing. This
+means implementation effort is not a meaningful criterion when
+comparing architectural options — it is a rounding error, not a
+trade-off. The costs that actually matter are all downstream:
+
+- reviewer cognitive load,
+- ongoing operational and maintenance burden,
+- reversibility if the choice turns out to be wrong,
+- correctness and safety guarantees,
+- blast radius of a failure.
+
+Rank options by these. Include the simpler option in every comparison
+even when you intend to recommend the richer one — the user needs the
+full option space to make an informed decision.
