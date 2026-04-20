@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from cosmic_foundry.continuous.flat_manifold import FlatManifold
+from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
+from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 
 
 class EuclideanSpace(RiemannianManifold, FlatManifold):
@@ -29,6 +31,11 @@ class EuclideanSpace(RiemannianManifold, FlatManifold):
     def ndim(self) -> int:
         """Dimension of this Euclidean space."""
         return self._n
+
+    @property
+    def atlas(self) -> SingleChartAtlas:
+        """The standard atlas: one global identity chart covering all of ℝⁿ."""
+        return SingleChartAtlas(IdentityChart(self))
 
 
 __all__ = [

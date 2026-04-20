@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 
 from cosmic_foundry.continuous.manifold import Manifold
+
+if TYPE_CHECKING:
+    from cosmic_foundry.continuous.atlas import Atlas
 
 
 class SmoothManifold(Manifold):
@@ -30,6 +34,11 @@ class SmoothManifold(Manifold):
     @abstractmethod
     def ndim(self) -> int:
         """Topological dimension of this manifold."""
+
+    @property
+    @abstractmethod
+    def atlas(self) -> Atlas:
+        """The maximal smooth atlas constituting the smooth structure of M."""
 
 
 __all__ = [

@@ -6,11 +6,13 @@ import pytest
 
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.flat_manifold import FlatManifold
+from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
+from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 from cosmic_foundry.foundation.indexed_set import IndexedSet
 from cosmic_foundry.foundation.set import Set
@@ -52,6 +54,10 @@ class FlatLorentzian(FlatManifold):
     def signature(self) -> tuple[int, int]:
         return (1, 3)
 
+    @property
+    def atlas(self) -> SingleChartAtlas:
+        return SingleChartAtlas(IdentityChart(self))
+
 
 class FlatR3(RiemannianManifold):
     @property
@@ -62,6 +68,10 @@ class FlatR3(RiemannianManifold):
     def signature(self) -> tuple[int, int]:
         return (3, 0)
 
+    @property
+    def atlas(self) -> SingleChartAtlas:
+        return SingleChartAtlas(IdentityChart(self))
+
 
 class MinkowskiR4(PseudoRiemannianManifold):
     @property
@@ -71,6 +81,10 @@ class MinkowskiR4(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (1, 3)
+
+    @property
+    def atlas(self) -> SingleChartAtlas:
+        return SingleChartAtlas(IdentityChart(self))
 
 
 def test_flat_r3_is_riemannian() -> None:

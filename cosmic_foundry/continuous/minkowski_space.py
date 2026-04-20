@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from cosmic_foundry.continuous.flat_manifold import FlatManifold
+from cosmic_foundry.continuous.identity_chart import IdentityChart
+from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 
 
 class MinkowskiSpace(FlatManifold):
@@ -20,6 +22,11 @@ class MinkowskiSpace(FlatManifold):
     def signature(self) -> tuple[int, int]:
         """Lorentzian signature: one timelike, three spacelike directions."""
         return (1, 3)
+
+    @property
+    def atlas(self) -> SingleChartAtlas:
+        """The standard atlas: one global chart covering all of ℝ¹˒³."""
+        return SingleChartAtlas(IdentityChart(self))
 
 
 __all__ = [

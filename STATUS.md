@@ -1,6 +1,6 @@
 # Cosmic Foundry — Status
 
-The repository is organized around four packages:
+The repository is organized into four packages with a strict dependency order:
 
 - **Foundation** (`foundation/`) — `Set`, `Function`, `IndexedSet`, `IndexedFamily`.
 - **Continuous** (`continuous/`) — manifolds, fields, operators, boundary conditions.
@@ -10,39 +10,37 @@ The repository is organized around four packages:
 `foundation/`, `continuous/`, and `discrete/` are symbolic-reasoning layers:
 no floats, no numerical packages; SymPy is approved.
 
-## What is complete
+## Near-term design questions
 
-**Foundation layer (`foundation/`)** — 104 tests passing:
-
-- `Set`, `Function`, `IndexedSet`, `IndexedFamily`
-
-**Continuous layer (`continuous/`)** — all ABCs tested:
-
-- Manifold hierarchy: `Manifold` → `SmoothManifold` → `PseudoRiemannianManifold`
-  → `RiemannianManifold` / `FlatManifold` → `EuclideanSpace` / `MinkowskiSpace`
-- `ManifoldWithBoundary` → `Region`
-- Field hierarchy: `Field` → `TensorField` → `VectorField`, `SymmetricTensorField`
-  → `MetricTensor`, `DifferentialForm` → `ScalarField` / `CovectorField`
-- `DifferentialOperator`
-- `BoundaryCondition` → `LocalBoundaryCondition` / `NonLocalBoundaryCondition`
-
-**Discrete layer (`discrete/`)** — ABCs only:
-
-- `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField` with typed
-  `approximates: Optional[<continuous counterpart>]` property
-
-## What is not yet started
-
-No concrete discrete implementations: no grid, no stencil operators, no
-JAX-backed evaluation, no I/O.
+**Does `ManifoldWithBoundary` belong in the hierarchy?**
+`ManifoldWithBoundary` sits outside the `SmoothManifold`/atlas branch, so it has
+no smooth structure and no hook for coordinate charts. Charts on a manifold with
+boundary map to the closed half-space ℝⁿ₊, not to ℝⁿ, so it cannot simply
+inherit the existing `Atlas` interface. The only concrete use is `Region`, which
+is itself fully abstract. Options: collapse to `Region(Manifold)` directly and
+defer the half-space chart question, or keep `ManifoldWithBoundary` and resolve
+its relationship to the smooth/atlas hierarchy now. Either way, the current state
+is carrying unresolved debt.
 
 ## Near-term work
 
+**M2.5 design session: mathematical narrative documentation.**
+What does the first notebook look like, and how does it hook into CI? Concrete
+questions to settle: (1) which concept is the right entry point — `Set` and
+`Function`, or the manifold hierarchy? (2) what makes a notebook "tested" — does
+it run SymPy derivations that assert results, does it instantiate the ABCs, or
+both? (3) how do we structure the `docs/` tree so notebooks accumulate without
+becoming a maze? The goal is a format that can be repeated for every new concept
+added to `continuous/` and `discrete/` as the epochs proceed.
+
 **Epoch 2 design session: how do physical coordinates attach to a grid?**
 The first concrete implementation is a Cartesian grid (`CartesianGrid` as a
-concrete `IndexedSet` with coordinate geometry). Before building it, one design
-question needs to be settled: how does a grid expose the physical location of
-each cell center? This unblocks the `approximates` convergence-check
-infrastructure (evaluate the continuous field at cell coordinates, compare) and
-the SymPy-backed field interface (what coordinate symbols does the expression
-use?). Once that question is answered, the Epoch 2 build is straightforward.
+concrete `IndexedSet` with coordinate geometry). The chart formalism is in
+place: `Chart(Function)` maps manifold points to ℝⁿ, and `EuclideanSpace` carries
+a `SingleChartAtlas`. But a `CartesianGrid` is a concrete `IndexedSet`, not a
+manifold — so a `Chart` cannot directly act on it. The design question is: what
+object maps grid indices to physical coordinates, and how does it relate to the
+chart on the ambient `EuclideanSpace`? Settling this unblocks the `approximates`
+convergence-check infrastructure (evaluate the continuous field at cell
+coordinates, compare) and the SymPy-backed field interface (what coordinate
+symbols does the expression use?).
