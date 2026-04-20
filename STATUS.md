@@ -1,13 +1,16 @@
 # Cosmic Foundry — Status
 
-The repository is in a foundation-building phase. We have cleared away wrong
-architectural assumptions (the old Op/Region/Policy framing, the `geometry/`
-domain package, `computation/Array` and `Extent` wrappers, the CLI entry point)
-and rebuilt on a clean mathematical foundation.
+The repository is organized around a three-layer architecture:
+
+- **Continuous** (`theory/`) — manifolds, fields, operators, boundary conditions.
+  The problem stated in its true mathematical form.
+- **Discrete** — a chosen discretization: grid, scheme, stencils, discrete fields.
+  Still symbolic; no floating-point arrays.
+- **Numerical** (`computation/`) — JAX evaluates the discrete description.
 
 ## What is complete
 
-**`theory/`** — pure mathematical ABCs, all tested (96 passing):
+**Continuous layer (`theory/`)** — all ABCs tested (96 passing):
 
 - Set hierarchy: `Set`, `IndexedSet`, `IndexedFamily`, `Function`
 - Manifold hierarchy: `Manifold` → `SmoothManifold` → `PseudoRiemannianManifold`
@@ -18,21 +21,15 @@ and rebuilt on a clean mathematical foundation.
 - `DifferentialOperator`
 - `BoundaryCondition` → `LocalBoundaryCondition` / `NonLocalBoundaryCondition`
 
-**`derivations/`** — SymPy-based finite-difference stencil coefficient derivation
-for arbitrary derivative order and approximation order, with convergence tests.
-
 ## What is not yet started
 
-`computation/` is empty. There are no concrete implementations of any `theory/` ABC:
-no JAX-backed fields, no grids, no numerical operators, no I/O.
+The discrete and numerical layers do not exist. There are no concrete
+implementations of any `theory/` ABC: no grid, no discrete fields, no stencil
+operators, no JAX-backed evaluation, no I/O.
 
 ## Near-term work
 
-**Review and sharpen the long-horizon epoch sequence in `ROADMAP.md`.**
-
-The roadmap was written before the `theory/` layer existed. Its epoch sequence
-jumps from early scaffolding to AMR mesh without accounting for the concrete
-implementation steps that bridge the abstract layer to a working physics code.
-The next session should establish a realistic sequence from theory → concrete
-geometry → concrete fields → numerical operators → first physics, and sharpen
-the remaining epochs accordingly.
+**Review and sharpen the epoch sequence in `ROADMAP.md`.** The roadmap has been
+restructured around the continuous/discrete/numerical split, but the epoch
+boundaries — particularly the shape of the discrete layer and where JAX first
+enters — need a design session before implementation begins.
