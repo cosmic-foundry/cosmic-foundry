@@ -15,9 +15,9 @@ no floats, no numerical packages; SymPy is approved.
 **Resolve the BoundaryCondition hierarchy.**
 One open question remains:
 
-1. ~~`BoundaryCondition(Function[D, C])`~~ — resolved. `Constraint(ABC)` is
-   the new root with abstract `support: Manifold`; `BoundaryCondition` inherits
-   it. The `Function` base and `[D, C]` type parameters are gone.
+1. ~~`BoundaryCondition(Function[D, C])`~~ — `Constraint(ABC)` is the root
+   with abstract `support: Manifold`; `BoundaryCondition` inherits it. No
+   `Function` base, no `[D, C]` type parameters.
 
 2. `LocalBoundaryCondition.constraint` is a `Field`, but the manifold it is
    defined on is unspecified. The constraint lives on the boundary face; the
