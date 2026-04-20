@@ -152,7 +152,6 @@ extends the discrete and numerical layers minimally to evaluate them.
 Every physics epoch must satisfy this checklist before it is considered verified:
 
 - Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
-- Entry in the formulas register (`replication/formulas.md`) for each physics formula
 - At least one externally-grounded convergence test against an analytical solution
   or observational data (not an engine-generated golden file); where an analytical
   solution exists, the relevant `DiscreteField.approximates` is set so the check

@@ -136,18 +136,6 @@ Before opening or pushing to a PR:
 - PR descriptions disclose AI-agent involvement when an agent
   generated substantial content.
 
-### Module boundary rule
-
-`theory/` may not import from any third-party package. This is the
-precise definition of the abstract-to-concrete transition in this
-codebase: mathematical concreteness (classes parameterized by Python
-primitives such as `int` or `tuple`) is allowed in `theory/`;
-computational concreteness (JAX, NumPy, HDF5, or any other third-party
-library) belongs in `computation/`, `mesh/`, `geometry/`, or other
-modules outside `theory/`. When placing a new class, the test is: does
-it import anything outside the standard library? If yes, it does not
-belong in `theory/`.
-
 ### Project status
 
 - This project has not started versioning or published stable APIs
@@ -278,16 +266,11 @@ The retrospective covers:
    reworded, reordered, or split? Is the immediate next work section
    still accurate?
 
-3. **`replication/` and formulas register**. Do the Function: blocks on
-   implemented operator classes reflect what was actually built? Are
-   there formula entries that should be updated now rather than left
-   stale?
-
-4. **Process documents** (`AI.md`, `DEVELOPMENT.md`). Did any
+3. **Process documents** (`AI.md`, `DEVELOPMENT.md`). Did any
    development rules prove unworkable, insufficient, or in need of
    precision?
 
-5. **Surprises and pain points**. What was harder than expected? What
+4. **Surprises and pain points**. What was harder than expected? What
    design decisions caused rework? What would have been better to
    decide earlier? Capture these as updates to `ARCHITECTURE.md`,
    `DEVELOPMENT.md`, or `AI.md` — wherever the lesson is most

@@ -21,14 +21,6 @@ Checks currently wired:
   are skipped. Requires `origin/main` to be fetched; CI does this
   via `git fetch --depth=1 origin main` before running pre-commit.
 
-Planned next:
-
-- **`check_replication_specs.py`** — capability and problem specs
-  under `replication/` are mutually consistent: every capability
-  referenced by a problem's "Capabilities required" field exists,
-  and every capability's "Dependents" list matches the set of
-  problems that require it.
-
 Adding a check: write `scripts/ci/check_<name>.py` using stdlib
 only, add one step to `.github/workflows/ci.yml` invoking it, and
 list the check in this README.

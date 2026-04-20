@@ -13,7 +13,7 @@
      Riemann solver, EOS, reaction network, etc.).
      Delete this section for infrastructure, tooling, and documentation PRs. -->
 - [ ] Discretization checked against the cited source (paper §, equation, or
-      textbook section recorded in `replication/formulas.md` or the capability spec)
+      textbook section; record source in a docstring or inline comment)
 - [ ] At least one externally grounded test ships with this PR (analytical
       solution, published benchmark, or measured convergence order — not
       solely engine-generated golden data)
