@@ -32,6 +32,7 @@ from cosmic_foundry.theory.local_boundary_condition import LocalBoundaryConditio
 from cosmic_foundry.theory.located_discretization import LocatedDiscretization
 from cosmic_foundry.theory.manifold import Manifold
 from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
+from cosmic_foundry.theory.metric_tensor import MetricTensor
 from cosmic_foundry.theory.minkowski_space import MinkowskiSpace
 from cosmic_foundry.theory.modal_discretization import ModalDiscretization
 from cosmic_foundry.theory.non_local_boundary_condition import NonLocalBoundaryCondition
@@ -57,6 +58,7 @@ __all__ = [
     "LocatedDiscretization",
     "Manifold",
     "ManifoldWithBoundary",
+    "MetricTensor",
     "MinkowskiSpace",
     "ModalDiscretization",
     "NonLocalBoundaryCondition",

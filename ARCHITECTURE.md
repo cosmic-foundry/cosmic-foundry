@@ -117,6 +117,7 @@ Field(Function)         — f: M → V on any Manifold; interface: manifold → 
 └── TensorField         — manifold narrows to SmoothManifold; interface: tensor_type → (p, q)
     ├── VectorField          — (1, 0); codomain TM; contravariant, not a form
     ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
+    │   └── MetricTensor     — g on a PseudoRiemannianManifold; manifold narrows from SmoothManifold
     └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k; tensor_type derived
         ├── ScalarField      — Ω⁰(M) = C∞(M); degree 0, tensor type (0, 0)
         └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
