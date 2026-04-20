@@ -142,6 +142,7 @@ extends the discrete and numerical layers minimally to evaluate them.
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
 | M1 | Verification infrastructure: convergence testing helpers, formulas register, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
+| M2.5 | Mathematical narrative documentation: executable MyST-NB notebooks that explain each layer of the hierarchy — what the formal concepts mean, how they relate, and why the code is structured the way it is. Notebooks run in CI, so every mathematical claim is machine-checked. Designed as a learning resource for contributors whose differential geometry background is thin; also exercises the test infrastructure in a direction orthogonal to unit tests. |
 | M3 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 4. |
 | M4 | Reproducibility capsule tooling: self-executing builder. |
 | M5 | Application-repo capsule integration and multi-repository evidence regeneration. |

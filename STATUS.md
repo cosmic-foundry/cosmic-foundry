@@ -24,6 +24,15 @@ is carrying unresolved debt.
 
 ## Near-term work
 
+**M2.5 design session: mathematical narrative documentation.**
+What does the first notebook look like, and how does it hook into CI? Concrete
+questions to settle: (1) which concept is the right entry point — `Set` and
+`Function`, or the manifold hierarchy? (2) what makes a notebook "tested" — does
+it run SymPy derivations that assert results, does it instantiate the ABCs, or
+both? (3) how do we structure the `docs/` tree so notebooks accumulate without
+becoming a maze? The goal is a format that can be repeated for every new concept
+added to `continuous/` and `discrete/` as the epochs proceed.
+
 **Epoch 2 design session: how do physical coordinates attach to a grid?**
 The first concrete implementation is a Cartesian grid (`CartesianGrid` as a
 concrete `IndexedSet` with coordinate geometry). The chart formalism is in
