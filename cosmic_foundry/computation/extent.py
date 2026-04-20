@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from cosmic_foundry.theory.indexed_set import IndexedSet
 
@@ -34,14 +33,6 @@ class Extent(IndexedSet):
         """Shape implied by the extent."""
         return tuple(_slice_length(axis_slice) for axis_slice in self.slices)
 
-    def expand(self, radii: tuple[int, ...]) -> Extent:
-        """Return the extent grown by *radii* ghost cells on each axis."""
-        expanded = []
-        for axis, axis_slice in enumerate(self.slices):
-            start, stop = _checked_bounds(axis_slice)
-            expanded.append(slice(start - radii[axis], stop + radii[axis]))
-        return Extent(tuple(expanded))
-
     def intersect(self, other: IndexedSet) -> Extent | None:
         """Return S ∩ T as an Extent, or None if the extents are disjoint."""
         if not isinstance(other, Extent):
@@ -56,9 +47,6 @@ class Extent(IndexedSet):
                 return None
             slices.append(slice(start, stop))
         return Extent(tuple(slices))
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"slices": [(s.start, s.stop) for s in self.slices]}
 
 
 def _checked_bounds(axis_slice: slice) -> tuple[int, int]:
@@ -80,18 +68,4 @@ def _slice_length(axis_slice: slice) -> int:
     return length
 
 
-def payload_slices(parent: Extent, child: Extent) -> tuple[slice, ...]:
-    """Return slices that index *child* within an array sized for *parent*."""
-    return tuple(
-        slice(
-            child_slice.start - parent_slice.start,
-            child_slice.stop - parent_slice.start,
-        )
-        for parent_slice, child_slice in zip(parent.slices, child.slices, strict=False)
-    )
-
-
-__all__ = [
-    "Extent",
-    "payload_slices",
-]
+__all__ = ["Extent"]

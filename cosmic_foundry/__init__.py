@@ -8,7 +8,7 @@ jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
 from cosmic_foundry.computation.array import Array  # noqa: E402
-from cosmic_foundry.computation.descriptor import Extent  # noqa: E402
+from cosmic_foundry.computation.extent import Extent  # noqa: E402
 from cosmic_foundry.theory import (  # noqa: E402
     Discretization,
     Field,

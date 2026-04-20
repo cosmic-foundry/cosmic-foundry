@@ -13,7 +13,7 @@ import jax
 import jax.numpy as jnp
 
 from cosmic_foundry.computation.array import Array
-from cosmic_foundry.computation.descriptor import Extent
+from cosmic_foundry.computation.extent import Extent
 from cosmic_foundry.computation.stencil import Stencil, seven_point_laplacian
 
 FLOAT64_BYTES = 8

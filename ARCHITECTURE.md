@@ -36,7 +36,7 @@ no temporal or spacetime computations are implemented yet.)*
 abstractions.** Any concrete representation is an implementation detail.
 *(Current inconsistency: `Field` and its subclasses are defined in
 `theory/` but are not used in computation. Kernel inputs and outputs are
-raw JAX arrays wrapped in `Array[T]`, not `Field` instances.)*
+raw arrays wrapped in `Array[T]`, not `Field` instances.)*
 
 **Every numerical method is formally derived from its continuous
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
@@ -69,17 +69,8 @@ observational data.
 repository. Any native code the engine executes is produced at runtime
 by a code-generation backend. `pybind11` and `ctypes` are emergency
 escape hatches only; adopting either requires a documented justification
-here. Pre-built libraries (JAX, NumPy, h5py) are consumed as
+here. Pre-built libraries (NumPy, h5py) are consumed as
 dependencies, not produced by this build.
-
-**JAX + XLA is the current kernel backend.** Every kernel is authored
-as a JAX kernel. The formal model governing backend substitutability and
-kernel composition is an open question (see *Open architectural
-questions*).
-
-**`jax.distributed` + NCCL/GLOO for host parallelism.** No MPI layer in
-the baseline. `mpi4py` is available as an optional extra for sites where
-`jax.distributed` cannot initialize over the native interconnect.
 
 **float64 as the default precision.** All field arrays default to
 `float64`. Precision exceptions must be explicit and documented.
@@ -99,7 +90,7 @@ Pages. Sphinx-design provides layout components.
 defines pure mathematical ABCs and may not import from any package
 outside the Python standard library. Mathematical concreteness (classes
 parameterized by Python primitives) belongs in `theory/`; computational
-concreteness (JAX, NumPy, HDF5) belongs outside it. Enforced by
+concreteness (NumPy, HDF5) belongs outside it. Enforced by
 `tests/test_theory_no_third_party_imports.py`.
 
 **`computation/` contains distance-1 implementations.** Every class at
@@ -117,7 +108,6 @@ Set
 │   └── Extent              (computation/) — half-open integer index extent
 │   └── Discretization      — IndexedSet approximating functions on a manifold
 │       └── LocatedDiscretization — DOFs at specific points; interface: node_positions
-│           └── Patch       (mesh/) — uniform Cartesian LocatedDiscretization
 └── Manifold                — topological manifold; interface: ndim
     ├── SmoothManifold      — smooth (C∞) structure
     │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
@@ -141,11 +131,9 @@ represents `α·f + β·∂f/∂n = g` on a single face — abstract properties
 is also blank beyond the root — it signals that the constraint depends on
 field values outside the immediate neighborhood of the boundary point, but
 makes no claim about the form of that non-locality;
-concrete subclasses declare whatever geometric references they need
-(`FaceIdentification` carries a pair of boundary faces; a Dirichlet-to-Neumann
-map carries the full boundary). The codimension-1 invariant is enforced
+concrete subclasses declare whatever geometric references they need. The codimension-1 invariant is enforced
 structurally: every face in `Domain.boundary` has `ndim = parent.ndim - 1`.
-Concrete subclasses with JAX-backed `execute` live in `computation/`.
+Concrete subclasses with `execute` implemented live in `computation/`.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
