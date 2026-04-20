@@ -26,7 +26,6 @@ from cosmic_foundry.continuous.flat_manifold import FlatManifold
 from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.continuous.manifold_with_boundary import ManifoldWithBoundary
 from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
 from cosmic_foundry.continuous.non_local_boundary_condition import (
@@ -35,7 +34,6 @@ from cosmic_foundry.continuous.non_local_boundary_condition import (
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
-from cosmic_foundry.continuous.region import Region
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
@@ -53,12 +51,10 @@ __all__ = [
     "IdentityChart",
     "LocalBoundaryCondition",
     "Manifold",
-    "ManifoldWithBoundary",
     "MetricTensor",
     "MinkowskiSpace",
     "NonLocalBoundaryCondition",
     "PseudoRiemannianManifold",
-    "Region",
     "RiemannianManifold",
     "ScalarField",
     "SingleChartAtlas",

@@ -10,18 +10,6 @@ The repository is organized into four packages with a strict dependency order:
 `foundation/`, `continuous/`, and `discrete/` are symbolic-reasoning layers:
 no floats, no numerical packages; SymPy is approved.
 
-## Near-term design questions
-
-**Does `ManifoldWithBoundary` belong in the hierarchy?**
-`ManifoldWithBoundary` sits outside the `SmoothManifold`/atlas branch, so it has
-no smooth structure and no hook for coordinate charts. Charts on a manifold with
-boundary map to the closed half-space ℝⁿ₊, not to ℝⁿ, so it cannot simply
-inherit the existing `Atlas` interface. The only concrete use is `Region`, which
-is itself fully abstract. Options: collapse to `Region(Manifold)` directly and
-defer the half-space chart question, or keep `ManifoldWithBoundary` and resolve
-its relationship to the smooth/atlas hierarchy now. Either way, the current state
-is carrying unresolved debt.
-
 ## Near-term work
 
 **M2.5 design session: mathematical narrative documentation.**
