@@ -10,10 +10,8 @@ Launches a selected AI agent CLI with an automated initialization prompt.
    repository next to `cosmic-foundry`.
 2. Verifies that the engine repo's `environment/miniforge/` environment exists.
 3. Starts a new agent session (`gemini`, `claude`, or `codex`).
-4. Passes absolute paths to the core documents an agent must read before
-   starting work:
-   - `AI.md`
-   - The agent-specific document (`GEMINI.md`, `CLAUDE.md`, or `CODEX.md`).
+4. Passes absolute paths to the core document an agent must read before
+   starting work: `AI.md`
 5. When launched from a parent workspace or sibling repository, includes the
    workspace path and any sibling git repositories in the initialization
    prompt so the agent can coordinate paired changes across repositories.
