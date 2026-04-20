@@ -9,6 +9,7 @@ from __future__ import annotations
 from cosmic_foundry.continuous.atlas import Atlas
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.continuous.chart import Chart
+from cosmic_foundry.continuous.constraint import Constraint
 from cosmic_foundry.continuous.differential_form import (
     CovectorField,
     DifferentialForm,
@@ -41,6 +42,7 @@ from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 __all__ = [
     "Atlas",
     "BoundaryCondition",
+    "Constraint",
     "Chart",
     "CovectorField",
     "DifferentialForm",

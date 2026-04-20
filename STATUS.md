@@ -13,17 +13,11 @@ no floats, no numerical packages; SymPy is approved.
 ## Near-term work
 
 **Resolve the BoundaryCondition hierarchy.**
-Two open questions:
+One open question remains:
 
-1. `BoundaryCondition(Function[D, C])` — a BC is a constraint on a field, not a
-   function mapping inputs to outputs. `__call__` is abstract with no typed
-   signature at the continuous layer; concrete implementations live in
-   `computation/`. The `Function` base is wrong. What should `BoundaryCondition`
-   inherit from instead?
-
-2. `LocalBoundaryCondition.constraint` is a `Field`, but the manifold it is
-   defined on is unspecified. The constraint lives on the boundary face; the
-   continuous layer has no formal type for a boundary face.
+`LocalBoundaryCondition.constraint` is a `Field`, but the manifold it is
+defined on is unspecified. The constraint lives on the boundary face; the
+continuous layer has no formal type for a boundary face.
 
 **M2.5 design session: mathematical narrative documentation.**
 What does the first notebook look like, and how does it hook into CI? Concrete

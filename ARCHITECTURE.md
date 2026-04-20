@@ -159,9 +159,10 @@ Field(Function)         — f: M → V on any Manifold; interface: manifold → 
 
 DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → SmoothManifold, order → int
 
-BoundaryCondition(Function)
-├── LocalBoundaryCondition    — α·f + β·∂f/∂n = g on a single face; properties: alpha, beta, constraint
-└── NonLocalBoundaryCondition — constraint depends on values outside the immediate neighborhood
+Constraint(ABC)              — abstract; support: Manifold (the geometric locus where the constraint is enforced)
+└── BoundaryCondition        — support is ∂M
+    ├── LocalBoundaryCondition    — α·f + β·∂f/∂n = g on a single face; properties: alpha, beta, constraint
+    └── NonLocalBoundaryCondition — constraint depends on values outside the immediate neighborhood
 ```
 
 **`discrete/` types:**
@@ -175,15 +176,17 @@ DiscreteField(Function[IndexedSet, V])
     approximates: Optional[VectorField]
 ```
 
-**`BoundaryCondition` hierarchy.** Three ABCs in `theory/`:
-`BoundaryCondition(Function)` is the blank root. `LocalBoundaryCondition`
-represents `α·f + β·∂f/∂n = g` on a single face — abstract properties
-`alpha: float`, `beta: float`, `constraint: Field`; covers Dirichlet
-(`α=1, β=0`), Neumann (`α=0, β=1`), and Robin. `NonLocalBoundaryCondition`
-is also blank beyond the root — it signals that the constraint depends on
-field values outside the immediate neighborhood of the boundary point, but
-makes no claim about the form of that non-locality;
-concrete subclasses declare whatever geometric references they need.
+**`Constraint` / `BoundaryCondition` hierarchy.** `Constraint(ABC)` is the
+root with a single abstract property `support: Manifold` — the geometric
+locus on which the constraint is enforced.  `BoundaryCondition(Constraint)`
+narrows support to the boundary ∂M.  `LocalBoundaryCondition` represents
+`α·f + β·∂f/∂n = g` on a single face — abstract properties `alpha: float`,
+`beta: float`, `constraint: Field`; covers Dirichlet (`α=1, β=0`), Neumann
+(`α=0, β=1`), and Robin. `NonLocalBoundaryCondition` is blank beyond the
+root — it signals that the constraint depends on field values outside the
+immediate neighborhood of the boundary point, but makes no claim about the
+form of that non-locality; concrete subclasses declare whatever geometric
+references they need.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:

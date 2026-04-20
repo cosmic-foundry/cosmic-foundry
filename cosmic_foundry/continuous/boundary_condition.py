@@ -2,28 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TypeVar
-
-from cosmic_foundry.foundation.function import Function
-
-D = TypeVar("D")  # Domain (boundary constraint)
-C = TypeVar("C")  # Codomain (constraint value)
+from cosmic_foundry.continuous.constraint import Constraint
 
 
-class BoundaryCondition(Function[D, C]):
-    """Abstract base for all boundary conditions on ∂Ω.
+class BoundaryCondition(Constraint):
+    """Abstract base for all boundary conditions on ∂M.
 
-    A BoundaryCondition is a Function that constrains field values on the
-    boundary of a Domain.  Subclasses specialize by constraint structure:
+    A BoundaryCondition is a Constraint whose support is the boundary of a
+    manifold.  Subclasses specialize by constraint structure:
     LocalBoundaryCondition operates on a single face; NonLocalBoundaryCondition
     spans multiple faces.
 
-    The codimension-1 invariant is enforced structurally: every face returned
-    by Domain.boundary has ndim = parent.ndim - 1.
-
-    __call__ is left fully abstract here; concrete subclasses in computation/
-    supply the JAX-backed implementation with a typed signature of the form
-    __call__(domain, face, field_data).
+    Concrete evaluation (e.g. applying the condition to field data) is deferred
+    to computation/ where JAX-backed implementations supply typed signatures.
     """
 
 
