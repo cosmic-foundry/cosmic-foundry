@@ -7,8 +7,9 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.theory.boundary_condition import BoundaryCondition
+from cosmic_foundry.theory.differential_form import ScalarField
 from cosmic_foundry.theory.euclidean_space import EuclideanSpace
-from cosmic_foundry.theory.field import Field, ScalarField
+from cosmic_foundry.theory.field import Field
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary

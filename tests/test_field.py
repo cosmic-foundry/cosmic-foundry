@@ -6,11 +6,14 @@ from typing import Any
 
 import pytest
 
+from cosmic_foundry.theory.differential_form import (
+    CovectorField,
+    DifferentialForm,
+    ScalarField,
+)
 from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 from cosmic_foundry.theory.field import (
-    CovectorField,
     Field,
-    ScalarField,
     SymmetricTensorField,
     TensorField,
     VectorField,
@@ -104,6 +107,14 @@ def test_field_is_function() -> None:
 
 def test_tensor_field_is_field() -> None:
     assert issubclass(TensorField, Field)
+
+
+def test_scalar_field_is_differential_form() -> None:
+    assert issubclass(ScalarField, DifferentialForm)
+
+
+def test_covector_field_is_differential_form() -> None:
+    assert issubclass(CovectorField, DifferentialForm)
 
 
 def test_scalar_field_is_tensor_field() -> None:

@@ -115,11 +115,11 @@ Function[D, C]          — callable mapping domain D → codomain C
 
 Field(Function)         — f: M → V on any Manifold; interface: manifold → Manifold
 └── TensorField         — manifold narrows to SmoothManifold; interface: tensor_type → (p, q)
-    ├── ScalarField          — (0, 0); codomain ℝ
-    ├── VectorField          — (1, 0); codomain TM
-    ├── CovectorField        — (0, 1); codomain T*M
+    ├── VectorField          — (1, 0); codomain TM; contravariant, not a form
     ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
-    └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k
+    └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k; tensor_type derived
+        ├── ScalarField      — Ω⁰(M) = C∞(M); degree 0, tensor type (0, 0)
+        └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
 
 DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → SmoothManifold, order → int
 ```

@@ -10,14 +10,16 @@ library) belongs outside theory/.
 from __future__ import annotations
 
 from cosmic_foundry.theory.boundary_condition import BoundaryCondition
-from cosmic_foundry.theory.differential_form import DifferentialForm
+from cosmic_foundry.theory.differential_form import (
+    CovectorField,
+    DifferentialForm,
+    ScalarField,
+)
 from cosmic_foundry.theory.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.discretization import Discretization
 from cosmic_foundry.theory.euclidean_space import EuclideanSpace
 from cosmic_foundry.theory.field import (
-    CovectorField,
     Field,
-    ScalarField,
     SymmetricTensorField,
     TensorField,
     VectorField,

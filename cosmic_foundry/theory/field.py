@@ -1,10 +1,12 @@
 """Field hierarchy: f: M → V.
 
-Field        — any assignment of values to manifold points; manifold: Manifold
-TensorField  — codomain is a tensor bundle T^(p,q)M; manifold: SmoothManifold
-ScalarField  — tensor type (0, 0); codomain ℝ
-VectorField  — tensor type (1, 0); codomain TM
-CovectorField — tensor type (0, 1); codomain T*M
+  Field        — any assignment of values to manifold points; manifold: Manifold
+  TensorField  — codomain is a tensor bundle T^(p,q)M; manifold: SmoothManifold
+  VectorField  — tensor type (1, 0); codomain TM
+  SymmetricTensorField — tensor type (0, 2); g_{ij} = g_{ji}
+
+ScalarField and CovectorField live in differential_form because they are the
+degree-0 and degree-1 cases of the de Rham complex: Ω⁰ = C∞(M), Ω¹ = T*M.
 """
 
 from __future__ import annotations
@@ -55,28 +57,16 @@ class TensorField(Field):  # noqa: B024
         """Return (p, q): p contravariant indices, q covariant indices."""
 
 
-class ScalarField(TensorField):  # noqa: B024
-    """A scalar field: tensor type (0, 0), codomain ℝ."""
-
-    @property
-    def tensor_type(self) -> tuple[int, int]:
-        return (0, 0)
-
-
 class VectorField(TensorField):  # noqa: B024
-    """A vector field: tensor type (1, 0), codomain TM."""
+    """A vector field: tensor type (1, 0), codomain TM.
+
+    Contravariant; lives in the tangent bundle, not the cotangent bundle,
+    so it is not a differential form.
+    """
 
     @property
     def tensor_type(self) -> tuple[int, int]:
         return (1, 0)
-
-
-class CovectorField(TensorField):  # noqa: B024
-    """A covector field (1-form): tensor type (0, 1), codomain T*M."""
-
-    @property
-    def tensor_type(self) -> tuple[int, int]:
-        return (0, 1)
 
 
 class SymmetricTensorField(TensorField):  # noqa: B024
@@ -95,9 +85,7 @@ class SymmetricTensorField(TensorField):  # noqa: B024
 
 
 __all__ = [
-    "CovectorField",
     "Field",
-    "ScalarField",
     "SymmetricTensorField",
     "TensorField",
     "VectorField",
