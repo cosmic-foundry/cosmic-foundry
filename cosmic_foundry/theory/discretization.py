@@ -23,8 +23,7 @@ class Discretization(IndexedSet):  # noqa: B024
       M.  DOFs are modal coefficients (spectral methods).
 
     A Discretization carries no metric, no geometry beyond what is needed
-    to define the approximation, and no payload — payloads live in
-    Array[T].
+    to define the approximation, and no payload.
     """
 
 

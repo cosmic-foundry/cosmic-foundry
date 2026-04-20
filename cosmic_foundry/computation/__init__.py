@@ -1,11 +1,3 @@
-"""Computation layer: distributed data containers."""
+"""Computation layer."""
 
-from __future__ import annotations
-
-from cosmic_foundry.computation.array import Array
-from cosmic_foundry.computation.extent import Extent
-
-__all__ = [
-    "Array",
-    "Extent",
-]
+__all__: list[str] = []

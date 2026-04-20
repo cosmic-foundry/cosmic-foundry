@@ -35,8 +35,7 @@ no temporal or spacetime computations are implemented yet.)*
 **Physical quantities are represented as instances of formal mathematical
 abstractions.** Any concrete representation is an implementation detail.
 *(Current inconsistency: `Field` and its subclasses are defined in
-`theory/` but are not used in computation. Kernel inputs and outputs are
-raw arrays wrapped in `Array[T]`, not `Field` instances.)*
+`theory/` but are not yet used in computation.)*
 
 **Every numerical method is formally derived from its continuous
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
@@ -93,34 +92,36 @@ parameterized by Python primitives) belongs in `theory/`; computational
 concreteness (NumPy, HDF5) belongs outside it. Enforced by
 `tests/test_theory_no_third_party_imports.py`.
 
-**`computation/` contains distance-1 implementations.** Every class at
-the top level of `computation/` directly inherits from an ABC in
-`theory/`. Classes two or more steps removed live one level down within
-their package.
-
 The current ABC hierarchy:
 
 ```
 Set
 ├── IndexedFamily           — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
-│   └── Array[T]            (computation/) — tuple-backed finite indexed family
 ├── IndexedSet              — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
-│   └── Extent              (computation/) — half-open integer index extent
 │   └── Discretization      — IndexedSet approximating functions on a manifold
-│       └── LocatedDiscretization — DOFs at specific points; interface: node_positions
+│       ├── LocatedDiscretization — DOFs at specific points; interface: manifold, node_positions
+│       └── ModalDiscretization  — DOFs as basis function coefficients; interface: basis_functions
 └── Manifold                — topological manifold; interface: ndim
     ├── SmoothManifold      — smooth (C∞) structure
     │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
     │       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
     │       └── FlatManifold         — zero curvature
-    │           ├── EuclideanSpace   (theory/) — ℝⁿ; free: ndim
-    │           └── MinkowskiSpace   (theory/) — signature (1,3); no free parameters
+    │           ├── EuclideanSpace   — ℝⁿ; free: ndim
+    │           └── MinkowskiSpace   — signature (1,3); no free parameters
     └── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
-        └── Domain           (geometry/) — finite region of a SmoothManifold with origin and size
+        └── Region           — compact, connected Ω ⊂ M; interface: ambient_manifold → SmoothManifold; derived: ndim
 
 Function[D, C]          — callable mapping domain D → codomain C
-├── Sink[D]             (theory/) — D → external state (codomain always None)
-└── Source[D, C]        (theory/) — external state D → C
+
+Field(Function)         — f: M → V on any Manifold; interface: manifold → Manifold
+└── TensorField         — manifold narrows to SmoothManifold; interface: tensor_type → (p, q)
+    ├── ScalarField          — (0, 0); codomain ℝ
+    ├── VectorField          — (1, 0); codomain TM
+    ├── CovectorField        — (0, 1); codomain T*M
+    ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
+    └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k
+
+DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → SmoothManifold, order → int
 ```
 
 **`BoundaryCondition` hierarchy.** Three ABCs in `theory/`:
@@ -131,9 +132,9 @@ represents `α·f + β·∂f/∂n = g` on a single face — abstract properties
 is also blank beyond the root — it signals that the constraint depends on
 field values outside the immediate neighborhood of the boundary point, but
 makes no claim about the form of that non-locality;
-concrete subclasses declare whatever geometric references they need. The codimension-1 invariant is enforced
-structurally: every face in `Domain.boundary` has `ndim = parent.ndim - 1`.
-Concrete subclasses with `execute` implemented live in `computation/`.
+concrete subclasses declare whatever geometric references they need. The
+codimension-1 invariant is enforced structurally: every face of a
+`ManifoldWithBoundary` has `ndim = parent.ndim - 1`.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
@@ -143,7 +144,7 @@ level, tighter constraints allow more to be derived:
 
 **`intersect` on `IndexedSet`.** Set intersection is a fundamental
 operation on any indexed set and lives as an `@abstractmethod` on
-`IndexedSet`. `Extent` implements it directly.
+`IndexedSet`.
 
 ---
 
@@ -156,7 +157,7 @@ and update the affected modules.
 
 **Kernel composition model.**
 A backend-agnostic interface separating kernel computation (Op) from
-spatial region (Region) and execution policy (Policy) is a design goal.
+spatial domain and execution policy (Policy) is a design goal.
 The earlier Op/Region/Policy/Dispatch framing was dropped before it was
 realized. The current `Stencil` and `Reduction` primitives expose
 `execute` directly; the formal model governing composition, backend
@@ -170,17 +171,7 @@ equations. Planned: `DynamicManifold(PseudoRiemannianManifold)` in
 a field in the simulation state. In the 3+1 (ADM) formalism the
 computational domain is a 3-D Riemannian spatial hypersurface; the
 3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
-The concrete geometry entry is `Spacetime3Plus1(DynamicManifold)` in
-`geometry/`.
-
-**Domain as Array[Domain].**
-`Domain` is currently a single bounded region of a manifold. Multi-patch
-or non-rectangular simulation domains may eventually require `Domain` to
-be an `Array[Domain]` — a finite indexed family of sub-domains — rather
-than a single object. If so, `PartitionDomain` dissolves: the domain
-decomposition IS the domain. This generalization is deferred until a
-concrete use case requires it; the single-`Domain` design is coherent for
-all planned physics capabilities.
+The concrete entry would be `Spacetime3Plus1(DynamicManifold)`.
 
 **Halo fill fence.**
 The halo-fill operation — ghost-cell exchange for stencil footprints

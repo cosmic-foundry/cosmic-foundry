@@ -7,21 +7,52 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.theory.boundary_condition import BoundaryCondition
-from cosmic_foundry.theory.field import Field
+from cosmic_foundry.theory.euclidean_space import EuclideanSpace
+from cosmic_foundry.theory.field import Field, ScalarField
 from cosmic_foundry.theory.function import Function
 from cosmic_foundry.theory.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
 from cosmic_foundry.theory.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
+from cosmic_foundry.theory.smooth_manifold import SmoothManifold
 
 # ---------------------------------------------------------------------------
-# Minimal concrete stubs for testing ABC structure
+# Minimal concrete stubs
 # ---------------------------------------------------------------------------
 
 
-class _ConstantField(Field[Any, float]):
-    name: str = "constant"
+class _Face(ManifoldWithBoundary):
+    """Codimension-1 face stub."""
+
+    def __init__(self, ndim: int) -> None:
+        self._ndim = ndim
+
+    @property
+    def ndim(self) -> int:
+        return self._ndim
+
+    @property
+    def boundary(self) -> tuple[ManifoldWithBoundary, ...]:
+        return ()
+
+
+class _Box(ManifoldWithBoundary):
+    """3-D box with 6 faces."""
+
+    @property
+    def ndim(self) -> int:
+        return 3
+
+    @property
+    def boundary(self) -> tuple[ManifoldWithBoundary, ...]:
+        return tuple(_Face(2) for _ in range(6))
+
+
+class _ConstantField(ScalarField):
+    @property
+    def manifold(self) -> SmoothManifold:
+        return EuclideanSpace(3)
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
         return 0.0
@@ -130,15 +161,17 @@ def test_local_constraint_is_field() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_face_identification_faces(euclidean_domain_3d: Any) -> None:
-    faces = euclidean_domain_3d.boundary
+def test_face_identification_faces() -> None:
+    box = _Box()
+    faces = box.boundary
     bc = _FaceIdentification(faces[0], faces[1])
     assert len(bc.faces) == 2
     assert all(isinstance(f, ManifoldWithBoundary) for f in bc.faces)
 
 
-def test_face_identification_codimension(euclidean_domain_3d: Any) -> None:
-    faces = euclidean_domain_3d.boundary
+def test_face_identification_codimension() -> None:
+    box = _Box()
+    faces = box.boundary
     bc = _FaceIdentification(faces[0], faces[1])
     for face in bc.faces:
-        assert face.ndim == euclidean_domain_3d.ndim - 1
+        assert face.ndim == box.ndim - 1
