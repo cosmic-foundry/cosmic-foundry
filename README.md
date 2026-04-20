@@ -3,6 +3,7 @@
 Cosmic Foundry is a general-purpose PDE simulation engine, optimized
 for astrophysical use cases. The foundational commitments governing its
 design are in [**Architectural basis**](ARCHITECTURE.md#architectural-basis).
+The epoch-by-epoch capability sequence is in [`ROADMAP.md`](ROADMAP.md).
 
 ## Quick start
 
@@ -28,13 +29,6 @@ Build the docs locally:
 ```bash
 sphinx-build -W docs docs/_build/html
 ```
-
-## Background
-
-- [`docs/research/`](docs/research/index.md) — survey of the computational astrophysics
-  code landscape that informs the design.
-- [`ROADMAP.md`](ROADMAP.md) — epoch sequence and current work queue.
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — architectural decisions.
 
 ## License
 
