@@ -41,15 +41,8 @@ raw JAX arrays wrapped in `Array[T]`, not `Field` instances.)*
 **Every numerical method is formally derived from its continuous
 mathematical counterpart.** The derivation is machine-checkable (SymPy)
 except where the argument is geometric or topological, in which case a
-human-readable derivation is required. Each module's derivation lives in
-that module as a `_derive()` function; a `generate()` function produces
-the full runtime section — constants and kernel function body — from the
-derivation's offset/weight pairs, spliced into the same file by
-`scripts/generate_kernels.py`. SymPy is never imported at module load time.
-*(Current inconsistency: `generate()` in `cosmic_foundry/computation/laplacian.py`
-produces only the constants block; the kernel function body `_seven_point_fn`
-is hand-written from the stencil geometry rather than generated from the
-derivation's offset/weight pairs.)*
+human-readable derivation is required. Derivations are documented in the
+modules that implement the methods; SymPy is never imported at module load time.
 
 **Every numerical method is verified against an analytical solution or
 observational data, with the verification test living in this
@@ -63,12 +56,6 @@ explicitly quantified and propagated.**
 independent of the deployment scale; any difference in outputs across
 scales is attributable to non-deterministic order of operations, not to
 architectural constraints.
-
-**Every file the engine writes carries provenance metadata** identifying
-the exact repository state from which it was generated.
-*(Current inconsistency: `io/` writes HDF5 files with no git commit
-hash or repository state attached. The `Provenance` class in
-`manifests/` covers external data ingestion only.)*
 
 **The engine is dimensionless internally.** Units are attached at the
 boundary where results are compared against analytical solutions or
@@ -141,10 +128,9 @@ Set
     └── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
         └── Domain           (geometry/) — finite region of a SmoothManifold with origin and size
 
-Function                — f: A × Θ → B; interface: execute
-├── Stencil             (computation/) — parametric pointwise stencil; parameters: fn, radii
-├── Reduction           (computation/) — parametric field fold; parameters: operator, identity
-└── PartitionDomain     (mesh/) — partitions a Domain into an Array[Patch]
+Function[D, C]          — callable mapping domain D → codomain C
+├── Sink[D]             (theory/) — D → external state (codomain always None)
+└── Source[D, C]        (theory/) — external state D → C
 ```
 
 **`BoundaryCondition` hierarchy.** Three ABCs in `theory/`:
@@ -169,32 +155,7 @@ level, tighter constraints allow more to be derived:
 
 **`intersect` on `IndexedSet`.** Set intersection is a fundamental
 operation on any indexed set and lives as an `@abstractmethod` on
-`IndexedSet`. `Extent` implements it directly; `Patch` delegates to
-`self.index_extent.intersect(other)`.
-
----
-
-## Operator model
-
-**Kernel primitives.** `Stencil` (pointwise) and `Reduction` (fold) are
-the two concrete kernel types, both in `computation/`. Each exposes an
-`execute` method. A formal model separating the kernel computation from
-the spatial region and execution policy is a design goal but is not yet
-realized; see *Open architectural questions*.
-
-**Global reduction primitive.** `Reduction(operator, identity)` is the
-primitive for field-level folds. It returns a 0-dimensional JAX array
-rather than a Python scalar so XLA can fuse the reduction into
-surrounding computation. The identity element is required for correctness
-under `jit`.
-
-**Operator documentation convention.** Every operator class carries a
-structured docstring block declaring its mathematical contract.
-`Function:` blocks state domain, codomain, and approximation parameters
-Θ and order p. `Source:` blocks document reads from external state
-(files, network). `Sink:` blocks document writes to external state. This
-convention makes each class's contract auditable without reading its
-implementation.
+`IndexedSet`. `Extent` implements it directly.
 
 ---
 
