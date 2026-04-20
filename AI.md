@@ -85,26 +85,6 @@ In practice this means:
 
 ---
 
-## In-session PR review
-
-Inside an active session, treat user requests of the form "Review PR N"
-or "Review N" as a request to run the adversarial reviewer:
-
-1. Read `pr-review/agent.md` and `pr-review/checklist.md` in full.
-   If the PR is architecture-changing, also read
-   `pr-review/architecture-checklist.md`.
-2. Fetch PR metadata and diff:
-   ```bash
-   gh pr view N --repo cosmic-foundry/cosmic-foundry
-   gh pr diff N --repo cosmic-foundry/cosmic-foundry
-   ```
-3. Perform the review using the fetched data and the working tree
-   (read-only inspection only).
-4. Return the report in the exact format required by
-   `pr-review/agent.md`.
-
----
-
 ## Physics lane selection
 
 The three lanes (A, B, C) are defined in

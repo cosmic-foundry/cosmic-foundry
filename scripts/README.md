@@ -51,39 +51,3 @@ In the multi-repo workflow, reusable engine changes should stay in
 `cosmic-foundry`, application-layer changes should stay in the domain repo,
 and each repository should get its own branch, worktree, commit, and pull
 request.
-
-### `_review_pr_impl.sh`
-
-Internal shared implementation for the `review_pr_with_*.sh` scripts.
-Handles argument validation, `gh pr view` / `gh pr diff` fetching, and
-prompt assembly. Sets `REVIEW_PROMPT` for the calling script to pipe
-into its agent CLI. Source this from a wrapper — do not invoke directly.
-
-### `review_pr_with_claude.sh`
-
-Runs the adversarial PR reviewer through Claude Code CLI:
-
-```bash
-./scripts/review_pr_with_claude.sh <pr-number>
-```
-
-### `review_pr_with_codex.sh`
-
-Runs the adversarial PR reviewer through Codex:
-
-```bash
-./scripts/review_pr_with_codex.sh <pr-number>
-```
-
-### `review_pr_with_gemini.sh`
-
-Runs the adversarial PR reviewer through Gemini CLI:
-
-```bash
-./scripts/review_pr_with_gemini.sh <pr-number>
-```
-
-All three `review_pr_with_*.sh` scripts share the same implementation
-via `_review_pr_impl.sh`. Set `COSMIC_FOUNDRY_PR_REPO` to override the
-default upstream repository (`cosmic-foundry/cosmic-foundry`) when
-testing against another remote.

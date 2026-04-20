@@ -47,29 +47,6 @@ discipline.
   same hooks; catching failures locally avoids a round-trip. If the
   command is not found, the working copy's env is stale or the git
   hook was never installed — see *Environment → Before Any Work*.
-- **PR review.** The project's adversarial reviewer lives at
-  [`pr-review/`](pr-review/README.md) (roles + checklist of
-  historical failure modes). Run the reviewer against any non-trivial
-  PR before requesting human review. For architecture-changing PRs,
-  also run the architecture stress-review checklist at
-  [`pr-review/architecture-checklist.md`](pr-review/architecture-checklist.md).
-
-  **For architecture-changing PRs the stress-review note is required,
-  not optional.** Include it in the PR description before opening. A
-  PR that introduces or reshapes an architectural abstraction without a
-  stress-review note should not be opened for human review — the note
-  is evidence that the review was actually done, not a post-hoc
-  summary.
-
-  **Terminal / automation:**
-  ```bash
-  ./scripts/review_pr_with_claude.sh <n>   # Claude Code
-  ./scripts/review_pr_with_codex.sh <n>    # Codex
-  ./scripts/review_pr_with_gemini.sh <n>   # Gemini CLI
-  ```
-  Set `COSMIC_FOUNDRY_PR_REPO` to override the default repository
-  (`cosmic-foundry/cosmic-foundry`).
-
 ### Pre-PR checklist
 
 Before opening or pushing to a PR:
@@ -274,11 +251,6 @@ the appropriate section. When a decision is superseded by the code or
 withdrawn, remove it. When an open question is resolved, move it from
 the *Open questions* section to the appropriate live section and update
 the affected modules.
-
-Before making or proposing a significant architectural change, run the
-architecture stress-review checklist at
-`pr-review/architecture-checklist.md`. Include the stress-review result
-in the PR description or review report.
 
 Any architecture review should also include a subjective pass over the
 `*(Current inconsistency: ...)*` annotations in `ARCHITECTURE.md
