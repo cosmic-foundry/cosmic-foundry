@@ -11,16 +11,26 @@ Once an item is fully specified and unblocked, it moves to `STATUS.md`.
 
 ## Architecture
 
-The codebase is organized around three layers, each with a distinct role:
+The codebase is organized into four packages with a strict dependency order:
 
-**Continuous (`theory/`)** — the problem in its true mathematical form.
+**Foundation (`foundation/`)** — primitive mathematical abstractions shared by
+all layers: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. No floats, no
+third-party imports.
+
+**Continuous (`continuous/`)** — the problem in its true mathematical form.
 Manifolds, smooth fields, differential operators, boundary conditions. Everything
 is infinite-dimensional and coordinate-free. No arrays, no grids, no floats.
+No third-party imports.
 
-**Discrete** — a chosen discretization of the continuous problem. A grid is a
-concrete `Region` with a finite cell count and exact spacing. Stencil coefficients
-are exact rationals derived from the continuous operator. Discrete fields are
-indexed families of values, one per cell. This layer is still symbolic: it
+**Discrete (`discrete/`)** — scheme description on finite index sets. A
+`DiscreteField` is a `Function[IndexedSet, V]`; it inherits from `foundation/`
+vertically (is-a) and optionally references `continuous/` horizontally (has-a)
+via the `approximates` property. When `approximates` is set, the discrete object
+declares itself a finite approximation of the named continuous object, enabling
+automatic convergence checks at computation time. When `approximates` is `None`,
+the discrete object is a primary mathematical object — the data IS the object,
+with no continuous antecedent (e.g. a field loaded from a MESA progenitor).
+Stencil coefficients are exact rationals. This layer is still symbolic: it
 describes the discretization without evaluating it.
 
 **Numerical (`computation/`)** — JAX evaluates the discrete description. Cell
@@ -80,8 +90,8 @@ the discrete and numerical layers evaluate.
 | Epoch | Layer | Capability |
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
-| 1 | Continuous | `theory/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric. ✓ |
-| 2 | Discrete | Cartesian grid as a concrete `Region`; coordinate geometry; cell and face structure. Discrete scalar and vector fields indexed by the grid. |
+| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric. `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
+| 2 | Discrete | Cartesian grid as a concrete `IndexedSet` with coordinate geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField` backed by the grid. |
 | 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators; formal operator composition on the grid. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 

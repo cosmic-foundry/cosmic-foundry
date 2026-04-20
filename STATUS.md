@@ -10,9 +10,12 @@ The repository is organized around a three-layer architecture:
 
 ## What is complete
 
-**Continuous layer (`theory/`)** — all ABCs tested (96 passing):
+**Foundation layer (`foundation/`)** — 104 tests passing:
 
-- Set hierarchy: `Set`, `IndexedSet`, `IndexedFamily`, `Function`
+- `Set`, `Function`, `IndexedSet`, `IndexedFamily`
+
+**Continuous layer (`continuous/`)** — all ABCs tested:
+
 - Manifold hierarchy: `Manifold` → `SmoothManifold` → `PseudoRiemannianManifold`
   → `RiemannianManifold` / `FlatManifold` → `EuclideanSpace` / `MinkowskiSpace`
 - `ManifoldWithBoundary` → `Region`
@@ -21,11 +24,15 @@ The repository is organized around a three-layer architecture:
 - `DifferentialOperator`
 - `BoundaryCondition` → `LocalBoundaryCondition` / `NonLocalBoundaryCondition`
 
+**Discrete layer (`discrete/`)** — ABCs only:
+
+- `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField` with typed
+  `approximates: Optional[<continuous counterpart>]` property
+
 ## What is not yet started
 
-The discrete and numerical layers do not exist. There are no concrete
-implementations of any `theory/` ABC: no grid, no discrete fields, no stencil
-operators, no JAX-backed evaluation, no I/O.
+No concrete discrete implementations: no grid, no stencil operators, no
+JAX-backed evaluation, no I/O.
 
 ## Near-term work
 

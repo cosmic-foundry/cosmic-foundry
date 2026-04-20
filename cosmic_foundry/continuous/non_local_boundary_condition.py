@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from cosmic_foundry.theory.boundary_condition import BoundaryCondition
+from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
 
 D = TypeVar("D")  # Domain
 C = TypeVar("C")  # Codomain

@@ -83,32 +83,62 @@ Pages. Sphinx-design provides layout components.
 
 ---
 
-## Mathematical hierarchy
+## Package structure and boundaries
 
-**`theory/` is strictly third-party-free.** The `theory/` package
-defines pure mathematical ABCs and may not import from any package
-outside the Python standard library. Mathematical concreteness (classes
-parameterized by Python primitives) belongs in `theory/`; computational
-concreteness (NumPy, HDF5) belongs outside it. Enforced by
+The codebase is organized into four packages with a strict dependency order:
+
+```
+foundation/   ←  continuous/
+     ↑                ↑ (has-a, optional)
+     └── discrete/ ───┘
+              ↑
+        computation/
+```
+
+**`foundation/` is strictly third-party-free.** Primitive mathematical
+abstractions shared by all layers: `Set`, `Function`, `IndexedSet`,
+`IndexedFamily`. May only import from the Python standard library.
+
+**`continuous/` is strictly third-party-free.** Manifolds, fields,
+operators, boundary conditions. Imports only from `foundation/` and the
+standard library. Enforced alongside `foundation/` by
 `tests/test_theory_no_third_party_imports.py`.
 
-The current ABC hierarchy:
+**`discrete/`** — scheme description on finite index sets. Imports from
+`foundation/` (vertical, is-a) and optionally from `continuous/`
+(horizontal, has-a) via the `approximates` property. The `approximates`
+property on each discrete type is `Optional[<continuous counterpart>]`:
+when set, it declares that the discrete object is a finite approximation
+of the named continuous object, enabling automatic convergence checks at
+the `computation/` layer. When `None`, the discrete object is a primary
+mathematical object with no continuous antecedent.
+
+**`computation/`** — JAX evaluation. The only layer that touches floats.
+
+## Mathematical hierarchy
+
+**`foundation/` types:**
 
 ```
 Set
-├── IndexedFamily           — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
-├── IndexedSet              — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
-└── Manifold                — topological manifold; interface: ndim
-    ├── SmoothManifold      — smooth (C∞) structure
-    │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
-    │       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
-    │       └── FlatManifold         — zero curvature
-    │           ├── EuclideanSpace   — ℝⁿ; free: ndim
-    │           └── MinkowskiSpace   — signature (1,3); no free parameters
-    └── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
-        └── Region           — compact, connected Ω ⊂ M; interface: ambient_manifold → SmoothManifold; derived: ndim
+├── IndexedFamily   — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
+└── IndexedSet      — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
 
-Function[D, C]          — callable mapping domain D → codomain C
+Function[D, C]      — callable mapping domain D → codomain C
+```
+
+**`continuous/` types:**
+
+```
+Manifold(Set)
+├── SmoothManifold      — smooth (C∞) structure
+│   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
+│       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
+│       └── FlatManifold         — zero curvature
+│           ├── EuclideanSpace   — ℝⁿ; free: ndim
+│           └── MinkowskiSpace   — signature (1,3); no free parameters
+└── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
+    └── Region           — compact, connected Ω ⊂ M; interface: ambient_manifold → SmoothManifold; derived: ndim
 
 Field(Function)         — f: M → V on any Manifold; interface: manifold → Manifold
 └── TensorField         — manifold narrows to SmoothManifold; interface: tensor_type → (p, q)
@@ -120,6 +150,21 @@ Field(Function)         — f: M → V on any Manifold; interface: manifold → 
         └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
 
 DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → SmoothManifold, order → int
+
+BoundaryCondition(Function)
+├── LocalBoundaryCondition    — α·f + β·∂f/∂n = g on a single face; properties: alpha, beta, constraint
+└── NonLocalBoundaryCondition — constraint depends on values outside the immediate neighborhood
+```
+
+**`discrete/` types:**
+
+```
+DiscreteField(Function[IndexedSet, V])
+    approximates: Optional[Field]           — None if primary object, set if approximating continuous field
+├── DiscreteScalarField
+│   approximates: Optional[ScalarField]
+└── DiscreteVectorField
+    approximates: Optional[VectorField]
 ```
 
 **`BoundaryCondition` hierarchy.** Three ABCs in `theory/`:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.theory.flat_manifold import FlatManifold
+from cosmic_foundry.continuous.flat_manifold import FlatManifold
 
 
 class MinkowskiSpace(FlatManifold):

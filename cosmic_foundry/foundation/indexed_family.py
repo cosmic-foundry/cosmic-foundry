@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any
 
-from cosmic_foundry.theory.set import Set
+from cosmic_foundry.foundation.set import Set
 
 
 class IndexedFamily(Set):

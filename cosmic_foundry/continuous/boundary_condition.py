@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from cosmic_foundry.theory.function import Function
+from cosmic_foundry.foundation.function import Function
 
 D = TypeVar("D")  # Domain (boundary constraint)
 C = TypeVar("C")  # Codomain (constraint value)

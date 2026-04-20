@@ -6,10 +6,10 @@ from typing import Any
 
 import pytest
 
-from cosmic_foundry.theory.differential_operator import DifferentialOperator
-from cosmic_foundry.theory.euclidean_space import EuclideanSpace
-from cosmic_foundry.theory.function import Function
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.foundation.function import Function
 
 
 class _Gradient(DifferentialOperator):

@@ -6,12 +6,14 @@ from typing import Any
 
 import pytest
 
-from cosmic_foundry.theory.euclidean_space import EuclideanSpace
-from cosmic_foundry.theory.field import SymmetricTensorField
-from cosmic_foundry.theory.metric_tensor import MetricTensor
-from cosmic_foundry.theory.minkowski_space import MinkowskiSpace
-from cosmic_foundry.theory.pseudo_riemannian_manifold import PseudoRiemannianManifold
-from cosmic_foundry.theory.riemannian_manifold import RiemannianManifold
+from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
+from cosmic_foundry.continuous.field import SymmetricTensorField
+from cosmic_foundry.continuous.metric_tensor import MetricTensor
+from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
+from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
+    PseudoRiemannianManifold,
+)
+from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
 
 
 class _EuclideanMetric(MetricTensor):

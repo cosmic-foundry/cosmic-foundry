@@ -1,8 +1,8 @@
-"""Enforce that theory/ contains no third-party imports.
+"""Enforce that foundation/ and continuous/ contain no third-party imports.
 
 The abstract-to-concrete boundary in this codebase is defined precisely
-by the third-party import boundary: theory/ may only import from the
-Python standard library or from within cosmic_foundry.theory itself.
+by the third-party import boundary: foundation/ and continuous/ may only
+import from the Python standard library or from within cosmic_foundry.
 """
 
 from __future__ import annotations
@@ -11,7 +11,11 @@ import ast
 import sys
 from pathlib import Path
 
-THEORY_DIR = Path(__file__).parent.parent / "cosmic_foundry" / "theory"
+PACKAGE_ROOT = Path(__file__).parent.parent / "cosmic_foundry"
+PURE_PACKAGES = [
+    PACKAGE_ROOT / "foundation",
+    PACKAGE_ROOT / "continuous",
+]
 STDLIB = sys.stdlib_module_names
 
 
@@ -37,15 +41,17 @@ def _third_party_imports(path: Path) -> list[str]:
     return violations
 
 
-def test_theory_has_no_third_party_imports() -> None:
+def test_pure_packages_have_no_third_party_imports() -> None:
     failures: dict[str, list[str]] = {}
-    for path in sorted(THEORY_DIR.rglob("*.py")):
-        violations = _third_party_imports(path)
-        if violations:
-            failures[str(path.relative_to(THEORY_DIR))] = violations
+    for package_dir in PURE_PACKAGES:
+        for path in sorted(package_dir.rglob("*.py")):
+            violations = _third_party_imports(path)
+            if violations:
+                rel = path.relative_to(PACKAGE_ROOT.parent)
+                failures[str(rel)] = violations
 
     if failures:
-        lines = ["theory/ must not import third-party packages:"]
+        lines = ["foundation/ and continuous/ must not import third-party packages:"]
         for file, imports in failures.items():
             lines.append(f"  {file}: {', '.join(imports)}")
         raise AssertionError("\n".join(lines))

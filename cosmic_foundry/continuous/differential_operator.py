@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.field import Field
-from cosmic_foundry.theory.function import Function
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.field import Field
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.foundation.function import Function
 
 
 class DifferentialOperator(Function[Field, Field]):

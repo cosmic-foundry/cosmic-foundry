@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.manifold_with_boundary import ManifoldWithBoundary
-from cosmic_foundry.theory.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold_with_boundary import ManifoldWithBoundary
+from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 
 
 class Region(ManifoldWithBoundary):  # noqa: B024

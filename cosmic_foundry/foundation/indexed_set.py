@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.set import Set
+from cosmic_foundry.foundation.set import Set
 
 
 class IndexedSet(Set):
