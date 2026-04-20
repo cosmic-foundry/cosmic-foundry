@@ -87,15 +87,12 @@ AGENT_TYPE=${1:-}
 case $AGENT_TYPE in
     gemini)
         CMD="gemini"
-        DOC="GEMINI.md"
         ;;
     claude)
         CMD="claude"
-        DOC="CLAUDE.md"
         ;;
     codex)
         CMD="codex"
-        DOC="CODEX.md"
         ;;
     *)
         echo "Usage: ./scripts/start_agent.sh [gemini|claude|codex]"
@@ -112,9 +109,8 @@ $LAUNCH_DIR
 The cosmic-foundry repository is at:
 $ENGINE_ROOT
 
-Please initialize your context by reading the following documents in order to understand the project rules, tools, and coordination patterns:
+Please initialize your context by reading the following document in order to understand the project rules, tools, and coordination patterns:
 1. $ENGINE_ROOT/AI.md
-2. $ENGINE_ROOT/$DOC
 
 Use the repository path above for cosmic-foundry work. If work spans sibling repositories, first locate and read each repository's local agent instructions before changing it.$WORKSPACE_NOTE"
 

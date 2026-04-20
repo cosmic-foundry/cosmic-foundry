@@ -53,12 +53,6 @@ In practice this means:
    is active, (b) `pre_commit` is importable, and (c) the git
    pre-commit hook is installed.
 
-   It is the only bash command auto-approved by the repository's
-   `.claude/settings.json`. The auto-approval is Claude Code-specific
-   because only Claude Code supports exact-match Bash allowlists;
-   Codex and Gemini operators approve the health check once per session
-   the normal way.
-
    **If the env check fails** (script prints `✗ WRONG ENVIRONMENT` and
    exits non-zero), stop immediately and warn the user:
 
