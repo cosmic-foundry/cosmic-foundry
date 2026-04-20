@@ -21,9 +21,7 @@ cosmology, galactic dynamics, planetary formation, and other domains
 In practice this means:
 
 - Reusable computation infrastructure (kernels, mesh, fields, I/O,
-  diagnostics) and manifest infrastructure (`cosmic_foundry.manifests`:
-  HTTP client, `ValidationAdapter`, `Provenance`, base schemas) belong
-  here.
+  diagnostics) belongs here.
 - Domain-specific physics implementations and observational validation
   data belong in the relevant application repo.
 - If a task spans the platform and an application repo, use separate
