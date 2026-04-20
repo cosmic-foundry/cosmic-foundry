@@ -1,18 +1,22 @@
-"""Field hierarchy.
+"""Field hierarchy: f: M → V.
 
-- ``Field``       — abstract base: f: M → V; inherits Function.
-- ``ScalarField`` — marker for V = ℝ.
-- ``TensorField`` — abstract for V = T^(p,q)M; carries ``tensor_type``.
+- ``Field``       — abstract base; Function[Point, Value].
+- ``ScalarField`` — marker for Value = ℝ.
+- ``TensorField`` — abstract for Value = T^(p,q)M; carries ``tensor_type``.
 """
 
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import TypeVar
 
 from cosmic_foundry.theory.function import Function
 
+D = TypeVar("D")  # Domain (point in manifold)
+C = TypeVar("C")  # Codomain (value type)
 
-class Field(Function):
+
+class Field(Function[D, C]):
     """Abstract base for all fields: f: M → V.
 
     A field assigns a value in V to every point in a manifold M.
@@ -30,7 +34,7 @@ class Field(Function):
 class ScalarField(Field):  # noqa: B024
     """A field with codomain V = ℝ.
 
-    Marker subclass; ``execute`` remains abstract from ``Function``.
+    Marker subclass; ``__call__`` remains abstract from ``Function``.
     """
 
 

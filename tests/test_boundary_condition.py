@@ -20,14 +20,14 @@ from cosmic_foundry.theory.non_local_boundary_condition import (
 # ---------------------------------------------------------------------------
 
 
-class _ConstantField(Field):
+class _ConstantField(Field[Any, float]):
     name: str = "constant"
 
-    def execute(self, *args: Any, **kwargs: Any) -> float:
+    def __call__(self, *args: Any, **kwargs: Any) -> float:
         return 0.0
 
 
-class _DirichletBC(LocalBoundaryCondition):
+class _DirichletBC(LocalBoundaryCondition[Any, None]):
     @property
     def alpha(self) -> float:
         return 1.0
@@ -40,11 +40,11 @@ class _DirichletBC(LocalBoundaryCondition):
     def constraint(self) -> Field:
         return _ConstantField()
 
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
 
 
-class _NeumannBC(LocalBoundaryCondition):
+class _NeumannBC(LocalBoundaryCondition[Any, None]):
     @property
     def alpha(self) -> float:
         return 0.0
@@ -57,17 +57,17 @@ class _NeumannBC(LocalBoundaryCondition):
     def constraint(self) -> Field:
         return _ConstantField()
 
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
 
 
-class _FaceIdentification(NonLocalBoundaryCondition):
+class _FaceIdentification(NonLocalBoundaryCondition[Any, None]):
     """Periodic BC: identifies two boundary faces. Carries its own geometry."""
 
     def __init__(self, face_a: ManifoldWithBoundary, face_b: ManifoldWithBoundary):
         self.faces = (face_a, face_b)
 
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
 
 

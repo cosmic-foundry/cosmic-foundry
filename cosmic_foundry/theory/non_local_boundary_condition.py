@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TypeVar
+
 from cosmic_foundry.theory.boundary_condition import BoundaryCondition
 
+D = TypeVar("D")  # Domain
+C = TypeVar("C")  # Codomain
 
-class NonLocalBoundaryCondition(BoundaryCondition):
+
+class NonLocalBoundaryCondition(BoundaryCondition[D, C]):
     """A boundary condition whose constraint is non-local.
 
     A local boundary condition depends only on field values in an infinitesimal
