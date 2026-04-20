@@ -59,9 +59,6 @@ taichi = ["taichi"]
 warp = ["warp-lang"]
 triton = ["triton"]
 
-[project.scripts]
-cosmic-foundry = "cosmic_foundry.cli:main"
-
 [tool.hatch.version]
 source = "vcs"
 
