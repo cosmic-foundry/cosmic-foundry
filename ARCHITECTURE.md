@@ -132,14 +132,23 @@ Function[D, C]      — callable mapping domain D → codomain C
 
 ```
 Manifold(Set)
-├── SmoothManifold      — smooth (C∞) structure
+├── SmoothManifold      — smooth (C∞) structure; atlas constitutes the smooth structure
+│   │   interface: ndim, atlas → Atlas
 │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
 │       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
 │       └── FlatManifold         — zero curvature
-│           ├── EuclideanSpace   — ℝⁿ; free: ndim
-│           └── MinkowskiSpace   — signature (1,3); no free parameters
+│           ├── EuclideanSpace   — ℝⁿ; free: ndim; atlas: one global IdentityChart
+│           └── MinkowskiSpace   — signature (1,3); no free parameters; atlas: one global IdentityChart
 └── ManifoldWithBoundary — has ∂M; interface: boundary → tuple[ManifoldWithBoundary, ...]
     └── Region           — compact, connected Ω ⊂ M; interface: ambient_manifold → SmoothManifold; derived: ndim
+
+Chart(Function)         — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
+                          interface: domain → SmoothManifold, codomain → EuclideanSpace, inverse → Function
+    IdentityChart       — φ(p) = p; standard chart for globally-chartable manifolds
+
+Atlas(IndexedFamily)    — collection of charts covering M; constitutes the smooth structure of M
+                          interface: manifold → SmoothManifold, __getitem__ → Chart, __len__
+    SingleChartAtlas    — one global chart covers all of M (EuclideanSpace, MinkowskiSpace)
 
 Field(Function)         — f: M → V on any Manifold; interface: manifold → Manifold
 └── TensorField         — manifold narrows to SmoothManifold; interface: tensor_type → (p, q)
