@@ -30,6 +30,12 @@ from cosmic_foundry.io.sink import Sink
 from cosmic_foundry.io.source import Source
 from cosmic_foundry.observability import get_logger
 
+# Type aliases for domain types
+_WriteArrayDomain = tuple[str | Path, Any]  # (path, array)
+_MergeRankFilesDomain = tuple[
+    Sequence[str | Path], str | Path
+]  # (rank_paths, output_path)
+
 _log = get_logger(__name__)
 
 #: True when h5py was built with MPI support (parallel HDF5 available).
@@ -37,7 +43,7 @@ HAS_PARALLEL_HDF5: bool = bool(h5py.h5.get_config().mpi)
 
 
 @dataclass(frozen=True)
-class WriteArray(Sink):
+class WriteArray(Sink[_WriteArrayDomain]):
     """Write a single array to a new HDF5 file.
 
     Sink:
@@ -75,7 +81,7 @@ write_array = WriteArray()
 
 
 @dataclass(frozen=True)
-class MergeRankFiles(Sink):
+class MergeRankFiles(Sink[_MergeRankFilesDomain]):
     """Concatenate per-rank HDF5 files into a single output file.
 
     Sink:

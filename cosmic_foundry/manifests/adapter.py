@@ -5,7 +5,7 @@ from cosmic_foundry.manifests.provenance import Provenance
 from cosmic_foundry.theory.function import Function
 
 
-class ValidationAdapter(Function):
+class ValidationAdapter(Function[Path, Provenance]):
     """Abstract base for application-repo observational adapters.
 
     Function:

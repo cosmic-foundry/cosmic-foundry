@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import TypeVar
 
 from cosmic_foundry.theory.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.field import Field
 
+D = TypeVar("D")  # Domain
+C = TypeVar("C")  # Codomain
 
-class LocalBoundaryCondition(BoundaryCondition):
+
+class LocalBoundaryCondition(BoundaryCondition[D, C]):
     """A boundary condition that constrains a single face of ∂Ω.
 
     Represents the Robin family: α·f + β·∂f/∂n = g, where f is the field

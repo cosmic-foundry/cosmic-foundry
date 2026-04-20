@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TypeVar
+
 from cosmic_foundry.theory.function import Function
 
+D = TypeVar("D")  # Domain (boundary constraint)
+C = TypeVar("C")  # Codomain (constraint value)
 
-class BoundaryCondition(Function):
+
+class BoundaryCondition(Function[D, C]):
     """Abstract base for all boundary conditions on ∂Ω.
 
     A BoundaryCondition is a Function that constrains field values on the

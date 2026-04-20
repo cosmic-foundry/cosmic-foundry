@@ -7,11 +7,14 @@ import jsonschema  # type: ignore
 
 from cosmic_foundry.io.source import Source
 
+# Domain and codomain for LoadSchema
+_SchemaDict = dict[str, Any]
+
 _SCHEMAS_DIR = Path(__file__).parent.parent / "schemas"
 
 
 @dataclass(frozen=True)
-class LoadSchema(Source):
+class LoadSchema(Source[str, _SchemaDict]):
     """Load a base schema by name from the schemas directory.
 
     Source:
