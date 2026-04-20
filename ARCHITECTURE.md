@@ -95,20 +95,19 @@ foundation/   ←  continuous/
         computation/
 ```
 
-**`foundation/` is strictly third-party-free.** Primitive mathematical
-abstractions shared by all layers: `Set`, `Function`, `IndexedSet`,
-`IndexedFamily`. May only import from the Python standard library.
+**`foundation/`, `continuous/`, and `discrete/` are symbolic-reasoning layers.**
+Their shared identity: they describe mathematical structure symbolically, without
+numerical evaluation. Their import boundary reflects that identity — they may
+only import from the Python standard library, `cosmic_foundry`, or packages on
+the approved symbolic-reasoning list. The approved list is `{sympy}`. Additions
+require justification against the symbolic-reasoning identity; numerical
+computation packages (JAX, NumPy, SciPy) are excluded by definition. Enforced
+by `tests/test_theory_no_third_party_imports.py`.
 
-**`continuous/` is strictly third-party-free.** Manifolds, fields,
-operators, boundary conditions. Imports only from `foundation/` and the
-standard library. Enforced alongside `foundation/` by
-`tests/test_theory_no_third_party_imports.py`.
-
-**`discrete/` is strictly third-party-free.** Scheme description on finite
-index sets. Imports from `foundation/` (vertical, is-a) and optionally from
-`continuous/` (horizontal, has-a) via the `approximates` property. Enforced
-alongside `foundation/` and `continuous/` by
-`tests/test_theory_no_third_party_imports.py`. The `approximates`
+- **`foundation/`** — `Set`, `Function`, `IndexedSet`, `IndexedFamily`.
+- **`continuous/`** — manifolds, fields, operators, boundary conditions.
+- **`discrete/`** — scheme description; imports `foundation/` (is-a) and
+  optionally `continuous/` (has-a) via `approximates`. The `approximates`
 property on each discrete type is `Optional[<continuous counterpart>]`:
 when set, it declares that the discrete object is a finite approximation
 of the named continuous object, enabling automatic convergence checks at

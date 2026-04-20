@@ -1,6 +1,7 @@
 """Foundation: primitive mathematical abstractions shared by all layers.
 
-Boundary rule: this package may not import from any third-party package.
+Boundary rule: symbolic-reasoning layer. May only import from stdlib,
+cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 """
 
 from __future__ import annotations

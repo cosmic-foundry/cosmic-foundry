@@ -1,8 +1,15 @@
-"""Enforce that foundation/, continuous/, and discrete/ contain no third-party imports.
+"""Enforce the symbolic-reasoning boundary on foundation/, continuous/, and discrete/.
 
-The abstract-to-concrete boundary in this codebase is defined precisely
-by the third-party import boundary: all three pre-computation layers may only
-import from the Python standard library or from within cosmic_foundry.
+These three layers share a common identity: they describe mathematical structure
+symbolically, without numerical evaluation. Their import boundary reflects that
+identity: they may only import from the Python standard library, from within
+cosmic_foundry, or from packages on the approved symbolic-reasoning list.
+
+Approved symbolic-reasoning packages:
+    sympy — symbolic mathematics
+
+Packages that do NOT belong here (numerical computation):
+    jax, numpy, scipy, h5py, ...
 """
 
 from __future__ import annotations
@@ -18,6 +25,7 @@ PURE_PACKAGES = [
     PACKAGE_ROOT / "discrete",
 ]
 STDLIB = sys.stdlib_module_names
+SYMBOLIC_PACKAGES = {"sympy"}
 
 
 def _top_level(module: str) -> str:
@@ -31,13 +39,21 @@ def _third_party_imports(path: Path) -> list[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 top = _top_level(alias.name)
-                if top not in STDLIB and top != "cosmic_foundry":
+                if (
+                    top not in STDLIB
+                    and top != "cosmic_foundry"
+                    and top not in SYMBOLIC_PACKAGES
+                ):
                     violations.append(alias.name)
         elif isinstance(node, ast.ImportFrom):
             if node.module is None:
                 continue
             top = _top_level(node.module)
-            if top not in STDLIB and top != "cosmic_foundry":
+            if (
+                top not in STDLIB
+                and top != "cosmic_foundry"
+                and top not in SYMBOLIC_PACKAGES
+            ):
                 violations.append(node.module)
     return violations
 
@@ -53,7 +69,7 @@ def test_pure_packages_have_no_third_party_imports() -> None:
 
     if failures:
         lines = [
-            "foundation/, continuous/, and discrete/ must not import third-party packages:"  # noqa: E501
+            "foundation/, continuous/, and discrete/ may only import symbolic-reasoning packages (sympy):"  # noqa: E501
         ]
         for file, imports in failures.items():
             lines.append(f"  {file}: {', '.join(imports)}")
