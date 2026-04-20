@@ -1,7 +1,7 @@
 # Cosmic Foundry — Roadmap
 
 For cross-cutting architectural decisions, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
-For near-term work — planned modules and the immediate implementation queue — see [`STATUS.md`](STATUS.md).
+For near-term work and current status, see [`STATUS.md`](STATUS.md).
 
 This file covers the long-horizon capability sequence: epochs, milestones, and the
 verification standard. Items belong here when they are not yet specified well enough
@@ -10,65 +10,71 @@ unblocked, it moves to `STATUS.md`.
 
 ---
 
-## Architectural basis gap closure
+## Open architectural questions
 
-Items required to bring the codebase into consistency with the
-foundational claims in `ARCHITECTURE.md §Architectural basis`.
+**How do concrete fields connect to the theory layer?**
+`theory/` defines the abstract interface (`ScalarField`, `VectorField`, etc.).
+The concrete implementation — a JAX array carrying values at grid points — must
+subclass those ABCs. The design question is how the concrete class declares its
+grid, how indexing works, and whether field arithmetic lives on the concrete class
+or on a separate operator. This must be resolved before Epoch 2.
 
-**Wire `Field` instances to the computation layer** *(claim 4).*
-Kernel inputs and outputs are currently raw JAX arrays wrapped in
-`Array[T]`. The design intention is that physical quantities are
-`Field` instances. Requires a design decision on how `Field` subclasses
-connect to `Array[T]` and how kernels declare their field types.
+**How does a grid relate to `Region`?**
+A Cartesian grid is a `Region` — a compact connected subset of ℝⁿ — but it also
+carries discrete structure (cell count, spacing, coordinate arrays). Whether the
+grid IS a `Region` subclass or OWNS a `Region` is an open question. The answer
+determines how boundary conditions attach and how the manifold hierarchy connects
+to numerical infrastructure.
 
-**Attach provenance metadata to all engine-written files** *(claim 9).*
-`io/` writes HDF5 files with no git commit hash. Every call to
-`WriteArray.execute()` should embed the current repository state
-(git commit hash, dirty-tree flag) as HDF5 attributes. Planned
-alongside M3 (validation infrastructure).
-
----
-
-## Planned visualization stack
-
-Field data is written in HDF5 (current `io/`) and Zarr v3 (planned).
-Browser rendering uses WebGPU primary with a WebGL2 fallback; desktop
-rendering uses pyvista/vispy for local inspection. All colormaps are
-perceptual (cmasher, cmocean); rainbow/jet are prohibited. Visual
-regression tests use pytest-mpl with SSIM comparison.
+**Provenance on engine-written files.**
+Every HDF5 file written by the engine should embed the git commit hash and
+dirty-tree flag. Planned alongside Epoch 6 (I/O).
 
 ---
 
 ## Planned theory additions
 
 **`DynamicManifold(PseudoRiemannianManifold)`**
-— A manifold whose signature is fixed but whose metric tensor is a
-dynamical field in the simulation state rather than a structural
-property. Required for full GR simulations. In the 3+1 (ADM) formalism:
-spatial hypersurfaces Σ_t are 3-D Riemannian; the 3-metric `γ_ij` and
-extrinsic curvature `K_ij` are evolved fields.
+— A manifold whose metric tensor is a dynamical field in the simulation state
+rather than a structural property. Required for full GR (3+1 ADM formalism):
+spatial hypersurfaces Σ_t are 3-D Riemannian; the 3-metric γ_ij and extrinsic
+curvature K_ij are evolved fields. Planned alongside Epoch 14.
+
+**`Connection` / `AffineConnection`**
+— Covariant derivative; not a tensor field (inhomogeneous transformation law).
+Required for curvature computations and parallel transport on curved spacetimes.
+Planned alongside Epoch 14.
 
 ---
 
 ## Simulation capabilities
 
+The epoch sequence below is a best-guess ordering as of the current foundation.
+It should be sharpened in the next design session — in particular, the boundary
+between Epochs 2–4 (concrete implementation of the abstract layer) and the
+subsequent physics epochs.
+
 | Epoch | Capability |
 |-------|------------|
-| 0 | Project scaffolding: CI, pre-commit, documentation standards, entry point. ✓ |
-| 1 | Kernel abstraction, field placement, HDF5 I/O, deterministic logging. ✓ |
-| 2 | Uniform structured mesh, AMR hierarchy, halo fill, task-graph driver. |
-| 3 | Platform services: manifest infrastructure, comparison-result schema, simulation spec format. |
-| 4 | Visualization: unit-aware plotting, in-engine renderers, public gallery. |
-| 5 | Newtonian hydrodynamics: finite-volume Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
-| 6 | Self-gravity and N-body: multigrid Poisson, particle infrastructure, Barnes–Hut tree. |
-| 7 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
-| 8 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
-| 9 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
-| 10 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
-| 11 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. |
-| 12 | Moving mesh: Arepo-class Voronoi. *(stretch)* |
-| 13 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
-| 14 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+| 0 | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
+| 1 | Stencil derivation pipeline: SymPy-based finite-difference coefficients, arbitrary order, convergence tests. ✓ |
+| 2 | Concrete geometry: `CartesianGrid` as a concrete `Region`; coordinate arrays; cell volumes and face areas. |
+| 3 | Concrete fields: JAX-backed `ScalarField` and `VectorField` on a `CartesianGrid`; field arithmetic and pointwise operations. |
+| 4 | Numerical operators: concrete `DifferentialOperator` subclasses (gradient, divergence, Laplacian) using the Epoch 1 stencil coefficients; convergence tests against analytical solutions. |
+| 5 | Mesh infrastructure: ghost cells and halo fill; physical boundary condition application; structured-mesh topology. |
+| 6 | I/O and diagnostics: HDF5 field output with provenance sidecars; checkpointing; simple time-series diagnostics. |
+| 7 | Scalar transport: linear advection and diffusion; method-of-lines time integration; analytical convergence tests. |
+| 8 | Newtonian hydrodynamics: Euler equations, finite-volume Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
+| 9 | Self-gravity: multigrid Poisson solver; N-body particle infrastructure; Barnes–Hut tree. |
+| 10 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
+| 11 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
+| 12 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
+| 13 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
+| 14 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
+| 15 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
+| 16 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
+| 17 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
+| 18 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
 
 ---
 
@@ -76,25 +82,21 @@ extrinsic curvature `K_ij` are evolved fields.
 
 ### Milestones
 
-One-time deliveries that establish the platform foundation — covering process
-discipline, documentation architecture, verification infrastructure, and
-reproducibility tooling:
-
 | Milestone | Capability |
 |-----------|------------|
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
-| M1 | Verification infrastructure: Function:/Source:/Sink: block convention, formulas register, convergence testing helpers, externally-grounded test pattern. ✓ |
+| M1 | Verification infrastructure: convergence testing helpers, formulas register, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions as one-paragraph claims in a single file; docs/ as a minimal index with API reference. ✓ |
-| M3 | Validation infrastructure: manifests, provenance sidecars (git commit hash on every engine-written file), and comparison-result schema. Planned alongside simulation Epoch 3. |
-| M4 | Reproducibility capsule tooling: self-executing builder from the architectural basis established in M2. |
+| M3 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 6. |
+| M4 | Reproducibility capsule tooling: self-executing builder from the architectural basis. |
 | M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
 
 ### Per-epoch verification standard
 
 Every simulation epoch must satisfy this checklist before it is considered verified:
 
-- Function:/Source:/Sink: block on every operator class introduced
+- Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
 - Entry in the formulas register (`replication/formulas.md`) for each physics formula
-- At least one externally-grounded test against an analytical solution or observational data (not an engine-generated golden file, and not the output of another simulation code)
-- At least one convergence test confirming the stated approximation order p
-- Lane A/B/C classification stated; derivation document with SymPy checks for Lanes B and C
+- At least one externally-grounded convergence test against an analytical solution
+  or observational data (not an engine-generated golden file)
+- Lane A/B/C classification stated in the PR description
