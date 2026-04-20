@@ -7,44 +7,43 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
-from cosmic_foundry.computation.array import Array  # noqa: E402
-from cosmic_foundry.computation.descriptor import Extent  # noqa: E402
 from cosmic_foundry.theory import (  # noqa: E402
-    Discretization,
+    CovectorField,
+    DifferentialForm,
+    DifferentialOperator,
     Field,
     Function,
     IndexedSet,
-    LocatedDiscretization,
-    ModalDiscretization,
+    MetricTensor,
     PseudoRiemannianManifold,
+    Region,
     RiemannianManifold,
     ScalarField,
     Set,
-    Sink,
     SmoothManifold,
-    Source,
+    SymmetricTensorField,
     TensorField,
+    VectorField,
 )
 
 __all__ = [
     "__version__",
-    # computation
-    "Array",
-    "Extent",
     # fields
+    "CovectorField",
+    "DifferentialForm",
+    "DifferentialOperator",
     "Field",
+    "MetricTensor",
+    "Region",
     "ScalarField",
+    "SymmetricTensorField",
     "TensorField",
+    "VectorField",
     # theory
-    "Discretization",
     "Function",
     "IndexedSet",
-    "LocatedDiscretization",
-    "ModalDiscretization",
     "PseudoRiemannianManifold",
     "RiemannianManifold",
     "Set",
-    "Sink",
     "SmoothManifold",
-    "Source",
 ]

@@ -15,11 +15,6 @@ class Function(ABC, Generic[D, C]):
     Subclasses parameterize D (domain type) and C (codomain type), making
     the mathematical contract explicit in the type signature.
 
-    Example:
-        class WriteArray(Sink[tuple[Path, Any]]): ...
-        class LoadSchema(Source[str, dict[str, Any]]): ...
-        class Field(Function[Point, Vector]): ...
-
     All concrete Function instances should use ``@dataclass(frozen=True)``
     for hashability when they carry no mutable state.
     """
@@ -28,23 +23,4 @@ class Function(ABC, Generic[D, C]):
     def __call__(self, *args: Any, **kwargs: Any) -> C: ...
 
 
-class Sink(Function[D, None]):
-    """Abstract base for all sink classes: D → external state (None).
-
-    Codomain is always None; the effect is external side effects.
-    Subclasses bind D to a specific domain type.
-    """
-
-
-class Source(Function[D, C]):
-    """Abstract base for all source classes: external state (D) → C.
-
-    Subclasses bind D (external state/query) and C (output type).
-    """
-
-
-__all__ = [
-    "Function",
-    "Sink",
-    "Source",
-]
+__all__ = ["Function"]

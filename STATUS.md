@@ -1,16 +1,38 @@
 # Cosmic Foundry — Status
 
-The repository is in a foundation-building phase. We have cleared away
-wrong architectural assumptions (the old Op/Region/Policy framing, bloated
-Function model, mixed concerns in mesh/) and rebuilt on a clean slate:
+The repository is in a foundation-building phase. We have cleared away wrong
+architectural assumptions (the old Op/Region/Policy framing, the `geometry/`
+domain package, `computation/Array` and `Extent` wrappers, the CLI entry point)
+and rebuilt on a clean mathematical foundation.
 
-- `theory/` — pure mathematical ABCs (complete)
-- `geometry/` — Domain and manifold concretizations (complete)
-- `computation/` — Array and Extent data containers (complete)
+## What is complete
 
-There is currently no planned work in this repository. The next steps will
-build the computation layer (stencils, reductions, field operations, spatial
-sweeps) from first principles, informed by the architectural basis in
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+**`theory/`** — pure mathematical ABCs, all tested (96 passing):
 
-For the long-horizon development sequence, see [`ROADMAP.md`](ROADMAP.md).
+- Set hierarchy: `Set`, `IndexedSet`, `IndexedFamily`, `Function`
+- Manifold hierarchy: `Manifold` → `SmoothManifold` → `PseudoRiemannianManifold`
+  → `RiemannianManifold` / `FlatManifold` → `EuclideanSpace` / `MinkowskiSpace`
+- `ManifoldWithBoundary` → `Region`
+- Field hierarchy: `Field` → `TensorField` → `VectorField`, `SymmetricTensorField`
+  → `MetricTensor`, `DifferentialForm` → `ScalarField` / `CovectorField`
+- `DifferentialOperator`
+- `BoundaryCondition` → `LocalBoundaryCondition` / `NonLocalBoundaryCondition`
+
+**`derivations/`** — SymPy-based finite-difference stencil coefficient derivation
+for arbitrary derivative order and approximation order, with convergence tests.
+
+## What is not yet started
+
+`computation/` is empty. There are no concrete implementations of any `theory/` ABC:
+no JAX-backed fields, no grids, no numerical operators, no I/O.
+
+## Near-term work
+
+**Review and sharpen the long-horizon epoch sequence in `ROADMAP.md`.**
+
+The roadmap was written before the `theory/` layer existed. Its epoch sequence
+jumps from early scaffolding to AMR mesh without accounting for the concrete
+implementation steps that bridge the abstract layer to a working physics code.
+The next session should establish a realistic sequence from theory → concrete
+geometry → concrete fields → numerical operators → first physics, and sharpen
+the remaining epochs accordingly.

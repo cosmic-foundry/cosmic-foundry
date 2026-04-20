@@ -144,9 +144,8 @@ def probe_operator_weights(
     Notes
     -----
     This function calls ``kernel_fn.fn`` directly at the center index
-    using a plain NumPy-backed probe array — it does not go through
-    ``execute``.  This keeps the probe independent of the execution
-    machinery and works for any ``Stencil`` with a single-field kernel.
+    using a plain NumPy-backed probe array, independent of any execution
+    machinery. Works for any ``Stencil`` with a single-field kernel.
     """
     center = n // 2
     weights: dict[tuple[int, int, int], float] = {}
