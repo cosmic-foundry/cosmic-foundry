@@ -60,7 +60,8 @@ a discrete object and its continuous counterpart, but does not make scheme choic
 object. An open question is whether a formal `Discretization` — a callable that
 maps a `DifferentialOperator` + grid + order to a discrete stencil — belongs in
 `discrete/`, or whether scheme choice remains implicit in how discrete objects
-are constructed.
+are constructed. The chart on the ambient manifold provides the coordinate map
+that grounds the derivation; a first-class `Discretization` would reference it.
 
 **What is the formal PDE object in the continuous layer?**
 Conservation laws like ∂ρ/∂t + ∇·(ρv) = 0 are statements about continuous
@@ -73,9 +74,11 @@ The symbolic-reasoning identity makes SymPy available in `continuous/` and
 `discrete/`. The natural use is analytical field representations — a concrete
 `ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)` — which
 would make `approximates` algebraically live: stencil derivation and truncation
-error analysis could be done in code rather than in documentation. The interface
-for SymPy-backed fields (evaluatable analytical forms, coordinate handling) is
-not yet designed.
+error analysis could be done in code rather than in documentation. The coordinate
+symbols `x, y` in such an expression are tied to a specific chart: the chart's
+component functions x¹, …, xⁿ are exactly the coordinate symbols the expression
+uses. The interface for SymPy-backed fields (evaluatable analytical forms,
+coordinate-to-chart binding) is not yet designed.
 
 ---
 
@@ -103,7 +106,7 @@ the discrete and numerical layers evaluate.
 | Epoch | Layer | Capability |
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
-| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric. `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
+| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`, `IdentityChart`, `SingleChartAtlas`); `SmoothManifold.atlas` constitutive. `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
 | 2 | Discrete | Cartesian grid as a concrete `IndexedSet` with coordinate geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField` backed by the grid. |
 | 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators via SymPy; truncation error verified algebraically; formal operator composition on the grid. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
