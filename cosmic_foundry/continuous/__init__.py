@@ -16,7 +16,7 @@ from cosmic_foundry.continuous.field import (
     TensorField,
 )
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
-from cosmic_foundry.continuous.manifold import Atlas, Chart, Manifold
+from cosmic_foundry.continuous.manifold import Atlas, Chart, Diffeomorphism, Manifold
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
@@ -31,6 +31,7 @@ __all__ = [
     "BoundaryCondition",
     "Chart",
     "Constraint",
+    "Diffeomorphism",
     "DifferentialForm",
     "DifferentialOperator",
     "Field",
