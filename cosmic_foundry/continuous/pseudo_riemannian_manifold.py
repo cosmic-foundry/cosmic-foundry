@@ -1,14 +1,11 @@
-"""PseudoRiemannianManifold ABC."""
+"""PseudoRiemannianManifold and MetricTensor ABCs."""
 
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING
 
+from cosmic_foundry.continuous.field import SymmetricTensorField
 from cosmic_foundry.continuous.manifold import Manifold
-
-if TYPE_CHECKING:
-    from cosmic_foundry.continuous.metric_tensor import MetricTensor
 
 
 class PseudoRiemannianManifold(Manifold):
@@ -45,6 +42,26 @@ class PseudoRiemannianManifold(Manifold):
         return sum(self.signature)
 
 
-__all__ = [
-    "PseudoRiemannianManifold",
-]
+class MetricTensor(SymmetricTensorField):  # noqa: B024
+    """The metric tensor g on a pseudo-Riemannian manifold (M, g).
+
+    g is a smoothly-varying non-degenerate symmetric (0,2)-tensor field.
+    Its signature (p, q) is inherited from the manifold.  Concrete
+    subclasses are responsible for the non-degeneracy condition and, on
+    Riemannian manifolds, positive-definiteness; neither can be enforced
+    at the ABC level.
+
+    The manifold narrows to PseudoRiemannianManifold, because a metric tensor
+    is precisely the additional structure that makes a manifold pseudo-Riemannian.
+
+    Required:
+        manifold — the pseudo-Riemannian manifold this metric is defined on
+    """
+
+    @property
+    @abstractmethod
+    def manifold(self) -> PseudoRiemannianManifold:
+        """The pseudo-Riemannian manifold on which this metric is defined."""
+
+
+__all__ = ["MetricTensor", "PseudoRiemannianManifold"]

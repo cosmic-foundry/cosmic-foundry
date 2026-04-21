@@ -9,8 +9,8 @@ import sympy
 
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.manifold import Atlas, Chart, Manifold
-from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
+    MetricTensor,
     PseudoRiemannianManifold,
 )
 from cosmic_foundry.foundation.set import Set
