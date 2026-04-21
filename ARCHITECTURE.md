@@ -63,35 +63,33 @@ Function[D, C]      — callable mapping domain D → codomain C
 ### continuous/  · Epoch 1 ✓
 
 ```
-Manifold(Set)
-├── SmoothManifold      — smooth (C∞) structure; atlas constitutes the smooth structure
-│   │   interface: ndim, atlas → Atlas
-│   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
-│       │   interface: metric → MetricTensor (abstract)
-│       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
-│       │   └── EuclideanSpace  — ℝⁿ; free: ndim; metric: EuclideanMetric; atlas: one global IdentityChart
-│       └── MinkowskiSpace       — signature (1,3); no free parameters; metric: MinkowskiMetric; atlas: one global IdentityChart
+Manifold(Set)           — topological space with a smooth atlas; interface: ndim, atlas → Atlas
+└── PseudoRiemannianManifold — Manifold + metric; free: signature, derived: ndim = sum(signature)
+    │   interface: metric → MetricTensor (abstract)
+    ├── RiemannianManifold   — positive-definite metric; free: ndim, derived: signature = (ndim, 0)
+    │   └── EuclideanSpace  — ℝⁿ; free: ndim; metric: EuclideanMetric; atlas: one global IdentityChart
+    └── MinkowskiSpace       — signature (1,3); no free parameters; metric: MinkowskiMetric; atlas: one global IdentityChart
 
 Chart(Function)         — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
-                          interface: domain → SmoothManifold, codomain → EuclideanSpace, inverse → Function
+                          interface: domain → Manifold, codomain → EuclideanSpace, inverse → Function
     IdentityChart       — φ(p) = p; standard chart for globally-chartable manifolds
 
 Atlas(IndexedFamily)    — collection of charts covering M; constitutes the smooth structure of M
-                          interface: manifold → SmoothManifold, __getitem__ → Chart, __len__
+                          interface: manifold → Manifold, __getitem__ → Chart, __len__
     SingleChartAtlas    — one global chart covers all of M (EuclideanSpace, MinkowskiSpace)
 
 Field(Function)         — f: M → V on any Manifold; interface: manifold → Manifold
-└── TensorField         — manifold narrows to SmoothManifold; interface: tensor_type → (p, q)
+└── TensorField         — interface: tensor_type → (p, q)
     ├── VectorField          — (1, 0); codomain TM; contravariant, not a form
     ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
-    │   └── MetricTensor     — g on a PseudoRiemannianManifold; manifold narrows from SmoothManifold
+    │   └── MetricTensor     — g on a PseudoRiemannianManifold
     │       ├── EuclideanMetric  — g_ij = δ_ij; __call__ returns sympy.eye(n)
     │       └── MinkowskiMetric  — g = diag(+1,−1,−1,−1); __call__ returns sympy.diag(1,-1,-1,-1)
     └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k; tensor_type derived
         ├── ScalarField      — Ω⁰(M) = C∞(M); degree 0, tensor type (0, 0)
         └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
 
-DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → SmoothManifold, order → int
+DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → Manifold, order → int
 
 Constraint(ABC)              — abstract; support: Manifold (the geometric locus where the constraint is enforced)
 └── BoundaryCondition        — support is ∂M
@@ -107,7 +105,7 @@ whatever geometric references they need.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
-- `SmoothManifold`: `ndim` is the free parameter (topologically primitive)
+- `Manifold`: `ndim` and `atlas` are the free parameters
 - `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`; `metric` is abstract — every concrete subclass must supply one
 - `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
 - `EuclideanSpace`: `metric = EuclideanMetric` (g_ij = δ_ij) is the quantitative distinguisher from a generic `RiemannianManifold`

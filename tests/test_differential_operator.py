@@ -8,13 +8,13 @@ import pytest
 
 from cosmic_foundry.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.foundation.function import Function
 
 
 class _Gradient(DifferentialOperator):
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         return EuclideanSpace(3)
 
     @property
@@ -27,7 +27,7 @@ class _Gradient(DifferentialOperator):
 
 class _Laplacian(DifferentialOperator):
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         return EuclideanSpace(3)
 
     @property
@@ -55,6 +55,6 @@ def test_laplacian_order() -> None:
     assert _Laplacian().order == 2
 
 
-def test_manifold_is_smooth() -> None:
+def test_manifold_is_manifold() -> None:
     op = _Gradient()
-    assert isinstance(op.manifold, SmoothManifold)
+    assert isinstance(op.manifold, Manifold)

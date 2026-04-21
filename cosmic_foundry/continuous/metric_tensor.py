@@ -19,9 +19,8 @@ class MetricTensor(SymmetricTensorField):  # noqa: B024
     Riemannian manifolds, positive-definiteness; neither can be enforced
     at the ABC level.
 
-    The manifold narrows from SmoothManifold (required by SymmetricTensorField)
-    to PseudoRiemannianManifold, because a metric tensor is precisely the
-    additional structure that makes a smooth manifold pseudo-Riemannian.
+    The manifold narrows to PseudoRiemannianManifold, because a metric tensor
+    is precisely the additional structure that makes a manifold pseudo-Riemannian.
 
     Required:
         manifold — the pseudo-Riemannian manifold this metric is defined on

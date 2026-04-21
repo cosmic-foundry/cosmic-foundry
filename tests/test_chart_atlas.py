@@ -8,9 +8,9 @@ from cosmic_foundry.continuous.atlas import Atlas
 from cosmic_foundry.continuous.chart import Chart
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.identity_chart import IdentityChart
+from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 from cosmic_foundry.foundation.function import Function
 from cosmic_foundry.foundation.indexed_family import IndexedFamily
 
@@ -96,13 +96,13 @@ def assert_single_chart_atlas_manifold() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Assertion functions — SmoothManifold.atlas
+# Assertion functions — Manifold.atlas
 # ---------------------------------------------------------------------------
 
 
-def assert_smooth_manifold_atlas_is_abstract() -> None:
+def assert_manifold_atlas_is_abstract() -> None:
     with pytest.raises(TypeError):
-        SmoothManifold()  # type: ignore[abstract]
+        Manifold()  # type: ignore[abstract]
 
 
 def assert_euclidean_space_atlas_is_single_chart() -> None:
@@ -191,8 +191,8 @@ def test_single_chart_atlas_manifold() -> None:
     assert_single_chart_atlas_manifold()
 
 
-def test_smooth_manifold_atlas_is_abstract() -> None:
-    assert_smooth_manifold_atlas_is_abstract()
+def test_manifold_atlas_is_abstract() -> None:
+    assert_manifold_atlas_is_abstract()
 
 
 def test_euclidean_space_atlas_is_single_chart() -> None:

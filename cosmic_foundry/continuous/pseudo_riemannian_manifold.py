@@ -5,14 +5,14 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
 
 if TYPE_CHECKING:
     from cosmic_foundry.continuous.metric_tensor import MetricTensor
 
 
-class PseudoRiemannianManifold(SmoothManifold):
-    """A SmoothManifold equipped with a non-degenerate metric tensor of
+class PseudoRiemannianManifold(Manifold):
+    """A Manifold equipped with a non-degenerate metric tensor of
     indefinite signature.
 
     A pseudo-Riemannian manifold (M, g) adds a smoothly-varying symmetric
@@ -26,6 +26,7 @@ class PseudoRiemannianManifold(SmoothManifold):
 
     Required:
         signature — metric signature as (p, q); ndim is derived as p + q
+        metric    — the metric tensor g equipping this manifold with geometry
     """
 
     @property

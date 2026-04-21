@@ -13,7 +13,7 @@ from cosmic_foundry.continuous.differential_form import (
 )
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import TensorField
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
 
 
 class _Form(DifferentialForm):
@@ -25,7 +25,7 @@ class _Form(DifferentialForm):
         return self._degree
 
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         return EuclideanSpace(3)
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
@@ -34,7 +34,7 @@ class _Form(DifferentialForm):
 
 class _Scalar(ScalarField):
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         return EuclideanSpace(3)
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
@@ -43,7 +43,7 @@ class _Scalar(ScalarField):
 
 class _Covector(CovectorField):
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         return EuclideanSpace(3)
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
@@ -148,5 +148,5 @@ def test_covector_instance_is_differential_form() -> None:
     assert isinstance(_Covector(), DifferentialForm)
 
 
-def test_manifold_is_smooth() -> None:
-    assert isinstance(_Form(2).manifold, SmoothManifold)
+def test_manifold_is_manifold() -> None:
+    assert isinstance(_Form(2).manifold, Manifold)

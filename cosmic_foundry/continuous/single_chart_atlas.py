@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from cosmic_foundry.continuous.atlas import Atlas
 from cosmic_foundry.continuous.chart import Chart
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
 
 
 class SingleChartAtlas(Atlas):
@@ -22,7 +22,7 @@ class SingleChartAtlas(Atlas):
         self._chart = chart
 
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         """The manifold covered by the single chart."""
         return self._chart.domain
 
