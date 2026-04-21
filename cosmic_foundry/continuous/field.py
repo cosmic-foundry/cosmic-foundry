@@ -47,19 +47,30 @@ class TensorField(Field):  # noqa: B024
         """Return (p, q): p contravariant indices, q covariant indices."""
 
 
-class SymmetricTensorField(TensorField):  # noqa: B024
+class SymmetricTensorField(TensorField):
     """A symmetric covariant 2-tensor field: tensor type (0, 2), g_{ij} = g_{ji}.
-
-    The symmetry condition is a mathematical requirement on concrete
-    implementations; it cannot be enforced at the ABC level.
 
     Covers the metric tensor g, the viscous stress tensor σ, and any
     other symmetric bilinear form on TM.
+
+    The symmetry condition is enforced through component: any valid
+    subclass must satisfy component(i, j) == component(j, i) pointwise.
+
+    Required:
+        component — return the (i, j) scalar field component; must be symmetric
     """
 
     @property
     def tensor_type(self) -> tuple[int, int]:
         return (0, 2)
+
+    @abstractmethod
+    def component(self, i: int, j: int) -> Field:
+        """Return the (i, j) component as a scalar Field on this manifold.
+
+        Implementations must satisfy component(i, j) == component(j, i)
+        pointwise for all valid index pairs.
+        """
 
 
 __all__ = [

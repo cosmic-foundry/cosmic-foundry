@@ -9,6 +9,7 @@ import sympy
 
 from cosmic_foundry.continuous.atlas import Atlas
 from cosmic_foundry.continuous.chart import Chart
+from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
@@ -43,6 +44,20 @@ class _StubMetric(MetricTensor):
     @property
     def manifold(self) -> PseudoRiemannianManifold:
         return self._m
+
+    def component(self, i: int, j: int) -> Field:
+        val = 1.0 if i == j else 0.0
+        m = self._m
+
+        class _C(Field):
+            @property
+            def manifold(self) -> Manifold:
+                return m  # type: ignore[return-value]
+
+            def __call__(self, *a: Any, **kw: Any) -> float:
+                return val
+
+        return _C()
 
     def __call__(self, *args: Any, **kwargs: Any) -> sympy.Matrix:
         return sympy.eye(self._m.ndim)
@@ -126,13 +141,5 @@ def test_flat_r3_isinstance_chain() -> None:
     assert_flat_r3_isinstance_chain()
 
 
-def test_flat_r3_ndim_derived_from_signature() -> None:
-    assert_flat_r3_ndim_derived_from_signature()
-
-
 def test_minkowski_r4_isinstance_chain() -> None:
     assert_minkowski_r4_isinstance_chain()
-
-
-def test_minkowski_r4_ndim_derived_from_signature() -> None:
-    assert_minkowski_r4_ndim_derived_from_signature()

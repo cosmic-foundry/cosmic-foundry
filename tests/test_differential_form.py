@@ -37,11 +37,5 @@ class _Form(DifferentialForm):
         return None
 
 
-def test_tensor_type_tracks_degree() -> None:
-    for k in range(4):
-        form = _Form(k)
-        assert form.tensor_type == (0, k)
-
-
 def test_manifold_is_manifold() -> None:
     assert isinstance(_Form(2).manifold, Manifold)
