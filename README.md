@@ -3,7 +3,7 @@
 Cosmic Foundry is a general-purpose PDE simulation engine, optimized
 for astrophysical use cases. The foundational commitments governing its
 design are in [**Architectural basis**](ARCHITECTURE.md#architectural-basis).
-The epoch-by-epoch capability sequence is in [`ROADMAP.md`](ROADMAP.md).
+The epoch-by-epoch capability sequence and development roadmap are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Quick start
 

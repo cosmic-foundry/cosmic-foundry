@@ -19,19 +19,8 @@ research/index
 ## Overview
 
 Cosmic Foundry is a Python engine for numerical astrophysics. The simulation
-capability sequence — hydrodynamics through numerical relativity, radiation
-transport, gravity, N-body, microphysics, and cosmology — is defined in
-[`ROADMAP.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
-The current work queue and long-horizon epoch sequence are in
-[`ROADMAP.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md).
-
-## Architecture
-
-All live architectural decisions are recorded as one-paragraph claims in
+capability sequence, architectural decisions, and current work queue are in
 [`ARCHITECTURE.md`](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ARCHITECTURE.md).
-That file is the single authoritative source for platform structure, the
-kernel and field abstractions, the operator model, the mesh layer, I/O,
-diagnostics, and the documentation and visualization stacks.
 
 ## Development
 

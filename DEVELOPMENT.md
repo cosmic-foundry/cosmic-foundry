@@ -3,7 +3,7 @@
 This document covers the development workflow for all contributors
 to this repository. For cross-cutting architectural decisions and open
 design questions, see [`ARCHITECTURE.md`](ARCHITECTURE.md). For the
-planned work and roadmap, see [`ROADMAP.md`](ROADMAP.md).
+planned work and roadmap, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
@@ -52,9 +52,9 @@ Before opening or pushing to a PR:
 
 - [ ] Read `DEVELOPMENT.md` (this file) and `ARCHITECTURE.md` to understand the rules and decisions that govern the PR
 - [ ] Run `pre-commit run --all-files` locally and fix any failures
-- [ ] Read `## Current work` in `ROADMAP.md` to understand the current planned work
+- [ ] Read `## Current work` in `ARCHITECTURE.md` to understand the current planned work
 - [ ] Determine if this PR completes any of the planned items
-  - [ ] **If yes:** Remove the item from `ROADMAP.md`
+  - [ ] **If yes:** Remove the item from `ARCHITECTURE.md`
   - [ ] **If yes:** Horizon-scan the next items — are they fully specified? Flesh out details if needed
   - [ ] **If yes:** Verify no inconsistencies between this change and the next planned items
   - [ ] **If no:** Note "No change to roadmap position" in the PR description
@@ -159,8 +159,8 @@ script from the `cosmic-foundry` checkout directory.
 
 ## Roadmap position
 
-**At the start of every session**, read `## Current work` in `ROADMAP.md`.
-It is the immediate implementation queue. The rest of `ROADMAP.md` covers
+**At the start of every session**, read `## Current work` in `ARCHITECTURE.md`.
+It is the immediate implementation queue. The rest of `ARCHITECTURE.md` covers
 the long-horizon capability sequence (epochs, milestones, verification
 standard) — items there are not yet specified well enough to implement
 without further design discussion. When an item becomes fully specified
@@ -174,17 +174,17 @@ Maintenance and tooling PRs that do not advance either track should
 note "No change to roadmap position" in the PR description.
 
 **When a PR completes a planned item**, that same PR must remove the
-corresponding entry from `ROADMAP.md ## Current work`. Do not leave
+corresponding entry from `ARCHITECTURE.md ## Current work`. Do not leave
 completed items there as historical record — the git log serves that
 purpose. The rule is: if the item is done when the PR merges, it is
-gone from `ROADMAP.md` when the PR merges.
+gone from `ARCHITECTURE.md` when the PR merges.
 
 **Before merging a completing PR, horizon-scan the next well-defined
 items in `## Current work`** and ask two questions for each:
 1. Does it have enough detail to be implementable without further design discussion?
 2. Is anything in the current change inconsistent with it?
 
-If the answer to (1) is no, flesh out the missing details in `ROADMAP.md`
+If the answer to (1) is no, flesh out the missing details in `ARCHITECTURE.md`
 in the same PR (moving the item from later in the file if it lives there).
 Do not update `ARCHITECTURE.md` speculatively — it records live decisions
 only and is updated by the PR that implements the change. If the answer
@@ -210,12 +210,12 @@ The retrospective covers:
    decision needs updating? Were any open questions resolved? Are any
    paragraphs now self-evident from the code and therefore removable?
 
-2. **`ROADMAP.md`**. Does the upcoming simulation or V&V scope still
+2. **`ARCHITECTURE.md`**. Does the upcoming simulation or V&V scope still
    make sense given what we built? Should any epoch one-liner be
    reworded, reordered, or split? Is the immediate next work section
    still accurate?
 
-3. **Process documents** (`DEVELOPMENT.md`, `ROADMAP.md`). Did any
+3. **Process documents** (`DEVELOPMENT.md`, `ARCHITECTURE.md`). Did any
    development rules prove unworkable, insufficient, or in need of
    precision?
 
@@ -243,7 +243,7 @@ Any architecture review should also include a subjective pass over the
 `*(Current inconsistency: ...)*` annotations in `ARCHITECTURE.md
 §Architectural basis`. For each one, ask: has recent work resolved this
 inconsistency? If yes, remove the annotation and close or update the
-corresponding ROADMAP.md gap-closure item.
+corresponding ARCHITECTURE.md gap-closure item.
 
 ---
 
@@ -351,7 +351,7 @@ In practice this means:
    `setup_environment.sh` or the remediation commands printed by the
    script.
 
-2. **Read `## Current work` in `ROADMAP.md`** — current planned work
+2. **Read `## Current work` in `ARCHITECTURE.md`** — current planned work
    and navigation anchor.
 
 3. **Read `ARCHITECTURE.md`** — all live architectural decisions. When
