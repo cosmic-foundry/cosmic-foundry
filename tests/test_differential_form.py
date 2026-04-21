@@ -1,14 +1,10 @@
-"""Tests for DifferentialForm, ScalarField, and CovectorField."""
+"""Tests for DifferentialForm."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from cosmic_foundry.continuous.differential_form import (
-    CovectorField,
-    DifferentialForm,
-    ScalarField,
-)
+from cosmic_foundry.continuous.differential_form import DifferentialForm
 from cosmic_foundry.continuous.manifold import Manifold
 
 
@@ -41,80 +37,10 @@ class _Form(DifferentialForm):
         return None
 
 
-class _Scalar(ScalarField):
-    @property
-    def manifold(self) -> Manifold:
-        return _M
-
-    def __call__(self, *args: Any, **kwargs: Any) -> float:
-        return 0.0
-
-
-class _Covector(CovectorField):
-    @property
-    def manifold(self) -> Manifold:
-        return _M
-
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        return None
-
-
-# ---------------------------------------------------------------------------
-# degree and tensor_type
-# ---------------------------------------------------------------------------
-
-
-def test_degree_zero_form() -> None:
-    form = _Form(0)
-    assert form.degree == 0
-    assert form.tensor_type == (0, 0)
-
-
-def test_degree_one_form() -> None:
-    form = _Form(1)
-    assert form.degree == 1
-    assert form.tensor_type == (0, 1)
-
-
-def test_degree_two_form() -> None:
-    form = _Form(2)
-    assert form.degree == 2
-    assert form.tensor_type == (0, 2)
-
-
 def test_tensor_type_tracks_degree() -> None:
     for k in range(4):
         form = _Form(k)
         assert form.tensor_type == (0, k)
-
-
-def test_scalar_field_degree() -> None:
-    assert _Scalar().degree == 0
-
-
-def test_scalar_field_tensor_type() -> None:
-    assert _Scalar().tensor_type == (0, 0)
-
-
-def test_covector_field_degree() -> None:
-    assert _Covector().degree == 1
-
-
-def test_covector_field_tensor_type() -> None:
-    assert _Covector().tensor_type == (0, 1)
-
-
-# ---------------------------------------------------------------------------
-# isinstance checks confirm the type relationship is real, not just nominal
-# ---------------------------------------------------------------------------
-
-
-def test_scalar_instance_is_differential_form() -> None:
-    assert isinstance(_Scalar(), DifferentialForm)
-
-
-def test_covector_instance_is_differential_form() -> None:
-    assert isinstance(_Covector(), DifferentialForm)
 
 
 def test_manifold_is_manifold() -> None:

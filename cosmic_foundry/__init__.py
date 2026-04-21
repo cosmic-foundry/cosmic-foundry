@@ -8,16 +8,13 @@ jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry._version import __version__  # noqa: E402
 from cosmic_foundry.continuous import (  # noqa: E402
-    CovectorField,
     DifferentialForm,
     DifferentialOperator,
     Field,
     MetricTensor,
     PseudoRiemannianManifold,
-    ScalarField,
     SymmetricTensorField,
     TensorField,
-    VectorField,
 )
 from cosmic_foundry.foundation import (  # noqa: E402
     Function,
@@ -28,15 +25,12 @@ from cosmic_foundry.foundation import (  # noqa: E402
 __all__ = [
     "__version__",
     # fields
-    "CovectorField",
     "DifferentialForm",
     "DifferentialOperator",
     "Field",
     "MetricTensor",
-    "ScalarField",
     "SymmetricTensorField",
     "TensorField",
-    "VectorField",
     # theory
     "Function",
     "IndexedSet",

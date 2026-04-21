@@ -4,20 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from cosmic_foundry.continuous.differential_form import (
-    CovectorField,
-    ScalarField,
-)
 from cosmic_foundry.continuous.field import (
     SymmetricTensorField,
     TensorField,
-    VectorField,
 )
 from cosmic_foundry.continuous.manifold import Manifold
-
-# ---------------------------------------------------------------------------
-# Minimal concrete stubs
-# ---------------------------------------------------------------------------
 
 
 class _StubManifold(Manifold):
@@ -31,33 +22,6 @@ class _StubManifold(Manifold):
 
 
 _M = _StubManifold()
-
-
-class _Scalar(ScalarField):
-    @property
-    def manifold(self) -> Manifold:
-        return _M
-
-    def __call__(self, *args: Any, **kwargs: Any) -> float:
-        return 0.0
-
-
-class _Vector(VectorField):
-    @property
-    def manifold(self) -> Manifold:
-        return _M
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return None
-
-
-class _Covector(CovectorField):
-    @property
-    def manifold(self) -> Manifold:
-        return _M
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return None
 
 
 class _CustomTensor(TensorField):
@@ -90,26 +54,13 @@ class _SymmetricTensor(SymmetricTensorField):
 
 
 def test_tensor_field_manifold_is_manifold() -> None:
-    assert isinstance(_Scalar().manifold, Manifold)
-    assert isinstance(_Vector().manifold, Manifold)
-    assert isinstance(_Covector().manifold, Manifold)
+    assert isinstance(_CustomTensor().manifold, Manifold)
+    assert isinstance(_SymmetricTensor().manifold, Manifold)
 
 
 # ---------------------------------------------------------------------------
-# tensor_type on named subclasses
+# tensor_type
 # ---------------------------------------------------------------------------
-
-
-def test_scalar_field_tensor_type() -> None:
-    assert _Scalar().tensor_type == (0, 0)
-
-
-def test_vector_field_tensor_type() -> None:
-    assert _Vector().tensor_type == (1, 0)
-
-
-def test_covector_field_tensor_type() -> None:
-    assert _Covector().tensor_type == (0, 1)
 
 
 def test_custom_tensor_type() -> None:
@@ -121,22 +72,7 @@ def test_symmetric_tensor_field_tensor_type() -> None:
 
 
 def test_tensor_type_is_nonneg_int_pair() -> None:
-    for instance in [
-        _Scalar(),
-        _Vector(),
-        _Covector(),
-        _CustomTensor(),
-        _SymmetricTensor(),
-    ]:
+    for instance in [_CustomTensor(), _SymmetricTensor()]:
         p, q = instance.tensor_type
         assert isinstance(p, int) and isinstance(q, int)
         assert p >= 0 and q >= 0
-
-
-# ---------------------------------------------------------------------------
-# Callability
-# ---------------------------------------------------------------------------
-
-
-def test_scalar_field_callable() -> None:
-    assert _Scalar()() == 0.0

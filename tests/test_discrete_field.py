@@ -4,18 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from cosmic_foundry.continuous.differential_form import ScalarField
-from cosmic_foundry.continuous.field import Field, VectorField
+from cosmic_foundry.continuous.differential_form import DifferentialForm
+from cosmic_foundry.continuous.field import Field, TensorField
 from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.discrete.discrete_field import (
     DiscreteScalarField,
     DiscreteVectorField,
 )
 from cosmic_foundry.foundation.indexed_set import IndexedSet
-
-# ---------------------------------------------------------------------------
-# Minimal concrete stubs
-# ---------------------------------------------------------------------------
 
 
 class _StubManifold(Manifold):
@@ -45,7 +41,7 @@ class _Grid(IndexedSet):
 
 
 class _DiscreteScalar(DiscreteScalarField):
-    def __init__(self, approximates: ScalarField | None = None) -> None:
+    def __init__(self, approximates: DifferentialForm | None = None) -> None:
         self._approximates = approximates
 
     @property
@@ -53,7 +49,7 @@ class _DiscreteScalar(DiscreteScalarField):
         return _Grid()
 
     @property
-    def approximates(self) -> ScalarField | None:
+    def approximates(self) -> DifferentialForm | None:
         return self._approximates
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
@@ -61,7 +57,7 @@ class _DiscreteScalar(DiscreteScalarField):
 
 
 class _DiscreteVector(DiscreteVectorField):
-    def __init__(self, approximates: VectorField | None = None) -> None:
+    def __init__(self, approximates: TensorField | None = None) -> None:
         self._approximates = approximates
 
     @property
@@ -69,14 +65,18 @@ class _DiscreteVector(DiscreteVectorField):
         return _Grid()
 
     @property
-    def approximates(self) -> VectorField | None:
+    def approximates(self) -> TensorField | None:
         return self._approximates
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return (0.0, 0.0, 0.0)
 
 
-class _ConcreteScalarField(ScalarField):
+class _ConcreteDifferentialForm(DifferentialForm):
+    @property
+    def degree(self) -> int:
+        return 0
+
     @property
     def manifold(self) -> Manifold:
         return _M
@@ -111,15 +111,15 @@ def test_approximates_none_by_default() -> None:
 
 
 def test_approximates_set_to_continuous_field() -> None:
-    continuous = _ConcreteScalarField()
+    continuous = _ConcreteDifferentialForm()
     f = _DiscreteScalar(approximates=continuous)
     assert f.approximates is continuous
 
 
-def test_discrete_scalar_approximates_narrows_to_scalar_field() -> None:
-    continuous = _ConcreteScalarField()
+def test_discrete_scalar_approximates_narrows_to_differential_form() -> None:
+    continuous = _ConcreteDifferentialForm()
     f = _DiscreteScalar(approximates=continuous)
-    assert isinstance(f.approximates, ScalarField)
+    assert isinstance(f.approximates, DifferentialForm)
 
 
 def test_discrete_vector_approximates_is_none_by_default() -> None:
