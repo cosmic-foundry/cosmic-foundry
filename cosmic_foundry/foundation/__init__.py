@@ -10,10 +10,12 @@ from cosmic_foundry.foundation.function import Function
 from cosmic_foundry.foundation.indexed_family import IndexedFamily
 from cosmic_foundry.foundation.indexed_set import IndexedSet
 from cosmic_foundry.foundation.set import Set
+from cosmic_foundry.foundation.topological_space import TopologicalSpace
 
 __all__ = [
     "Function",
     "IndexedFamily",
     "IndexedSet",
     "Set",
+    "TopologicalSpace",
 ]
