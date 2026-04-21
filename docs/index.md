@@ -3,10 +3,10 @@
 A computational astrophysics engine for multi-physics simulation.
 
 ```{toctree}
-:maxdepth: 1
+:maxdepth: 2
 :caption: Concepts
 
-manifolds
+continuous/index
 ```
 
 ```{toctree}
