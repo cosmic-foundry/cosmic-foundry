@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from cosmic_foundry.continuous.euclidean_metric import EuclideanMetric
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.identity_chart import IdentityChart
+from cosmic_foundry.continuous.minkowski_metric import MinkowskiMetric
 from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
@@ -37,6 +39,10 @@ class FlatR3(RiemannianManifold):
         return (3, 0)
 
     @property
+    def metric(self) -> EuclideanMetric:
+        return EuclideanMetric(self)
+
+    @property
     def atlas(self) -> SingleChartAtlas:
         return SingleChartAtlas(IdentityChart(self))
 
@@ -49,6 +55,10 @@ class MinkowskiR4(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (1, 3)
+
+    @property
+    def metric(self) -> MinkowskiMetric:
+        return MinkowskiMetric(self)
 
     @property
     def atlas(self) -> SingleChartAtlas:

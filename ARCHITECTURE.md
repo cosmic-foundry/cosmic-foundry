@@ -67,9 +67,10 @@ Manifold(Set)
 ├── SmoothManifold      — smooth (C∞) structure; atlas constitutes the smooth structure
 │   │   interface: ndim, atlas → Atlas
 │   └── PseudoRiemannianManifold — indefinite metric; free: signature, derived: ndim = sum(signature)
+│       │   interface: metric → MetricTensor (abstract)
 │       ├── RiemannianManifold   — positive-definite; free: ndim, derived: signature = (ndim, 0)
-│       │   └── EuclideanSpace  — ℝⁿ; free: ndim; atlas: one global IdentityChart
-│       └── MinkowskiSpace       — signature (1,3); no free parameters; atlas: one global IdentityChart
+│       │   └── EuclideanSpace  — ℝⁿ; free: ndim; metric: EuclideanMetric; atlas: one global IdentityChart
+│       └── MinkowskiSpace       — signature (1,3); no free parameters; metric: MinkowskiMetric; atlas: one global IdentityChart
 
 Chart(Function)         — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
                           interface: domain → SmoothManifold, codomain → EuclideanSpace, inverse → Function
@@ -84,6 +85,8 @@ Field(Function)         — f: M → V on any Manifold; interface: manifold → 
     ├── VectorField          — (1, 0); codomain TM; contravariant, not a form
     ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
     │   └── MetricTensor     — g on a PseudoRiemannianManifold; manifold narrows from SmoothManifold
+    │       ├── EuclideanMetric  — g_ij = δ_ij; __call__ returns sympy.eye(n)
+    │       └── MinkowskiMetric  — g = diag(+1,−1,−1,−1); __call__ returns sympy.diag(1,-1,-1,-1)
     └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k; tensor_type derived
         ├── ScalarField      — Ω⁰(M) = C∞(M); degree 0, tensor type (0, 0)
         └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
@@ -105,8 +108,20 @@ whatever geometric references they need.
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
 - `SmoothManifold`: `ndim` is the free parameter (topologically primitive)
-- `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`
+- `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`; `metric` is abstract — every concrete subclass must supply one
 - `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
+- `EuclideanSpace`: `metric = EuclideanMetric` (g_ij = δ_ij) is the quantitative distinguisher from a generic `RiemannianManifold`
+- `MinkowskiSpace`: `metric = MinkowskiMetric` (g = diag(+1,−1,−1,−1)) is the quantitative distinguisher from a generic `PseudoRiemannianManifold`
+
+**Long-term direction: names as tags, not types.** The named subclass
+hierarchy (`EuclideanSpace`, `MinkowskiSpace`) is an intermediate step.
+The destination is parameterized instances: a manifold is fully specified
+by its mathematical content (metric, signature), and names like "Euclidean
+space" are informal labels attached to instances rather than class-level
+distinctions. As the hierarchy matures, named subclasses are replaced by
+concrete parameterized implementations of the abstract ABCs, and the ABCs
+themselves become the only types. No new named subclasses should be added
+without a plan to dissolve them.
 
 **Planned additions** (Epoch 12)
 
@@ -132,14 +147,13 @@ fields. Before discretizing, we may want to express them as formal objects in
 have a working discretization to invert from.
 
 **What do SymPy-backed continuous objects look like?**
-The natural use of SymPy in `continuous/` is analytical field representations —
-a concrete `ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)`
-— which would make `approximates` algebraically live: stencil derivation and
-truncation error analysis could be done in code rather than in documentation.
-The coordinate symbols `x, y` in such an expression are tied to a specific
-chart: the chart's component functions x¹, …, xⁿ are exactly the coordinate
-symbols the expression uses. The interface for SymPy-backed fields (evaluatable
-analytical forms, coordinate-to-chart binding) is not yet designed.
+Constant fields are resolved: `EuclideanMetric.__call__` returns `sympy.eye(n)`
+and `MinkowskiMetric.__call__` returns `sympy.diag(1,-1,-1,-1)` — both
+independent of position. The open case is coordinate-dependent fields: a
+concrete `ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)`
+where the coordinate symbols `x, y` are tied to a specific chart. The interface
+for coordinate-dependent SymPy-backed fields (evaluatable analytical forms,
+coordinate-to-chart binding) is not yet designed.
 
 ### discrete/  · Epochs 2–3
 
