@@ -16,6 +16,13 @@ continuous/index
 api/index
 ```
 
+```{toctree}
+:maxdepth: 1
+:caption: Research
+
+RESEARCH
+```
+
 
 ## Overview
 
