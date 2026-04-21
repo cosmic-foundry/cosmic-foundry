@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cosmic_foundry.continuous.euclidean_metric import EuclideanMetric
 from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
@@ -27,6 +28,11 @@ class EuclideanSpace(RiemannianManifold):
     def ndim(self) -> int:
         """Dimension of this Euclidean space."""
         return self._n
+
+    @property
+    def metric(self) -> EuclideanMetric:
+        """The flat Euclidean metric: g_ij = δ_ij."""
+        return EuclideanMetric(self)
 
     @property
     def atlas(self) -> SingleChartAtlas:

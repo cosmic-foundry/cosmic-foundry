@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 
 from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+
+if TYPE_CHECKING:
+    from cosmic_foundry.continuous.metric_tensor import MetricTensor
 
 
 class PseudoRiemannianManifold(SmoothManifold):
@@ -28,6 +32,11 @@ class PseudoRiemannianManifold(SmoothManifold):
     @abstractmethod
     def signature(self) -> tuple[int, int]:
         """Metric signature (p, q): p positive, q negative eigenvalues."""
+
+    @property
+    @abstractmethod
+    def metric(self) -> MetricTensor:
+        """The metric tensor g that equips this manifold with its geometry."""
 
     @property
     def ndim(self) -> int:

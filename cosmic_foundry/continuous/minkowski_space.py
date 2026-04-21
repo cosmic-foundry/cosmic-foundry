@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cosmic_foundry.continuous.identity_chart import IdentityChart
+from cosmic_foundry.continuous.minkowski_metric import MinkowskiMetric
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
@@ -24,6 +25,11 @@ class MinkowskiSpace(PseudoRiemannianManifold):
     def signature(self) -> tuple[int, int]:
         """Lorentzian signature: one timelike, three spacelike directions."""
         return (1, 3)
+
+    @property
+    def metric(self) -> MinkowskiMetric:
+        """The flat Lorentzian metric: g = diag(+1, −1, −1, −1)."""
+        return MinkowskiMetric(self)
 
     @property
     def atlas(self) -> SingleChartAtlas:
