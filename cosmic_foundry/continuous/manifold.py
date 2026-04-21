@@ -1,4 +1,4 @@
-"""Manifold ABCs: chart, atlas, and smooth structure."""
+"""Manifold ABCs: diffeomorphism, chart, atlas, and smooth structure."""
 
 from __future__ import annotations
 
@@ -13,29 +13,50 @@ D = TypeVar("D")
 C = TypeVar("C")
 
 
-class Chart(Homeomorphism[D, C], Generic[D, C]):
-    """A local coordinate system on a topological manifold: φ: U → V.
+class Diffeomorphism(Homeomorphism[D, C], Generic[D, C]):
+    """A smooth bijection between manifolds with a smooth inverse: φ: U → V.
 
-    A chart maps an open subset U of a manifold M homeomorphically onto an
-    open subset V of ℝⁿ. The component functions x¹, …, xⁿ of φ are the
-    local coordinates. A chart is a homeomorphism whose domain and codomain
-    are both topological manifolds.
+    A diffeomorphism is a homeomorphism whose forward map and inverse are
+    both C∞. Diffeomorphisms are the isomorphisms of smooth manifolds —
+    two manifolds connected by a diffeomorphism are smoothly identical.
+
+    Narrows domain and codomain to Manifold, reflecting that smooth
+    structure is the relevant context.
 
     Required:
-        domain   — the open subset U ⊂ M
-        codomain — the open subset V ⊂ ℝⁿ
-        inverse  — the continuous inverse φ⁻¹: V → U
+        domain   — the source smooth manifold U
+        codomain — the target smooth manifold V
+        inverse  — the smooth inverse φ⁻¹: V → U
     """
 
     @property
     @abstractmethod
-    def domain(self) -> TopologicalManifold:
-        """The open subset of M on which this chart is defined."""
+    def domain(self) -> Manifold:
+        """The source smooth manifold U."""
 
     @property
     @abstractmethod
-    def codomain(self) -> TopologicalManifold:
-        """The open subset of ℝⁿ that is the image of this chart."""
+    def codomain(self) -> Manifold:
+        """The target smooth manifold V."""
+
+    @property
+    @abstractmethod
+    def inverse(self) -> Diffeomorphism[C, D]:
+        """The smooth inverse φ⁻¹: V → U."""
+
+
+class Chart(Diffeomorphism[D, C], Generic[D, C]):  # noqa: B024
+    """A local coordinate system on a smooth manifold: φ: U → V.
+
+    A chart maps an open subset U of a manifold M diffeomorphically onto an
+    open subset V of ℝⁿ. The component functions x¹, …, xⁿ of φ are the
+    local coordinates.
+
+    Required:
+        domain   — the open subset U ⊂ M
+        codomain — the open subset V ⊂ ℝⁿ
+        inverse  — the smooth inverse φ⁻¹: V → U
+    """
 
 
 class Atlas(IndexedFamily):
@@ -82,4 +103,4 @@ class Manifold(TopologicalManifold):
         """The smooth atlas constituting the smooth structure of M."""
 
 
-__all__ = ["Atlas", "Chart", "Manifold"]
+__all__ = ["Atlas", "Chart", "Diffeomorphism", "Manifold"]
