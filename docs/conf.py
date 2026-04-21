@@ -46,7 +46,6 @@ nb_execution_mode = "off"  # notebooks executed explicitly, not on every build
 # ---------------------------------------------------------------------------
 
 html_theme = "furo"
-html_static_path = ["_static"]
 html_title = f"Cosmic Foundry {version}"
 
 # Canonical base URL — must match the GitHub Pages subpath.
