@@ -403,3 +403,20 @@ trade-off. The costs that actually matter are all downstream:
 Rank options by these. Include the simpler option in every comparison
 even when you intend to recommend the richer one — the user needs the
 full option space to make an informed decision.
+
+### Code economy
+
+Source code and documentation lines are expensive. Every line must be
+read, understood, and kept accurate by every future contributor. Each
+abstraction, helper, and prose paragraph is a permanent cognitive tax.
+When in doubt, delete rather than retain; the simpler the codebase, the
+lower the maintenance burden and the harder it is for bugs to hide.
+
+Test lines are cheap. They run automatically, catch regressions silently,
+and do not accumulate into mental models that contributors must internalize.
+A test that fails is immediately actionable; a test that passes is
+invisible. Write tests liberally and source code parsimoniously.
+
+In practice: before adding a helper, ask whether the call site is already
+readable without it. Before adding a docstring sentence, ask whether a
+good name already says it. Before skipping a test case, write it anyway.
