@@ -1,15 +1,41 @@
-"""Manifold ABCs: topological structure and smooth atlas."""
+"""Manifold ABCs: chart, atlas, and smooth structure."""
 
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING
+from typing import Generic, TypeVar
 
 from cosmic_foundry.continuous.topological_manifold import TopologicalManifold
+from cosmic_foundry.foundation.homeomorphism import Homeomorphism
 from cosmic_foundry.foundation.indexed_family import IndexedFamily
 
-if TYPE_CHECKING:
-    from cosmic_foundry.continuous.chart import Chart
+D = TypeVar("D")
+C = TypeVar("C")
+
+
+class Chart(Homeomorphism[D, C], Generic[D, C]):
+    """A local coordinate system on a topological manifold: φ: U → V.
+
+    A chart maps an open subset U of a manifold M homeomorphically onto an
+    open subset V of ℝⁿ. The component functions x¹, …, xⁿ of φ are the
+    local coordinates. A chart is a homeomorphism whose domain and codomain
+    are both topological manifolds.
+
+    Required:
+        domain   — the open subset U ⊂ M
+        codomain — the open subset V ⊂ ℝⁿ
+        inverse  — the continuous inverse φ⁻¹: V → U
+    """
+
+    @property
+    @abstractmethod
+    def domain(self) -> TopologicalManifold:
+        """The open subset of M on which this chart is defined."""
+
+    @property
+    @abstractmethod
+    def codomain(self) -> TopologicalManifold:
+        """The open subset of ℝⁿ that is the image of this chart."""
 
 
 class Atlas(IndexedFamily):
@@ -22,7 +48,7 @@ class Atlas(IndexedFamily):
     index, and the union of their domains covers all of M.
 
     Required:
-        __getitem__  — retrieve the chart at index i (narrows to Chart)
+        __getitem__  — retrieve the chart at index i
         __len__      — number of charts in this atlas
     """
 
@@ -56,4 +82,4 @@ class Manifold(TopologicalManifold):
         """The smooth atlas constituting the smooth structure of M."""
 
 
-__all__ = ["Atlas", "Manifold"]
+__all__ = ["Atlas", "Chart", "Manifold"]
