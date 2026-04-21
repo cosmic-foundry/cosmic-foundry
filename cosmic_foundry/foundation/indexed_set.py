@@ -20,21 +20,23 @@ class IndexedSet(Set):
     from IndexedSet and layer on additional structure.
 
     Required:
-        ndim      — number of index dimensions n
         shape     — sizes (s₁, …, sₙ) of the index range along each axis,
                     so that the total number of elements is ∏ sᵢ
         intersect — set-theoretic intersection: S ∩ T → IndexedSet | None
-    """
 
-    @property
-    @abstractmethod
-    def ndim(self) -> int:
-        """Number of index dimensions."""
+    Derived:
+        ndim      — number of index dimensions n; equals len(shape)
+    """
 
     @property
     @abstractmethod
     def shape(self) -> tuple[int, ...]:
         """Size along each index axis."""
+
+    @property
+    def ndim(self) -> int:
+        """Number of index dimensions; derived as len(shape)."""
+        return len(self.shape)
 
     @abstractmethod
     def intersect(self, other: IndexedSet) -> IndexedSet | None:
