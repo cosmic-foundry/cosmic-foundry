@@ -7,13 +7,13 @@ from typing import Any
 import pytest
 import sympy
 
-from cosmic_foundry.continuous.chart import Chart
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.manifold import Atlas, Manifold
 from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
+from cosmic_foundry.foundation.homeomorphism import Homeomorphism
 from cosmic_foundry.foundation.set import Set
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ class _StubAtlas(Atlas):
     def manifold(self) -> PseudoRiemannianManifold:
         return self._m
 
-    def __getitem__(self, index: int) -> Chart:
+    def __getitem__(self, index: int) -> Homeomorphism:
         raise IndexError(index)
 
     def __len__(self) -> int:

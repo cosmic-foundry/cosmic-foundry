@@ -7,7 +7,6 @@ cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 from __future__ import annotations
 
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
-from cosmic_foundry.continuous.chart import Chart
 from cosmic_foundry.continuous.constraint import Constraint
 from cosmic_foundry.continuous.differential_form import DifferentialForm
 from cosmic_foundry.continuous.differential_operator import DifferentialOperator
@@ -30,7 +29,6 @@ from cosmic_foundry.continuous.topological_manifold import TopologicalManifold
 __all__ = [
     "Atlas",
     "BoundaryCondition",
-    "Chart",
     "Constraint",
     "DifferentialForm",
     "DifferentialOperator",
