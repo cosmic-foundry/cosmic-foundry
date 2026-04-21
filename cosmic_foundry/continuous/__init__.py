@@ -16,47 +16,37 @@ from cosmic_foundry.continuous.differential_form import (
     ScalarField,
 )
 from cosmic_foundry.continuous.differential_operator import DifferentialOperator
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import (
     Field,
     SymmetricTensorField,
     TensorField,
     VectorField,
 )
-from cosmic_foundry.continuous.identity_chart import IdentityChart
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.metric_tensor import MetricTensor
-from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
-from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
-from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 
 __all__ = [
     "Atlas",
     "BoundaryCondition",
-    "Constraint",
     "Chart",
+    "Constraint",
     "CovectorField",
     "DifferentialForm",
     "DifferentialOperator",
-    "EuclideanSpace",
     "Field",
-    "IdentityChart",
     "LocalBoundaryCondition",
     "Manifold",
     "MetricTensor",
-    "MinkowskiSpace",
     "NonLocalBoundaryCondition",
     "PseudoRiemannianManifold",
-    "RiemannianManifold",
     "ScalarField",
-    "SingleChartAtlas",
     "SymmetricTensorField",
     "TensorField",
     "VectorField",

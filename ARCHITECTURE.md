@@ -63,28 +63,21 @@ Function[D, C]      — callable mapping domain D → codomain C
 ### continuous/  · Epoch 1 ✓
 
 ```
-Manifold(Set)           — topological space with a smooth atlas; interface: ndim, atlas → Atlas
+Manifold(Set)               — topological space with a smooth atlas; interface: ndim, atlas → Atlas
 └── PseudoRiemannianManifold — Manifold + metric; free: signature, derived: ndim = sum(signature)
-    │   interface: metric → MetricTensor (abstract)
-    ├── RiemannianManifold   — positive-definite metric; free: ndim, derived: signature = (ndim, 0)
-    │   └── EuclideanSpace  — ℝⁿ; free: ndim; metric: EuclideanMetric; atlas: one global IdentityChart
-    └── MinkowskiSpace       — signature (1,3); no free parameters; metric: MinkowskiMetric; atlas: one global IdentityChart
+                               interface: metric → MetricTensor (abstract)
 
-Chart(Function)         — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
-                          interface: domain → Manifold, codomain → EuclideanSpace, inverse → Function
-    IdentityChart       — φ(p) = p; standard chart for globally-chartable manifolds
+Chart(Function)             — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
+                               interface: domain → Manifold, codomain → Manifold, inverse → Function
 
-Atlas(IndexedFamily)    — collection of charts covering M; constitutes the smooth structure of M
-                          interface: manifold → Manifold, __getitem__ → Chart, __len__
-    SingleChartAtlas    — one global chart covers all of M (EuclideanSpace, MinkowskiSpace)
+Atlas(IndexedFamily)        — collection of charts covering M; constitutes the smooth structure of M
+                               interface: manifold → Manifold, __getitem__ → Chart, __len__
 
-Field(Function)         — f: M → V on any Manifold; interface: manifold → Manifold
-└── TensorField         — interface: tensor_type → (p, q)
+Field(Function)             — f: M → V on any Manifold; interface: manifold → Manifold
+└── TensorField             — interface: tensor_type → (p, q)
     ├── VectorField          — (1, 0); codomain TM; contravariant, not a form
     ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
     │   └── MetricTensor     — g on a PseudoRiemannianManifold
-    │       ├── EuclideanMetric  — g_ij = δ_ij; __call__ returns sympy.eye(n)
-    │       └── MinkowskiMetric  — g = diag(+1,−1,−1,−1); __call__ returns sympy.diag(1,-1,-1,-1)
     └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k; tensor_type derived
         ├── ScalarField      — Ω⁰(M) = C∞(M); degree 0, tensor type (0, 0)
         └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
@@ -103,23 +96,19 @@ unified `α·f + β·∂f/∂n = g` form. `NonLocalBoundaryCondition` makes no
 claim about the form of the non-locality; concrete subclasses declare
 whatever geometric references they need.
 
+**Class existence is justified by symbolic derivation, not anticipation.**
+Every ABC in `continuous/` must earn its place: a new class is warranted
+only when a SymPy derivation produces a result that is valid only under a
+specific constraint, and that constraint removes a degree of freedom from
+the parameter space. The test: can you point to a SymPy expression that
+fails when the constraint is violated? If not, the class does not belong
+here. Concrete implementations belong in test fixtures or in the
+`computation/` layer — `continuous/` is ABCs only.
+
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
 - `Manifold`: `ndim` and `atlas` are the free parameters
 - `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`; `metric` is abstract — every concrete subclass must supply one
-- `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
-- `EuclideanSpace`: `metric = EuclideanMetric` (g_ij = δ_ij) is the quantitative distinguisher from a generic `RiemannianManifold`
-- `MinkowskiSpace`: `metric = MinkowskiMetric` (g = diag(+1,−1,−1,−1)) is the quantitative distinguisher from a generic `PseudoRiemannianManifold`
-
-**Long-term direction: names as tags, not types.** The named subclass
-hierarchy (`EuclideanSpace`, `MinkowskiSpace`) is an intermediate step.
-The destination is parameterized instances: a manifold is fully specified
-by its mathematical content (metric, signature), and names like "Euclidean
-space" are informal labels attached to instances rather than class-level
-distinctions. As the hierarchy matures, named subclasses are replaced by
-concrete parameterized implementations of the abstract ABCs, and the ABCs
-themselves become the only types. No new named subclasses should be added
-without a plan to dissolve them.
 
 **Planned additions** (Epoch 12)
 
@@ -145,13 +134,12 @@ fields. Before discretizing, we may want to express them as formal objects in
 have a working discretization to invert from.
 
 **What do SymPy-backed continuous objects look like?**
-Constant fields are resolved: `EuclideanMetric.__call__` returns `sympy.eye(n)`
-and `MinkowskiMetric.__call__` returns `sympy.diag(1,-1,-1,-1)` — both
-independent of position. The open case is coordinate-dependent fields: a
-concrete `ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)`
-where the coordinate symbols `x, y` are tied to a specific chart. The interface
-for coordinate-dependent SymPy-backed fields (evaluatable analytical forms,
-coordinate-to-chart binding) is not yet designed.
+The open case is coordinate-dependent fields: a concrete `ScalarField` backed
+by a SymPy expression `f(x, y) = sin(πx)sin(πy)` where the coordinate symbols
+`x, y` are tied to a specific chart. The interface for coordinate-dependent
+SymPy-backed fields (evaluatable analytical forms, coordinate-to-chart binding)
+is not yet designed. Concrete field implementations live outside `continuous/`
+— either in test fixtures or in `computation/` once the numerical layer lands.
 
 ### discrete/  · Epochs 2–3
 
@@ -231,14 +219,13 @@ added to `continuous/` and `discrete/` as the epochs proceed.
 **Epoch 2 design session: how do physical coordinates attach to a grid?**
 The first concrete implementation is a Cartesian grid (`CartesianGrid` as a
 concrete `IndexedSet` with coordinate geometry). The chart formalism is in
-place: `Chart(Function)` maps manifold points to ℝⁿ, and `EuclideanSpace` carries
-a `SingleChartAtlas`. But a `CartesianGrid` is a concrete `IndexedSet`, not a
-manifold — so a `Chart` cannot directly act on it. The design question is: what
-object maps grid indices to physical coordinates, and how does it relate to the
-chart on the ambient `EuclideanSpace`? Settling this unblocks the `approximates`
-convergence-check infrastructure (evaluate the continuous field at cell
-coordinates, compare) and the SymPy-backed field interface (what coordinate
-symbols does the expression use?).
+place: `Chart(Function)` maps manifold points to ℝⁿ. But a `CartesianGrid` is
+a concrete `IndexedSet`, not a manifold — so a `Chart` cannot directly act on
+it. The design question is: what object maps grid indices to physical
+coordinates, and how does it relate to the chart on the ambient manifold?
+Settling this unblocks the `approximates` convergence-check infrastructure
+(evaluate the continuous field at cell coordinates, compare) and the
+SymPy-backed field interface (what coordinate symbols does the expression use?).
 
 ---
 
@@ -252,7 +239,7 @@ extends the discrete and numerical layers minimally to evaluate them.
 | Epoch | Layer | Capability |
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
-| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`, `IdentityChart`, `SingleChartAtlas`); `SmoothManifold.atlas` constitutive. `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
+| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`). `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
 | 2 | Discrete | Cartesian grid as a concrete `IndexedSet` with coordinate geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField` backed by the grid. |
 | 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators via SymPy; truncation error verified algebraically; formal operator composition on the grid. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |

@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.continuous.differential_form import ScalarField
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import Field, VectorField
+from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.discrete.discrete_field import (
     DiscreteScalarField,
     DiscreteVectorField,
@@ -19,7 +19,18 @@ from cosmic_foundry.foundation.indexed_set import IndexedSet
 # Minimal concrete stubs
 # ---------------------------------------------------------------------------
 
-_M = EuclideanSpace(3)
+
+class _StubManifold(Manifold):
+    @property
+    def ndim(self) -> int:
+        return 3
+
+    @property
+    def atlas(self) -> Any:
+        raise NotImplementedError
+
+
+_M = _StubManifold()
 
 
 class _Grid(IndexedSet):
@@ -69,7 +80,7 @@ class _DiscreteVector(DiscreteVectorField):
 
 class _ConcreteScalarField(ScalarField):
     @property
-    def manifold(self) -> EuclideanSpace:
+    def manifold(self) -> Manifold:
         return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
