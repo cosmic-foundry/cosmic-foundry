@@ -23,10 +23,6 @@ tooling — on which application repositories build domain-specific
 physics. No domain-specific physics implementation and no observational
 validation data belongs here.
 
-**The architecture is defined independently of any implementation
-language.** The current Python implementation is one realization of the
-architecture, not the architecture itself.
-
 **The mathematical language of the architecture is differential geometry
 on spatio-temporal manifolds, with PDE theory as the application layer.**
 *(Tension: the current implementation uses only spatial manifolds;
@@ -49,11 +45,6 @@ repository.**
 tables, observational measurements), **the uncertainty in that data is
 explicitly quantified and propagated.**
 
-**The architecture is scale-agnostic.** The physics implementation is
-independent of the deployment scale; any difference in outputs across
-scales is attributable to non-deterministic order of operations, not to
-architectural constraints.
-
 **The engine is dimensionless internally.** Units are attached at the
 boundary where results are compared against analytical solutions or
 observational data.
@@ -66,7 +57,7 @@ observational data.
 repository. Any native code the engine executes is produced at runtime
 by a code-generation backend. `pybind11` and `ctypes` are emergency
 escape hatches only; adopting either requires a documented justification
-here. Pre-built libraries (NumPy, h5py) are consumed as
+here. Pre-built numerical libraries are consumed as
 dependencies, not produced by this build.
 
 **float64 as the default precision.** All field arrays default to
@@ -76,8 +67,7 @@ dependencies, not produced by this build.
 
 **Sphinx + MyST-NB documentation stack.** All narrative documentation is
 built with Sphinx + MyST-NB. Docstrings follow the NumPy convention. The
-docs build runs with warnings-as-errors; GitHub Actions deploys to GitHub
-Pages. Sphinx-design provides layout components.
+docs build runs with warnings-as-errors. Sphinx-design provides layout components.
 
 ---
 
@@ -173,27 +163,17 @@ DiscreteField(Function[IndexedSet, V])
     approximates: Optional[VectorField]
 ```
 
-**`Constraint` / `BoundaryCondition` hierarchy.** `Constraint(ABC)` is the
-root with a single abstract property `support: Manifold` — the geometric
-locus on which the constraint is enforced.  `BoundaryCondition(Constraint)`
-narrows support to the boundary ∂M.  `LocalBoundaryCondition` represents
-`α·f + β·∂f/∂n = g` on a single face — abstract properties `alpha: float`,
-`beta: float`, `constraint: Field`; covers Dirichlet (`α=1, β=0`), Neumann
-(`α=0, β=1`), and Robin. `NonLocalBoundaryCondition` is blank beyond the
-root — it signals that the constraint depends on field values outside the
-immediate neighborhood of the boundary point, but makes no claim about the
-form of that non-locality; concrete subclasses declare whatever geometric
-references they need.
+**`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
+covers Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin via the
+unified `α·f + β·∂f/∂n = g` form. `NonLocalBoundaryCondition` makes no
+claim about the form of the non-locality; concrete subclasses declare
+whatever geometric references they need.
 
 **Derivation chain across the pseudo-Riemannian hierarchy.** At each
 level, tighter constraints allow more to be derived:
 - `SmoothManifold`: `ndim` is the free parameter (topologically primitive)
 - `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`
 - `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
-
-**`intersect` on `IndexedSet`.** Set intersection is a fundamental
-operation on any indexed set and lives as an `@abstractmethod` on
-`IndexedSet`.
 
 ---
 
@@ -206,11 +186,10 @@ and update the affected modules.
 
 **Kernel composition model.**
 A backend-agnostic interface separating kernel computation (Op) from
-spatial domain and execution policy (Policy) is a design goal.
-The earlier Op/Policy/Dispatch framing was dropped before it was
-realized. The current `Stencil` and `Reduction` primitives expose
-`execute` directly; the formal model governing composition, backend
-substitutability, and dispatch is unsettled.
+spatial domain and execution policy (Policy) is a design goal. An
+earlier Op/Policy/Dispatch framing was dropped before it was realized.
+The formal model governing composition, backend substitutability, and
+dispatch is unsettled.
 
 **`DynamicManifold` for full GR.**
 Full GR simulations cannot use a fixed-metric manifold: the metric
@@ -221,14 +200,6 @@ a field in the simulation state. In the 3+1 (ADM) formalism the
 computational domain is a 3-D Riemannian spatial hypersurface; the
 3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
 The concrete entry would be `Spacetime3Plus1(DynamicManifold)`.
-
-**Halo fill fence.**
-The halo-fill operation — ghost-cell exchange for stencil footprints
-that cross patch boundaries — has a designed but not yet implemented
-interface: `HaloFillFence` as a descriptor and `HaloFillPolicy` as the
-execution unit. The driver inserts fences before dispatches whose stencil
-radii exceed the local interior. The design is settled; implementation is
-Epoch 2.
 
 **Numerical transcription discipline.**
 Physics capabilities sourced from reference tables (EOS polynomial fits,
