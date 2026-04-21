@@ -1,6 +1,6 @@
-"""Enforce the symbolic-reasoning boundary on foundation/, continuous/, and discrete/.
+"""Enforce the symbolic-reasoning boundary on foundation/ and continuous/.
 
-These three layers share a common identity: they describe mathematical structure
+These layers share a common identity: they describe mathematical structure
 symbolically, without numerical evaluation. Their import boundary reflects that
 identity: they may only import from the Python standard library, from within
 cosmic_foundry, or from packages on the approved symbolic-reasoning list.
@@ -22,7 +22,6 @@ PACKAGE_ROOT = Path(__file__).parent.parent / "cosmic_foundry"
 PURE_PACKAGES = [
     PACKAGE_ROOT / "foundation",
     PACKAGE_ROOT / "continuous",
-    PACKAGE_ROOT / "discrete",
 ]
 STDLIB = sys.stdlib_module_names
 SYMBOLIC_PACKAGES = {"sympy"}
@@ -69,7 +68,7 @@ def test_pure_packages_have_no_third_party_imports() -> None:
 
     if failures:
         lines = [
-            "foundation/, continuous/, and discrete/ may only import symbolic-reasoning packages (sympy):"  # noqa: E501
+            "foundation/ and continuous/ may only import symbolic-reasoning packages (sympy):"  # noqa: E501
         ]
         for file, imports in failures.items():
             lines.append(f"  {file}: {', '.join(imports)}")
