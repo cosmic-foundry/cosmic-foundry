@@ -9,6 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
 
 from cosmic_foundry._version import __version__  # noqa: E402
+from scripts.gen_continuous_docs import generate as _gen_continuous_docs  # noqa: E402
+
+_gen_continuous_docs()
 
 # ---------------------------------------------------------------------------
 # Project information
