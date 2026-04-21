@@ -1,11 +1,5 @@
 # Cosmic Foundry — Architecture
 
-This document records live architectural decisions and the development
-roadmap. `DEVELOPMENT.md` covers workflow and process decisions
-(including physics capability lanes).
-
----
-
 ## Commitments
 
 These are the foundational claims about this repository. Each is a
@@ -14,35 +8,24 @@ and any PR that violates a claim must explicitly revise it here rather
 than quietly breaking it.
 
 **Cosmic Foundry is a general-purpose PDE simulation engine, optimized
-for astrophysical use cases.** It provides reusable computation
-infrastructure — kernels, mesh, fields, I/O, diagnostics, manifest
-tooling — on which application repositories build domain-specific
-physics. No domain-specific physics implementation and no observational
-validation data belongs here.
+for astrophysical use cases.**
 
 **The mathematical language of the architecture is differential geometry
 on spatio-temporal manifolds, with PDE theory as the application layer.**
 
 **Physical quantities are represented as instances of formal mathematical
-abstractions.** Any concrete representation is an implementation detail.
+abstractions.**
 
 **Every numerical method is formally derived from its continuous
-mathematical counterpart.** The derivation is machine-checkable (SymPy)
-except where the argument is geometric or topological, in which case a
-human-readable derivation is required. Derivations are documented in the
-modules that implement the methods; SymPy is never imported at module load time.
+mathematical counterpart, and machine-checkable, where possible.**
 
-**Every numerical method is verified against an analytical solution or
-observational data, with the verification test living in this
-repository.**
+**Every numerical method is verified against an analytical solution,
+with the verification test living in this repository.**
 
-**Where external data sources are ingested** (reaction rates, opacity
-tables, observational measurements), **the uncertainty in that data is
-explicitly quantified and propagated.**
+**Where external data sources are ingested the uncertainty in that
+data is explicitly quantified and propagated.**
 
-**The engine is dimensionless internally.** Units are attached at the
-boundary where results are compared against analytical solutions or
-observational data.
+**The engine is dimensionless internally.**
 
 ---
 
