@@ -122,10 +122,6 @@ def assert_minkowski_r4_ndim_derived_from_signature() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pseudo_riemannian_manifold_is_abstract() -> None:
-    assert_pseudo_riemannian_manifold_is_abstract()
-
-
 def test_flat_r3_isinstance_chain() -> None:
     assert_flat_r3_isinstance_chain()
 

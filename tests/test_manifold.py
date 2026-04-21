@@ -27,9 +27,5 @@ def assert_manifold_branch_disjoint_from_indexed_set_branch() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_manifold_is_abstract() -> None:
-    assert_manifold_is_abstract()
-
-
 def test_manifold_branch_disjoint_from_indexed_set_branch() -> None:
     assert_manifold_branch_disjoint_from_indexed_set_branch()

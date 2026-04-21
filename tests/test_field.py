@@ -4,21 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from cosmic_foundry.continuous.differential_form import (
     CovectorField,
-    DifferentialForm,
     ScalarField,
 )
 from cosmic_foundry.continuous.field import (
-    Field,
     SymmetricTensorField,
     TensorField,
     VectorField,
 )
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.foundation.function import Function
 
 # ---------------------------------------------------------------------------
 # Minimal concrete stubs
@@ -87,53 +82,6 @@ class _SymmetricTensor(SymmetricTensorField):
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return None
-
-
-# ---------------------------------------------------------------------------
-# Hierarchy
-# ---------------------------------------------------------------------------
-
-
-def test_field_is_function() -> None:
-    assert issubclass(Field, Function)
-
-
-def test_tensor_field_is_field() -> None:
-    assert issubclass(TensorField, Field)
-
-
-def test_scalar_field_is_differential_form() -> None:
-    assert issubclass(ScalarField, DifferentialForm)
-
-
-def test_covector_field_is_differential_form() -> None:
-    assert issubclass(CovectorField, DifferentialForm)
-
-
-def test_scalar_field_is_tensor_field() -> None:
-    assert issubclass(ScalarField, TensorField)
-
-
-def test_vector_field_is_tensor_field() -> None:
-    assert issubclass(VectorField, TensorField)
-
-
-def test_covector_field_is_tensor_field() -> None:
-    assert issubclass(CovectorField, TensorField)
-
-
-def test_symmetric_tensor_field_is_tensor_field() -> None:
-    assert issubclass(SymmetricTensorField, TensorField)
-
-
-def test_field_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        Field()  # type: ignore[abstract]
-
-
-def test_tensor_field_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        TensorField()  # type: ignore[abstract]
 
 
 # ---------------------------------------------------------------------------

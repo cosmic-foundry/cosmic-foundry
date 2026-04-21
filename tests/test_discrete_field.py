@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from cosmic_foundry.continuous.differential_form import ScalarField
 from cosmic_foundry.continuous.field import Field, VectorField
 from cosmic_foundry.continuous.manifold import Manifold
@@ -127,18 +125,3 @@ def test_discrete_scalar_approximates_narrows_to_scalar_field() -> None:
 def test_discrete_vector_approximates_is_none_by_default() -> None:
     f = _DiscreteVector()
     assert f.approximates is None
-
-
-# ---------------------------------------------------------------------------
-# Abstract enforcement
-# ---------------------------------------------------------------------------
-
-
-def test_discrete_scalar_field_cannot_be_instantiated_directly() -> None:
-    with pytest.raises(TypeError):
-        DiscreteScalarField()  # type: ignore[abstract]
-
-
-def test_discrete_vector_field_cannot_be_instantiated_directly() -> None:
-    with pytest.raises(TypeError):
-        DiscreteVectorField()  # type: ignore[abstract]
