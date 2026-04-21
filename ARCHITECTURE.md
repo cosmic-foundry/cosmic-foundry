@@ -49,25 +49,6 @@ observational data.
 
 ---
 
-## Technology baseline
-
-**Python-only engine.** No compiled extensions are shipped from this
-repository. Any native code the engine executes is produced at runtime
-by a code-generation backend. `pybind11` and `ctypes` are emergency
-escape hatches only; adopting either requires a documented justification
-here. Pre-built numerical libraries are consumed as
-dependencies, not produced by this build.
-
-**float64 as the default precision.** All field arrays default to
-`float64`. Precision exceptions must be explicit and documented.
-
-**Python ≥ 3.11.** Single source language end-to-end.
-
-**Sphinx + MyST-NB documentation stack.** All narrative documentation is
-built with Sphinx + MyST-NB. Docstrings follow the NumPy convention. The
-docs build runs with warnings-as-errors. Sphinx-design provides layout components.
-
----
 
 ## Package structure and boundaries
 
