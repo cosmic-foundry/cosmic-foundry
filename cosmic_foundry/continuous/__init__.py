@@ -36,7 +36,6 @@ from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
 )
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 
 __all__ = [
     "Atlas",
@@ -58,7 +57,6 @@ __all__ = [
     "RiemannianManifold",
     "ScalarField",
     "SingleChartAtlas",
-    "SmoothManifold",
     "SymmetricTensorField",
     "TensorField",
     "VectorField",

@@ -7,6 +7,7 @@ import pytest
 from cosmic_foundry.continuous.euclidean_metric import EuclideanMetric
 from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.identity_chart import IdentityChart
+from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.minkowski_metric import MinkowskiMetric
 from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
@@ -14,7 +15,6 @@ from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
 )
 from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
 from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 from cosmic_foundry.foundation.indexed_set import IndexedSet
 from cosmic_foundry.foundation.set import Set
 
@@ -70,9 +70,9 @@ class MinkowskiR4(PseudoRiemannianManifold):
 # ---------------------------------------------------------------------------
 
 
-def assert_smooth_manifold_is_abstract() -> None:
+def assert_manifold_is_abstract() -> None:
     with pytest.raises(TypeError):
-        SmoothManifold()  # type: ignore[abstract]
+        Manifold()  # type: ignore[abstract]
 
 
 def assert_pseudo_riemannian_manifold_is_abstract() -> None:
@@ -100,7 +100,7 @@ def assert_flat_r3_isinstance_chain() -> None:
     m = FlatR3()
     assert isinstance(m, RiemannianManifold)
     assert isinstance(m, PseudoRiemannianManifold)
-    assert isinstance(m, SmoothManifold)
+    assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
@@ -117,8 +117,8 @@ def assert_minkowski_is_pseudo_riemannian_not_riemannian() -> None:
 
 
 def assert_manifold_branch_disjoint_from_indexed_set_branch() -> None:
-    assert not issubclass(SmoothManifold, IndexedSet)
-    assert not issubclass(IndexedSet, SmoothManifold)
+    assert not issubclass(Manifold, IndexedSet)
+    assert not issubclass(IndexedSet, Manifold)
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +149,7 @@ def assert_euclidean_space_isinstance_chain() -> None:
     e = EuclideanSpace(3)
     assert isinstance(e, RiemannianManifold)
     assert isinstance(e, PseudoRiemannianManifold)
-    assert isinstance(e, SmoothManifold)
+    assert isinstance(e, Manifold)
     assert isinstance(e, Set)
 
 
@@ -174,7 +174,7 @@ def assert_minkowski_space_ndim_derived() -> None:
 def assert_minkowski_space_isinstance_chain() -> None:
     m = MinkowskiSpace()
     assert isinstance(m, PseudoRiemannianManifold)
-    assert isinstance(m, SmoothManifold)
+    assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
@@ -187,8 +187,8 @@ def assert_minkowski_space_is_not_riemannian() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_smooth_manifold_is_abstract() -> None:
-    assert_smooth_manifold_is_abstract()
+def test_manifold_is_abstract() -> None:
+    assert_manifold_is_abstract()
 
 
 def test_pseudo_riemannian_manifold_is_abstract() -> None:

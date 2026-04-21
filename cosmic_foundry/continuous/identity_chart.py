@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from cosmic_foundry.continuous.chart import Chart
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.foundation.function import Function
 
 
@@ -20,14 +20,14 @@ class IdentityChart(Chart[Any, Any]):
     where n = domain.ndim.
 
     Required:
-        manifold — the smooth manifold M this chart covers globally
+        manifold — the manifold M this chart covers globally
     """
 
-    def __init__(self, manifold: SmoothManifold) -> None:
+    def __init__(self, manifold: Manifold) -> None:
         self._manifold = manifold
 
     @property
-    def domain(self) -> SmoothManifold:
+    def domain(self) -> Manifold:
         """The manifold M."""
         return self._manifold
 

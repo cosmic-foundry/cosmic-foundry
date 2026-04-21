@@ -16,7 +16,6 @@ from cosmic_foundry.continuous import (  # noqa: E402
     PseudoRiemannianManifold,
     RiemannianManifold,
     ScalarField,
-    SmoothManifold,
     SymmetricTensorField,
     TensorField,
     VectorField,
@@ -45,5 +44,4 @@ __all__ = [
     "PseudoRiemannianManifold",
     "RiemannianManifold",
     "Set",
-    "SmoothManifold",
 ]

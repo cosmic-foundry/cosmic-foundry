@@ -16,7 +16,6 @@ from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 
 # ---------------------------------------------------------------------------
 # Minimal concrete stubs
@@ -27,7 +26,7 @@ _BOUNDARY = EuclideanSpace(2)  # stand-in for a boundary manifold
 
 class _ConstantField(ScalarField):
     @property
-    def manifold(self) -> SmoothManifold:
+    def manifold(self) -> Manifold:
         return EuclideanSpace(3)
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:

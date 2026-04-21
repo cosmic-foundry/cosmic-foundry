@@ -1,4 +1,4 @@
-"""Chart ABC: a local coordinate system on a smooth manifold."""
+"""Chart ABC: a local coordinate system on a manifold."""
 
 from __future__ import annotations
 
@@ -9,17 +9,17 @@ from cosmic_foundry.foundation.function import Function
 
 if TYPE_CHECKING:
     from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
-    from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
+    from cosmic_foundry.continuous.manifold import Manifold
 
 D = TypeVar("D")  # type of domain points
 C = TypeVar("C")  # type of codomain coordinates
 
 
 class Chart(Function[D, C], Generic[D, C]):
-    """A local coordinate system on a smooth manifold: a diffeomorphism φ: U → V.
+    """A local coordinate system on a manifold: a diffeomorphism φ: U → V.
 
-    A chart assigns coordinates to points in an open subset U of a smooth
-    manifold M by mapping them homeomorphically onto an open subset V of ℝⁿ.
+    A chart assigns coordinates to points in an open subset U of a manifold
+    M by mapping them homeomorphically onto an open subset V of ℝⁿ.
     The component functions x¹, …, xⁿ of φ are the local coordinates.
 
     A chart is a diffeomorphism: smooth, injective, and with a smooth inverse.
@@ -33,7 +33,7 @@ class Chart(Function[D, C], Generic[D, C]):
 
     @property
     @abstractmethod
-    def domain(self) -> SmoothManifold:
+    def domain(self) -> Manifold:
         """The open subset of M on which this chart is defined."""
 
     @property

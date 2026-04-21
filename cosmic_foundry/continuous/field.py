@@ -1,7 +1,7 @@
 """Field hierarchy: f: M → V.
 
   Field        — any assignment of values to manifold points; manifold: Manifold
-  TensorField  — codomain is a tensor bundle T^(p,q)M; manifold: SmoothManifold
+  TensorField  — codomain is a tensor bundle T^(p,q)M; manifold: Manifold
   VectorField  — tensor type (1, 0); codomain TM
   SymmetricTensorField — tensor type (0, 2); g_{ij} = g_{ji}
 
@@ -15,7 +15,6 @@ from abc import abstractmethod
 from typing import TypeVar
 
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 from cosmic_foundry.foundation.function import Function
 
 D = TypeVar("D")  # Domain (point in manifold)
@@ -26,8 +25,6 @@ class Field(Function[D, C]):
     """Abstract base for all fields: f: M → V.
 
     A field assigns a value in V to every point in a manifold M.
-    The manifold may be any Manifold; subclasses that require smooth
-    structure (e.g. TensorField) narrow this to SmoothManifold.
     """
 
     @property
@@ -39,17 +36,14 @@ class Field(Function[D, C]):
 class TensorField(Field):  # noqa: B024
     """A field whose codomain is a tensor bundle T^(p,q)M.
 
-    Requires a SmoothManifold: tangent and cotangent bundles are only
-    defined where a smooth structure exists.
-
     Subclasses fix tensor_type to name specific tensor kinds;
     arbitrary (p, q) fields subclass TensorField directly.
     """
 
     @property
     @abstractmethod
-    def manifold(self) -> SmoothManifold:
-        """The smooth manifold on which this tensor field is defined."""
+    def manifold(self) -> Manifold:
+        """The manifold on which this tensor field is defined."""
 
     @property
     @abstractmethod

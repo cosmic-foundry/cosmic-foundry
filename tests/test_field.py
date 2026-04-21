@@ -19,7 +19,6 @@ from cosmic_foundry.continuous.field import (
     VectorField,
 )
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.continuous.smooth_manifold import SmoothManifold
 from cosmic_foundry.foundation.function import Function
 
 # ---------------------------------------------------------------------------
@@ -80,22 +79,6 @@ class _SymmetricTensor(SymmetricTensorField):
         return None
 
 
-class _TopologicalField(Field):
-    """A field on a bare topological manifold — no tensor structure."""
-
-    class _TopoManifold(Manifold):
-        @property
-        def ndim(self) -> int:
-            return 2
-
-    @property
-    def manifold(self) -> _TopoManifold:
-        return self._TopoManifold()
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Hierarchy
 # ---------------------------------------------------------------------------
@@ -148,16 +131,10 @@ def test_tensor_field_is_abstract() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_field_manifold_can_be_topological() -> None:
-    f = _TopologicalField()
-    assert isinstance(f.manifold, Manifold)
-    assert not isinstance(f.manifold, SmoothManifold)
-
-
-def test_tensor_field_manifold_is_smooth() -> None:
-    assert isinstance(_Scalar().manifold, SmoothManifold)
-    assert isinstance(_Vector().manifold, SmoothManifold)
-    assert isinstance(_Covector().manifold, SmoothManifold)
+def test_tensor_field_manifold_is_manifold() -> None:
+    assert isinstance(_Scalar().manifold, Manifold)
+    assert isinstance(_Vector().manifold, Manifold)
+    assert isinstance(_Covector().manifold, Manifold)
 
 
 # ---------------------------------------------------------------------------
