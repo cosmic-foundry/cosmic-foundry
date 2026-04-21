@@ -9,12 +9,6 @@ A computational astrophysics engine for multi-physics simulation.
 api/index
 ```
 
-```{toctree}
-:maxdepth: 1
-:caption: Research survey
-
-research/index
-```
 
 ## Overview
 
