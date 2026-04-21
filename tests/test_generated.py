@@ -8,6 +8,8 @@ Derived-property invariants (per-ABC mathematical laws verified on stubs):
   3. DifferentialForm.tensor_type == (0, degree) for degree in 0..3.
   4. PseudoRiemannianManifold.ndim == sum(signature) for several signatures.
   5. SymmetricTensorField.component(i, j) == component(j, i) pointwise.
+  6. IndexedSet.len(shape) == ndim for several (ndim, shape) pairs.
+  7. Homeomorphism.inverse.domain == codomain and inverse.codomain == domain.
 
 Discovery for (1) and (2) runs at import time, so any new ABC is covered
 without touching the test suite.
@@ -28,6 +30,9 @@ from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
+from cosmic_foundry.foundation.homeomorphism import Homeomorphism
+from cosmic_foundry.foundation.indexed_set import IndexedSet
+from cosmic_foundry.foundation.topological_space import TopologicalSpace
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGES = [
@@ -147,6 +152,52 @@ class _PRMStub(PseudoRiemannianManifold):
         raise NotImplementedError
 
 
+class _IndexedSetStub(IndexedSet):
+    def __init__(self, ndim: int, shape: tuple[int, ...]) -> None:
+        self._ndim = ndim
+        self._shape = shape
+
+    @property
+    def ndim(self) -> int:
+        return self._ndim
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._shape
+
+    def intersect(self, other: IndexedSet) -> IndexedSet | None:
+        return None
+
+
+class _TSStub(TopologicalSpace):
+    pass
+
+
+class _HomeoStub(Homeomorphism[Any, Any]):
+    def __init__(self, dom: TopologicalSpace, cod: TopologicalSpace) -> None:
+        self._domain = dom
+        self._codomain = cod
+
+    @property
+    def domain(self) -> TopologicalSpace:
+        return self._domain
+
+    @property
+    def codomain(self) -> TopologicalSpace:
+        return self._codomain
+
+    @property
+    def inverse(self) -> Homeomorphism[Any, Any]:
+        return _HomeoStub(self._codomain, self._domain)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+
+_TS_A = _TSStub()
+_TS_B = _TSStub()
+
+
 class _SymStub(SymmetricTensorField):
     @property
     def manifold(self) -> Manifold:
@@ -189,3 +240,17 @@ def test_pseudo_riemannian_ndim_derived(signature: tuple[int, int]) -> None:
 def test_symmetric_tensor_component_symmetry(i: int, j: int) -> None:
     stub = _SymStub()
     assert stub.component(i, j)(None) == stub.component(j, i)(None)
+
+
+@pytest.mark.parametrize(
+    "ndim,shape",
+    [(1, (5,)), (2, (3, 4)), (3, (2, 3, 5)), (0, ())],
+)
+def test_indexed_set_shape_len_equals_ndim(ndim: int, shape: tuple[int, ...]) -> None:
+    assert len(_IndexedSetStub(ndim, shape).shape) == ndim
+
+
+def test_homeomorphism_inverse_swaps_domain_codomain() -> None:
+    h = _HomeoStub(_TS_A, _TS_B)
+    assert h.inverse.domain is h.codomain
+    assert h.inverse.codomain is h.domain
