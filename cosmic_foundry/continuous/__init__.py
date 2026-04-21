@@ -23,6 +23,7 @@ from cosmic_foundry.continuous.non_local_boundary_condition import (
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     PseudoRiemannianManifold,
+    RiemannianManifold,
 )
 from cosmic_foundry.continuous.topological_manifold import TopologicalManifold
 
@@ -40,6 +41,7 @@ __all__ = [
     "MetricTensor",
     "NonLocalBoundaryCondition",
     "PseudoRiemannianManifold",
+    "RiemannianManifold",
     "SymmetricTensorField",
     "TensorField",
     "TopologicalManifold",

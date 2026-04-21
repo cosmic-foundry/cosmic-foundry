@@ -54,40 +54,47 @@ by `tests/test_theory_no_third_party_imports.py`.
 
 ```
 Set
-├── IndexedFamily   — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
-└── IndexedSet      — finite rectangular subset of ℤⁿ; interface: ndim, shape, intersect
+├── TopologicalSpace     — Set equipped with a topology (marker; no additional interface)
+├── IndexedFamily        — finite collection indexed by {0,…,n-1}; interface: __getitem__, __len__
+└── IndexedSet           — finite rectangular subset of ℤⁿ; interface: shape, intersect
+                           derived: ndim = len(shape)
 
-Function[D, C]      — callable mapping domain D → codomain C
+Function[D, C]           — callable mapping domain D → codomain C; interface: __call__
+└── InvertibleFunction   — bijection with two-sided inverse; interface: domain, codomain, inverse
+    └── Homeomorphism    — bicontinuous bijection; narrows domain/codomain to TopologicalSpace
 ```
 
 ### continuous/  · Epoch 1 ✓
 
 ```
-Manifold(Set)               — topological space with a smooth atlas; interface: ndim, atlas → Atlas
-└── PseudoRiemannianManifold — Manifold + metric; free: signature, derived: ndim = sum(signature)
-                               interface: metric → MetricTensor (abstract)
+TopologicalManifold(TopologicalSpace) — locally Euclidean topological space; interface: ndim
+└── Manifold                          — TopologicalManifold + smooth atlas; interface: atlas → Atlas
+    └── PseudoRiemannianManifold      — Manifold + metric; free: signature, metric
+                                        derived: ndim = sum(signature)
+        └── RiemannianManifold        — positive-definite metric; free: ndim, metric
+                                        derived: signature = (ndim, 0)
 
-Chart(Function)             — diffeomorphism φ: U → V; U ⊂ M open, V ⊂ ℝⁿ open
-                               interface: domain → Manifold, codomain → Manifold, inverse → Function
+Diffeomorphism(Homeomorphism)         — smooth bijection; narrows domain/codomain to Manifold
+└── Chart                             — local coordinate system φ: U → V; co-located in manifold.py
 
-Atlas(IndexedFamily)        — collection of charts covering M; constitutes the smooth structure of M
-                               interface: manifold → Manifold, __getitem__ → Chart, __len__
+Atlas(IndexedFamily)                  — collection of Charts covering M; co-located in manifold.py
+                                        interface: __getitem__ → Chart, __len__
 
-Field(Function)             — f: M → V on any Manifold; interface: manifold → Manifold
-└── TensorField             — interface: tensor_type → (p, q)
-    ├── VectorField          — (1, 0); codomain TM; contravariant, not a form
-    ├── SymmetricTensorField — (0, 2); g_{ij} = g_{ji}
-    │   └── MetricTensor     — g on a PseudoRiemannianManifold
-    └── DifferentialForm     — (0, k); antisymmetric; interface: degree → k; tensor_type derived
-        ├── ScalarField      — Ω⁰(M) = C∞(M); degree 0, tensor type (0, 0)
-        └── CovectorField    — Ω¹(M) = Γ(T*M); degree 1, tensor type (0, 1)
+MetricTensor(SymmetricTensorField)    — metric g; co-located in pseudo_riemannian_manifold.py
 
-DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold → Manifold, order → int
+Field(Function)                       — f: M → V; interface: manifold → Manifold
+└── TensorField                       — interface: tensor_type → (p, q)
+    ├── SymmetricTensorField          — derived: tensor_type = (0, 2); interface: component(i,j) → Field
+    │   └── MetricTensor             — see above
+    └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
 
-Constraint(ABC)              — abstract; support: Manifold (the geometric locus where the constraint is enforced)
-└── BoundaryCondition        — support is ∂M
-    ├── LocalBoundaryCondition    — α·f + β·∂f/∂n = g on a single face; properties: alpha, beta, constraint
-    └── NonLocalBoundaryCondition — constraint depends on values outside the immediate neighborhood
+DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold, order
+
+Constraint(ABC)                       — interface: support → Manifold
+└── BoundaryCondition                 — support is ∂M
+    ├── LocalBoundaryCondition        — α·f + β·∂f/∂n = g; free: alpha, beta, constraint
+                                        derived: support = constraint.manifold
+    └── NonLocalBoundaryCondition     — constraint depends on values outside the immediate neighborhood
 ```
 
 **`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
@@ -96,19 +103,22 @@ unified `α·f + β·∂f/∂n = g` form. `NonLocalBoundaryCondition` makes no
 claim about the form of the non-locality; concrete subclasses declare
 whatever geometric references they need.
 
-**Class existence is justified by symbolic derivation, not anticipation.**
-Every ABC in `continuous/` must earn its place: a new class is warranted
-only when a SymPy derivation produces a result that is valid only under a
-specific constraint, and that constraint removes a degree of freedom from
-the parameter space. The test: can you point to a SymPy expression that
-fails when the constraint is violated? If not, the class does not belong
-here. Concrete implementations belong in test fixtures or in the
-`computation/` layer — `continuous/` is ABCs only.
+**Class existence is justified by a falsifiable constraint, not anticipation.**
+Every ABC in `continuous/` and `foundation/` must earn its place. A new class
+is warranted only when it removes a degree of freedom from its parent: either
+a derived property (a non-abstract property fully determined by abstract ones)
+or a type narrowing that mypy can check. A property describing *regularity* of
+`__call__` (continuous, smooth) is not falsifiable in Python's type system and
+does not justify a new class.
 
-**Derivation chain across the pseudo-Riemannian hierarchy.** At each
-level, tighter constraints allow more to be derived:
-- `Manifold`: `ndim` and `atlas` are the free parameters
-- `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`; `metric` is abstract — every concrete subclass must supply one
+Concretely: `PseudoRiemannianManifold` earns its place via `ndim =
+sum(signature)`; `RiemannianManifold` via `signature = (ndim, 0)`;
+`Homeomorphism` by narrowing `domain`/`codomain` to `TopologicalSpace`. A
+hypothetical `SmoothMap` would not qualify.
+
+Non-independent objects are co-located in the same file as the object they
+belong to. Example: `Chart`, `Atlas`, `Diffeomorphism` in `manifold.py`;
+`MetricTensor`, `RiemannianManifold` in `pseudo_riemannian_manifold.py`.
 
 **Planned additions** (Epoch 12)
 

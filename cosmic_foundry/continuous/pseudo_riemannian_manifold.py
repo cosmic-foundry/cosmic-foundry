@@ -42,6 +42,35 @@ class PseudoRiemannianManifold(Manifold):
         return sum(self.signature)
 
 
+class RiemannianManifold(PseudoRiemannianManifold):  # noqa: B024
+    """A Manifold equipped with a positive-definite metric tensor.
+
+    A Riemannian manifold is a pseudo-Riemannian manifold whose metric has
+    signature (n, 0): all eigenvalues are positive.  This makes the metric
+    a true inner product at each point, enabling lengths, angles, and
+    geodesics in the classical sense.
+
+    ndim becomes the primitive; signature is derived as (ndim, 0).
+
+    Required:
+        ndim   — topological dimension n
+        metric — the positive-definite metric tensor
+
+    Derived:
+        signature — always (ndim, 0)
+    """
+
+    @property
+    @abstractmethod
+    def ndim(self) -> int:
+        """Topological dimension n."""
+
+    @property
+    def signature(self) -> tuple[int, int]:
+        """Metric signature; derived as (ndim, 0)."""
+        return (self.ndim, 0)
+
+
 class MetricTensor(SymmetricTensorField):  # noqa: B024
     """The metric tensor g on a pseudo-Riemannian manifold (M, g).
 
@@ -53,4 +82,4 @@ class MetricTensor(SymmetricTensorField):  # noqa: B024
     """
 
 
-__all__ = ["MetricTensor", "PseudoRiemannianManifold"]
+__all__ = ["MetricTensor", "PseudoRiemannianManifold", "RiemannianManifold"]
