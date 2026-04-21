@@ -50,10 +50,6 @@ class _ConstantField(DifferentialForm):
 
 class _DirichletBC(LocalBoundaryCondition):
     @property
-    def support(self) -> Manifold:
-        return _BOUNDARY
-
-    @property
     def alpha(self) -> float:
         return 1.0
 
@@ -67,10 +63,6 @@ class _DirichletBC(LocalBoundaryCondition):
 
 
 class _NeumannBC(LocalBoundaryCondition):
-    @property
-    def support(self) -> Manifold:
-        return _BOUNDARY
-
     @property
     def alpha(self) -> float:
         return 0.0
