@@ -17,11 +17,11 @@ from cosmic_foundry.continuous.field import (
 )
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.continuous.manifold import Atlas, Chart, Manifold
-from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
+    MetricTensor,
     PseudoRiemannianManifold,
 )
 from cosmic_foundry.continuous.topological_manifold import TopologicalManifold
