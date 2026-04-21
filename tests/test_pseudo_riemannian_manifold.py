@@ -1,4 +1,4 @@
-"""Tests for the manifold ABC hierarchy."""
+"""Tests for the PseudoRiemannianManifold ABC."""
 
 from __future__ import annotations
 
@@ -14,11 +14,10 @@ from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
-from cosmic_foundry.foundation.indexed_set import IndexedSet
 from cosmic_foundry.foundation.set import Set
 
 # ---------------------------------------------------------------------------
-# Minimal concrete stubs
+# Minimal private helpers
 # ---------------------------------------------------------------------------
 
 
@@ -49,7 +48,12 @@ class _StubMetric(MetricTensor):
         return sympy.eye(self._m.ndim)
 
 
-class _FlatR3(PseudoRiemannianManifold):
+# ---------------------------------------------------------------------------
+# Concrete implementations
+# ---------------------------------------------------------------------------
+
+
+class FlatR3(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (3, 0)
@@ -63,7 +67,7 @@ class _FlatR3(PseudoRiemannianManifold):
         return _StubAtlas(self)
 
 
-class _MinkowskiR4(PseudoRiemannianManifold):
+class MinkowskiR4(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (1, 3)
@@ -78,13 +82,8 @@ class _MinkowskiR4(PseudoRiemannianManifold):
 
 
 # ---------------------------------------------------------------------------
-# Assertion functions — abstraction guards
+# Assertion functions
 # ---------------------------------------------------------------------------
-
-
-def assert_manifold_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        Manifold()  # type: ignore[abstract]
 
 
 def assert_pseudo_riemannian_manifold_is_abstract() -> None:
@@ -92,49 +91,35 @@ def assert_pseudo_riemannian_manifold_is_abstract() -> None:
         PseudoRiemannianManifold()  # type: ignore[abstract]
 
 
-# ---------------------------------------------------------------------------
-# Assertion functions — hierarchy membership
-# ---------------------------------------------------------------------------
-
-
 def assert_flat_r3_isinstance_chain() -> None:
-    m = _FlatR3()
+    m = FlatR3()
     assert isinstance(m, PseudoRiemannianManifold)
     assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
 def assert_flat_r3_ndim_derived_from_signature() -> None:
-    m = _FlatR3()
+    m = FlatR3()
     assert m.signature == (3, 0)
     assert m.ndim == 3
 
 
 def assert_minkowski_r4_isinstance_chain() -> None:
-    m = _MinkowskiR4()
+    m = MinkowskiR4()
     assert isinstance(m, PseudoRiemannianManifold)
     assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
 def assert_minkowski_r4_ndim_derived_from_signature() -> None:
-    m = _MinkowskiR4()
+    m = MinkowskiR4()
     assert m.signature == (1, 3)
     assert m.ndim == 4
-
-
-def assert_manifold_branch_disjoint_from_indexed_set_branch() -> None:
-    assert not issubclass(Manifold, IndexedSet)
-    assert not issubclass(IndexedSet, Manifold)
 
 
 # ---------------------------------------------------------------------------
 # Test wrappers
 # ---------------------------------------------------------------------------
-
-
-def test_manifold_is_abstract() -> None:
-    assert_manifold_is_abstract()
 
 
 def test_pseudo_riemannian_manifold_is_abstract() -> None:
@@ -155,7 +140,3 @@ def test_minkowski_r4_isinstance_chain() -> None:
 
 def test_minkowski_r4_ndim_derived_from_signature() -> None:
     assert_minkowski_r4_ndim_derived_from_signature()
-
-
-def test_manifold_branch_disjoint_from_indexed_set_branch() -> None:
-    assert_manifold_branch_disjoint_from_indexed_set_branch()
