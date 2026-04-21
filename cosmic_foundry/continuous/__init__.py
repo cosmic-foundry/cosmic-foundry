@@ -6,7 +6,6 @@ cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 
 from __future__ import annotations
 
-from cosmic_foundry.continuous.atlas import Atlas
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.continuous.chart import Chart
 from cosmic_foundry.continuous.constraint import Constraint
@@ -18,7 +17,7 @@ from cosmic_foundry.continuous.field import (
     TensorField,
 )
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
-from cosmic_foundry.continuous.manifold import Manifold
+from cosmic_foundry.continuous.manifold import Atlas, Manifold
 from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
