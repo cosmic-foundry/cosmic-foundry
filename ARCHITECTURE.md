@@ -35,13 +35,13 @@ The codebase is organized into four packages with a strict dependency order:
 
 ```
 foundation/   ←  continuous/
-     ↑                ↑ (has-a, optional)
-     └── discrete/ ───┘
-              ↑
-        computation/
+     ↑                ↑
+     └──────── discrete/ (Epoch 2, not yet implemented)
+                        ↑
+                  computation/
 ```
 
-**`foundation/`, `continuous/`, and `discrete/` are symbolic-reasoning layers.**
+**`foundation/` and `continuous/` are symbolic-reasoning layers.**
 Their shared identity: they describe mathematical structure symbolically, without
 numerical evaluation. Their import boundary reflects that identity — they may
 only import from the Python standard library, `cosmic_foundry`, or packages on
@@ -153,41 +153,38 @@ is not yet designed. Concrete field implementations live outside `continuous/`
 
 ### discrete/  · Epochs 2–3
 
-```
-DiscreteField(Function[IndexedSet, V])
-    approximates: Optional[Field]           — None if primary object, set if approximating continuous field
-├── DiscreteScalarField
-│   approximates: Optional[ScalarField]
-└── DiscreteVectorField
-    approximates: Optional[VectorField]
-```
+Not yet implemented. The earlier `DiscreteField` ABC was removed: it predated
+the `Chart`/`Atlas` machinery and did not self-consistently arise from
+`foundation/` and `continuous/`. In particular, `approximates` baked the
+approximation relationship into the discrete object, but that relationship
+involves three parties — the continuous field, the grid, and the discretization
+scheme — and cannot be a property of one alone.
 
-The `approximates` property declares that the discrete object is a finite
-approximation of the named continuous object, enabling automatic convergence
-checks at the `computation/` layer. When `None`, the discrete object is a
-primary mathematical object with no continuous antecedent.
-
-**Planned** (Epoch 2): Cartesian grid as a concrete `IndexedSet` with coordinate
-geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField`
-backed by the grid.
+**Planned** (Epoch 2): `CartesianGrid` as a concrete `IndexedSet` with
+coordinate geometry; cell and face structure. Grid functions as
+`Function[CartesianGrid, V]`. The approximation relationship deferred until a
+real discretization scheme is in place to express it against.
 
 **Planned** (Epoch 3): Discrete differential operators: stencil coefficients
 derived from continuous operators via SymPy; truncation error verified
 algebraically; formal operator composition on the grid.
 
-**Open question**
+**Open questions**
+
+**What is the right ABC for a grid function?**
+A grid function is `Function[IndexedSet, V]`. The open question is whether a
+named subclass (analogous to `Field(Function[Manifold, V])`) is warranted, and
+if so what derived property earns it a class under the falsifiable-constraint
+rule.
 
 **Is scheme choice a first-class concept?**
 A finite-difference discretization of ∇² is a precise mathematical act: choose
-a grid, choose an approximation order, derive stencil coefficients. The
-`approximates` property establishes the has-a link between a discrete object and
-its continuous counterpart, but does not make scheme choice (e.g. "second-order
-centered finite difference of the Laplacian") a first-class object. An open
-question is whether a formal `Discretization` — a callable that maps a
-`DifferentialOperator` + grid + order to a discrete stencil — belongs in
-`discrete/`, or whether scheme choice remains implicit in how discrete objects
-are constructed. The chart on the ambient manifold provides the coordinate map
-that grounds the derivation; a first-class `Discretization` would reference it.
+a grid, choose an approximation order, derive stencil coefficients. Whether a
+formal `Discretization` — a callable that maps a `DifferentialOperator` + grid
++ order to a discrete stencil — belongs in `discrete/`, or whether scheme
+choice remains implicit in how discrete objects are constructed, is unsettled.
+The chart on the ambient manifold provides the coordinate map that grounds the
+derivation; a first-class `Discretization` would reference it.
 
 ### computation/  · Epoch 4
 
@@ -224,7 +221,7 @@ questions to settle: (1) which concept is the right entry point — `Set` and
 it run SymPy derivations that assert results, does it instantiate the ABCs, or
 both? (3) how do we structure the `docs/` tree so notebooks accumulate without
 becoming a maze? The goal is a format that can be repeated for every new concept
-added to `continuous/` and `discrete/` as the epochs proceed.
+added to `continuous/` and `discrete/` as the epochs proceed. (Note: `discrete/` is not yet implemented; see that section.)
 
 **Epoch 2 design session: how do physical coordinates attach to a grid?**
 The first concrete implementation is a Cartesian grid (`CartesianGrid` as a
@@ -233,8 +230,7 @@ place: `Chart(Function)` maps manifold points to ℝⁿ. But a `CartesianGrid` i
 a concrete `IndexedSet`, not a manifold — so a `Chart` cannot directly act on
 it. The design question is: what object maps grid indices to physical
 coordinates, and how does it relate to the chart on the ambient manifold?
-Settling this unblocks the `approximates` convergence-check infrastructure
-(evaluate the continuous field at cell coordinates, compare) and the
+Settling this unblocks the grid-function approximation relationship and the
 SymPy-backed field interface (what coordinate symbols does the expression use?).
 
 ---
@@ -249,8 +245,8 @@ extends the discrete and numerical layers minimally to evaluate them.
 | Epoch | Layer | Capability |
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
-| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`). `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
-| 2 | Discrete | Cartesian grid as a concrete `IndexedSet` with coordinate geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField` backed by the grid. |
+| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`). `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. ✓ |
+| 2 | Discrete | `CartesianGrid` as a concrete `IndexedSet` with coordinate geometry; cell and face structure. Grid functions as `Function[CartesianGrid, V]`. Design of the approximation relationship and any named grid-function ABC. |
 | 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators via SymPy; truncation error verified algebraically; formal operator composition on the grid. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
