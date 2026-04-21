@@ -25,8 +25,6 @@ validation data belongs here.
 
 **The mathematical language of the architecture is differential geometry
 on spatio-temporal manifolds, with PDE theory as the application layer.**
-*(Tension: the current implementation uses only spatial manifolds;
-no temporal or spacetime computations are implemented yet.)*
 
 **Physical quantities are represented as instances of formal mathematical
 abstractions.** Any concrete representation is an implementation detail.
