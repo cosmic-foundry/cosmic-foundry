@@ -5,19 +5,22 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
-from cosmic_foundry.foundation.function import Function
+from cosmic_foundry.foundation.invertible_function import InvertibleFunction
 from cosmic_foundry.foundation.topological_space import TopologicalSpace
 
 D = TypeVar("D")
 C = TypeVar("C")
 
 
-class Homeomorphism(Function[D, C], Generic[D, C]):
+class Homeomorphism(InvertibleFunction[D, C], Generic[D, C]):
     """A bicontinuous bijection between topological spaces: φ: U → V.
 
     A homeomorphism is continuous, bijective, and has a continuous inverse.
     Two topological spaces connected by a homeomorphism are topologically
     indistinguishable.
+
+    Narrows domain and codomain to TopologicalSpace, reflecting that
+    continuity is the relevant structure.
 
     Required:
         domain   — the source topological space U
