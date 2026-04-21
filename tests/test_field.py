@@ -11,7 +11,6 @@ from cosmic_foundry.continuous.differential_form import (
     DifferentialForm,
     ScalarField,
 )
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import (
     Field,
     SymmetricTensorField,
@@ -25,12 +24,23 @@ from cosmic_foundry.foundation.function import Function
 # Minimal concrete stubs
 # ---------------------------------------------------------------------------
 
-_M = EuclideanSpace(3)
+
+class _StubManifold(Manifold):
+    @property
+    def ndim(self) -> int:
+        return 3
+
+    @property
+    def atlas(self) -> Any:
+        raise NotImplementedError
+
+
+_M = _StubManifold()
 
 
 class _Scalar(ScalarField):
     @property
-    def manifold(self) -> EuclideanSpace:
+    def manifold(self) -> Manifold:
         return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
@@ -39,7 +49,7 @@ class _Scalar(ScalarField):
 
 class _Vector(VectorField):
     @property
-    def manifold(self) -> EuclideanSpace:
+    def manifold(self) -> Manifold:
         return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -48,7 +58,7 @@ class _Vector(VectorField):
 
 class _Covector(CovectorField):
     @property
-    def manifold(self) -> EuclideanSpace:
+    def manifold(self) -> Manifold:
         return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -59,7 +69,7 @@ class _CustomTensor(TensorField):
     """Arbitrary (2, 1) tensor field."""
 
     @property
-    def manifold(self) -> EuclideanSpace:
+    def manifold(self) -> Manifold:
         return _M
 
     @property
@@ -72,7 +82,7 @@ class _CustomTensor(TensorField):
 
 class _SymmetricTensor(SymmetricTensorField):
     @property
-    def manifold(self) -> EuclideanSpace:
+    def manifold(self) -> Manifold:
         return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:

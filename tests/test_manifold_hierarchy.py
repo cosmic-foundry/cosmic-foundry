@@ -1,68 +1,80 @@
-"""Tests for the manifold ABC hierarchy and concrete manifolds."""
+"""Tests for the manifold ABC hierarchy."""
 
 from __future__ import annotations
 
-import pytest
+from typing import Any
 
-from cosmic_foundry.continuous.euclidean_metric import EuclideanMetric
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
-from cosmic_foundry.continuous.identity_chart import IdentityChart
+import pytest
+import sympy
+
+from cosmic_foundry.continuous.atlas import Atlas
+from cosmic_foundry.continuous.chart import Chart
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.continuous.minkowski_metric import MinkowskiMetric
-from cosmic_foundry.continuous.minkowski_space import MinkowskiSpace
+from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
 )
-from cosmic_foundry.continuous.riemannian_manifold import RiemannianManifold
-from cosmic_foundry.continuous.single_chart_atlas import SingleChartAtlas
 from cosmic_foundry.foundation.indexed_set import IndexedSet
 from cosmic_foundry.foundation.set import Set
 
 # ---------------------------------------------------------------------------
-# Parameter sets
-# ---------------------------------------------------------------------------
-
-EUCLIDEAN_SPACE_DIMS = [1, 2, 3, 4]
-
-# ---------------------------------------------------------------------------
-# Concrete subclasses used by assertion functions
+# Minimal concrete stubs
 # ---------------------------------------------------------------------------
 
 
-class FlatR3(RiemannianManifold):
+class _StubAtlas(Atlas):
+    def __init__(self, m: PseudoRiemannianManifold) -> None:
+        self._m = m
+
     @property
-    def ndim(self) -> int:
-        return 3
+    def manifold(self) -> PseudoRiemannianManifold:
+        return self._m
 
+    def __getitem__(self, index: int) -> Chart:
+        raise IndexError(index)
+
+    def __len__(self) -> int:
+        return 0
+
+
+class _StubMetric(MetricTensor):
+    def __init__(self, m: PseudoRiemannianManifold) -> None:
+        self._m = m
+
+    @property
+    def manifold(self) -> PseudoRiemannianManifold:
+        return self._m
+
+    def __call__(self, *args: Any, **kwargs: Any) -> sympy.Matrix:
+        return sympy.eye(self._m.ndim)
+
+
+class _FlatR3(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (3, 0)
 
     @property
-    def metric(self) -> EuclideanMetric:
-        return EuclideanMetric(self)
+    def metric(self) -> _StubMetric:
+        return _StubMetric(self)
 
     @property
-    def atlas(self) -> SingleChartAtlas:
-        return SingleChartAtlas(IdentityChart(self))
+    def atlas(self) -> _StubAtlas:
+        return _StubAtlas(self)
 
 
-class MinkowskiR4(PseudoRiemannianManifold):
-    @property
-    def ndim(self) -> int:
-        return 4
-
+class _MinkowskiR4(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (1, 3)
 
     @property
-    def metric(self) -> MinkowskiMetric:
-        return MinkowskiMetric(self)
+    def metric(self) -> _StubMetric:
+        return _StubMetric(self)
 
     @property
-    def atlas(self) -> SingleChartAtlas:
-        return SingleChartAtlas(IdentityChart(self))
+    def atlas(self) -> _StubAtlas:
+        return _StubAtlas(self)
 
 
 # ---------------------------------------------------------------------------
@@ -80,106 +92,40 @@ def assert_pseudo_riemannian_manifold_is_abstract() -> None:
         PseudoRiemannianManifold()  # type: ignore[abstract]
 
 
-def assert_riemannian_manifold_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        RiemannianManifold()  # type: ignore[abstract]
-
-
 # ---------------------------------------------------------------------------
-# Assertion functions — concrete subclasses satisfy the hierarchy
+# Assertion functions — hierarchy membership
 # ---------------------------------------------------------------------------
-
-
-def assert_flat_r3_is_riemannian() -> None:
-    m = FlatR3()
-    assert m.ndim == 3
-    assert m.signature == (3, 0)
 
 
 def assert_flat_r3_isinstance_chain() -> None:
-    m = FlatR3()
-    assert isinstance(m, RiemannianManifold)
+    m = _FlatR3()
     assert isinstance(m, PseudoRiemannianManifold)
     assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
-def assert_flat_r3_is_not_indexed_set() -> None:
-    assert not issubclass(RiemannianManifold, IndexedSet)
+def assert_flat_r3_ndim_derived_from_signature() -> None:
+    m = _FlatR3()
+    assert m.signature == (3, 0)
+    assert m.ndim == 3
 
 
-def assert_minkowski_is_pseudo_riemannian_not_riemannian() -> None:
-    m = MinkowskiR4()
-    assert m.ndim == 4
-    assert m.signature == (1, 3)
+def assert_minkowski_r4_isinstance_chain() -> None:
+    m = _MinkowskiR4()
     assert isinstance(m, PseudoRiemannianManifold)
-    assert not isinstance(m, RiemannianManifold)
+    assert isinstance(m, Manifold)
+    assert isinstance(m, Set)
+
+
+def assert_minkowski_r4_ndim_derived_from_signature() -> None:
+    m = _MinkowskiR4()
+    assert m.signature == (1, 3)
+    assert m.ndim == 4
 
 
 def assert_manifold_branch_disjoint_from_indexed_set_branch() -> None:
     assert not issubclass(Manifold, IndexedSet)
     assert not issubclass(IndexedSet, Manifold)
-
-
-# ---------------------------------------------------------------------------
-# Assertion functions — EuclideanSpace
-# ---------------------------------------------------------------------------
-
-
-def assert_euclidean_space_ndim() -> None:
-    assert EuclideanSpace(3).ndim == 3
-
-
-def assert_euclidean_space_signature_derived() -> None:
-    assert EuclideanSpace(3).signature == (3, 0)
-
-
-def assert_euclidean_space_ndim_matches_signature() -> None:
-    e = EuclideanSpace(4)
-    assert e.ndim == sum(e.signature)
-
-
-def assert_euclidean_space_parametric(n: int) -> None:
-    e = EuclideanSpace(n)
-    assert e.ndim == n
-    assert e.signature == (n, 0)
-
-
-def assert_euclidean_space_isinstance_chain() -> None:
-    e = EuclideanSpace(3)
-    assert isinstance(e, RiemannianManifold)
-    assert isinstance(e, PseudoRiemannianManifold)
-    assert isinstance(e, Manifold)
-    assert isinstance(e, Set)
-
-
-def assert_euclidean_space_invalid_dimension() -> None:
-    with pytest.raises(ValueError):
-        EuclideanSpace(0)
-
-
-# ---------------------------------------------------------------------------
-# Assertion functions — MinkowskiSpace
-# ---------------------------------------------------------------------------
-
-
-def assert_minkowski_space_signature() -> None:
-    assert MinkowskiSpace().signature == (1, 3)
-
-
-def assert_minkowski_space_ndim_derived() -> None:
-    assert MinkowskiSpace().ndim == 4
-
-
-def assert_minkowski_space_isinstance_chain() -> None:
-    m = MinkowskiSpace()
-    assert isinstance(m, PseudoRiemannianManifold)
-    assert isinstance(m, Manifold)
-    assert isinstance(m, Set)
-
-
-def assert_minkowski_space_is_not_riemannian() -> None:
-    assert not isinstance(MinkowskiSpace(), RiemannianManifold)
 
 
 # ---------------------------------------------------------------------------
@@ -195,66 +141,21 @@ def test_pseudo_riemannian_manifold_is_abstract() -> None:
     assert_pseudo_riemannian_manifold_is_abstract()
 
 
-def test_riemannian_manifold_is_abstract() -> None:
-    assert_riemannian_manifold_is_abstract()
-
-
-def test_flat_r3_is_riemannian() -> None:
-    assert_flat_r3_is_riemannian()
-
-
 def test_flat_r3_isinstance_chain() -> None:
     assert_flat_r3_isinstance_chain()
 
 
-def test_flat_r3_is_not_indexed_set() -> None:
-    assert_flat_r3_is_not_indexed_set()
+def test_flat_r3_ndim_derived_from_signature() -> None:
+    assert_flat_r3_ndim_derived_from_signature()
 
 
-def test_minkowski_is_pseudo_riemannian_not_riemannian() -> None:
-    assert_minkowski_is_pseudo_riemannian_not_riemannian()
+def test_minkowski_r4_isinstance_chain() -> None:
+    assert_minkowski_r4_isinstance_chain()
+
+
+def test_minkowski_r4_ndim_derived_from_signature() -> None:
+    assert_minkowski_r4_ndim_derived_from_signature()
 
 
 def test_manifold_branch_disjoint_from_indexed_set_branch() -> None:
     assert_manifold_branch_disjoint_from_indexed_set_branch()
-
-
-def test_euclidean_space_ndim() -> None:
-    assert_euclidean_space_ndim()
-
-
-def test_euclidean_space_signature_derived() -> None:
-    assert_euclidean_space_signature_derived()
-
-
-def test_euclidean_space_ndim_matches_signature() -> None:
-    assert_euclidean_space_ndim_matches_signature()
-
-
-@pytest.mark.parametrize("n", EUCLIDEAN_SPACE_DIMS)
-def test_euclidean_space_parametric(n: int) -> None:
-    assert_euclidean_space_parametric(n)
-
-
-def test_euclidean_space_isinstance_chain() -> None:
-    assert_euclidean_space_isinstance_chain()
-
-
-def test_euclidean_space_invalid_dimension() -> None:
-    assert_euclidean_space_invalid_dimension()
-
-
-def test_minkowski_space_signature() -> None:
-    assert_minkowski_space_signature()
-
-
-def test_minkowski_space_ndim_derived() -> None:
-    assert_minkowski_space_ndim_derived()
-
-
-def test_minkowski_space_isinstance_chain() -> None:
-    assert_minkowski_space_isinstance_chain()
-
-
-def test_minkowski_space_is_not_riemannian() -> None:
-    assert_minkowski_space_is_not_riemannian()

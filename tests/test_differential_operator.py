@@ -7,15 +7,27 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.continuous.differential_operator import DifferentialOperator
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.manifold import Manifold
 from cosmic_foundry.foundation.function import Function
+
+
+class _StubManifold(Manifold):
+    @property
+    def ndim(self) -> int:
+        return 3
+
+    @property
+    def atlas(self) -> Any:
+        raise NotImplementedError
+
+
+_M = _StubManifold()
 
 
 class _Gradient(DifferentialOperator):
     @property
     def manifold(self) -> Manifold:
-        return EuclideanSpace(3)
+        return _M
 
     @property
     def order(self) -> int:
@@ -28,7 +40,7 @@ class _Gradient(DifferentialOperator):
 class _Laplacian(DifferentialOperator):
     @property
     def manifold(self) -> Manifold:
-        return EuclideanSpace(3)
+        return _M
 
     @property
     def order(self) -> int:

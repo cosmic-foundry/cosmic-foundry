@@ -11,9 +11,21 @@ from cosmic_foundry.continuous.differential_form import (
     DifferentialForm,
     ScalarField,
 )
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import TensorField
 from cosmic_foundry.continuous.manifold import Manifold
+
+
+class _StubManifold(Manifold):
+    @property
+    def ndim(self) -> int:
+        return 3
+
+    @property
+    def atlas(self) -> Any:
+        raise NotImplementedError
+
+
+_M = _StubManifold()
 
 
 class _Form(DifferentialForm):
@@ -26,7 +38,7 @@ class _Form(DifferentialForm):
 
     @property
     def manifold(self) -> Manifold:
-        return EuclideanSpace(3)
+        return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
@@ -35,7 +47,7 @@ class _Form(DifferentialForm):
 class _Scalar(ScalarField):
     @property
     def manifold(self) -> Manifold:
-        return EuclideanSpace(3)
+        return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
         return 0.0
@@ -44,7 +56,7 @@ class _Scalar(ScalarField):
 class _Covector(CovectorField):
     @property
     def manifold(self) -> Manifold:
-        return EuclideanSpace(3)
+        return _M
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None

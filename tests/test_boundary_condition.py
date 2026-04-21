@@ -9,7 +9,6 @@ import pytest
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.continuous.constraint import Constraint
 from cosmic_foundry.continuous.differential_form import ScalarField
-from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.continuous.manifold import Manifold
@@ -21,13 +20,28 @@ from cosmic_foundry.continuous.non_local_boundary_condition import (
 # Minimal concrete stubs
 # ---------------------------------------------------------------------------
 
-_BOUNDARY = EuclideanSpace(2)  # stand-in for a boundary manifold
+
+class _StubManifold(Manifold):
+    def __init__(self, ndim: int) -> None:
+        self._ndim = ndim
+
+    @property
+    def ndim(self) -> int:
+        return self._ndim
+
+    @property
+    def atlas(self) -> Any:
+        raise NotImplementedError
+
+
+_BOUNDARY = _StubManifold(2)
+_DOMAIN = _StubManifold(3)
 
 
 class _ConstantField(ScalarField):
     @property
     def manifold(self) -> Manifold:
-        return EuclideanSpace(3)
+        return _DOMAIN
 
     def __call__(self, *args: Any, **kwargs: Any) -> float:
         return 0.0

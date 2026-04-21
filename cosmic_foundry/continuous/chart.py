@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from cosmic_foundry.foundation.function import Function
 
 if TYPE_CHECKING:
-    from cosmic_foundry.continuous.euclidean_space import EuclideanSpace
     from cosmic_foundry.continuous.manifold import Manifold
 
 D = TypeVar("D")  # type of domain points
@@ -27,7 +26,7 @@ class Chart(Function[D, C], Generic[D, C]):
 
     Required:
         domain   — the open subset U ⊂ M where this chart is defined
-        codomain — the open subset V ⊂ ℝⁿ that is the image of U
+        codomain — the open subset V ⊂ ℝⁿ represented as a Manifold
         inverse  — the smooth inverse φ⁻¹: V → U
     """
 
@@ -38,7 +37,7 @@ class Chart(Function[D, C], Generic[D, C]):
 
     @property
     @abstractmethod
-    def codomain(self) -> EuclideanSpace:
+    def codomain(self) -> Manifold:
         """The open subset of ℝⁿ that is the image of this chart."""
 
     @property
