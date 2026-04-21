@@ -47,6 +47,7 @@ mpi = [
 docs = [
     "sphinx",
     "myst-nb",
+    "ipykernel",
     "furo",
     "sphinx-design",
     "sphinx-autodoc2",

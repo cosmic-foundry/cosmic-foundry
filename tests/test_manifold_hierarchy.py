@@ -49,7 +49,7 @@ class _StubMetric(MetricTensor):
         return sympy.eye(self._m.ndim)
 
 
-class _FlatR3(PseudoRiemannianManifold):
+class FlatR3(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (3, 0)
@@ -63,7 +63,7 @@ class _FlatR3(PseudoRiemannianManifold):
         return _StubAtlas(self)
 
 
-class _MinkowskiR4(PseudoRiemannianManifold):
+class MinkowskiR4(PseudoRiemannianManifold):
     @property
     def signature(self) -> tuple[int, int]:
         return (1, 3)
@@ -98,27 +98,27 @@ def assert_pseudo_riemannian_manifold_is_abstract() -> None:
 
 
 def assert_flat_r3_isinstance_chain() -> None:
-    m = _FlatR3()
+    m = FlatR3()
     assert isinstance(m, PseudoRiemannianManifold)
     assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
 def assert_flat_r3_ndim_derived_from_signature() -> None:
-    m = _FlatR3()
+    m = FlatR3()
     assert m.signature == (3, 0)
     assert m.ndim == 3
 
 
 def assert_minkowski_r4_isinstance_chain() -> None:
-    m = _MinkowskiR4()
+    m = MinkowskiR4()
     assert isinstance(m, PseudoRiemannianManifold)
     assert isinstance(m, Manifold)
     assert isinstance(m, Set)
 
 
 def assert_minkowski_r4_ndim_derived_from_signature() -> None:
-    m = _MinkowskiR4()
+    m = MinkowskiR4()
     assert m.signature == (1, 3)
     assert m.ndim == 4
 

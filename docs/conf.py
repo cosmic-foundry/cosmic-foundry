@@ -5,6 +5,8 @@ from pathlib import Path
 
 # Allow importing the package without a full install when building docs locally.
 sys.path.insert(0, str(Path(__file__).parent.parent))
+# Allow notebooks to import from the tests directory.
+sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
 
 from cosmic_foundry._version import __version__  # noqa: E402
 
@@ -39,7 +41,7 @@ myst_enable_extensions = [
     "fieldlist",
 ]
 
-nb_execution_mode = "off"  # notebooks executed explicitly, not on every build
+nb_execution_mode = "force"  # always re-execute; CI fails if any notebook cell raises
 
 # ---------------------------------------------------------------------------
 # HTML output
