@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
-from cosmic_foundry.continuous.differential_form import ScalarField
+from cosmic_foundry.continuous.differential_form import DifferentialForm
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
 from cosmic_foundry.continuous.manifold import Manifold
@@ -35,7 +35,11 @@ _BOUNDARY = _StubManifold(2)
 _DOMAIN = _StubManifold(3)
 
 
-class _ConstantField(ScalarField):
+class _ConstantField(DifferentialForm):
+    @property
+    def degree(self) -> int:
+        return 0
+
     @property
     def manifold(self) -> Manifold:
         return _DOMAIN
