@@ -3,12 +3,13 @@
 Cosmic Foundry is a general-purpose PDE simulation engine, optimized
 for astrophysical use cases. The foundational commitments governing its
 design are in [**Architectural basis**](ARCHITECTURE.md#architectural-basis).
+The epoch-by-epoch capability sequence and development roadmap are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Quick start
 
 ```bash
-# Clone the fork
-git clone git@github.com:<your-fork>/cosmic-foundry.git
+# Clone the repo
+git clone git@github.com:cosmic-foundry/cosmic-foundry.git
 cd cosmic-foundry
 
 # One-time setup (~5 min)
@@ -19,11 +20,7 @@ bash scripts/setup_environment.sh
 
 # Or activate manually and work directly
 source scripts/activate_environment.sh
-cosmic-foundry hello
 ```
-
-`cosmic-foundry hello` prints the JAX backend, device list, and a JIT
-smoke-test result. If it exits 0, the environment is correctly wired.
 
 ## Documentation
 
@@ -33,33 +30,6 @@ Build the docs locally:
 sphinx-build -W docs docs/_build/html
 ```
 
-## Repository layout
-
-Start here:
-
-| Directory | What it is | Read first |
-|---|---|---|
-| `cosmic_foundry/theory/` | Pure mathematical ABCs — sets, manifolds, discretizations, functions, fields. No JAX dependency. | `theory/__init__.py` |
-| `cosmic_foundry/computation/` | Distance-1 concrete implementations of theory ABCs. Currently: Array, Extent (data containers). | `computation/__init__.py` |
-| `cosmic_foundry/geometry/` | Concrete manifolds and simulation domains: `EuclideanSpace`, `MinkowskiSpace`, `Domain`. | `geometry/__init__.py` |
-| `cosmic_foundry/cli/` | CLI entry point (`cosmic-foundry`). | `cli/main.py` |
-| `tests/` | Test suite. | — |
-| `docs/research/` | Research survey — code landscape, capabilities, licensing, V&V methodology. | `docs/research/index.md` |
-| `pr-review/` | Adversarial PR review checklist and architecture stress-review checklist. | `pr-review/README.md` |
-| `scripts/` | Agent health check, PR review wrappers, session startup, environment setup and activation. | `scripts/agent_health_check.sh` |
-| `environment/` | Conda environment spec files and miniforge install target. | `environment/cosmic_foundry.yml` |
-
-`theory/` defines an ABC tree; `computation/` implements it at distance 1.
-The full hierarchy is in [`ARCHITECTURE.md §Mathematical hierarchy`](ARCHITECTURE.md).
-
-## Background
-
-- [`docs/research/`](docs/research/index.md) — survey of the computational astrophysics
-  code landscape that informs the design.
-- [`ROADMAP.md`](ROADMAP.md) — epoch-by-epoch development plan.
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — architectural decisions.
-- [`STATUS.md`](STATUS.md) — immediate implementation queue.
-
 ## License
 
-[BSD 3-Clause](LICENSE)
+[MIT](LICENSE)

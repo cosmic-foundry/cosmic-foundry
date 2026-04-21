@@ -1,15 +1,6 @@
 # Cosmic Foundry — Architecture
 
-This document is the authoritative record of live architectural decisions
-for this repository. Decisions not yet made are listed under *Open
-questions*. The code is designed to make its own structure self-evident;
-ARCHITECTURE.md records the decisions and reasoning behind that
-structure, not a description of it. `DEVELOPMENT.md` covers workflow and
-process decisions (including physics capability lanes).
-
----
-
-## Architectural basis
+## Commitments
 
 These are the foundational claims about this repository. Each is a
 commitment: the code must satisfy it, tests enforce it where possible,
@@ -17,73 +8,28 @@ and any PR that violates a claim must explicitly revise it here rather
 than quietly breaking it.
 
 **Cosmic Foundry is a general-purpose PDE simulation engine, optimized
-for astrophysical use cases.** It provides reusable computation
-infrastructure — kernels, mesh, fields, I/O, diagnostics, manifest
-tooling — on which application repositories build domain-specific
-physics. No domain-specific physics implementation and no observational
-validation data belongs here.
-
-**The architecture is defined independently of any implementation
-language.** The current Python implementation is one realization of the
-architecture, not the architecture itself.
+for astrophysical use cases.**
 
 **The mathematical language of the architecture is differential geometry
 on spatio-temporal manifolds, with PDE theory as the application layer.**
-*(Tension: the current implementation uses only spatial manifolds;
-no temporal or spacetime computations are implemented yet.)*
 
 **Physical quantities are represented as instances of formal mathematical
-abstractions.** Any concrete representation is an implementation detail.
-*(Current inconsistency: `Field` and its subclasses are defined in
-`theory/` but are not yet used in computation.)*
+abstractions.**
 
 **Every numerical method is formally derived from its continuous
-mathematical counterpart.** The derivation is machine-checkable (SymPy)
-except where the argument is geometric or topological, in which case a
-human-readable derivation is required. Derivations are documented in the
-modules that implement the methods; SymPy is never imported at module load time.
+mathematical counterpart, and machine-checkable, where possible.**
 
-**Every numerical method is verified against an analytical solution or
-observational data, with the verification test living in this
-repository.**
+**Every numerical method is verified against an analytical solution,
+with the verification test living in this repository.**
 
-**Where external data sources are ingested** (reaction rates, opacity
-tables, observational measurements), **the uncertainty in that data is
-explicitly quantified and propagated.**
+**Where external data sources are ingested the uncertainty in that
+data is explicitly quantified and propagated.**
 
-**The architecture is scale-agnostic.** The physics implementation is
-independent of the deployment scale; any difference in outputs across
-scales is attributable to non-deterministic order of operations, not to
-architectural constraints.
-
-**The engine is dimensionless internally.** Units are attached at the
-boundary where results are compared against analytical solutions or
-observational data.
+**The engine is dimensionless internally.**
 
 ---
 
-## Technology baseline
-
-**Python-only engine.** No compiled extensions are shipped from this
-repository. Any native code the engine executes is produced at runtime
-by a code-generation backend. `pybind11` and `ctypes` are emergency
-escape hatches only; adopting either requires a documented justification
-here. Pre-built libraries (NumPy, h5py) are consumed as
-dependencies, not produced by this build.
-
-**float64 as the default precision.** All field arrays default to
-`float64`. Precision exceptions must be explicit and documented.
-
-**Python ≥ 3.11.** Single source language end-to-end.
-
-**Sphinx + MyST-NB documentation stack.** All narrative documentation is
-built with Sphinx + MyST-NB. Docstrings follow the NumPy convention. The
-docs build runs with warnings-as-errors; GitHub Actions deploys to GitHub
-Pages. Sphinx-design provides layout components.
-
----
-
-## Package structure and boundaries
+## Layer architecture
 
 The codebase is organized into four packages with a strict dependency order:
 
@@ -104,21 +50,7 @@ require justification against the symbolic-reasoning identity; numerical
 computation packages (JAX, NumPy, SciPy) are excluded by definition. Enforced
 by `tests/test_theory_no_third_party_imports.py`.
 
-- **`foundation/`** — `Set`, `Function`, `IndexedSet`, `IndexedFamily`.
-- **`continuous/`** — manifolds, fields, operators, boundary conditions.
-- **`discrete/`** — scheme description; imports `foundation/` (is-a) and
-  optionally `continuous/` (has-a) via `approximates`. The `approximates`
-property on each discrete type is `Optional[<continuous counterpart>]`:
-when set, it declares that the discrete object is a finite approximation
-of the named continuous object, enabling automatic convergence checks at
-the `computation/` layer. When `None`, the discrete object is a primary
-mathematical object with no continuous antecedent.
-
-**`computation/`** — JAX evaluation. The only layer that touches floats.
-
-## Mathematical hierarchy
-
-**`foundation/` types:**
+### foundation/  · Epoch 1 ✓
 
 ```
 Set
@@ -128,7 +60,7 @@ Set
 Function[D, C]      — callable mapping domain D → codomain C
 ```
 
-**`continuous/` types:**
+### continuous/  · Epoch 1 ✓
 
 ```
 Manifold(Set)
@@ -164,7 +96,52 @@ Constraint(ABC)              — abstract; support: Manifold (the geometric locu
     └── NonLocalBoundaryCondition — constraint depends on values outside the immediate neighborhood
 ```
 
-**`discrete/` types:**
+**`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
+covers Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin via the
+unified `α·f + β·∂f/∂n = g` form. `NonLocalBoundaryCondition` makes no
+claim about the form of the non-locality; concrete subclasses declare
+whatever geometric references they need.
+
+**Derivation chain across the pseudo-Riemannian hierarchy.** At each
+level, tighter constraints allow more to be derived:
+- `SmoothManifold`: `ndim` is the free parameter (topologically primitive)
+- `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`
+- `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
+
+**Planned additions** (Epoch 12)
+
+**`DynamicManifold(PseudoRiemannianManifold)`** — A manifold whose metric
+tensor is a dynamical field in the simulation state. Required for full GR
+(3+1 ADM formalism): signature is fixed (Lorentzian), but the metric is
+evolved by the Einstein equations. In the 3+1 decomposition the
+computational domain is a 3-D Riemannian spatial hypersurface; the
+3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields. The
+concrete entry would be `Spacetime3Plus1(DynamicManifold)`. Interface not
+yet designed.
+
+**`Connection` / `AffineConnection`** — Covariant derivative; not a tensor
+field (inhomogeneous transformation law). Required for curvature
+computations and parallel transport.
+
+**Open questions**
+
+**What is the formal PDE object in the continuous layer?**
+Conservation laws like ∂ρ/∂t + ∇·(ρv) = 0 are statements about continuous
+fields. Before discretizing, we may want to express them as formal objects in
+`continuous/`. The right interface is unclear and may only become clear once we
+have a working discretization to invert from.
+
+**What do SymPy-backed continuous objects look like?**
+The natural use of SymPy in `continuous/` is analytical field representations —
+a concrete `ScalarField` backed by a SymPy expression `f(x, y) = sin(πx)sin(πy)`
+— which would make `approximates` algebraically live: stencil derivation and
+truncation error analysis could be done in code rather than in documentation.
+The coordinate symbols `x, y` in such an expression are tied to a specific
+chart: the chart's component functions x¹, …, xⁿ are exactly the coordinate
+symbols the expression uses. The interface for SymPy-backed fields (evaluatable
+analytical forms, coordinate-to-chart binding) is not yet designed.
+
+### discrete/  · Epochs 2–3
 
 ```
 DiscreteField(Function[IndexedSet, V])
@@ -175,62 +152,49 @@ DiscreteField(Function[IndexedSet, V])
     approximates: Optional[VectorField]
 ```
 
-**`Constraint` / `BoundaryCondition` hierarchy.** `Constraint(ABC)` is the
-root with a single abstract property `support: Manifold` — the geometric
-locus on which the constraint is enforced.  `BoundaryCondition(Constraint)`
-narrows support to the boundary ∂M.  `LocalBoundaryCondition` represents
-`α·f + β·∂f/∂n = g` on a single face — abstract properties `alpha: float`,
-`beta: float`, `constraint: Field`; covers Dirichlet (`α=1, β=0`), Neumann
-(`α=0, β=1`), and Robin. `NonLocalBoundaryCondition` is blank beyond the
-root — it signals that the constraint depends on field values outside the
-immediate neighborhood of the boundary point, but makes no claim about the
-form of that non-locality; concrete subclasses declare whatever geometric
-references they need.
+The `approximates` property declares that the discrete object is a finite
+approximation of the named continuous object, enabling automatic convergence
+checks at the `computation/` layer. When `None`, the discrete object is a
+primary mathematical object with no continuous antecedent.
 
-**Derivation chain across the pseudo-Riemannian hierarchy.** At each
-level, tighter constraints allow more to be derived:
-- `SmoothManifold`: `ndim` is the free parameter (topologically primitive)
-- `PseudoRiemannianManifold`: `signature` is the free parameter; `ndim = sum(signature)`
-- `RiemannianManifold`: `ndim` is the free parameter; `signature = (ndim, 0)` enforces q = 0
+**Planned** (Epoch 2): Cartesian grid as a concrete `IndexedSet` with coordinate
+geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField`
+backed by the grid.
 
-**`intersect` on `IndexedSet`.** Set intersection is a fundamental
-operation on any indexed set and lives as an `@abstractmethod` on
-`IndexedSet`.
+**Planned** (Epoch 3): Discrete differential operators: stencil coefficients
+derived from continuous operators via SymPy; truncation error verified
+algebraically; formal operator composition on the grid.
 
----
+**Open question**
 
+**Is scheme choice a first-class concept?**
+A finite-difference discretization of ∇² is a precise mathematical act: choose
+a grid, choose an approximation order, derive stencil coefficients. The
+`approximates` property establishes the has-a link between a discrete object and
+its continuous counterpart, but does not make scheme choice (e.g. "second-order
+centered finite difference of the Laplacian") a first-class object. An open
+question is whether a formal `Discretization` — a callable that maps a
+`DifferentialOperator` + grid + order to a discrete stencil — belongs in
+`discrete/`, or whether scheme choice remains implicit in how discrete objects
+are constructed. The chart on the ambient manifold provides the coordinate map
+that grounds the derivation; a first-class `Discretization` would reference it.
 
-## Open architectural questions
+### computation/  · Epoch 4
 
-These are decisions we know we need to make but have not yet made.
-When a question is resolved, move it into the appropriate section above
-and update the affected modules.
+JAX evaluation. The only layer that touches floats. Planned: concrete field
+storage as `jax.Array`; JIT-compiled stencil application; explicit time
+integration; HDF5 I/O with provenance.
+
+**Open question**
 
 **Kernel composition model.**
 A backend-agnostic interface separating kernel computation (Op) from
-spatial domain and execution policy (Policy) is a design goal.
-The earlier Op/Policy/Dispatch framing was dropped before it was
-realized. The current `Stencil` and `Reduction` primitives expose
-`execute` directly; the formal model governing composition, backend
-substitutability, and dispatch is unsettled.
+spatial domain and execution policy (Policy) is a design goal. An
+earlier Op/Policy/Dispatch framing was dropped before it was realized.
+The formal model governing composition, backend substitutability, and
+dispatch is unsettled.
 
-**`DynamicManifold` for full GR.**
-Full GR simulations cannot use a fixed-metric manifold: the metric
-tensor `g_μν` is the dynamical variable evolved by the Einstein
-equations. Planned: `DynamicManifold(PseudoRiemannianManifold)` in
-`theory/` — signature is fixed (Lorentzian for GR), but the metric is
-a field in the simulation state. In the 3+1 (ADM) formalism the
-computational domain is a 3-D Riemannian spatial hypersurface; the
-3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields.
-The concrete entry would be `Spacetime3Plus1(DynamicManifold)`.
-
-**Halo fill fence.**
-The halo-fill operation — ghost-cell exchange for stencil footprints
-that cross patch boundaries — has a designed but not yet implemented
-interface: `HaloFillFence` as a descriptor and `HaloFillPolicy` as the
-execution unit. The driver inserts fences before dispatches whose stencil
-radii exceed the local interior. The design is settled; implementation is
-Epoch 2.
+### Cross-cutting
 
 **Numerical transcription discipline.**
 Physics capabilities sourced from reference tables (EOS polynomial fits,
@@ -238,3 +202,87 @@ reaction networks, opacity tables) need a discipline governing how
 numeric tables are transcribed, verified, and updated independently of
 the derivation-first lane policy. This decision is deferred to Epoch 7
 (microphysics), when the first such capability lands.
+
+---
+
+## Current work
+
+**M2.5 design session: mathematical narrative documentation.**
+What does the first notebook look like, and how does it hook into CI? Concrete
+questions to settle: (1) which concept is the right entry point — `Set` and
+`Function`, or the manifold hierarchy? (2) what makes a notebook "tested" — does
+it run SymPy derivations that assert results, does it instantiate the ABCs, or
+both? (3) how do we structure the `docs/` tree so notebooks accumulate without
+becoming a maze? The goal is a format that can be repeated for every new concept
+added to `continuous/` and `discrete/` as the epochs proceed.
+
+**Epoch 2 design session: how do physical coordinates attach to a grid?**
+The first concrete implementation is a Cartesian grid (`CartesianGrid` as a
+concrete `IndexedSet` with coordinate geometry). The chart formalism is in
+place: `Chart(Function)` maps manifold points to ℝⁿ, and `EuclideanSpace` carries
+a `SingleChartAtlas`. But a `CartesianGrid` is a concrete `IndexedSet`, not a
+manifold — so a `Chart` cannot directly act on it. The design question is: what
+object maps grid indices to physical coordinates, and how does it relate to the
+chart on the ambient `EuclideanSpace`? Settling this unblocks the `approximates`
+convergence-check infrastructure (evaluate the continuous field at cell
+coordinates, compare) and the SymPy-backed field interface (what coordinate
+symbols does the expression use?).
+
+---
+
+## Physics roadmap
+
+Each physics epoch adds new fields and equations to the continuous layer and
+extends the discrete and numerical layers minimally to evaluate them.
+
+### Foundation epochs
+
+| Epoch | Layer | Capability |
+|-------|-------|------------|
+| 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
+| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`, `IdentityChart`, `SingleChartAtlas`); `SmoothManifold.atlas` constitutive. `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. `discrete/` ABCs: `DiscreteField`, `DiscreteScalarField`, `DiscreteVectorField`. ✓ |
+| 2 | Discrete | Cartesian grid as a concrete `IndexedSet` with coordinate geometry; cell and face structure. `DiscreteScalarField` and `DiscreteVectorField` backed by the grid. |
+| 3 | Discrete | Discrete differential operators: stencil coefficients derived from continuous operators via SymPy; truncation error verified algebraically; formal operator composition on the grid. |
+| 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
+
+### Physics epochs
+
+| Epoch | Capability |
+|-------|------------|
+| 5 | Scalar transport: linear advection and diffusion on a Cartesian grid. First end-to-end simulation; validates the full pipeline. |
+| 6 | Newtonian hydrodynamics: Euler equations, finite-volume Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
+| 7 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
+| 8 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
+| 9 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
+| 10 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
+| 11 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
+| 12 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
+| 13 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
+| 14 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
+| 15 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
+| 16 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+
+---
+
+## Platform milestones
+
+| Milestone | Capability |
+|-----------|------------|
+| M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
+| M1 | Verification infrastructure: convergence testing helpers, externally-grounded test pattern. ✓ |
+| M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
+| M2.5 | Mathematical narrative documentation: executable MyST-NB notebooks that explain each layer of the hierarchy — what the formal concepts mean, how they relate, and why the code is structured the way it is. Notebooks run in CI, so every mathematical claim is machine-checked. |
+| M3 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 4. |
+| M4 | Reproducibility capsule tooling: self-executing builder. |
+| M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
+
+### Per-epoch verification standard
+
+Every physics epoch must satisfy this checklist before it is considered verified:
+
+- Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
+- At least one externally-grounded convergence test against an analytical solution
+  or observational data (not an engine-generated golden file); where an analytical
+  solution exists, the relevant `DiscreteField.approximates` is set so the check
+  runs automatically
+- Lane A/B/C classification stated in the PR description

@@ -7,5 +7,5 @@ Autodoc entries are added here as each module gains a public API surface.
 ```
 
 No stable public API exists yet. See the
-[development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ROADMAP.md)
+[development roadmap](https://github.com/cosmic-foundry/cosmic-foundry/blob/main/ARCHITECTURE.md)
 for planned API growth.

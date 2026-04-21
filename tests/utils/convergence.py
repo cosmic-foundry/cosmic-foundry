@@ -49,11 +49,6 @@ Three resolutions is the minimum; the log-log fit is noisy with three
 points.  Five or more is preferred for a stable slope estimate.  Use
 powers of two so that successive errors differ by approximately 2^p.
 
-See also
---------
-``roadmap/epoch-02-mesh.md`` §"Global reduction primitive": conservation
-tests at outflow boundaries require boundary-flux accounting rather than
-a simple convergence sweep.
 """
 
 from __future__ import annotations

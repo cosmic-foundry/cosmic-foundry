@@ -7,7 +7,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 ENGINE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd -P)
 ENGINE_PARENT=$(dirname "$ENGINE_ROOT")
 
-if [ ! -f "$ENGINE_ROOT/AI.md" ] || [ ! -d "$ENGINE_ROOT/scripts" ]; then
+if [ ! -f "$ENGINE_ROOT/DEVELOPMENT.md" ] || [ ! -d "$ENGINE_ROOT/scripts" ]; then
     echo "✗ Could not find Cosmic Foundry project docs next to this launcher."
     exit 1
 fi
@@ -43,8 +43,8 @@ This session was launched from a sibling repository:
 - $LAUNCH_DIR
 
 Treat this sibling repository as the primary working repository for this session. Before changing it, read its local agent instructions if present:
-- $LAUNCH_DIR/AI.md
-- the agent-specific instruction document in $LAUNCH_DIR, if present
+- $LAUNCH_DIR/DEVELOPMENT.md
+- any other agent instruction document in $LAUNCH_DIR
 
 The parent workspace is:
 - $ENGINE_PARENT$(workspace_note "$ENGINE_PARENT")"
@@ -110,7 +110,7 @@ The cosmic-foundry repository is at:
 $ENGINE_ROOT
 
 Please initialize your context by reading the following document in order to understand the project rules, tools, and coordination patterns:
-1. $ENGINE_ROOT/AI.md
+1. $ENGINE_ROOT/DEVELOPMENT.md
 
 Use the repository path above for cosmic-foundry work. If work spans sibling repositories, first locate and read each repository's local agent instructions before changing it.$WORKSPACE_NOTE"
 
