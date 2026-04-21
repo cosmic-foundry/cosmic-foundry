@@ -210,10 +210,10 @@ The retrospective covers:
    decision needs updating? Were any open questions resolved? Are any
    paragraphs now self-evident from the code and therefore removable?
 
-2. **`ARCHITECTURE.md`**. Does the upcoming simulation or V&V scope still
-   make sense given what we built? Should any epoch one-liner be
-   reworded, reordered, or split? Is the immediate next work section
-   still accurate?
+2. **Epoch sequence and current work.** Does the upcoming simulation or
+   V&V scope still make sense given what we built? Should any epoch
+   one-liner be reworded, reordered, or split? Is the current work
+   section still accurate?
 
 3. **Process documents** (`DEVELOPMENT.md`, `ARCHITECTURE.md`). Did any
    development rules prove unworkable, insufficient, or in need of
@@ -249,36 +249,38 @@ corresponding ARCHITECTURE.md gap-closure item.
 
 ## Physics capability implementation paths
 
-Every PR that adds or changes a *physics capability* is in one of
-three lanes:
+Every PR that adds or changes a physics capability is classified into one
+of three lanes. The classification matters for two reasons: licensing (many
+astrophysics reference codes carry copyleft terms that would propagate to
+this codebase if their source were consulted) and rigor (Lanes B and C
+require machine-checkable derivations that Lane A defers to the reference).
 
-- **Lane A — Port-and-verify.** Adapt from a permissively-licensed
-  reference code with attribution. Default for permissive references.
-  No derivation document required.
-- **Lane B — Clean-room from paper.** Mandatory when the only
-  reference is copyleft-licensed (per
-  [`docs/research/06-12-licensing.md`](docs/research/06-12-licensing.md):
-  GADGET-4, RAMSES, MESA, SWIFT, PLUTO, Arepo, ChaNGa, GIZMO-public,
-  MPI-AMRVAC, BHAC, koral_lite, Dedalus, ...). The reference source
-  tree **must not be opened** — no `git clone`, no source browsing,
-  no cached previews with source content. Papers and vendor
-  documentation only. A derivation document is required.
-- **Lane C — First-principles origination.** For generalizations,
-  extensions, and novel work where the goal is to *understand* the
-  formalism rather than reproduce a specific reference. A derivation
-  document is required; principled disagreements with the literature
-  are recorded inside it.
+- **Lane A — Port-and-verify.** A permissively-licensed reference
+  implementation exists (MIT, BSD, Apache, or similar). Adapt it with
+  attribution. No derivation document required; the reference source is
+  openly inspectable and serves as the derivation.
 
-Lanes B and C require a `_derive()` function in the production module
-with executable SymPy checks on load-bearing algebraic steps. A paired
-`generate()` function produces the runtime constants block; running
-`scripts/generate_kernels.py` splices it back into the module.
-Infrastructure capabilities (dispatch, mesh topology, I/O, field
-placement) are out of scope.
+- **Lane B — Clean-room from paper.** The only reference implementations
+  are copyleft-licensed (GPL and similar — common among major astrophysics
+  codes). The reference source tree **must not be opened**: no `git clone`,
+  no source browsing, no cached previews. Work from papers and vendor
+  documentation only. A derivation document is required to demonstrate
+  independence from the copyleft source.
 
-The lane must be stated in the PR description for any physics
-capability, e.g. `Lane C (origination). Reference papers: [...]`.
-For Lane B, explicitly record that reference source was not consulted.
+- **Lane C — First-principles origination.** No reference implementation
+  to port, or the goal is to generalize, extend, or understand the formalism
+  beyond what any specific reference provides. Derive from first principles.
+  A derivation document is required; principled disagreements with the
+  literature are recorded inside it.
+
+Lanes B and C require a `_derive()` function in the production module with
+executable SymPy checks on load-bearing algebraic steps. Infrastructure
+capabilities (mesh topology, I/O, field placement) are out of scope for
+lane classification.
+
+The lane must be stated in the PR description, e.g. `Lane C (origination).
+Reference papers: [...]`. For Lane B, explicitly record that the reference
+source was not consulted.
 
 ---
 
@@ -364,10 +366,11 @@ The three lanes (A, B, C) are defined in
 
 For any task that touches a physics capability:
 
-1. **Classify the lane.** Look up the reference code's license in
-   `docs/research/06-12-licensing.md`. If no reference code exists, or
-   the user's framing implies generalization or novel work (phrases
-   like "extend," "generalize," "we might need to break new ground,"
+1. **Classify the lane.** Determine whether a reference implementation
+   exists and check its license. If the license is permissive, Lane A
+   applies. If the only references are copyleft-licensed, Lane B is
+   mandatory. If no reference implementation exists, or the user's
+   framing implies generalization or novel work ("extend," "generalize,"
    "give us our own version of X"), Lane C applies.
 2. **Propose the derivation-first lane when it appears to apply.**
    If the default would be Lane A but the task framing suggests Lane C,
