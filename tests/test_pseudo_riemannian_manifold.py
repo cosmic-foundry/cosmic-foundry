@@ -7,9 +7,8 @@ from typing import Any
 import pytest
 import sympy
 
-from cosmic_foundry.continuous.chart import Chart
 from cosmic_foundry.continuous.field import Field
-from cosmic_foundry.continuous.manifold import Atlas, Manifold
+from cosmic_foundry.continuous.manifold import Atlas, Chart, Manifold
 from cosmic_foundry.continuous.metric_tensor import MetricTensor
 from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
