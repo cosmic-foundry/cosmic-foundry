@@ -6,6 +6,7 @@ from abc import abstractmethod
 
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.continuous.field import Field
+from cosmic_foundry.continuous.manifold import Manifold
 
 
 class LocalBoundaryCondition(BoundaryCondition):
@@ -23,6 +24,10 @@ class LocalBoundaryCondition(BoundaryCondition):
         alpha      — coefficient of the field value at the face
         beta       — coefficient of the outward normal derivative
         constraint — the prescribed data g; a Field on the boundary face
+
+    Derived:
+        support    — the manifold on which this BC is enforced; equals
+                     constraint.manifold
     """
 
     @property
@@ -39,6 +44,11 @@ class LocalBoundaryCondition(BoundaryCondition):
     @abstractmethod
     def constraint(self) -> Field:
         """The prescribed boundary data g in α·f + β·∂f/∂n = g."""
+
+    @property
+    def support(self) -> Manifold:
+        """The manifold on which this BC is enforced; derived as constraint.manifold."""
+        return self.constraint.manifold
 
 
 __all__ = ["LocalBoundaryCondition"]
