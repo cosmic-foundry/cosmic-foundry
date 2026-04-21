@@ -50,18 +50,7 @@ class MetricTensor(SymmetricTensorField):  # noqa: B024
     subclasses are responsible for the non-degeneracy condition and, on
     Riemannian manifolds, positive-definiteness; neither can be enforced
     at the ABC level.
-
-    The manifold narrows to PseudoRiemannianManifold, because a metric tensor
-    is precisely the additional structure that makes a manifold pseudo-Riemannian.
-
-    Required:
-        manifold — the pseudo-Riemannian manifold this metric is defined on
     """
-
-    @property
-    @abstractmethod
-    def manifold(self) -> PseudoRiemannianManifold:
-        """The pseudo-Riemannian manifold on which this metric is defined."""
 
 
 __all__ = ["MetricTensor", "PseudoRiemannianManifold"]
