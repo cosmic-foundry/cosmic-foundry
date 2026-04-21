@@ -113,6 +113,16 @@ level, tighter constraints allow more to be derived:
 - `EuclideanSpace`: `metric = EuclideanMetric` (g_ij = δ_ij) is the quantitative distinguisher from a generic `RiemannianManifold`
 - `MinkowskiSpace`: `metric = MinkowskiMetric` (g = diag(+1,−1,−1,−1)) is the quantitative distinguisher from a generic `PseudoRiemannianManifold`
 
+**Long-term direction: names as tags, not types.** The named subclass
+hierarchy (`EuclideanSpace`, `MinkowskiSpace`) is an intermediate step.
+The destination is parameterized instances: a manifold is fully specified
+by its mathematical content (metric, signature), and names like "Euclidean
+space" are informal labels attached to instances rather than class-level
+distinctions. As the hierarchy matures, named subclasses are replaced by
+concrete parameterized implementations of the abstract ABCs, and the ABCs
+themselves become the only types. No new named subclasses should be added
+without a plan to dissolve them.
+
 **Planned additions** (Epoch 12)
 
 **`DynamicManifold(PseudoRiemannianManifold)`** — A manifold whose metric
