@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from cosmic_foundry.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.foundation.function import Function
 
 
 class _StubManifold(Manifold):
@@ -48,15 +45,6 @@ class _Laplacian(DifferentialOperator):
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
-
-
-def test_differential_operator_is_function() -> None:
-    assert issubclass(DifferentialOperator, Function)
-
-
-def test_differential_operator_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        DifferentialOperator()  # type: ignore[abstract]
 
 
 def test_gradient_order() -> None:

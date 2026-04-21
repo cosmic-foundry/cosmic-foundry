@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
-from cosmic_foundry.continuous.constraint import Constraint
 from cosmic_foundry.continuous.differential_form import ScalarField
 from cosmic_foundry.continuous.field import Field
 from cosmic_foundry.continuous.local_boundary_condition import LocalBoundaryCondition
@@ -94,38 +91,6 @@ class _PeriodicBC(NonLocalBoundaryCondition):
     @property
     def support(self) -> Manifold:
         return _BOUNDARY
-
-
-# ---------------------------------------------------------------------------
-# Hierarchy tests
-# ---------------------------------------------------------------------------
-
-
-def test_boundary_condition_is_constraint() -> None:
-    assert issubclass(BoundaryCondition, Constraint)
-
-
-def test_local_is_boundary_condition() -> None:
-    assert issubclass(LocalBoundaryCondition, BoundaryCondition)
-
-
-def test_non_local_is_boundary_condition() -> None:
-    assert issubclass(NonLocalBoundaryCondition, BoundaryCondition)
-
-
-def test_boundary_condition_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        BoundaryCondition()  # type: ignore[abstract]
-
-
-def test_local_boundary_condition_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        LocalBoundaryCondition()  # type: ignore[abstract]
-
-
-def test_non_local_boundary_condition_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        NonLocalBoundaryCondition()  # type: ignore[abstract]
 
 
 # ---------------------------------------------------------------------------

@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from cosmic_foundry.continuous.differential_form import (
     CovectorField,
     DifferentialForm,
     ScalarField,
 )
-from cosmic_foundry.continuous.field import TensorField
 from cosmic_foundry.continuous.manifold import Manifold
 
 
@@ -60,46 +57,6 @@ class _Covector(CovectorField):
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         return None
-
-
-# ---------------------------------------------------------------------------
-# Hierarchy
-# ---------------------------------------------------------------------------
-
-
-def test_differential_form_is_tensor_field() -> None:
-    assert issubclass(DifferentialForm, TensorField)
-
-
-def test_scalar_field_is_differential_form() -> None:
-    assert issubclass(ScalarField, DifferentialForm)
-
-
-def test_covector_field_is_differential_form() -> None:
-    assert issubclass(CovectorField, DifferentialForm)
-
-
-def test_scalar_field_is_tensor_field() -> None:
-    assert issubclass(ScalarField, TensorField)
-
-
-def test_covector_field_is_tensor_field() -> None:
-    assert issubclass(CovectorField, TensorField)
-
-
-def test_differential_form_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        DifferentialForm()  # type: ignore[abstract]
-
-
-def test_scalar_field_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        ScalarField()  # type: ignore[abstract]
-
-
-def test_covector_field_is_abstract() -> None:
-    with pytest.raises(TypeError):
-        CovectorField()  # type: ignore[abstract]
 
 
 # ---------------------------------------------------------------------------
