@@ -5,8 +5,8 @@ Covers two invariants for every discovered ABC:
   2. Every cosmic_foundry ancestor in its MRO is a proper superclass
      (issubclass transitivity check).
 
-These tests replace per-file boilerplate that previously duplicated the same
-two patterns ~40 times across the test suite.
+Discovery runs at import time, so any new ABC added to the codebase is
+covered without touching the test suite.
 """
 
 from __future__ import annotations
