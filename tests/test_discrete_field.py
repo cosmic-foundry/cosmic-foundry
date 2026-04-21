@@ -29,10 +29,6 @@ _M = _StubManifold()
 
 class _Grid(IndexedSet):
     @property
-    def ndim(self) -> int:
-        return 3
-
-    @property
     def shape(self) -> tuple[int, ...]:
         return (8, 8, 8)
 
