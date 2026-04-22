@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-import matplotlib.figure
+import matplotlib.pyplot as plt
 import numpy as np
 
 from validation.schwarzschild.constants import (
@@ -17,7 +17,7 @@ from validation.schwarzschild.constants import (
 )
 
 
-def time_dilation_figure() -> matplotlib.figure.Figure:
+def time_dilation_figure() -> plt.Figure:
     """Fractional clock rate offset vs. orbital radius in the Schwarzschild spacetime.
 
     The curve shows dτ_sat/dτ_ground − 1 as a function of orbital radius from
@@ -34,13 +34,13 @@ def time_dilation_figure() -> matplotlib.figure.Figure:
     r = np.linspace(WGS84_R_E, 10 * WGS84_R_E, 2000)
     shift = np.sqrt(np.clip(1 - 3 * M_geom / r, 0, None)) / dtau_ground - 1
 
-    fig = matplotlib.figure.Figure()
-    ax = fig.add_subplot()
+    fig, ax = plt.subplots()
     ax.plot(r / WGS84_R_E, shift)
     ax.axvline(GPS_SEMI_MAJOR_AXIS / WGS84_R_E, color="k", linestyle="--")
     ax.axhline(ICD_GPS200_FRACTIONAL_OFFSET, color="r", linestyle="--")
     ax.set_xlabel("r / R_E")
     ax.set_ylabel("Δf / f")
+    plt.close(fig)
     return fig
 
 
