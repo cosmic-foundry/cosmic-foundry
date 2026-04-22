@@ -13,13 +13,13 @@ from validation.schwarzschild.spacetime import M, SchwarzschildSpacetime, r, the
 spacetime = SchwarzschildSpacetime()
 spacetime.metric.as_matrix()
 
-# %%
+# %% Satellite clock: proper time rate on a circular geodesic
 g_tt = spacetime.metric.component(0, 0).expr
 g_phiphi = spacetime.metric.component(3, 3).expr.subs(theta, sympy.pi / 2)
 
 sympy.simplify(-g_tt - g_phiphi * M / r**3)
 
-# %%
+# %% Ground clock: proper time rate including Earth's rotation
 r_E = sympy.Symbol("r_E", positive=True)
 Omega = sympy.Symbol("Omega", positive=True)
 

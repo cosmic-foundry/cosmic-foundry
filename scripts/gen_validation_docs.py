@@ -116,9 +116,12 @@ def _render_page(
     for tag, body in cells:
         if tag:
             obj = name_map.get(tag)
-            doc = _doc_body(obj) if obj is not None else None
-            if doc:
-                parts.append(doc)
+            if obj is not None:
+                doc = _doc_body(obj)
+                if doc:
+                    parts.append(doc)
+            else:
+                parts.append(tag)
         parts.append(f"```{{code-cell}} python\n{body}\n```")
     return "\n\n".join(parts) + "\n"
 
