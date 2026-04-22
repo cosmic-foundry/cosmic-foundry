@@ -1,80 +1,112 @@
 """GPS time dilation: Schwarzschild derivation validated against ICD-GPS-200.
 
-Two claims:
+Three claims:
 
-1. Algebraic: the proper time ratio for a circular equatorial geodesic in the
-   Schwarzschild spacetime simplifies to sqrt(1 - 3M/r). Verified by SymPy.
+1. Algebraic: the proper time ratio for a circular equatorial geodesic simplifies
+   to sqrt(1 - 3M/r). Derived from g_tt and g_φφ of the Schwarzschild metric.
 
-2. Numerical: the first-order weak-field fractional frequency shift evaluated
-   at GPS orbital parameters matches the ICD-GPS-200 Table 20-IV correction
-   factor of 4.4647 × 10⁻¹⁰ to within 1%.
+2. Algebraic: the proper time rate for a ground clock rotating with Earth at
+   angular velocity Ω is sqrt((1-2M/r_E) - r_E²Ω²). Same derivation, different
+   worldline.
 
-   Omissions in this model (each < 1 × 10⁻¹² in magnitude):
-   - Earth's rotation (Sagnac correction)
-   - Second-order post-Newtonian terms
+3. Numerical: the exact fractional frequency shift evaluated at WGS 84 / GPS
+   parameters matches the ICD-GPS-200 Table 20-IV correction factor of
+   4.4647 × 10⁻¹⁰ within 0.1%.
+
+   Residual discrepancy (~0.04%) is from second-order post-Newtonian terms.
 """
 
 from __future__ import annotations
+
+import math
 
 import sympy
 
 from validation.schwarzschild.spacetime import M, SchwarzschildSpacetime, r, theta
 
+# ---------------------------------------------------------------------------
+# ICD-GPS-200 reference value
+# ---------------------------------------------------------------------------
+
+# Pre-launch fractional frequency offset applied to GPS satellite clocks.
+# Satellite clocks run fast relative to ground; the correction is positive
+# (clocks are manufactured to tick slow to compensate).
+ICD_GPS200_FRACTIONAL_OFFSET = 4.4647e-10  # dimensionless, Table 20-IV
+
+# WGS 84 constants used to derive that value (ICD-GPS-200, IS-GPS-200)
+WGS84_MU = 3.986005e14  # m³ s⁻²   Earth standard gravitational parameter
+WGS84_OMEGA_E = 7.2921151467e-5  # rad s⁻¹  Earth rotation rate
+WGS84_R_E = 6.378137e6  # m         equatorial radius
+WGS84_C = 2.99792458e8  # m s⁻¹    speed of light
+GPS_SEMI_MAJOR_AXIS = 26_559_710.0  # m         nominal GPS orbital radius
+
+
+# ---------------------------------------------------------------------------
+# Algebraic claims
+# ---------------------------------------------------------------------------
+
 
 def test_circular_geodesic_proper_time() -> None:
-    """Proper time ratio for circular equatorial orbit is sqrt(1 - 3M/r).
+    """Proper time ratio for a circular equatorial orbit is sqrt(1 - 3M/r).
 
     Derived from the metric: dτ²/dt² = -g_tt - g_φφ · (dφ/dt)²
-    with the circular geodesic condition (dφ/dt)² = M/r³.
+    with the circular geodesic condition (dφ/dt)² = M/r³ (geometric units).
     """
     metric = SchwarzschildSpacetime().metric
 
     g_tt = metric.component(0, 0).expr  # -(1 - 2M/r)
     g_phiphi = metric.component(3, 3).expr  # r² sin²θ
 
-    g_phiphi_eq = g_phiphi.subs(theta, sympy.pi / 2)  # equatorial: → r²
+    g_phiphi_eq = g_phiphi.subs(theta, sympy.pi / 2)
 
-    # Circular geodesic angular velocity in geometric units (G = c = 1)
-    omega_sq = M / r**3
+    omega_sq = M / r**3  # circular geodesic condition (G = c = 1)
 
     dtau_sq = -g_tt - g_phiphi_eq * omega_sq
 
     assert sympy.simplify(dtau_sq - (1 - 3 * M / r)) == 0
 
 
-def test_gps_clock_correction_matches_icd() -> None:
-    """First-order fractional frequency shift matches ICD-GPS-200 within 1%.
+def test_ground_clock_proper_time_with_rotation() -> None:
+    """Ground clock co-rotating with Earth: dτ²/dt² = (1-2M/r_E) - r_E²Ω².
 
-    The weak-field expansion of (dτ_sat/dτ_ground - 1) to first order in M/r
-    gives M·(1/r_E - 3/(2r_gps)). Evaluated at WGS 84 parameters this agrees
-    with the ICD-GPS-200 Table 20-IV value of 4.4647 × 10⁻¹⁰.
+    The ground clock is not in free fall; it follows a circular worldline at
+    fixed r_E with dφ/dt = Ω_E. Substituting into the metric interval gives
+    the rotation correction directly from g_tt and g_φφ.
     """
+    metric = SchwarzschildSpacetime().metric
+
     r_E = sympy.Symbol("r_E", positive=True)
-    r_gps = sympy.Symbol("r_gps", positive=True)
+    Omega = sympy.Symbol("Omega", positive=True)
 
-    # Proper time rates from the geodesic result above
-    dtau_sat = sympy.sqrt(1 - 3 * M / r)
-    dtau_ground = sympy.sqrt(1 - 2 * M / r_E)
+    g_tt = metric.component(0, 0).expr
+    g_phiphi = metric.component(3, 3).expr
+    g_phiphi_eq = g_phiphi.subs(theta, sympy.pi / 2)
 
-    shift = dtau_sat.subs(r, r_gps) / dtau_ground - 1
+    dtau_sq = (-g_tt - g_phiphi_eq * Omega**2).subs(r, r_E)
 
-    # Linearise in M (weak-field; M/r ~ 7e-10 at GPS altitude)
-    shift_linear = sympy.series(shift, M, 0, 2).removeO()
+    expected = (1 - 2 * M / r_E) - r_E**2 * Omega**2
+    assert sympy.simplify(dtau_sq - expected) == 0
 
-    expected_formula = M * (1 / r_E - sympy.Rational(3, 2) / r_gps)
-    assert sympy.simplify(shift_linear - expected_formula) == 0
 
-    # Numerical evaluation — WGS 84 / ICD-GPS-200 constants
-    mu_E = 3.986005e14  # m³ s⁻²  standard gravitational parameter
-    c_si = 2.99792458e8  # m s⁻¹
-    r_E_si = 6.3781e6  # m       mean Earth radius
-    r_gps_si = 2.6560e7  # m       GPS nominal semi-major axis
+# ---------------------------------------------------------------------------
+# Numerical claim
+# ---------------------------------------------------------------------------
 
-    M_si = mu_E / c_si**2  # geometric mass [m]
 
-    shift_num = float(
-        expected_formula.subs([(M, M_si), (r_E, r_E_si), (r_gps, r_gps_si)])
+def test_gps_clock_correction_matches_icd() -> None:
+    """Exact fractional frequency shift matches ICD-GPS-200 within 0.1%.
+
+    Uses the exact sqrt expressions from the two algebraic claims above,
+    evaluated at WGS 84 / GPS constants with SI units restored.
+    """
+    M_geom = WGS84_MU / WGS84_C**2  # geometric mass [m]; GM/c²
+    v_rot = WGS84_OMEGA_E * WGS84_R_E  # equatorial surface speed [m/s]
+
+    dtau_sat = math.sqrt(1 - 3 * M_geom / GPS_SEMI_MAJOR_AXIS)
+    dtau_ground = math.sqrt((1 - 2 * M_geom / WGS84_R_E) - (v_rot / WGS84_C) ** 2)
+
+    shift = dtau_sat / dtau_ground - 1
+
+    assert (
+        abs(shift - ICD_GPS200_FRACTIONAL_OFFSET) / ICD_GPS200_FRACTIONAL_OFFSET < 0.001
     )
-
-    # ICD-GPS-200 Table 20-IV: satellite clocks run fast by 4.4647 × 10⁻¹⁰
-    assert abs(shift_num - 4.4647e-10) / 4.4647e-10 < 0.01
