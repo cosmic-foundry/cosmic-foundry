@@ -107,7 +107,7 @@ ignore_missing_imports = true
 # ---------------------------------------------------------------------------
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "validation"]
 addopts = "-q"
 markers = [
     "multihost: requires jax.distributed multi-process setup",

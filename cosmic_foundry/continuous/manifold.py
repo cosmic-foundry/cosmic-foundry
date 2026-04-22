@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
+import sympy
+
 from cosmic_foundry.continuous.topological_manifold import TopologicalManifold
 from cosmic_foundry.foundation.homeomorphism import Homeomorphism
 from cosmic_foundry.foundation.indexed_family import IndexedFamily
@@ -56,7 +58,13 @@ class Chart(Diffeomorphism[D, C], Generic[D, C]):  # noqa: B024
         domain   — the open subset U ⊂ M
         codomain — the open subset V ⊂ ℝⁿ
         inverse  — the smooth inverse φ⁻¹: V → U
+        symbols  — ordered SymPy symbols (x¹, …, xⁿ) for this chart's coordinates
     """
+
+    @property
+    @abstractmethod
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        """Ordered coordinate symbols (x¹, …, xⁿ) for this chart."""
 
 
 class Atlas(IndexedFamily):
