@@ -4,7 +4,7 @@ Derives the relativistic clock rate correction for GPS satellites from the
 Schwarzschild metric tensor and validates it against ICD-GPS-200 Table 20-IV.
 """
 
-# %%
+# %% SchwarzschildSpacetime
 import sympy
 
 from validation.schwarzschild.figures import time_dilation_figure
@@ -25,5 +25,5 @@ Omega = sympy.Symbol("Omega", positive=True)
 
 sympy.simplify((-g_tt - g_phiphi * Omega**2).subs(r, r_E))
 
-# %%
+# %% time_dilation_figure
 time_dilation_figure()

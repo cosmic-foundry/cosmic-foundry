@@ -4,21 +4,31 @@ For each `validation/{scenario}/` directory containing a `*.py` script
 (not prefixed `test_` or `__`), this script converts the percent-format
 cells to MyST-NB code cells and writes the result to `docs/{scenario}/`.
 
-The module docstring of each script becomes the page title; `# %%` markers
-become code-cell boundaries. Generated files are build artifacts: gitignored,
-not committed.
+Cell markers of the form `# %% Name` cause the docstring of `Name` (looked
+up from the script's imports) to be inserted as prose before that cell.
+The module docstring's first line becomes the page title; remaining lines
+become the page introduction.
 
+Generated files are build artifacts: gitignored, not committed.
 Run automatically from docs/conf.py before Sphinx processes sources.
 """
 
 from __future__ import annotations
 
 import ast
+import importlib
+import inspect
+import sys
 from pathlib import Path
+from typing import Any
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _VALIDATION = _PROJECT_ROOT / "validation"
 _DOCS_OUT = _PROJECT_ROOT / "docs"
+
+# Ensure validation/ is importable when running the generator standalone.
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 _FRONTMATTER = """\
 ---
@@ -34,38 +44,78 @@ kernelspec:
 """
 
 
-def _extract_docstring(source: str) -> str | None:
-    """Return the module-level docstring from *source*, or None."""
+def _extract_docstring(source: str) -> tuple[str, str] | None:
+    """Return (title, intro) from the module docstring, or None."""
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return None
-    return ast.get_docstring(tree)
+    doc = ast.get_docstring(tree)
+    if not doc:
+        return None
+    lines = doc.splitlines()
+    title = lines[0].rstrip(".")
+    intro = "\n".join(lines[2:]).strip() if len(lines) > 2 else ""
+    return title, intro
 
 
-def _split_cells(source: str) -> list[str]:
-    """Split *source* on `# %%` markers; return non-empty cell bodies."""
-    raw = source.split("\n# %%")
+def _build_name_map(source: str) -> dict[str, Any]:
+    """Map names imported in *source* to their live objects."""
+    tree = ast.parse(source)
+    name_map: dict[str, Any] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            try:
+                mod = importlib.import_module(node.module)
+            except ImportError:
+                continue
+            for alias in node.names:
+                obj = getattr(mod, alias.name, None)
+                if obj is not None:
+                    name_map[alias.asname or alias.name] = obj
+    return name_map
+
+
+def _split_cells(source: str) -> list[tuple[str | None, str]]:
+    """Split *source* on `# %%` markers; return (tag, body) pairs."""
+    chunks = source.split("\n# %%")
     cells = []
-    for chunk in raw:
-        # Strip the leading newline left by the split and any trailing whitespace.
-        body = chunk.strip()
-        # Skip the first chunk if it is only the module docstring (it becomes title).
-        if body.startswith('"""') or body.startswith("'''"):
+    for chunk in chunks:
+        stripped = chunk.strip()
+        if not stripped or stripped.startswith(('"""', "'''")):
             continue
+        first_newline = chunk.find("\n")
+        if first_newline == -1:
+            continue
+        tag = chunk[:first_newline].strip() or None
+        body = chunk[first_newline:].strip()
         if body:
-            cells.append(body)
+            cells.append((tag, body))
     return cells
 
 
-def _render_page(title: str, cells: list[str]) -> str:
-    code_cells = "\n\n".join(f"```{{code-cell}} python\n{cell}\n```" for cell in cells)
-    return f"{_FRONTMATTER.strip()}\n\n# {title}\n\n{code_cells}\n"
+def _render_page(
+    title: str,
+    intro: str,
+    cells: list[tuple[str | None, str]],
+    name_map: dict[str, Any],
+) -> str:
+    parts = [f"{_FRONTMATTER.strip()}\n\n# {title}"]
+    if intro:
+        parts.append(intro)
+    for tag, body in cells:
+        if tag:
+            obj = name_map.get(tag)
+            doc = inspect.getdoc(obj) if obj is not None else None
+            if doc:
+                parts.append(doc)
+        parts.append(f"```{{code-cell}} python\n{body}\n```")
+    return "\n\n".join(parts) + "\n"
 
 
 def _render_index(scenario: str, stems: list[str]) -> str:
-    entries = "\n".join(stems)
     title = scenario.replace("_", " ").title()
+    entries = "\n".join(stems)
     return f"# {title}\n\n```{{toctree}}\n:maxdepth: 1\n\n{entries}\n```\n"
 
 
@@ -80,17 +130,19 @@ def generate(out_root: Path = _DOCS_OUT) -> None:
             if script.stem.startswith("test_") or script.stem.startswith("_"):
                 continue
             source = script.read_text()
-            docstring = _extract_docstring(source)
-            if docstring is None:
+            result = _extract_docstring(source)
+            if result is None:
                 continue
-            title = docstring.splitlines()[0].rstrip(".")
+            title, intro = result
+            name_map = _build_name_map(source)
             cells = _split_cells(source)
             if not cells:
                 continue
 
             out_dir = out_root / scenario_dir.name
             out_dir.mkdir(parents=True, exist_ok=True)
-            (out_dir / f"{script.stem}.md").write_text(_render_page(title, cells))
+            page = _render_page(title, intro, cells, name_map)
+            (out_dir / f"{script.stem}.md").write_text(page)
             stems.append(script.stem)
 
         if stems:
