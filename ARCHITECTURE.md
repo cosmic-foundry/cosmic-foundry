@@ -60,6 +60,10 @@ Set
                            derived: ndim = len(shape)
 
 Function[D, C]           — callable mapping domain D → codomain C; interface: __call__
+├── SymbolicFunction     — Function defined by a SymPy expression; free: expr, symbols
+│                          derived: __call__ = expr.subs(zip(symbols, args))
+├── NumericFunction      — Function implemented procedurally; interface: __call__
+│                          optional: symbolic → SymbolicFunction (refinement declaration)
 └── InvertibleFunction   — bijection with two-sided inverse; interface: domain, codomain, inverse
     └── Homeomorphism    — bicontinuous bijection; narrows domain/codomain to TopologicalSpace
 ```
@@ -82,7 +86,7 @@ Atlas(IndexedFamily)                  — collection of Charts covering M; co-lo
 
 MetricTensor(SymmetricTensorField)    — metric g; co-located in pseudo_riemannian_manifold.py
 
-Field(Function)                       — f: M → V; interface: manifold → Manifold
+Field(SymbolicFunction)               — f: M → V; interface: manifold → Manifold, expr, symbols
 └── TensorField                       — interface: tensor_type → (p, q)
     ├── SymmetricTensorField          — derived: tensor_type = (0, 2); interface: component(i,j) → Field
     │   └── MetricTensor             — see above
