@@ -27,6 +27,11 @@ data is explicitly quantified and propagated.**
 
 **The engine is dimensionless internally.**
 
+**Concrete implementations are verification artifacts, not engine source.**
+A concrete physics object earns its place by making a testable claim — symbolic
+or numerical — that CI can check. If no such claim exists, the implementation
+does not belong in this repository.
+
 ---
 
 ## Layer architecture
@@ -218,14 +223,14 @@ the derivation-first lane policy. This decision is deferred to Epoch 7
 
 ## Current work
 
-**M2.5 design session: mathematical narrative documentation.**
-What does the first notebook look like, and how does it hook into CI? Concrete
-questions to settle: (1) which concept is the right entry point — `Set` and
-`Function`, or the manifold hierarchy? (2) what makes a notebook "tested" — does
-it run SymPy derivations that assert results, does it instantiate the ABCs, or
-both? (3) how do we structure the `docs/` tree so notebooks accumulate without
-becoming a maze? The goal is a format that can be repeated for every new concept
-added to `continuous/` and `discrete/` as the epochs proceed. (Note: `discrete/` is not yet implemented; see that section.)
+**M3: Executable mathematical narrative.**
+The first `verification/` implementations are GR spacetimes: `SchwarzschildSpacetime`
+with a SymPy-backed metric, GPS time dilation derivation, and Schwarzschild
+embedding diagram. Each is a concrete `PseudoRiemannianManifold` alongside
+SymPy assertions that CI executes. Notebooks in `docs/` import directly from
+`verification/` — no class definitions in notebooks. Open questions to settle
+during implementation: coordinate-to-chart binding (which SymPy symbols belong
+to which `Chart`), and how `symbols` is declared on concrete `Field` subclasses.
 
 **Epoch 2 design session: how do physical coordinates attach to a grid?**
 The first concrete implementation is a Cartesian grid (`CartesianGrid` as a
@@ -280,10 +285,10 @@ extends the discrete and numerical layers minimally to evaluate them.
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
 | M1 | Verification infrastructure: convergence testing helpers, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
-| M2.5 | Mathematical narrative documentation: executable MyST-NB notebooks that explain each layer of the hierarchy — what the formal concepts mean, how they relate, and why the code is structured the way it is. Notebooks run in CI, so every mathematical claim is machine-checked. |
-| M3 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 4. |
-| M4 | Reproducibility capsule tooling: self-executing builder. |
-| M5 | Application-repo capsule integration and multi-repository evidence regeneration. |
+| M3 | Executable mathematical narrative: first `verification/` implementations (Schwarzschild spacetime, GPS time dilation); notebooks in `docs/` that import from `verification/` and run in CI. Settles coordinate-to-chart binding and the `SymbolicFunction` interface on concrete fields. |
+| M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 4. |
+| M5 | Reproducibility capsule tooling: self-executing builder. |
+| M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
 
 ### Per-epoch verification standard
 
@@ -292,6 +297,6 @@ Every physics epoch must satisfy this checklist before it is considered verified
 - Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
 - At least one externally-grounded convergence test against an analytical solution
   or observational data (not an engine-generated golden file); where an analytical
-  solution exists, the relevant `DiscreteField.approximates` is set so the check
-  runs automatically
+  solution exists, the relevant `NumericFunction.symbolic` is declared so the
+  check runs automatically
 - Lane A/B/C classification stated in the PR description
