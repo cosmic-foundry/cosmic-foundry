@@ -221,11 +221,11 @@ the derivation-first lane policy. This decision is deferred to Epoch 7
 ## Current work
 
 **M3: Executable mathematical narrative.**
-The first `verification/` implementations are GR spacetimes: `SchwarzschildSpacetime`
+The first `validation/` implementations are GR spacetimes: `SchwarzschildSpacetime`
 with a SymPy-backed metric, GPS time dilation derivation, and Schwarzschild
 embedding diagram. Each is a concrete `PseudoRiemannianManifold` alongside
 SymPy assertions that CI executes. Notebooks in `docs/` import directly from
-`verification/` — no class definitions in notebooks. Open questions to settle
+`validation/` — no class definitions in notebooks. Open questions to settle
 during implementation: coordinate-to-chart binding (which SymPy symbols belong
 to which `Chart`), and how `symbols` is declared on concrete `Field` subclasses.
 
@@ -282,7 +282,7 @@ extends the discrete and numerical layers minimally to evaluate them.
 | M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
 | M1 | Verification infrastructure: convergence testing helpers, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
-| M3 | Executable mathematical narrative: first `verification/` implementations (Schwarzschild spacetime, GPS time dilation); notebooks in `docs/` that import from `verification/` and run in CI. Settles coordinate-to-chart binding and the `SymbolicFunction` interface on concrete fields. |
+| M3 | Executable mathematical narrative: first `validation/` implementations (Schwarzschild spacetime, GPS time dilation); notebooks in `docs/` that import from `validation/` and run in CI. Settles coordinate-to-chart binding and the `SymbolicFunction` interface on concrete fields. |
 | M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 4. |
 | M5 | Reproducibility capsule tooling: self-executing builder. |
 | M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
