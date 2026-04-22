@@ -10,6 +10,13 @@ continuous/index
 ```
 
 ```{toctree}
+:maxdepth: 2
+:caption: Validation
+
+schwarzschild/index
+```
+
+```{toctree}
 :maxdepth: 1
 :caption: API reference
 
