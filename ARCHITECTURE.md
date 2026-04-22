@@ -19,10 +19,9 @@ abstractions.**
 **Every numerical method is formally derived from its continuous
 mathematical counterpart, and machine-checkable, where possible.**
 
-**Every object that claims to represent a specific physical scenario is paired
-with a testable claim about that scenario — symbolic or numerical — that CI can
-check. For numerical methods this claim is verification against an analytical
-solution, with the test living in this repository.**
+**Every named physical scenario carries a machine-checkable claim. For numerical
+methods: verified against an analytical solution, with the test in this
+repository.**
 
 **Where external data sources are ingested the uncertainty in that
 data is explicitly quantified and propagated.**
