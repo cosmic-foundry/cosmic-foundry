@@ -20,8 +20,12 @@ from validation.schwarzschild.constants import (
 def time_dilation_figure() -> plt.Figure:
     """Fractional clock rate offset vs. orbital radius in the Schwarzschild spacetime.
 
-    Evaluates dτ_sat/dτ_ground − 1 from the surface to ten Earth radii.
-    Marks the GPS orbital radius and the ICD-GPS-200 reference value.
+    The curve shows dτ_sat/dτ_ground − 1 as a function of orbital radius from
+    Earth's surface to ten Earth radii. A satellite clock runs fast relative to
+    a ground clock because the gravitational blueshift — clocks tick faster
+    further from a mass — outweighs the kinematic redshift from orbital
+    velocity. A vertical line marks the GPS orbital radius; a horizontal line
+    marks the ICD-GPS-200 reference correction factor.
     """
     M_geom = WGS84_MU / WGS84_C**2
     v_rot = WGS84_OMEGA_E * WGS84_R_E

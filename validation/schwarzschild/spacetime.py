@@ -156,12 +156,16 @@ class SchwarzschildAtlas(Atlas):
 class SchwarzschildSpacetime(PseudoRiemannianManifold):
     """The Schwarzschild vacuum solution.
 
-    The unique static, spherically symmetric solution to the Einstein field
-    equations in vacuum (Birkhoff's theorem). Describes the exterior geometry
-    of any spherically symmetric mass distribution: black holes, stars, Earth.
+    The Schwarzschild spacetime is the unique static, spherically symmetric
+    solution to the vacuum Einstein field equations (Birkhoff's theorem). It
+    describes the exterior geometry of any spherically symmetric mass
+    distribution — black holes, neutron stars, and to excellent approximation,
+    Earth and the Sun.
 
-    Signature (1, 3): one timelike and three spacelike dimensions.
-    Metric in geometric units (G = c = 1); M is a free SymPy symbol.
+    Signature (1, 3): one timelike and three spacelike dimensions. The metric
+    is expressed in geometric units (G = c = 1); M is a free SymPy symbol
+    representing the central mass, so a single instance parametrises the full
+    family of Schwarzschild spacetimes.
     """
 
     @property
