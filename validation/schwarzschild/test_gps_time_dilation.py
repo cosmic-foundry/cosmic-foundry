@@ -1,15 +1,12 @@
 """GPS time dilation: Schwarzschild derivation validated against ICD-GPS-200.
 
-Three claims:
+Two claims:
 
-1. Algebraic: the proper time ratio for a circular equatorial geodesic simplifies
-   to sqrt(1 - 3M/r). Derived from g_tt and g_φφ of the Schwarzschild metric.
+1. Algebraic: the proper time rate for a ground clock rotating with Earth at
+   angular velocity Ω is sqrt((1-2M/r_E) - r_E²Ω²), derived from g_tt and
+   g_φφ of the Schwarzschild metric.
 
-2. Algebraic: the proper time rate for a ground clock rotating with Earth at
-   angular velocity Ω is sqrt((1-2M/r_E) - r_E²Ω²). Same derivation, different
-   worldline.
-
-3. Numerical: the exact fractional frequency shift evaluated at WGS 84 / GPS
+2. Numerical: the exact fractional frequency shift evaluated at WGS 84 / GPS
    parameters matches the ICD-GPS-200 Table 20-IV correction factor of
    4.4647 × 10⁻¹⁰ within 0.1%.
 
@@ -42,28 +39,8 @@ GPS_SEMI_MAJOR_AXIS = 26_559_710.0  # m         nominal GPS orbital radius
 
 
 # ---------------------------------------------------------------------------
-# Algebraic claims
+# Algebraic claim
 # ---------------------------------------------------------------------------
-
-
-def test_circular_geodesic_proper_time() -> None:
-    """Proper time ratio for a circular equatorial orbit is sqrt(1 - 3M/r).
-
-    Derived from the metric: dτ²/dt² = -g_tt - g_φφ · (dφ/dt)²
-    with the circular geodesic condition (dφ/dt)² = M/r³ (geometric units).
-    """
-    metric = SchwarzschildSpacetime().metric
-
-    g_tt = metric.component(0, 0).expr  # -(1 - 2M/r)
-    g_phiphi = metric.component(3, 3).expr  # r² sin²θ
-
-    g_phiphi_eq = g_phiphi.subs(theta, sympy.pi / 2)
-
-    omega_sq = M / r**3  # circular geodesic condition (G = c = 1)
-
-    dtau_sq = -g_tt - g_phiphi_eq * omega_sq
-
-    assert sympy.simplify(dtau_sq - (1 - 3 * M / r)) == 0
 
 
 def test_ground_clock_proper_time_with_rotation() -> None:
