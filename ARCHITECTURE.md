@@ -216,6 +216,17 @@ numeric tables are transcribed, verified, and updated independently of
 the derivation-first lane policy. This decision is deferred to Epoch 7
 (microphysics), when the first such capability lands.
 
+**Physical constants ingestion (CODATA).**
+The engine will need physical constants (G, c, ħ, k_B, …) throughout the
+physics epochs. The authoritative machine-readable source is NIST CODATA
+(public domain), available at `https://physics.nist.gov/cuu/Constants/Table/allascii.txt`.
+Open questions: where the constants module lives (`foundation/`? `computation/`?)
+and whether it must respect the symbolic-reasoning import boundary; how constants
+are exposed (SymPy symbols with known numerical values, plain floats, or both);
+how the CODATA revision is pinned and updated. WGS 84 / GPS-specific defined
+constants (μ, Ω_E, GPS semi-major axis) have no machine-readable API; the
+ingestion discipline for PDF-sourced defined constants is a separate decision.
+
 ---
 
 ## Current work
