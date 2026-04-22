@@ -19,18 +19,15 @@ abstractions.**
 **Every numerical method is formally derived from its continuous
 mathematical counterpart, and machine-checkable, where possible.**
 
-**Every numerical method is verified against an analytical solution,
-with the verification test living in this repository.**
+**Every object that claims to represent a specific physical scenario is paired
+with a testable claim about that scenario — symbolic or numerical — that CI can
+check. For numerical methods this claim is verification against an analytical
+solution, with the test living in this repository.**
 
 **Where external data sources are ingested the uncertainty in that
 data is explicitly quantified and propagated.**
 
 **The engine is dimensionless internally.**
-
-**Concrete implementations are verification artifacts, not engine source.**
-A concrete physics object earns its place by making a testable claim — symbolic
-or numerical — that CI can check. If no such claim exists, the implementation
-does not belong in this repository.
 
 ---
 
