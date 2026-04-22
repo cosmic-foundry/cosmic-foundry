@@ -112,6 +112,7 @@ def _render_page(
     parts = [f"{_FRONTMATTER.strip()}\n\n# {title}"]
     if intro:
         parts.append(intro)
+    parts.append("---")
     for tag, body in cells:
         if tag:
             obj = name_map.get(tag)
