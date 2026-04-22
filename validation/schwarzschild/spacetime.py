@@ -86,6 +86,10 @@ class SchwarzschildMetric(MetricTensor):
     def manifold(self) -> SchwarzschildSpacetime:
         return self._spacetime
 
+    def as_matrix(self) -> sympy.Matrix:
+        """Return the metric components as a SymPy Matrix."""
+        return _METRIC
+
     def component(self, i: int, j: int) -> _ScalarField:
         return _ScalarField(_METRIC[i, j], self._spacetime)
 

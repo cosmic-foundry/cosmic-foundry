@@ -19,24 +19,15 @@ import math
 
 import sympy
 
+from validation.schwarzschild.constants import (
+    GPS_SEMI_MAJOR_AXIS,
+    ICD_GPS200_FRACTIONAL_OFFSET,
+    WGS84_C,
+    WGS84_MU,
+    WGS84_OMEGA_E,
+    WGS84_R_E,
+)
 from validation.schwarzschild.spacetime import M, SchwarzschildSpacetime, r, theta
-
-# ---------------------------------------------------------------------------
-# ICD-GPS-200 reference value
-# ---------------------------------------------------------------------------
-
-# Pre-launch fractional frequency offset applied to GPS satellite clocks.
-# Satellite clocks run fast relative to ground; the correction is positive
-# (clocks are manufactured to tick slow to compensate).
-ICD_GPS200_FRACTIONAL_OFFSET = 4.4647e-10  # dimensionless, Table 20-IV
-
-# WGS 84 constants used to derive that value (ICD-GPS-200, IS-GPS-200)
-WGS84_MU = 3.986005e14  # m³ s⁻²   Earth standard gravitational parameter
-WGS84_OMEGA_E = 7.2921151467e-5  # rad s⁻¹  Earth rotation rate
-WGS84_R_E = 6.378137e6  # m         equatorial radius
-WGS84_C = 2.99792458e8  # m s⁻¹    speed of light
-GPS_SEMI_MAJOR_AXIS = 26_559_710.0  # m         nominal GPS orbital radius
-
 
 # ---------------------------------------------------------------------------
 # Algebraic claim
