@@ -94,6 +94,15 @@ def _split_cells(source: str) -> list[tuple[str | None, str]]:
     return cells
 
 
+def _doc_body(obj: Any) -> str | None:
+    """Return the docstring after the one-liner, for use as doc page prose."""
+    doc = inspect.getdoc(obj)
+    if not doc:
+        return None
+    parts = doc.split("\n\n", 1)
+    return parts[1].strip() if len(parts) > 1 else None
+
+
 def _render_page(
     title: str,
     intro: str,
@@ -106,7 +115,7 @@ def _render_page(
     for tag, body in cells:
         if tag:
             obj = name_map.get(tag)
-            doc = inspect.getdoc(obj) if obj is not None else None
+            doc = _doc_body(obj) if obj is not None else None
             if doc:
                 parts.append(doc)
         parts.append(f"```{{code-cell}} python\n{body}\n```")
