@@ -11,13 +11,13 @@ from abc import abstractmethod
 from typing import TypeVar
 
 from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.foundation.function import Function
+from cosmic_foundry.foundation.symbolic_function import SymbolicFunction
 
 D = TypeVar("D")  # Domain (point in manifold)
 C = TypeVar("C")  # Codomain (value type)
 
 
-class Field(Function[D, C]):
+class Field(SymbolicFunction[D, C]):
     """Abstract base for all fields: f: M → V.
 
     A field assigns a value in V to every point in a manifold M.
