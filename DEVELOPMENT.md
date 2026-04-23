@@ -176,6 +176,51 @@ script from the `cosmic-foundry` checkout directory.
 
 ---
 
+## Secret and environment hygiene
+
+Leaking credentials, tokens, or local machine details into a public GitHub
+repository is a critical risk. This section explains the layered defenses in
+place and how to work within them.
+
+### What we protect against
+
+| Risk | Defense |
+|---|---|
+| Committing `.env`, key files, cloud credentials | `.gitignore` patterns |
+| High-entropy strings or known secret formats | `detect-secrets` pre-commit hook |
+
+### The detect-secrets baseline
+
+`.secrets.baseline` is committed to the repo. It records every "potential
+secret" that was audited and confirmed safe so the hook does not re-alert on
+them. **Never delete this file.**
+
+When the hook fires on your branch:
+
+1. **If it is a real secret** — remove it, rotate the credential immediately,
+   and do not push that commit.
+2. **If it is a false positive** — audit the flagged line, confirm it is not
+   sensitive, then update the baseline:
+   ```bash
+   detect-secrets scan --update .secrets.baseline
+   detect-secrets audit .secrets.baseline   # mark each finding as safe
+   git add .secrets.baseline
+   ```
+
+### Rules for secrets in development
+
+- **Never hardcode secrets.** Use environment variables loaded from a local
+  `.env` file (already in `.gitignore`).
+- **Never commit `.env` files**, cloud credential directories (`.aws/`,
+  `.gcloud/`, `.azure/`), or private key material (`*.pem`, `*.key`, `*.p12`).
+- Keep tokens out of commit messages, issue comments, and PR descriptions —
+  GitHub's history is public and permanent.
+- If a secret has been pushed at any point, treat it as compromised: rotate it
+  immediately and notify the security owner, regardless of whether the branch
+  was merged.
+
+---
+
 ## Roadmap position
 
 **At the start of every session**, read `## Current work` in `ARCHITECTURE.md`.

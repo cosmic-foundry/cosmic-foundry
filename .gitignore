@@ -225,3 +225,61 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ---------------------------------------------------------------------------
+# macOS system files
+# ---------------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# ---------------------------------------------------------------------------
+# Credential, key, and secret files
+# ---------------------------------------------------------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+secrets.yml
+secrets.yaml
+secrets.json
+.secrets
+.netrc
+.pgpass
+.npmrc
+.pypirc
+
+# ---------------------------------------------------------------------------
+# Common local config / tool artefacts that can embed paths or tokens
+# ---------------------------------------------------------------------------
+.direnv/
+.envrc.local
+.tool-versions
+*.local
+
+# ---------------------------------------------------------------------------
+# IDE / editor files that can contain local machine paths
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+.vscode/settings.json
+.vscode/launch.json
+.vscode/*.log
+*.sublime-workspace
+*.sublime-project
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# Cloud provider credential directories (if accidentally placed in-tree)
+# ---------------------------------------------------------------------------
+.aws/
+.azure/
+.gcloud/
