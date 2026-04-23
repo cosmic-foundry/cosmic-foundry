@@ -223,9 +223,10 @@ When the hook fires on your branch:
 
 ### Scanning history manually (local)
 
-Install gitleaks once:
+gitleaks is installed by `setup_environment.sh`. Activate the environment
+first if not already active:
 ```bash
-brew install gitleaks
+source ./scripts/activate_environment.sh
 ```
 
 Scan the entire local history:
