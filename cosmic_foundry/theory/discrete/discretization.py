@@ -25,11 +25,12 @@ class Discretization(NumericFunction[ConservationLaw, DiscreteOperator]):
 
     For Lanes B and C, the commutation diagram must be verified algebraically
     via SymPy as an assert_* function in tests/, following the standard test
-    authorship convention.
+    authorship convention.  The approximation order is a property of the
+    concrete scheme — proved by the convergence test — not a parameter of
+    the abstract interface.
 
     Required:
         mesh     — the mesh on which the scheme is defined
-        order    — the approximation order p
         __call__ — produce the DiscreteOperator for a given ConservationLaw
                    (inherited from NumericFunction)
     """
@@ -38,11 +39,6 @@ class Discretization(NumericFunction[ConservationLaw, DiscreteOperator]):
     @abstractmethod
     def mesh(self) -> Mesh:
         """The mesh on which the scheme is defined."""
-
-    @property
-    @abstractmethod
-    def order(self) -> int:
-        """The approximation order p."""
 
 
 __all__ = ["Discretization"]

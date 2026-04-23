@@ -223,21 +223,21 @@ the cell decomposition. FDM and FEM are also derivable from this foundation:
 
 ```
 Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
-                            — free: law: ConservationLaw, mesh: Mesh, order: int
-                              maps a ConservationLaw + Mesh + approximation order
-                              to a DiscreteOperator; encapsulates the scheme choice.
+                            — free: mesh: Mesh
+                              maps a ConservationLaw to a DiscreteOperator;
+                              encapsulates the scheme choice (reconstruction,
+                              Riemann solver, quadrature).
                               Defined by the commutation diagram:
                                 Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
-                              where p is the approximation order. Different scheme
-                              choices (reconstruction, Riemann solver) are different
-                              ways of constructing Lₕ to make the diagram commute at
-                              order p. The commutation check verified algebraically via
-                              SymPy is the machine-checkable derivation required by Lanes B and C.
+                              The approximation order p is a property of the
+                              concrete scheme, proved by its convergence test —
+                              not a parameter of the abstract interface.
+                              The commutation check verified algebraically via
+                              SymPy is the machine-checkable derivation required
+                              by Lanes B and C.
                               Formally separate from Rₕ: Rₕ projects field values
                               (Function → MeshFunction); Discretization projects
                               operators (ConservationLaw → DiscreteOperator).
-                              They share a Mesh parameter and are related by the
-                              commutation diagram, but operate on different objects.
 
 DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                             — the output of Discretization; the Lₕ that makes
@@ -306,11 +306,12 @@ ingestion discipline for PDF-sourced defined constants is a separate decision.
 `MeshFunction` and earns its class via `.mesh: Mesh` — constraining input and output to the
 same mesh, by analogy with `DifferentialOperator.manifold`.
 `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])` is the scheme constructor:
-free parameters are `law: ConservationLaw`, `mesh: Mesh`, and `order: int`; it produces the
-`DiscreteOperator` making the commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` hold to `O(hᵖ)`.
-The commutation check is the machine-checkable derivation required by Lane C:
-verify via SymPy that Taylor-expanding `Lₕ(Rₕ f) − Rₕ(Lf)` for a symbolic test
-function f yields a remainder whose leading term is `O(hᵖ)`.
+free parameter is `mesh: Mesh`; it produces the `DiscreteOperator` Lₕ making the commutation
+diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` hold to some order.  The approximation order is a property of
+the concrete scheme — proved by its convergence test — not a parameter of the abstract interface.
+The machine-checkable derivation required by Lane C: verify via SymPy that Taylor-expanding
+`Lₕ(Rₕ f) − Rₕ(Lf)` for a symbolic test function f yields a remainder whose leading term
+is `O(hᵖ)` for the order p the scheme claims.
 
 **Concrete `Rₕ` and `CartesianMesh.boundary()`.** The `RestrictionOperator` ABC is in place;
 the concrete subclass for `CartesianMesh` integrates a `SymbolicFunction` analytically via SymPy:
