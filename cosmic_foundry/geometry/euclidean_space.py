@@ -22,7 +22,7 @@ from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     RiemannianManifold,
 )
 
-_DEFAULT_SYMBOL_NAMES = ("x", "y", "z", "w", "v", "u")
+_NAMED_SYMBOL_NAMES = ("x", "y", "z")
 
 
 class _ConstantField(Field):
@@ -144,7 +144,8 @@ class EuclideanSpace(RiemannianManifold):
 
     Free:
         ndim         — number of spatial dimensions
-        symbol_names — optional coordinate names (defaults to x, y, z, …)
+        symbol_names — optional coordinate names; defaults to (x, y, z) for
+                       ndim ≤ 3, then (x0, x1, x2, …) for higher dimensions
 
     Derived:
         signature  — always (ndim, 0) for a Riemannian manifold
@@ -159,10 +160,10 @@ class EuclideanSpace(RiemannianManifold):
         symbol_names: tuple[str, ...] | None = None,
     ) -> None:
         if symbol_names is None:
-            if ndim > len(_DEFAULT_SYMBOL_NAMES):
-                msg = f"ndim={ndim} exceeds default symbol names; pass symbol_names"
-                raise ValueError(msg)
-            symbol_names = _DEFAULT_SYMBOL_NAMES[:ndim]
+            if ndim <= len(_NAMED_SYMBOL_NAMES):
+                symbol_names = _NAMED_SYMBOL_NAMES[:ndim]
+            else:
+                symbol_names = tuple(f"x{i}" for i in range(ndim))
         if len(symbol_names) != ndim:
             msg = f"len(symbol_names)={len(symbol_names)} must equal ndim={ndim}"
             raise ValueError(msg)
