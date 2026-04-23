@@ -6,12 +6,20 @@ abstract interfaces and contributes nothing back to that layer.
 
 Exported objects
 ----------------
-CartesianChart  — identity coordinate chart on EuclideanSpace
-CartesianMesh   — uniform Cartesian mesh on flat Euclidean space
-EuclideanSpace  — flat Euclidean ℝⁿ with g = I
+CartesianChart    — identity coordinate chart on EuclideanManifold
+CartesianMesh     — uniform Cartesian mesh on flat Euclidean space
+EuclideanManifold — flat Euclidean ℝⁿ with g = I
+SchwarzschildManifold — Schwarzschild vacuum solution; static spherically
+                        symmetric spacetime with Lorentzian signature
 """
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.geometry.euclidean_space import CartesianChart, EuclideanSpace
+from cosmic_foundry.geometry.euclidean_manifold import CartesianChart, EuclideanManifold
+from cosmic_foundry.geometry.schwarzschild_manifold import SchwarzschildManifold
 
-__all__ = ["CartesianChart", "CartesianMesh", "EuclideanSpace"]
+__all__ = [
+    "CartesianChart",
+    "CartesianMesh",
+    "EuclideanManifold",
+    "SchwarzschildManifold",
+]

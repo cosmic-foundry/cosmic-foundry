@@ -4,13 +4,18 @@ Derives the relativistic clock rate correction for GPS satellites from the
 Schwarzschild metric tensor and validates it against ICD-GPS-200 Table 20-IV.
 """
 
-# %% SchwarzschildSpacetime
+# %% SchwarzschildManifold
 import sympy
 
+from cosmic_foundry.geometry.schwarzschild_manifold import (
+    M,
+    SchwarzschildManifold,
+    r,
+    theta,
+)
 from validation.schwarzschild.figures import time_dilation_figure
-from validation.schwarzschild.spacetime import M, SchwarzschildSpacetime, r, theta
 
-spacetime = SchwarzschildSpacetime()
+spacetime = SchwarzschildManifold()
 spacetime.metric.as_matrix()
 
 # %% Satellite clock: proper time rate on a circular geodesic

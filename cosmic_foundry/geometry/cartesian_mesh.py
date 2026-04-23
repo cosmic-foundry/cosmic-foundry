@@ -7,7 +7,7 @@ from typing import Any
 
 import sympy
 
-from cosmic_foundry.geometry.euclidean_space import CartesianChart, EuclideanSpace
+from cosmic_foundry.geometry.euclidean_manifold import CartesianChart, EuclideanManifold
 from cosmic_foundry.theory.continuous.manifold import Chart
 from cosmic_foundry.theory.discrete.structured_mesh import StructuredMesh
 from cosmic_foundry.theory.foundation.function import Function
@@ -29,7 +29,7 @@ class CartesianMesh(StructuredMesh):
         shape   — number of cells along each axis
 
     Derived:
-        chart       — CartesianChart on EuclideanSpace(ndim)
+        chart       — CartesianChart on EuclideanManifold(ndim)
         coordinate  — origin + (idx + ½)·spacing
         cell_volume — ∏ Δxₖ
         face_area   — ∏_{k≠j} Δxₖ for face ⊥ to axis j
@@ -85,7 +85,7 @@ class CartesianMesh(StructuredMesh):
         self._spacing = spacing
         self._shape = shape
         ndim = len(shape)
-        space = EuclideanSpace(ndim)
+        space = EuclideanManifold(ndim)
         self._chart: CartesianChart = space.atlas[0]
 
     @property
