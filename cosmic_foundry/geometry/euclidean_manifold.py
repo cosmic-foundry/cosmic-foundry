@@ -182,14 +182,14 @@ class EuclideanManifold(RiemannianManifold):
         return self._symbols
 
     @property
-    def atlas(self) -> _CartesianAtlas:
+    def atlas(self) -> Atlas:
         """Single-chart atlas; constructed lazily to avoid circular init."""
         if self._atlas is None:
             self._atlas = _CartesianAtlas(CartesianChart(self))
         return self._atlas
 
     @property
-    def metric(self) -> _CartesianMetric:
+    def metric(self) -> MetricTensor:
         """Flat metric in Cartesian coordinates: g_ij = δ_ij; constructed lazily."""
         if self._metric is None:
             self._metric = _CartesianMetric(self)

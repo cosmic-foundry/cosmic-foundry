@@ -90,7 +90,7 @@ class SchwarzschildMetric(MetricTensor):
         """Return the metric components as a SymPy Matrix."""
         return _METRIC
 
-    def component(self, i: int, j: int) -> _ScalarField:
+    def component(self, i: int, j: int) -> Field:
         return _ScalarField(_METRIC[i, j], self._manifold)
 
 
@@ -139,7 +139,7 @@ class _SchwarzschildAtlas(Atlas):
     def __init__(self, manifold: SchwarzschildManifold) -> None:
         self._chart = _SchwarzschildChart(manifold)
 
-    def __getitem__(self, index: int) -> _SchwarzschildChart:
+    def __getitem__(self, index: int) -> Chart:
         if index != 0:
             raise IndexError(index)
         return self._chart
@@ -177,7 +177,7 @@ class SchwarzschildManifold(PseudoRiemannianManifold):
         return SchwarzschildMetric(self)
 
     @property
-    def atlas(self) -> _SchwarzschildAtlas:
+    def atlas(self) -> Atlas:
         return _SchwarzschildAtlas(self)
 
 
