@@ -144,6 +144,79 @@ if [ -n "$remaining_hooks_path" ]; then
 fi
 pre-commit install
 
+# Install gitleaks for local secret scanning.
+# On macOS, use Homebrew (the only supported binary distribution).
+# On Linux in CI, gitleaks is provided by gitleaks/gitleaks-action; developers
+# on Linux should install it manually: https://github.com/gitleaks/gitleaks
+echo "Installing gitleaks..."
+if [ "$OS" = "Darwin" ]; then
+  if command -v brew &>/dev/null; then
+    brew install gitleaks 2>/dev/null || brew upgrade gitleaks 2>/dev/null || true
+    if command -v gitleaks &>/dev/null; then
+      echo "  gitleaks $(gitleaks version) installed"
+    else
+      echo "  Warning: gitleaks install via Homebrew failed — install manually with 'brew install gitleaks'"
+    fi
+  else
+    echo "  Warning: Homebrew not found — install gitleaks manually: https://github.com/gitleaks/gitleaks"
+  fi
+else
+  echo "  Skipping gitleaks install on $OS — install manually if needed: https://github.com/gitleaks/gitleaks"
+fi
+
+# Configure a global gitignore to catch machine-specific and credential files
+# across every repository on this machine, not just this one.
+GLOBAL_GITIGNORE="${HOME}/.config/git/ignore"
+if [ -z "$(git config --global core.excludesfile 2>/dev/null)" ]; then
+  echo "Configuring global gitignore at ${GLOBAL_GITIGNORE}..."
+  mkdir -p "${HOME}/.config/git"
+  if [ ! -f "$GLOBAL_GITIGNORE" ]; then
+    cat > "$GLOBAL_GITIGNORE" << 'GITIGNORE_EOF'
+# Global gitignore — machine-specific files that should never be committed
+# in any repository on this machine.
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# Credential files / private keys
+*.pem
+*.key
+*.p12
+*.pfx
+.netrc
+.npmrc-private
+.pypirc
+
+# Local environment overrides
+.envrc.local
+*.local
+.env.local
+.env.*.local
+
+# Editor artefacts
+*.swp
+*~
+.vscode/*.log
+*.sublime-workspace
+
+# Cloud provider config (if ever checked out into a project tree)
+.aws/
+.azure/
+.gcloud/
+GITIGNORE_EOF
+  fi
+  git config --global core.excludesfile "$GLOBAL_GITIGNORE"
+  echo "  Global gitignore configured: ${GLOBAL_GITIGNORE}"
+else
+  echo "  Global gitignore already configured: $(git config --global core.excludesfile)"
+fi
+
 # Record that the environment is in sync with the current spec files.
 # start_agent.sh compares this sentinel against the mtimes of
 # cosmic_foundry.yml and setup_environment.sh to decide whether a

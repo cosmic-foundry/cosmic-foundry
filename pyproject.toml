@@ -38,6 +38,7 @@ dev = [
     "requests",
     "jsonschema",
     "pyyaml",
+    "detect-secrets",
 ]
 mpi = [
     "mpi4py",
