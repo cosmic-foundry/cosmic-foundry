@@ -292,10 +292,13 @@ require machine-checkable derivations that Lane A defers to the reference).
   A derivation document is required; principled disagreements with the
   literature are recorded inside it.
 
-Lanes B and C require a `_derive()` function in the production module with
-executable SymPy checks on load-bearing algebraic steps. Infrastructure
-capabilities (mesh topology, I/O, field placement) are out of scope for
-lane classification.
+Lanes B and C require a machine-checkable derivation: executable SymPy
+checks on the load-bearing algebraic steps of the numerical scheme,
+expressed as `assert_*` functions in `tests/` following the standard test
+authorship convention. This keeps derivations automatically discoverable
+by CI and displayable in notebooks, as a separate concern from production
+code. Infrastructure capabilities (mesh topology, I/O, field placement)
+are out of scope for lane classification.
 
 The lane must be stated in the PR description, e.g. `Lane C (origination).
 Reference papers: [...]`. For Lane B, explicitly record that the reference

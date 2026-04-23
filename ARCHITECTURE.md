@@ -231,8 +231,8 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                               where p is the approximation order. Different scheme
                               choices (reconstruction, Riemann solver) are different
                               ways of constructing Lₕ to make the diagram commute at
-                              order p. The _derive() function required by Lanes B and C
-                              IS this commutation check, verified algebraically via SymPy.
+                              order p. The commutation check verified algebraically via
+                              SymPy is the machine-checkable derivation required by Lanes B and C.
                               Formally separate from Rₕ: Rₕ projects field values
                               (Function → MeshFunction); Discretization projects
                               operators (ConservationLaw → DiscreteOperator).
@@ -308,20 +308,20 @@ same mesh, by analogy with `DifferentialOperator.manifold`.
 `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])` is the scheme constructor:
 free parameters are `law: ConservationLaw`, `mesh: Mesh`, and `order: int`; it produces the
 `DiscreteOperator` making the commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` hold to `O(hᵖ)`.
-The `_derive()` function IS this commutation check, verified algebraically via SymPy:
-Taylor-expand the stencil, collect remainder terms, and confirm the leading term is `O(hᵖ)`.
+The commutation check is the machine-checkable derivation required by Lane C:
+verify via SymPy that Taylor-expanding `Lₕ(Rₕ f) − Rₕ(Lf)` for a symbolic test
+function f yields a remainder whose leading term is `O(hᵖ)`.
 
 **Concrete `Rₕ` and `CartesianMesh.boundary()`.** The `RestrictionOperator` ABC is in place;
 the concrete subclass for `CartesianMesh` integrates a `SymbolicFunction` analytically via SymPy:
 `(Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV`. `CartesianMesh.boundary(k)` (currently `NotImplementedError`)
 also lands here — it returns the signed face-incidence map needed to assemble FVM flux sums.
 Both are deferred from the discrete structure layer because their implementation pattern is shared
-with the truncation-error verification in `Discretization._derive()`.
+with the truncation-error verification in the Lane C commutation check.
 
 **First Poisson solver.** Target: a working second-order FVM discretization of `∇²φ = ρ` on
 a `CartesianMesh` with Dirichlet boundary conditions, verified against `φ = sin(πx)sin(πy)`
-via a convergence test demonstrating `O(h²)` error. Lane C (origination); the SymPy
-commutation check in `Discretization._derive()` is the derivation document.
+via a convergence test demonstrating `O(h²)` error. Lane C (origination); the SymPy commutation check is the machine-checkable derivation.
 
 ---
 
