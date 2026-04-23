@@ -188,8 +188,6 @@ place and how to work within them.
 |---|---|
 | Committing `.env`, key files, cloud credentials | `.gitignore` patterns |
 | High-entropy strings or known secret formats | `detect-secrets` pre-commit hook |
-| Secrets anywhere in history (all commits) | `gitleaks` CI job |
-| Secrets in new PRs pushed to GitHub | `gitleaks-action` on every push/PR |
 
 ### The detect-secrets baseline
 
@@ -220,11 +218,6 @@ When the hook fires on your branch:
 - If a secret has been pushed at any point, treat it as compromised: rotate it
   immediately and notify the security owner, regardless of whether the branch
   was merged.
-
-### Scanning history manually (local)
-
-Secret history scanning is handled by the `secret-scan` CI job on every push.
-There is no local gitleaks requirement.
 
 ---
 
