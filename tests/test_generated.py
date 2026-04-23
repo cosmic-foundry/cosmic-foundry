@@ -23,6 +23,7 @@ _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
     "cosmic_foundry.theory.discrete",
+    "cosmic_foundry.geometry",
 ]
 
 
@@ -99,7 +100,7 @@ def test_module_all_is_complete(mod_path: str, mod: types.ModuleType) -> None:
     defined = {
         name
         for name, obj in inspect.getmembers(mod, inspect.isclass)
-        if obj.__module__ == mod_path
+        if obj.__module__ == mod_path and not name.startswith("_")
     }
     missing = defined - exported
     assert not missing, f"defined but not in __all__: {missing}"
