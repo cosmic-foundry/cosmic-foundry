@@ -69,8 +69,8 @@ class CartesianMesh(StructuredMesh):
         Returns the signed face incidence list for a cell index.  Each entry
         is (axis, face_idx, sign) where face_idx is the multi-index of the
         face in the axis-perpendicular face array and sign ∈ {-1, +1} encodes
-        orientation: -1 for the low face (inward-pointing normal) and +1 for
-        the high face (outward-pointing normal).
+        orientation: -1 for the low face (outward normal points inward along
+        axis) and +1 for the high face (outward normal points outward).
         """
 
         def __init__(self, ndim: int) -> None:
@@ -135,7 +135,7 @@ class CartesianMesh(StructuredMesh):
         """Return the boundary operator ∂_k for k-cells.
 
         Only k == ndim (top-dimensional cells) is implemented; lower-dimensional
-        boundary operators are deferred to Epoch 3.
+        boundary operators are not yet implemented.
         """
         ndim = len(self._shape)
         if k == ndim:
@@ -143,7 +143,7 @@ class CartesianMesh(StructuredMesh):
         if k <= 0 or k > ndim:
             msg = f"k must be in [1, {ndim}], got {k}"
             raise IndexError(msg)
-        msg = f"∂_{k} on CartesianMesh deferred to Epoch 3; only ∂_{ndim} implemented"
+        msg = f"∂_{k} on CartesianMesh not yet implemented; only ∂_{ndim} available"
         raise NotImplementedError(msg)
 
     def coordinate(self, idx: tuple[int, ...]) -> tuple[sympy.Expr, ...]:
