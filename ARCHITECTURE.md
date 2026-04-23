@@ -51,15 +51,17 @@ making the symbolic-reasoning boundary a directory boundary. Everything
 outside `theory/` (`geometry/`, `computation/`, `validation/`) is the
 application/concreteness layer.
 
-**`theory/` is the symbolic-reasoning layer.**
-`foundation/`, `continuous/`, and `discrete/` all share the same identity:
-they describe mathematical structure symbolically, without numerical evaluation.
-Their import boundary reflects that identity — they may only import from the
-Python standard library, `cosmic_foundry`, or packages on the approved
-symbolic-reasoning list. The approved list is `{sympy}`. Additions require
-justification against the symbolic-reasoning identity; numerical computation
-packages (JAX, NumPy, SciPy) are excluded by definition. Enforced by
-`tests/test_theory_no_third_party_imports.py`.
+**`theory/` and `geometry/` are the symbolic-reasoning layer.**
+`foundation/`, `continuous/`, `discrete/`, and `geometry/` all share the same
+identity: they describe mathematical structure symbolically, without numerical
+evaluation. `geometry/` is coordinate geometry infrastructure — manifolds,
+charts, and meshes defined by SymPy expressions; numerical array allocation
+belongs in `computation/`. Their import boundary reflects that shared identity —
+they may only import from the Python standard library, `cosmic_foundry`, or
+packages on the approved symbolic-reasoning list. The approved list is
+`{sympy}`. Additions require justification against the symbolic-reasoning
+identity; numerical computation packages (JAX, NumPy, SciPy) are excluded by
+definition. Enforced by `tests/test_theory_no_third_party_imports.py`.
 
 ### foundation/  · Epoch 1 ✓
 
