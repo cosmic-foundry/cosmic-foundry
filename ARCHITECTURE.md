@@ -38,10 +38,19 @@ The codebase is organized into four packages with a strict dependency order:
 ```
 foundation/   ←  continuous/
      ↑                ↑
-     └──────── discrete/ (Epoch 2, not yet implemented)
-                        ↑
-                  computation/
+     └──────── discrete/
+                   ↑
+              geometry/   ← concrete instantiable objects (meshes, spacetimes)
+                   ↑
+             computation/
 ```
+
+**Planned reorg:** `foundation/`, `continuous/`, and `discrete/` will be
+nested under a single `theory/` top-level package, making the
+symbolic-reasoning boundary a directory boundary. Everything outside
+`theory/` (`geometry/`, `computation/`, `validation/`) is the
+application/concreteness layer. This rename is deferred until the
+`geometry/` package is introduced.
 
 **`foundation/` and `continuous/` are symbolic-reasoning layers.**
 Their shared identity: they describe mathematical structure symbolically, without
@@ -241,11 +250,12 @@ StructuredMesh(Mesh)            — a Mesh whose cells are regular and axis-alig
                               rectangular region of ℤⁿ, earning shape, ndim, and intersect
                               as derived properties of cell regularity.
 
-CartesianMesh(StructuredMesh)   — concrete; free: origin, spacing, shape; flat metric (g = I)
+CartesianMesh(StructuredMesh)   — free: origin, spacing, shape, chart; flat metric (g = I)
                               derives: coordinate = origin + (idx + ½)·spacing
                                        cell volume = ∏ Δxₖ
                                        face area = ∏_{k≠j} Δxₖ  (face ⊥ to axis j)
                                        face normal = ê_j
+                              Lives in geometry/, not discrete/ — see next steps.
 
 MeshFunction(NumericFunction[Mesh, V])
                             — value assignment to mesh elements (cells, faces, or vertices);
@@ -328,14 +338,26 @@ the Set of k-cells; `boundary(k)` returns ∂_k: C_k → C_{k-1}; the identity
 `continuous/`: faces are regions in the chart's parameter space (not polygons
 in physical space); cell volumes are derived from face geometry via the
 divergence theorem itself (`|Ωᵢ| = (1/n) ∑_{f ∈ ∂Ωᵢ} xf · nf Af`); areas and
-volumes in non-Cartesian geometries use `√|g|` from the chart's metric.
-The restriction operator `Rₕ` (free: `mesh: Mesh`) is the formal bridge: a
-continuous Function plus a Mesh yields a MeshFunction via
-`(Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV`; the output has `.mesh == Rₕ.mesh` by construction. The regular-mesh
-ABC StructuredMesh adds `coordinate(idx)` and the evaluation bridge
-`field.expr.subs(zip(chart.symbols, coordinate(idx)))`; `CartesianMesh`
-concretises to flat metric, deriving all geometry from `origin`, `spacing`,
-and `shape`.
+volumes in non-Cartesian geometries use `√|g|` from the metric of the
+chart's domain manifold. The restriction operator `Rₕ` (free: `mesh: Mesh`)
+is the formal bridge: a continuous Function plus a Mesh yields a MeshFunction
+via `(Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV`; the output has `.mesh == Rₕ.mesh` by
+construction. `StructuredMesh` adds `coordinate(idx)` and the derived
+evaluation bridge `field.expr.subs(zip(chart.symbols, coordinate(idx)))`.
+
+**Next steps.**
+Two structural decisions taken but not yet implemented:
+
+1. **Package reorg (`theory/`).** `foundation/`, `continuous/`, and
+   `discrete/` will be nested under a `theory/` top-level package so the
+   symbolic-reasoning boundary is a directory boundary. Everything outside
+   `theory/` is the application/concreteness layer.
+
+2. **`geometry/` package.** Concrete instantiable objects — `CartesianMesh`,
+   `SchwarzschildSpacetime`, and future common geometries — belong in
+   `geometry/`, not in the abstract layers. `CartesianMesh` is deferred
+   to this package. `SchwarzschildSpacetime` will move from `validation/`
+   to `geometry/` when the reorg lands.
 
 ---
 

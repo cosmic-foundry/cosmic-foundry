@@ -22,6 +22,7 @@ PACKAGE_ROOT = Path(__file__).parent.parent / "cosmic_foundry"
 PURE_PACKAGES = [
     PACKAGE_ROOT / "foundation",
     PACKAGE_ROOT / "continuous",
+    PACKAGE_ROOT / "discrete",
 ]
 STDLIB = sys.stdlib_module_names
 SYMBOLIC_PACKAGES = {"sympy"}
