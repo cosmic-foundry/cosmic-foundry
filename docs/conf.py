@@ -93,6 +93,8 @@ linkcheck_ignore = [
     r"^https://cactuscode\.org/",
     # NRC site — intermittently unreachable
     r"^https://www\.nrc\.gov/",
+    # OSTI — intermittently unreachable (connection timeouts in CI)
+    r"^https://www\.osti\.gov/",
     # Confirmed-dead links in research/ — to be cleaned up separately
     r"^https://doi\.org/10\.1016/S0898122100003175$",  # dead DOI
     r"^https://github\.com/Flash-X/Flash-X$",  # repo moved/deleted
