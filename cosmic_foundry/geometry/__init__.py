@@ -12,6 +12,6 @@ EuclideanSpace  — flat Euclidean ℝⁿ with g = I
 """
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.geometry.cartesian_space import CartesianChart, EuclideanSpace
+from cosmic_foundry.geometry.euclidean_space import CartesianChart, EuclideanSpace
 
 __all__ = ["CartesianChart", "CartesianMesh", "EuclideanSpace"]

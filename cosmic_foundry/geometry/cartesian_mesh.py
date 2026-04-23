@@ -6,7 +6,7 @@ from typing import Any
 
 import sympy
 
-from cosmic_foundry.geometry.cartesian_space import CartesianChart, EuclideanSpace
+from cosmic_foundry.geometry.euclidean_space import CartesianChart, EuclideanSpace
 from cosmic_foundry.theory.continuous.manifold import Chart
 from cosmic_foundry.theory.discrete.structured_mesh import StructuredMesh
 from cosmic_foundry.theory.foundation.function import Function
