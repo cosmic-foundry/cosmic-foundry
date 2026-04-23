@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import combinations
 from typing import Any
 
 import sympy
@@ -135,6 +136,10 @@ class CartesianMesh(StructuredMesh):
 
     def face_area(self, axis: int) -> sympy.Expr:
         """Face area ∏_{k≠axis} Δxₖ for faces perpendicular to axis."""
+        ndim = len(self._shape)
+        if axis < 0 or axis >= ndim:
+            msg = f"axis must be in [0, {ndim - 1}], got {axis}"
+            raise IndexError(msg)
         result: sympy.Expr = sympy.Integer(1)
         for i, s in enumerate(self._spacing):
             if i != axis:
@@ -143,14 +148,15 @@ class CartesianMesh(StructuredMesh):
 
     def face_normal(self, axis: int) -> tuple[sympy.Integer, ...]:
         """Unit outward normal ê_axis for faces perpendicular to axis."""
+        ndim = len(self._shape)
+        if axis < 0 or axis >= ndim:
+            msg = f"axis must be in [0, {ndim - 1}], got {axis}"
+            raise IndexError(msg)
         return tuple(
-            sympy.Integer(1) if i == axis else sympy.Integer(0)
-            for i in range(len(self._shape))
+            sympy.Integer(1) if i == axis else sympy.Integer(0) for i in range(ndim)
         )
 
     def _lower_cell_count(self, k: int) -> int:
-        from itertools import combinations
-
         ndim = len(self._shape)
         total = 0
         for axes in combinations(range(ndim), k):
