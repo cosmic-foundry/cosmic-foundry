@@ -68,6 +68,11 @@ class SymmetricTensorField(TensorField):
     def component(self, i: int, j: int) -> Field:
         """Return the (i, j) component as a scalar Field on this manifold.
 
+        Components are always expressed relative to a specific coordinate
+        chart.  Implementations must document which chart they use; the
+        returned Field's ``symbols`` attribute identifies the coordinate
+        symbols of that chart.
+
         Implementations must satisfy component(i, j) == component(j, i)
         pointwise for all valid index pairs.
         """

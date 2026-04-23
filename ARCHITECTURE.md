@@ -51,15 +51,17 @@ making the symbolic-reasoning boundary a directory boundary. Everything
 outside `theory/` (`geometry/`, `computation/`, `validation/`) is the
 application/concreteness layer.
 
-**`theory/` is the symbolic-reasoning layer.**
-`foundation/`, `continuous/`, and `discrete/` all share the same identity:
-they describe mathematical structure symbolically, without numerical evaluation.
-Their import boundary reflects that identity — they may only import from the
-Python standard library, `cosmic_foundry`, or packages on the approved
-symbolic-reasoning list. The approved list is `{sympy}`. Additions require
-justification against the symbolic-reasoning identity; numerical computation
-packages (JAX, NumPy, SciPy) are excluded by definition. Enforced by
-`tests/test_theory_no_third_party_imports.py`.
+**`theory/` and `geometry/` are the symbolic-reasoning layer.**
+`foundation/`, `continuous/`, `discrete/`, and `geometry/` all share the same
+identity: they describe mathematical structure symbolically, without numerical
+evaluation. `geometry/` is coordinate geometry infrastructure — manifolds,
+charts, and meshes defined by SymPy expressions; numerical array allocation
+belongs in `computation/`. Their import boundary reflects that shared identity —
+they may only import from the Python standard library, `cosmic_foundry`, or
+packages on the approved symbolic-reasoning list. The approved list is
+`{sympy}`. Additions require justification against the symbolic-reasoning
+identity; numerical computation packages (JAX, NumPy, SciPy) are excluded by
+definition. Enforced by `tests/test_theory_no_third_party_imports.py`.
 
 ### foundation/  · Epoch 1 ✓
 
@@ -244,12 +246,14 @@ StructuredMesh(Mesh)            — a Mesh whose cells are regular and axis-alig
                               rectangular region of ℤⁿ, earning shape, ndim, and intersect
                               as derived properties of cell regularity.
 
-CartesianMesh(StructuredMesh)   — free: origin, spacing, shape, chart; flat metric (g = I)
+CartesianMesh(StructuredMesh)   — free: origin, spacing, shape; flat metric (g = I)
+                              chart is derived internally: a Cartesian mesh has a
+                              Cartesian chart by definition (EuclideanSpace(ndim).atlas[0])
                               derives: coordinate = origin + (idx + ½)·spacing
                                        cell volume = ∏ Δxₖ
                                        face area = ∏_{k≠j} Δxₖ  (face ⊥ to axis j)
                                        face normal = ê_j
-                              Lives in geometry/, not discrete/ — see next steps.
+                              Lives in geometry/, not discrete/.
 
 MeshFunction(NumericFunction[Mesh, V])
                             — value assignment to mesh elements (cells, faces, or vertices);
@@ -307,7 +311,7 @@ dispatch is unsettled.
 Physics capabilities sourced from reference tables (EOS polynomial fits,
 reaction networks, opacity tables) need a discipline governing how
 numeric tables are transcribed, verified, and updated independently of
-the derivation-first lane policy. This decision is deferred to Epoch 7
+the derivation-first lane policy. This decision is deferred to Epoch 9
 (microphysics), when the first such capability lands.
 
 **Physical constants ingestion (CODATA).**
@@ -341,11 +345,20 @@ evaluation bridge `field.expr.subs(zip(chart.symbols, coordinate(idx)))`.
 
 **Next steps.**
 
-**`geometry/` package.** Concrete instantiable objects — `CartesianMesh`,
-`SchwarzschildSpacetime`, and future common geometries — belong in
-`geometry/`, not in the abstract layers. `CartesianMesh` is deferred
-to this package. `SchwarzschildSpacetime` will move from `validation/`
-to `geometry/` when the package is introduced.
+**`geometry/` package** (in progress). Concrete instantiable objects —
+`CartesianMesh`, `SchwarzschildSpacetime`, and future common geometries —
+belong in `geometry/`, not in the abstract layers. `CartesianMesh` and
+`EuclideanSpace`/`CartesianChart` have been introduced; `RotatingChart`
+(Epoch 7) and `SchwarzschildSpacetime` (moved from `validation/`) will
+follow in later epochs.
+
+**`RotatingChart` design.** The formally principled approach to rotating
+reference frames is to change the metric, not add source terms. A
+`RotatingChart` in `geometry/` carries the rotating-frame metric; fictitious
+forces (centrifugal, Coriolis) appear as Christoffel symbols of that metric,
+not as ad hoc source terms. This is co-designed with Epoch 7 hydro validation
+tests so that the design is grounded by a concrete simulation before it is
+declared stable.
 
 ---
 
@@ -360,7 +373,7 @@ extends the discrete and numerical layers minimally to evaluate them.
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
 | 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`). `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. ✓ |
-| 2 | Continuous + Discrete | `ConservationLaw(DifferentialOperator)` in `continuous/` (divergence form, flux + source, integral form via divergence theorem). In `discrete/`: `CellComplex(IndexedFamily)` (chain (C_*, ∂), ∂²=0); `Mesh(CellComplex)` with `chart: Chart` (faces as parameter-space primitives, volumes/areas/normals derived via metric); restriction operator `Rₕ`; `StructuredMesh(Mesh)` with `coordinate(idx)`, narrows `complex[n]` to `IndexedSet`; `CartesianMesh(StructuredMesh)` concrete (flat metric, derives all geometry from origin/spacing/shape); `MeshFunction` with `.mesh` accessor. |
+| 2 | Continuous + Discrete + Geometry | `ConservationLaw(DifferentialOperator)` in `continuous/` (divergence form, flux + source, integral form via divergence theorem). In `discrete/`: `CellComplex(IndexedFamily)` (chain (C_*, ∂), ∂²=0); `Mesh(CellComplex)` with `chart: Chart`; restriction operator `Rₕ`; `StructuredMesh(Mesh)` with `coordinate(idx)`, narrows `complex[n]` to `IndexedSet`; `MeshFunction` with `.mesh` accessor. In `geometry/`: `EuclideanSpace(RiemannianManifold)` (flat ℝⁿ, g = I), `CartesianChart` (identity chart), `CartesianMesh(StructuredMesh)` (derives all geometry from origin/spacing/shape). |
 | 3 | Discrete | `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
@@ -370,16 +383,17 @@ extends the discrete and numerical layers minimally to evaluate them.
 |-------|------------|
 | 5 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
 | 6 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
-| 7 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
-| 8 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
-| 9 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
-| 10 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
-| 11 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
-| 12 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
-| 13 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
-| 14 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
-| 15 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
-| 16 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+| 7 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 6 hydro validation tests. |
+| 8 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
+| 9 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
+| 10 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
+| 11 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
+| 12 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
+| 13 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
+| 14 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
+| 15 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
+| 16 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
+| 17 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
 
 ---
 
