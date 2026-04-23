@@ -248,7 +248,7 @@ StructuredMesh(Mesh)            — a Mesh whose cells are regular and axis-alig
 
 CartesianMesh(StructuredMesh)   — free: origin, spacing, shape; flat metric (g = I)
                               chart is derived internally: a Cartesian mesh has a
-                              Cartesian chart by definition (EuclideanSpace(ndim).atlas[0])
+                              Cartesian chart by definition (EuclideanManifold(ndim).atlas[0])
                               derives: coordinate = origin + (idx + ½)·spacing
                                        cell volume = ∏ Δxₖ
                                        face area = ∏_{k≠j} Δxₖ  (face ⊥ to axis j)
@@ -346,10 +346,10 @@ evaluation bridge `field.expr.subs(zip(chart.symbols, coordinate(idx)))`.
 **Next steps.**
 
 **`geometry/` package** (in progress). Concrete instantiable objects —
-`CartesianMesh`, `SchwarzschildSpacetime`, and future common geometries —
+`CartesianMesh`, `SchwarzschildManifold`, and future common geometries —
 belong in `geometry/`, not in the abstract layers. `CartesianMesh` and
-`EuclideanSpace`/`CartesianChart` have been introduced; `RotatingChart`
-(Epoch 7) and `SchwarzschildSpacetime` (moved from `validation/`) will
+`EuclideanManifold`/`CartesianChart` have been introduced; `RotatingChart`
+(Epoch 7) and `SchwarzschildManifold` (moved from `validation/`) will
 follow in later epochs.
 
 **`RotatingChart` design.** The formally principled approach to rotating
@@ -373,7 +373,7 @@ extends the discrete and numerical layers minimally to evaluate them.
 |-------|-------|------------|
 | 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
 | 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`). `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. ✓ |
-| 2 | Continuous + Discrete + Geometry | `ConservationLaw(DifferentialOperator)` in `continuous/` (divergence form, flux + source, integral form via divergence theorem). In `discrete/`: `CellComplex(IndexedFamily)` (chain (C_*, ∂), ∂²=0); `Mesh(CellComplex)` with `chart: Chart`; restriction operator `Rₕ`; `StructuredMesh(Mesh)` with `coordinate(idx)`, narrows `complex[n]` to `IndexedSet`; `MeshFunction` with `.mesh` accessor. In `geometry/`: `EuclideanSpace(RiemannianManifold)` (flat ℝⁿ, g = I), `CartesianChart` (identity chart), `CartesianMesh(StructuredMesh)` (derives all geometry from origin/spacing/shape). |
+| 2 | Continuous + Discrete + Geometry | `ConservationLaw(DifferentialOperator)` in `continuous/` (divergence form, flux + source, integral form via divergence theorem). In `discrete/`: `CellComplex(IndexedFamily)` (chain (C_*, ∂), ∂²=0); `Mesh(CellComplex)` with `chart: Chart`; restriction operator `Rₕ`; `StructuredMesh(Mesh)` with `coordinate(idx)`, narrows `complex[n]` to `IndexedSet`; `MeshFunction` with `.mesh` accessor. In `geometry/`: `EuclideanManifold(RiemannianManifold)` (flat ℝⁿ, g = I), `CartesianChart` (identity chart), `CartesianMesh(StructuredMesh)` (derives all geometry from origin/spacing/shape). |
 | 3 | Discrete | `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
 | 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 

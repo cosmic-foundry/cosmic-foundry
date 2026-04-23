@@ -1,11 +1,11 @@
-"""EuclideanSpace and CartesianChart: flat Euclidean geometry.
+"""EuclideanManifold and CartesianChart: flat Euclidean geometry.
 
-EuclideanSpace  — concrete RiemannianManifold representing ℝⁿ with flat metric
-CartesianChart  — the identity chart on EuclideanSpace
+EuclideanManifold — concrete RiemannianManifold representing ℝⁿ with flat metric
+CartesianChart    — the identity chart on EuclideanManifold
 
 These two classes are co-located because they are mutually dependent:
-EuclideanSpace carries an atlas of CartesianCharts, and CartesianChart
-carries its EuclideanSpace as domain.  The dependency is resolved by
+EuclideanManifold carries an atlas of CartesianCharts, and CartesianChart
+carries its EuclideanManifold as domain.  The dependency is resolved by
 lazy atlas construction.
 """
 
@@ -49,22 +49,22 @@ class _CartesianMetric(MetricTensor):
     """The flat Euclidean metric expressed in Cartesian coordinates: g_ij = δ_ij.
 
     This is the coordinate representation of the flat metric in the
-    Cartesian chart (the identity chart on EuclideanSpace).  In Cartesian
+    Cartesian chart (the identity chart on EuclideanManifold).  In Cartesian
     coordinates all components are constants (no coordinate dependence), so
     g_ij = δ_ij exactly.
 
-    Note: in a non-Cartesian chart on the same EuclideanSpace (e.g. polar or
+    Note: in a non-Cartesian chart on the same EuclideanManifold (e.g. polar or
     cylindrical), the metric components are not δ_ij — for example in 2-D
     polar coordinates g_θθ = r².  A different MetricTensor implementation
     would be required for those charts.
     """
 
-    def __init__(self, space: EuclideanSpace) -> None:
-        self._space = space
+    def __init__(self, manifold: EuclideanManifold) -> None:
+        self._manifold = manifold
 
     @property
-    def manifold(self) -> EuclideanSpace:
-        return self._space
+    def manifold(self) -> EuclideanManifold:
+        return self._manifold
 
     @property
     def expr(self) -> sympy.Expr:
@@ -72,12 +72,12 @@ class _CartesianMetric(MetricTensor):
 
     @property
     def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return self._space.symbols
+        return self._manifold.symbols
 
     def component(self, i: int, j: int) -> Field:
         """Return the (i, j) Cartesian metric component: 1 if i == j, else 0."""
         value = sympy.Integer(1) if i == j else sympy.Integer(0)
-        return _ConstantField(self._space, value)
+        return _ConstantField(self._manifold, value)
 
 
 class _CartesianAtlas(Atlas):
@@ -96,28 +96,28 @@ class _CartesianAtlas(Atlas):
 
 
 class CartesianChart(Chart):
-    """The identity coordinate chart on EuclideanSpace: φ = id.
+    """The identity coordinate chart on EuclideanManifold: φ = id.
 
     A CartesianChart is the canonical chart on flat Euclidean space — the
     identity map φ: ℝⁿ → ℝⁿ.  It is its own inverse, and its symbols are
-    the coordinate names of the EuclideanSpace it belongs to.
+    the coordinate names of the EuclideanManifold it belongs to.
 
     Required:
-        space — the EuclideanSpace this chart covers
+        manifold — the EuclideanManifold this chart covers
     """
 
-    def __init__(self, space: EuclideanSpace) -> None:
-        self._space = space
+    def __init__(self, manifold: EuclideanManifold) -> None:
+        self._manifold = manifold
 
     @property
-    def domain(self) -> EuclideanSpace:
-        """The EuclideanSpace this chart maps from."""
-        return self._space
+    def domain(self) -> EuclideanManifold:
+        """The EuclideanManifold this chart maps from."""
+        return self._manifold
 
     @property
-    def codomain(self) -> EuclideanSpace:
-        """The EuclideanSpace this chart maps to (same space — identity map)."""
-        return self._space
+    def codomain(self) -> EuclideanManifold:
+        """The EuclideanManifold this chart maps to (same manifold — identity map)."""
+        return self._manifold
 
     @property
     def inverse(self) -> CartesianChart:
@@ -127,17 +127,17 @@ class CartesianChart(Chart):
     @property
     def symbols(self) -> tuple[sympy.Symbol, ...]:
         """Ordered coordinate symbols (x, y, …) for this chart."""
-        return self._space.symbols
+        return self._manifold.symbols
 
     def __call__(self, *args: Any, **kwargs: Any) -> tuple[Any, ...]:
         """Apply the identity map: return coordinates unchanged."""
         return args
 
 
-class EuclideanSpace(RiemannianManifold):
+class EuclideanManifold(RiemannianManifold):
     """Flat Euclidean space ℝⁿ with the standard Cartesian metric g = I.
 
-    EuclideanSpace is the concrete domain for Cartesian geometry.  Its
+    EuclideanManifold is the concrete domain for Cartesian geometry.  Its
     metric is the identity (g_ij = δ_ij), its atlas consists of a single
     CartesianChart (the identity map), and its coordinate symbols are
     derived from ndim.
@@ -178,7 +178,7 @@ class EuclideanSpace(RiemannianManifold):
 
     @property
     def symbols(self) -> tuple[sympy.Symbol, ...]:
-        """Coordinate symbols (x, y, …) for this space."""
+        """Coordinate symbols (x, y, …) for this manifold."""
         return self._symbols
 
     @property
@@ -196,4 +196,4 @@ class EuclideanSpace(RiemannianManifold):
         return self._metric
 
 
-__all__ = ["CartesianChart", "EuclideanSpace"]
+__all__ = ["CartesianChart", "EuclideanManifold"]

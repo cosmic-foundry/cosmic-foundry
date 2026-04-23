@@ -1,6 +1,6 @@
-"""Schwarzschild spacetime: the unique static, spherically symmetric vacuum solution.
+"""SchwarzschildManifold: the unique static, spherically symmetric vacuum solution.
 
-SchwarzschildSpacetime is a concrete PseudoRiemannianManifold. The metric is
+SchwarzschildManifold is a concrete PseudoRiemannianManifold. The metric is
 expressed in Schwarzschild coordinates (t, r, θ, φ) with signature (-,+,+,+)
 and geometric units G = c = 1. M is a free SymPy symbol; substituting a
 numerical value yields a specific spacetime (Earth, Sun, black hole, …).
@@ -43,14 +43,14 @@ _METRIC = sympy.Matrix(
 
 
 # ---------------------------------------------------------------------------
-# Private scalar field: a single SymPy expression on the spacetime
+# Private scalar field: a single SymPy expression on the manifold
 # ---------------------------------------------------------------------------
 
 
 class _ScalarField(Field):
-    def __init__(self, expr: sympy.Expr, spacetime: SchwarzschildSpacetime) -> None:
+    def __init__(self, expr: sympy.Expr, manifold: SchwarzschildManifold) -> None:
         self._expr = expr
-        self._spacetime = spacetime
+        self._manifold = manifold
 
     @property
     def expr(self) -> sympy.Expr:
@@ -61,8 +61,8 @@ class _ScalarField(Field):
         return _SYMBOLS
 
     @property
-    def manifold(self) -> SchwarzschildSpacetime:
-        return self._spacetime
+    def manifold(self) -> SchwarzschildManifold:
+        return self._manifold
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +71,8 @@ class _ScalarField(Field):
 
 
 class SchwarzschildMetric(MetricTensor):
-    def __init__(self, spacetime: SchwarzschildSpacetime) -> None:
-        self._spacetime = spacetime
+    def __init__(self, manifold: SchwarzschildManifold) -> None:
+        self._manifold = manifold
 
     @property
     def expr(self) -> sympy.Matrix:
@@ -83,15 +83,15 @@ class SchwarzschildMetric(MetricTensor):
         return _SYMBOLS
 
     @property
-    def manifold(self) -> SchwarzschildSpacetime:
-        return self._spacetime
+    def manifold(self) -> SchwarzschildManifold:
+        return self._manifold
 
     def as_matrix(self) -> sympy.Matrix:
         """Return the metric components as a SymPy Matrix."""
         return _METRIC
 
     def component(self, i: int, j: int) -> _ScalarField:
-        return _ScalarField(_METRIC[i, j], self._spacetime)
+        return _ScalarField(_METRIC[i, j], self._manifold)
 
 
 # ---------------------------------------------------------------------------
@@ -99,31 +99,31 @@ class SchwarzschildMetric(MetricTensor):
 # ---------------------------------------------------------------------------
 
 
-class SchwarzschildChart(Chart):
+class _SchwarzschildChart(Chart):
     """Schwarzschild coordinate chart: φ: M → ℝ⁴ via (t, r, θ, φ).
 
-    domain  — the Schwarzschild spacetime (r > r_s, exterior region)
+    domain  — the Schwarzschild manifold (r > r_s, exterior region)
     codomain — ℝ⁴; not yet represented as a concrete manifold object
     __call__ — point-to-coordinate map; not yet implemented
     """
 
-    def __init__(self, spacetime: SchwarzschildSpacetime) -> None:
-        self._spacetime = spacetime
+    def __init__(self, manifold: SchwarzschildManifold) -> None:
+        self._manifold = manifold
 
     @property
     def symbols(self) -> tuple[sympy.Symbol, ...]:
         return _SYMBOLS
 
     @property
-    def domain(self) -> SchwarzschildSpacetime:
-        return self._spacetime
+    def domain(self) -> SchwarzschildManifold:
+        return self._manifold
 
     @property
-    def codomain(self) -> SchwarzschildSpacetime:
-        raise NotImplementedError("EuclideanSpace codomain not yet represented")
+    def codomain(self) -> SchwarzschildManifold:
+        raise NotImplementedError("codomain not yet represented as a manifold object")
 
     @property
-    def inverse(self) -> SchwarzschildChart:
+    def inverse(self) -> _SchwarzschildChart:
         raise NotImplementedError("inverse chart not yet implemented")
 
     def __call__(self, *args: object, **kwargs: object) -> object:
@@ -135,11 +135,11 @@ class SchwarzschildChart(Chart):
 # ---------------------------------------------------------------------------
 
 
-class SchwarzschildAtlas(Atlas):
-    def __init__(self, spacetime: SchwarzschildSpacetime) -> None:
-        self._chart = SchwarzschildChart(spacetime)
+class _SchwarzschildAtlas(Atlas):
+    def __init__(self, manifold: SchwarzschildManifold) -> None:
+        self._chart = _SchwarzschildChart(manifold)
 
-    def __getitem__(self, index: int) -> SchwarzschildChart:
+    def __getitem__(self, index: int) -> _SchwarzschildChart:
         if index != 0:
             raise IndexError(index)
         return self._chart
@@ -149,14 +149,14 @@ class SchwarzschildAtlas(Atlas):
 
 
 # ---------------------------------------------------------------------------
-# Spacetime
+# Manifold
 # ---------------------------------------------------------------------------
 
 
-class SchwarzschildSpacetime(PseudoRiemannianManifold):
+class SchwarzschildManifold(PseudoRiemannianManifold):
     """The Schwarzschild vacuum solution.
 
-    The Schwarzschild spacetime is the unique static, spherically symmetric
+    The Schwarzschild manifold is the unique static, spherically symmetric
     solution to the vacuum Einstein field equations (Birkhoff's theorem). It
     describes the exterior geometry of any spherically symmetric mass
     distribution — black holes, neutron stars, and to excellent approximation,
@@ -177,14 +177,14 @@ class SchwarzschildSpacetime(PseudoRiemannianManifold):
         return SchwarzschildMetric(self)
 
     @property
-    def atlas(self) -> SchwarzschildAtlas:
-        return SchwarzschildAtlas(self)
+    def atlas(self) -> _SchwarzschildAtlas:
+        return _SchwarzschildAtlas(self)
 
 
 __all__ = [
     "M",
+    "SchwarzschildManifold",
     "SchwarzschildMetric",
-    "SchwarzschildSpacetime",
     "phi",
     "r",
     "t",

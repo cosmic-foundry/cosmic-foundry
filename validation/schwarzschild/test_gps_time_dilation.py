@@ -19,6 +19,12 @@ import math
 
 import sympy
 
+from cosmic_foundry.geometry.schwarzschild_manifold import (
+    M,
+    SchwarzschildManifold,
+    r,
+    theta,
+)
 from validation.schwarzschild.constants import (
     GPS_SEMI_MAJOR_AXIS,
     ICD_GPS200_FRACTIONAL_OFFSET,
@@ -27,7 +33,6 @@ from validation.schwarzschild.constants import (
     WGS84_OMEGA_E,
     WGS84_R_E,
 )
-from validation.schwarzschild.spacetime import M, SchwarzschildSpacetime, r, theta
 
 # ---------------------------------------------------------------------------
 # Algebraic claim
@@ -41,7 +46,7 @@ def test_ground_clock_proper_time_with_rotation() -> None:
     fixed r_E with dφ/dt = Ω_E. Substituting into the metric interval gives
     the rotation correction directly from g_tt and g_φφ.
     """
-    metric = SchwarzschildSpacetime().metric
+    metric = SchwarzschildManifold().metric
 
     r_E = sympy.Symbol("r_E", positive=True)
     Omega = sympy.Symbol("Omega", positive=True)
