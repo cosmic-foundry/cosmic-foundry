@@ -45,8 +45,19 @@ class _ConstantField(Field):
         return ()
 
 
-class _FlatMetric(MetricTensor):
-    """The flat Euclidean metric g_ij = δ_ij on EuclideanSpace."""
+class _CartesianMetric(MetricTensor):
+    """The flat Euclidean metric expressed in Cartesian coordinates: g_ij = δ_ij.
+
+    This is the coordinate representation of the flat metric in the
+    Cartesian chart (the identity chart on EuclideanSpace).  In Cartesian
+    coordinates all components are constants (no coordinate dependence), so
+    g_ij = δ_ij exactly.
+
+    Note: in a non-Cartesian chart on the same EuclideanSpace (e.g. polar or
+    cylindrical), the metric components are not δ_ij — for example in 2-D
+    polar coordinates g_θθ = r².  A different MetricTensor implementation
+    would be required for those charts.
+    """
 
     def __init__(self, space: EuclideanSpace) -> None:
         self._space = space
@@ -64,7 +75,7 @@ class _FlatMetric(MetricTensor):
         return self._space.symbols
 
     def component(self, i: int, j: int) -> Field:
-        """Return the (i, j) metric component: 1 if i == j, else 0."""
+        """Return the (i, j) Cartesian metric component: 1 if i == j, else 0."""
         value = sympy.Integer(1) if i == j else sympy.Integer(0)
         return _ConstantField(self._space, value)
 
@@ -138,7 +149,7 @@ class EuclideanSpace(RiemannianManifold):
     Derived:
         signature  — always (ndim, 0) for a Riemannian manifold
         symbols    — SymPy symbols for the coordinate names
-        metric     — flat metric g_ij = δ_ij
+        metric     — flat metric in Cartesian coordinates: g_ij = δ_ij
         atlas      — single-chart atlas containing the identity CartesianChart
     """
 
@@ -158,7 +169,7 @@ class EuclideanSpace(RiemannianManifold):
         self._ndim = ndim
         self._symbols = tuple(sympy.Symbol(n) for n in symbol_names)
         self._atlas: _CartesianAtlas | None = None
-        self._metric: _FlatMetric | None = None
+        self._metric: _CartesianMetric | None = None
 
     @property
     def ndim(self) -> int:
@@ -177,10 +188,10 @@ class EuclideanSpace(RiemannianManifold):
         return self._atlas
 
     @property
-    def metric(self) -> _FlatMetric:
-        """Flat metric g_ij = δ_ij; constructed lazily."""
+    def metric(self) -> _CartesianMetric:
+        """Flat metric in Cartesian coordinates: g_ij = δ_ij; constructed lazily."""
         if self._metric is None:
-            self._metric = _FlatMetric(self)
+            self._metric = _CartesianMetric(self)
         return self._metric
 
 
