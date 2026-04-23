@@ -10,8 +10,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TypeVar
 
-from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.foundation.symbolic_function import SymbolicFunction
+from cosmic_foundry.theory.continuous.manifold import Manifold
+from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
 
 D = TypeVar("D")  # Domain (point in manifold)
 C = TypeVar("C")  # Codomain (value type)

@@ -20,9 +20,9 @@ import pytest
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGES = [
-    "cosmic_foundry.foundation",
-    "cosmic_foundry.continuous",
-    "cosmic_foundry.discrete",
+    "cosmic_foundry.theory.foundation",
+    "cosmic_foundry.theory.continuous",
+    "cosmic_foundry.theory.discrete",
 ]
 
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
-from cosmic_foundry.continuous.field import Field
-from cosmic_foundry.continuous.manifold import Manifold
+from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.theory.continuous.field import Field
+from cosmic_foundry.theory.continuous.manifold import Manifold
 
 
 class LocalBoundaryCondition(BoundaryCondition):

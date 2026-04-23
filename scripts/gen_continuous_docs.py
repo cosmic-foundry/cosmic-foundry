@@ -1,6 +1,6 @@
-"""Generate one MyST-NB notebook per ABC in cosmic_foundry/continuous/.
+"""Generate one MyST-NB notebook per ABC in cosmic_foundry/theory/continuous/.
 
-For each module `continuous/{stem}.py` that has a matching `tests/test_{stem}.py`,
+For each module `theory/continuous/{stem}.py` with a matching `tests/test_{stem}.py`,
 this script discovers the primary ABC defined in the module and writes
 `docs/continuous/{stem}.md`. It also writes `docs/continuous/index.md`.
 
@@ -15,7 +15,7 @@ import inspect
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).parent.parent
-_CONTINUOUS = _PROJECT_ROOT / "cosmic_foundry" / "continuous"
+_CONTINUOUS = _PROJECT_ROOT / "cosmic_foundry" / "theory" / "continuous"
 _TESTS = _PROJECT_ROOT / "tests"
 _DOCS_OUT = _PROJECT_ROOT / "docs" / "continuous"
 
@@ -98,7 +98,7 @@ for _, fn in _asserts:
 
 def _find_primary_abc(stem: str) -> str | None:
     """Return the name of the primary ABC defined in continuous/{stem}.py."""
-    module_path = f"cosmic_foundry.continuous.{stem}"
+    module_path = f"cosmic_foundry.theory.continuous.{stem}"
     try:
         mod = importlib.import_module(module_path)
     except ImportError:
@@ -163,7 +163,7 @@ def generate(out_dir: Path = _DOCS_OUT) -> None:
         class_name = _find_primary_abc(stem)
         if class_name is None:
             continue
-        module_path = f"cosmic_foundry.continuous.{stem}"
+        module_path = f"cosmic_foundry.theory.continuous.{stem}"
         test_module = f"test_{stem}"
         page = _render_page(class_name, module_path, test_module)
         (out_dir / f"{stem}.md").write_text(page)

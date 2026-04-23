@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any, Generic, TypeVar
 
-from cosmic_foundry.foundation.function import Function
+from cosmic_foundry.theory.foundation.function import Function
 
 D = TypeVar("D")
 C = TypeVar("C")

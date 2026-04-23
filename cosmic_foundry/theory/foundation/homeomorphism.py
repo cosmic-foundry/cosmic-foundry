@@ -5,8 +5,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
-from cosmic_foundry.foundation.invertible_function import InvertibleFunction
-from cosmic_foundry.foundation.topological_space import TopologicalSpace
+from cosmic_foundry.theory.foundation.invertible_function import InvertibleFunction
+from cosmic_foundry.theory.foundation.topological_space import TopologicalSpace
 
 D = TypeVar("D")
 C = TypeVar("C")

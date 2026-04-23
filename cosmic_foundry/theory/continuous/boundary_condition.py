@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.continuous.constraint import Constraint
+from cosmic_foundry.theory.continuous.constraint import Constraint
 
 
 class BoundaryCondition(Constraint):

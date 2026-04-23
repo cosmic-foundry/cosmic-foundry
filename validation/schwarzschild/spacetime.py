@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import sympy
 
-from cosmic_foundry.continuous.field import Field
-from cosmic_foundry.continuous.manifold import Atlas, Chart
-from cosmic_foundry.continuous.pseudo_riemannian_manifold import (
+from cosmic_foundry.theory.continuous.field import Field
+from cosmic_foundry.theory.continuous.manifold import Atlas, Chart
+from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     PseudoRiemannianManifold,
 )

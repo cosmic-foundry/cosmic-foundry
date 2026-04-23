@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.continuous.manifold import Chart
-from cosmic_foundry.discrete.cell_complex import CellComplex
+from cosmic_foundry.theory.continuous.manifold import Chart
+from cosmic_foundry.theory.discrete.cell_complex import CellComplex
 
 
 class Mesh(CellComplex):

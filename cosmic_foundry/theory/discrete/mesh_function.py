@@ -5,8 +5,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
-from cosmic_foundry.discrete.mesh import Mesh
-from cosmic_foundry.foundation.numeric_function import NumericFunction
+from cosmic_foundry.theory.discrete.mesh import Mesh
+from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
 V = TypeVar("V")
 
