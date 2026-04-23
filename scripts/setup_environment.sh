@@ -144,26 +144,6 @@ if [ -n "$remaining_hooks_path" ]; then
 fi
 pre-commit install
 
-# Install gitleaks for local secret scanning.
-# On macOS, use Homebrew (the only supported binary distribution).
-# On Linux in CI, gitleaks is provided by gitleaks/gitleaks-action; developers
-# on Linux should install it manually: https://github.com/gitleaks/gitleaks
-echo "Installing gitleaks..."
-if [ "$OS" = "Darwin" ]; then
-  if command -v brew &>/dev/null; then
-    brew install gitleaks 2>/dev/null || brew upgrade gitleaks 2>/dev/null || true
-    if command -v gitleaks &>/dev/null; then
-      echo "  gitleaks $(gitleaks version) installed"
-    else
-      echo "  Warning: gitleaks install via Homebrew failed — install manually with 'brew install gitleaks'"
-    fi
-  else
-    echo "  Warning: Homebrew not found — install gitleaks manually: https://github.com/gitleaks/gitleaks"
-  fi
-else
-  echo "  Skipping gitleaks install on $OS — install manually if needed: https://github.com/gitleaks/gitleaks"
-fi
-
 # Record that the environment is in sync with the current spec files.
 # start_agent.sh compares this sentinel against the mtimes of
 # cosmic_foundry.yml and setup_environment.sh to decide whether a

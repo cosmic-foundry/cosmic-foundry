@@ -223,21 +223,8 @@ When the hook fires on your branch:
 
 ### Scanning history manually (local)
 
-gitleaks is installed by `setup_environment.sh`. Activate the environment
-first if not already active:
-```bash
-source ./scripts/activate_environment.sh
-```
-
-Scan the entire local history:
-```bash
-gitleaks git --redact --verbose
-```
-
-Scan only staged changes (same check the CI hook runs):
-```bash
-gitleaks git --pre-commit --redact --staged --verbose
-```
+Secret history scanning is handled by the `secret-scan` CI job on every push.
+There is no local gitleaks requirement.
 
 ---
 
