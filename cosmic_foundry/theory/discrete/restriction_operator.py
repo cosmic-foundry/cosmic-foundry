@@ -5,10 +5,10 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
-from cosmic_foundry.discrete.mesh import Mesh
-from cosmic_foundry.discrete.mesh_function import MeshFunction
-from cosmic_foundry.foundation.function import Function
-from cosmic_foundry.foundation.numeric_function import NumericFunction
+from cosmic_foundry.theory.discrete.mesh import Mesh
+from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
+from cosmic_foundry.theory.foundation.function import Function
+from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
 M = TypeVar("M")
 V = TypeVar("V")

@@ -7,7 +7,7 @@ from typing import Any, Generic, TypeVar
 
 import sympy
 
-from cosmic_foundry.foundation.function import Function
+from cosmic_foundry.theory.foundation.function import Function
 
 D = TypeVar("D")
 C = TypeVar("C")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.foundation.set import Set
+from cosmic_foundry.theory.foundation.set import Set
 
 
 class TopologicalSpace(Set):  # noqa: B024

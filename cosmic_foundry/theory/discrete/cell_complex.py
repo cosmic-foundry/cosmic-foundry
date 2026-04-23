@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.foundation.function import Function
-from cosmic_foundry.foundation.indexed_family import IndexedFamily
-from cosmic_foundry.foundation.set import Set
+from cosmic_foundry.theory.foundation.function import Function
+from cosmic_foundry.theory.foundation.indexed_family import IndexedFamily
+from cosmic_foundry.theory.foundation.set import Set
 
 
 class CellComplex(IndexedFamily):

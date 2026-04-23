@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.continuous.manifold import Manifold
-from cosmic_foundry.foundation.indexed_set import IndexedSet
+from cosmic_foundry.theory.continuous.manifold import Manifold
+from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
 
 
 def test_manifold_branch_disjoint_from_indexed_set_branch() -> None:

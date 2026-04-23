@@ -7,9 +7,9 @@ from typing import Generic, TypeVar
 
 import sympy
 
-from cosmic_foundry.continuous.topological_manifold import TopologicalManifold
-from cosmic_foundry.foundation.homeomorphism import Homeomorphism
-from cosmic_foundry.foundation.indexed_family import IndexedFamily
+from cosmic_foundry.theory.continuous.topological_manifold import TopologicalManifold
+from cosmic_foundry.theory.foundation.homeomorphism import Homeomorphism
+from cosmic_foundry.theory.foundation.indexed_family import IndexedFamily
 
 D = TypeVar("D")
 C = TypeVar("C")

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.continuous.differential_operator import DifferentialOperator
-from cosmic_foundry.continuous.field import Field, TensorField
-from cosmic_foundry.foundation.function import Function
+from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.field import Field, TensorField
+from cosmic_foundry.theory.foundation.function import Function
 
 
 class ConservationLaw(DifferentialOperator):

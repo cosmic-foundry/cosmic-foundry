@@ -6,8 +6,8 @@ from abc import abstractmethod
 
 import sympy
 
-from cosmic_foundry.continuous.field import Field
-from cosmic_foundry.discrete.mesh import Mesh
+from cosmic_foundry.theory.continuous.field import Field
+from cosmic_foundry.theory.discrete.mesh import Mesh
 
 
 class StructuredMesh(Mesh):

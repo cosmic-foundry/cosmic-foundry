@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 
 
 class NonLocalBoundaryCondition(BoundaryCondition):

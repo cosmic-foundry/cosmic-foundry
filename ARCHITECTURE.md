@@ -36,36 +36,30 @@ data is explicitly quantified and propagated.**
 The codebase is organized into four packages with a strict dependency order:
 
 ```
-foundation/   ←  continuous/
-     ↑                ↑
-     └──────── discrete/
-                   ↑
-              geometry/   ← concrete instantiable objects (meshes, spacetimes)
-                   ↑
-             computation/
+theory/
+  foundation/   ←  continuous/
+       ↑                ↑
+       └──────── discrete/
+                     ↑
+geometry/   ← concrete instantiable objects (meshes, spacetimes)
+    ↑
+computation/
 ```
 
-**Planned reorg:** `foundation/`, `continuous/`, and `discrete/` will be
-nested under a single `theory/` top-level package, making the
-symbolic-reasoning boundary a directory boundary. Everything outside
-`theory/` (`geometry/`, `computation/`, `validation/`) is the
-application/concreteness layer. This rename is deferred until the
-`geometry/` package is introduced.
+`foundation/`, `continuous/`, and `discrete/` are nested under `theory/`,
+making the symbolic-reasoning boundary a directory boundary. Everything
+outside `theory/` (`geometry/`, `computation/`, `validation/`) is the
+application/concreteness layer.
 
-**`foundation/` and `continuous/` are symbolic-reasoning layers.**
-Their shared identity: they describe mathematical structure symbolically, without
-numerical evaluation. Their import boundary reflects that identity — they may
-only import from the Python standard library, `cosmic_foundry`, or packages on
-the approved symbolic-reasoning list. The approved list is `{sympy}`. Additions
-require justification against the symbolic-reasoning identity; numerical
-computation packages (JAX, NumPy, SciPy) are excluded by definition. Enforced
-by `tests/test_theory_no_third_party_imports.py`.
-
-**`discrete/` imports from `foundation/` and `continuous/`, never from `computation/`.**
-The discrete layer holds abstract mesh structure and operator derivations; it
-does not evaluate to floats. Float evaluation is `computation/`'s job. This
-boundary is the same kind as the symbolic-reasoning boundary above: `discrete/`
-may import SymPy for algebraic truncation-error checks, but not JAX or NumPy.
+**`theory/` is the symbolic-reasoning layer.**
+`foundation/`, `continuous/`, and `discrete/` all share the same identity:
+they describe mathematical structure symbolically, without numerical evaluation.
+Their import boundary reflects that identity — they may only import from the
+Python standard library, `cosmic_foundry`, or packages on the approved
+symbolic-reasoning list. The approved list is `{sympy}`. Additions require
+justification against the symbolic-reasoning identity; numerical computation
+packages (JAX, NumPy, SciPy) are excluded by definition. Enforced by
+`tests/test_theory_no_third_party_imports.py`.
 
 ### foundation/  · Epoch 1 ✓
 
@@ -346,18 +340,12 @@ construction. `StructuredMesh` adds `coordinate(idx)` and the derived
 evaluation bridge `field.expr.subs(zip(chart.symbols, coordinate(idx)))`.
 
 **Next steps.**
-Two structural decisions taken but not yet implemented:
 
-1. **Package reorg (`theory/`).** `foundation/`, `continuous/`, and
-   `discrete/` will be nested under a `theory/` top-level package so the
-   symbolic-reasoning boundary is a directory boundary. Everything outside
-   `theory/` is the application/concreteness layer.
-
-2. **`geometry/` package.** Concrete instantiable objects — `CartesianMesh`,
-   `SchwarzschildSpacetime`, and future common geometries — belong in
-   `geometry/`, not in the abstract layers. `CartesianMesh` is deferred
-   to this package. `SchwarzschildSpacetime` will move from `validation/`
-   to `geometry/` when the reorg lands.
+**`geometry/` package.** Concrete instantiable objects — `CartesianMesh`,
+`SchwarzschildSpacetime`, and future common geometries — belong in
+`geometry/`, not in the abstract layers. `CartesianMesh` is deferred
+to this package. `SchwarzschildSpacetime` will move from `validation/`
+to `geometry/` when the package is introduced.
 
 ---
 
