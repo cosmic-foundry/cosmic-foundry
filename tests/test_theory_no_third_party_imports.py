@@ -1,9 +1,13 @@
-"""Enforce the symbolic-reasoning boundary on theory/.
+"""Enforce the symbolic-reasoning boundary on theory/ and geometry/.
 
 These layers share a common identity: they describe mathematical structure
 symbolically, without numerical evaluation. Their import boundary reflects that
 identity: they may only import from the Python standard library, from within
 cosmic_foundry, or from packages on the approved symbolic-reasoning list.
+
+geometry/ is coordinate geometry infrastructure (manifolds, charts, meshes
+defined by SymPy expressions). Numerical array allocation belongs in
+computation/, not here.
 
 Approved symbolic-reasoning packages:
     sympy — symbolic mathematics
@@ -23,6 +27,7 @@ PURE_PACKAGES = [
     PACKAGE_ROOT / "theory" / "foundation",
     PACKAGE_ROOT / "theory" / "continuous",
     PACKAGE_ROOT / "theory" / "discrete",
+    PACKAGE_ROOT / "geometry",
 ]
 STDLIB = sys.stdlib_module_names
 SYMBOLIC_PACKAGES = {"sympy"}
@@ -68,7 +73,9 @@ def test_pure_packages_have_no_third_party_imports() -> None:
                 failures[str(rel)] = violations
 
     if failures:
-        lines = ["theory/ may only import symbolic-reasoning packages (sympy):"]
+        lines = [
+            "theory/ and geometry/ may only import symbolic-reasoning packages (sympy):"
+        ]
         for file, imports in failures.items():
             lines.append(f"  {file}: {', '.join(imports)}")
         raise AssertionError("\n".join(lines))
