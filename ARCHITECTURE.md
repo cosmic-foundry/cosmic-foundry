@@ -63,7 +63,7 @@ packages on the approved symbolic-reasoning list. The approved list is
 identity; numerical computation packages (JAX, NumPy, SciPy) are excluded by
 definition. Enforced by `tests/test_theory_no_third_party_imports.py`.
 
-### foundation/  · Epoch 1 ✓
+### foundation/
 
 ```
 Set
@@ -81,7 +81,7 @@ Function[D, C]           — callable mapping domain D → codomain C; interface
     └── Homeomorphism    — bicontinuous bijection; narrows domain/codomain to TopologicalSpace
 ```
 
-### continuous/  · Epoch 1 ✓
+### continuous/
 
 ```
 TopologicalManifold(TopologicalSpace) — locally Euclidean topological space; interface: ndim
@@ -106,6 +106,11 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
 
 DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold, order
+└── ConservationLaw                          — divergence form: ∂ₜU + ∇·F(U) = S
+                                               free: flux: Function[Field, TensorField], source: Field
+                                               earned by: integral form ∮_∂Ωᵢ F·n dA = ∫_Ωᵢ S dV
+                                               is fully determined by flux + divergence theorem;
+                                               not derivable from bare DifferentialOperator
 
 Constraint(ABC)                       — interface: support → Manifold
 └── BoundaryCondition                 — support is ∂M
@@ -137,23 +142,14 @@ Non-independent objects are co-located in the same file as the object they
 belong to. Example: `Chart`, `Atlas`, `Diffeomorphism` in `manifold.py`;
 `MetricTensor`, `RiemannianManifold` in `pseudo_riemannian_manifold.py`.
 
-**Planned additions** (Epoch 2)
-
-**`ConservationLaw(DifferentialOperator)`** — A differential operator in
-divergence form: the spatial operator `∇·F(U)` in `∂ₜU + ∇·F(U) = S`.
-Free: `flux: Function[Field, TensorField]` (the F in ∇·F(U)) and
-`source: Field` (the S). Earned by the derived integral form — per cell,
-the divergence theorem gives `∮_∂Ωᵢ F(U)·n dA = ∫_Ωᵢ S dV` — which is
-fully determined by `flux` and the divergence theorem and cannot be derived
-from a bare `DifferentialOperator`.
-`ConservationLaw` is spatial only: `∂ₜ` is handled by the time integrator
-(Epoch 4), not this object. This separation is preserved under the 3+1 ADM
+**`ConservationLaw` is spatial only.** `∂ₜ` is handled by the time integrator
+(Epoch 2), not this object. This separation is preserved under the 3+1 ADM
 decomposition: in GR, covariant equations `∇_μ F^μ = S` decompose to
 `∂ₜ(√γ U) + ∂ᵢ(√γ Fⁱ) = √γ S(α, β, γᵢⱼ, Kᵢⱼ)` — still a spatial
 divergence operator with metric factors entering through the `Chart` and
-curvature terms in `source`. `ConservationLaw` is stable through Epoch 12.
+curvature terms in `source`. `ConservationLaw` is stable through Epoch 10.
 
-**Planned additions** (Epoch 12)
+**Planned additions** (Epoch 10)
 
 **`DynamicManifold(PseudoRiemannianManifold)`** — A manifold whose metric
 tensor is a dynamical field in the simulation state. Required for full GR
@@ -168,7 +164,39 @@ yet designed.
 field (inhomogeneous transformation law). Required for curvature
 computations and parallel transport.
 
-### discrete/  · Epochs 2–3
+### discrete/
+
+```
+CellComplex(IndexedFamily)     — chain (C_*, ∂): complex[k] → Set of k-cells;
+                                  boundary operators ∂_k: C_k → C_{k-1};
+                                  earned by ∂² = 0 (∂_{k-1} ∘ ∂_k = 0)
+└── Mesh(CellComplex)          — adds chart: Chart; grounds the complex geometrically;
+                                  cell volumes derived via divergence theorem:
+                                    |Ωᵢ| = (1/n) ∑_{f ∈ ∂Ωᵢ} xf · nf Af
+                                  general volumes/areas: ∫ √|g| dV and ∫ √|g_σ| dA;
+                                  earned by: volume, area, normal are derived properties
+                                  fully determined by CellComplex + Chart;
+                                  covers Cartesian (g = I), cylindrical (√|g| = r),
+                                  GR spacetimes (curved g), moving mesh (time-varying Chart)
+    └── StructuredMesh(Mesh)   — abstract: coordinate(idx) → ℝⁿ;
+                                  evaluation bridge:
+                                    field.expr.subs(zip(chart.symbols, coordinate(idx)))
+                                  narrows complex[n] from Set to IndexedSet: regularity
+                                  implies top-dimensional cells biject with a rectangular
+                                  region of ℤⁿ
+
+MeshFunction(NumericFunction[Mesh, V])
+                               — value assignment to mesh elements (cells, faces, vertices);
+                                  earned by .mesh: Mesh typed accessor,
+                                  by analogy with Field.manifold
+
+RestrictionOperator(NumericFunction[Function[M,V], MeshFunction[V]])
+                               — free: mesh: Mesh;
+                                  (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV;
+                                  formal bridge from continuous/ to discrete/:
+                                  a Function plus a Mesh yields a MeshFunction;
+                                  the restriction depends on both — neither alone suffices
+```
 
 The discrete layer approximates the **integral form** of conservation laws, not
 the differential form. The derivation chain grounding every object in this layer:
@@ -191,77 +219,7 @@ the cell decomposition. FDM and FEM are also derivable from this foundation:
   Additional machinery (basis functions, bilinear forms, function spaces) extends
   the current foundation; deferred.
 
-The earlier `DiscreteField` ABC was removed: it predated the `Chart`/`Atlas`
-machinery and baked the approximation relationship (which involves three
-parties — continuous field, mesh, discretization scheme) into the discrete
-object alone.
-
-**Planned** (Epoch 2):
-
-```
-CellComplex(IndexedFamily)  — chain (C_*, ∂): complex[k] returns the Set of k-cells.
-                              Adds boundary operators ∂_k: C_k → C_{k-1}.
-                              Earned by ∂² = 0 (∂_{k-1} ∘ ∂_k = 0), the algebraic
-                              identity underlying the divergence theorem.
-                              Example — 2D Cartesian N×M grid:
-                                C_0: (N+1)(M+1) vertices
-                                C_1: N(M+1) horizontal + (N+1)M vertical edges
-                                C_2: N×M cells
-                                ∂₁: signed vertex-incidence; ∂₂: signed edge-incidence
-
-Mesh(CellComplex)           — CellComplex carrying a Chart from continuous/.
-                              The chart's metric makes the complex geometric.
-                              Faces are the geometric primitives: each face is a region
-                              in the chart's parameter space; cell volumes are derived
-                              from face geometry via the divergence theorem:
-                                |Ωᵢ| = (1/n) ∑_{f ∈ ∂Ωᵢ} xf · nf Af
-                              General volumes and areas computed as ∫ √|g| dV and
-                              ∫ √|g_σ| dA using the chart's metric g.
-                              Earned by: volume, area, normal are derived properties
-                              fully determined by the CellComplex and the Chart.
-                              Covers: Cartesian (g = I), cylindrical (√|g| = r),
-                              GR spacetimes (curved g), moving mesh (time-varying Chart).
-
-Rₕ(NumericFunction[Function[M,V], MeshFunction])
-                            — free: mesh: Mesh
-                              restriction operator: (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV
-                              The output MeshFunction has .mesh == Rₕ.mesh by
-                              construction — the cell averages are indexed by the
-                              cells of Rₕ.mesh and can live on no other mesh.
-                              This is the formal bridge from continuous/ to discrete/:
-                              a continuous Function plus a Mesh yields a MeshFunction.
-                              When f is a Field (SymbolicFunction), the integral is
-                              computed analytically via SymPy. Rₕ is what defines the
-                              relationship between Field and MeshFunction; this is why
-                              the earlier DiscreteField ABC was wrong — the restriction
-                              depends on both the field and the mesh, not either alone.
-
-StructuredMesh(Mesh)            — a Mesh whose cells are regular and axis-aligned; carries
-                              chart: Chart grounding coordinate symbols symbolically.
-                              abstract: coordinate(idx) → ℝⁿ (values in chart's codomain)
-                              evaluation bridge:
-                                field.expr.subs(zip(chart.symbols, coordinate(idx)))
-                              Narrows complex[n] from Set to IndexedSet: the regularity
-                              constraint implies the top-dimensional cells biject with a
-                              rectangular region of ℤⁿ, earning shape, ndim, and intersect
-                              as derived properties of cell regularity.
-
-CartesianMesh(StructuredMesh)   — free: origin, spacing, shape; flat metric (g = I)
-                              chart is derived internally: a Cartesian mesh has a
-                              Cartesian chart by definition (EuclideanManifold(ndim).atlas[0])
-                              derives: coordinate = origin + (idx + ½)·spacing
-                                       cell volume = ∏ Δxₖ
-                                       face area = ∏_{k≠j} Δxₖ  (face ⊥ to axis j)
-                                       face normal = ê_j
-                              Lives in geometry/, not discrete/.
-
-MeshFunction(NumericFunction[Mesh, V])
-                            — value assignment to mesh elements (cells, faces, or vertices);
-                              earns its class via .mesh: Mesh typed accessor,
-                              by analogy with Field.manifold
-```
-
-**Planned** (Epoch 3):
+**Planned additions (Epoch 1 — Discrete operators):**
 
 ```
 Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
@@ -273,8 +231,8 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                               where p is the approximation order. Different scheme
                               choices (reconstruction, Riemann solver) are different
                               ways of constructing Lₕ to make the diagram commute at
-                              order p. The _derive() function required by Lanes B and C
-                              IS this commutation check, verified algebraically via SymPy.
+                              order p. The commutation check verified algebraically via
+                              SymPy is the machine-checkable derivation required by Lanes B and C.
                               Formally separate from Rₕ: Rₕ projects field values
                               (Function → MeshFunction); Discretization projects
                               operators (ConservationLaw → DiscreteOperator).
@@ -290,20 +248,27 @@ DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                               Not independently constructed from stencil coefficients.
 ```
 
-### computation/  · Epoch 4
+### geometry/
+
+```
+EuclideanManifold(RiemannianManifold)  — flat ℝⁿ; metric g = δᵢⱼ; free: ndim, symbol_names
+
+CartesianChart(Chart)                  — identity map φ: ℝⁿ → ℝⁿ on a EuclideanManifold;
+                                         derived: inverse = self, symbols from domain
+
+CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
+                                         derived: chart = CartesianChart on EuclideanManifold(ndim)
+                                                  coordinate = origin + (idx + ½)·spacing
+                                                  cell volume = ∏ Δxₖ
+                                                  face area = ∏_{k≠j} Δxₖ  (face ⊥ axis j)
+                                                  face normal = ê_j
+```
+
+### computation/
 
 JAX evaluation. The only layer that touches floats. Planned: concrete field
 storage as `jax.Array`; JIT-compiled stencil application; explicit time
 integration; HDF5 I/O with provenance.
-
-**Open question**
-
-**Kernel composition model.**
-A backend-agnostic interface separating kernel computation (Op) from
-spatial domain and execution policy (Policy) is a design goal. An
-earlier Op/Policy/Dispatch framing was dropped before it was realized.
-The formal model governing composition, backend substitutability, and
-dispatch is unsettled.
 
 ### Cross-cutting
 
@@ -311,8 +276,15 @@ dispatch is unsettled.
 Physics capabilities sourced from reference tables (EOS polynomial fits,
 reaction networks, opacity tables) need a discipline governing how
 numeric tables are transcribed, verified, and updated independently of
-the derivation-first lane policy. This decision is deferred to Epoch 9
+the derivation-first lane policy. This decision is deferred to Epoch 7
 (microphysics), when the first such capability lands.
+
+**Kernel composition model.**
+A backend-agnostic interface separating kernel computation (Op) from
+spatial domain and execution policy (Policy) is a design goal. An
+earlier Op/Policy/Dispatch framing was dropped before it was realized.
+The formal model governing composition, backend substitutability, and
+dispatch is unsettled.
 
 **Physical constants ingestion (CODATA).**
 The engine will need physical constants (G, c, ħ, k_B, …) throughout the
@@ -329,71 +301,67 @@ ingestion discipline for PDF-sourced defined constants is a separate decision.
 
 ## Current work
 
-**Epoch 2 design decisions: the discrete layer hierarchy.**
-`CellComplex(IndexedFamily)` is the topological skeleton: `complex[k]` returns
-the Set of k-cells; `boundary(k)` returns ∂_k: C_k → C_{k-1}; the identity
-∂² = 0 earns the class. `Mesh(CellComplex)` adds a `chart: Chart` from
-`continuous/`: faces are regions in the chart's parameter space (not polygons
-in physical space); cell volumes are derived from face geometry via the
-divergence theorem itself (`|Ωᵢ| = (1/n) ∑_{f ∈ ∂Ωᵢ} xf · nf Af`); areas and
-volumes in non-Cartesian geometries use `√|g|` from the metric of the
-chart's domain manifold. The restriction operator `Rₕ` (free: `mesh: Mesh`)
-is the formal bridge: a continuous Function plus a Mesh yields a MeshFunction
-via `(Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV`; the output has `.mesh == Rₕ.mesh` by
-construction. `StructuredMesh` adds `coordinate(idx)` and the derived
-evaluation bridge `field.expr.subs(zip(chart.symbols, coordinate(idx)))`.
+**Discrete operators — Epoch 1.**
+`DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])` maps a `MeshFunction` to a
+`MeshFunction` and earns its class via `.mesh: Mesh` — constraining input and output to the
+same mesh, by analogy with `DifferentialOperator.manifold`.
+`Discretization(NumericFunction[ConservationLaw, DiscreteOperator])` is the scheme constructor:
+free parameters are `law: ConservationLaw`, `mesh: Mesh`, and `order: int`; it produces the
+`DiscreteOperator` making the commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` hold to `O(hᵖ)`.
+The commutation check is the machine-checkable derivation required by Lane C:
+verify via SymPy that Taylor-expanding `Lₕ(Rₕ f) − Rₕ(Lf)` for a symbolic test
+function f yields a remainder whose leading term is `O(hᵖ)`.
 
-**Next steps.**
+**Concrete `Rₕ` and `CartesianMesh.boundary()`.** The `RestrictionOperator` ABC is in place;
+the concrete subclass for `CartesianMesh` integrates a `SymbolicFunction` analytically via SymPy:
+`(Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV`. `CartesianMesh.boundary(k)` (currently `NotImplementedError`)
+also lands here — it returns the signed face-incidence map needed to assemble FVM flux sums.
+Both are deferred from the discrete structure layer because their implementation pattern is shared
+with the truncation-error verification in the Lane C commutation check.
 
-**`geometry/` package** (in progress). Concrete instantiable objects —
-`CartesianMesh`, `SchwarzschildManifold`, and future common geometries —
-belong in `geometry/`, not in the abstract layers. `CartesianMesh` and
-`EuclideanManifold`/`CartesianChart` have been introduced; `RotatingChart`
-(Epoch 7) and `SchwarzschildManifold` (moved from `validation/`) will
-follow in later epochs.
-
-**`RotatingChart` design.** The formally principled approach to rotating
-reference frames is to change the metric, not add source terms. A
-`RotatingChart` in `geometry/` carries the rotating-frame metric; fictitious
-forces (centrifugal, Coriolis) appear as Christoffel symbols of that metric,
-not as ad hoc source terms. This is co-designed with Epoch 7 hydro validation
-tests so that the design is grounded by a concrete simulation before it is
-declared stable.
+**First Poisson solver.** Target: a working second-order FVM discretization of `∇²φ = ρ` on
+a `CartesianMesh` with Dirichlet boundary conditions, verified against `φ = sin(πx)sin(πy)`
+via a convergence test demonstrating `O(h²)` error. Lane C (origination); the SymPy commutation check is the machine-checkable derivation.
 
 ---
 
 ## Physics roadmap
 
-Each physics epoch adds new fields and equations to the continuous layer and
-extends the discrete and numerical layers minimally to evaluate them.
-
 ### Foundation epochs
 
 | Epoch | Layer | Capability |
 |-------|-------|------------|
-| 0 | — | Project scaffolding: CI, pre-commit, documentation standards. ✓ |
-| 1 | Continuous | `continuous/` ABCs: full manifold and field hierarchy, operators, boundary conditions, metric; coordinate structure (`Chart`, `Atlas`). `foundation/` ABCs: `Set`, `Function`, `IndexedSet`, `IndexedFamily`. ✓ |
-| 2 | Continuous + Discrete + Geometry | `ConservationLaw(DifferentialOperator)` in `continuous/` (divergence form, flux + source, integral form via divergence theorem). In `discrete/`: `CellComplex(IndexedFamily)` (chain (C_*, ∂), ∂²=0); `Mesh(CellComplex)` with `chart: Chart`; restriction operator `Rₕ`; `StructuredMesh(Mesh)` with `coordinate(idx)`, narrows `complex[n]` to `IndexedSet`; `MeshFunction` with `.mesh` accessor. In `geometry/`: `EuclideanManifold(RiemannianManifold)` (flat ℝⁿ, g = I), `CartesianChart` (identity chart), `CartesianMesh(StructuredMesh)` (derives all geometry from origin/spacing/shape). |
-| 3 | Discrete | `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
-| 4 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
+| 1 | Discrete | **Discrete operators.** `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
+| 2 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
 ### Physics epochs
 
 | Epoch | Capability |
 |-------|------------|
-| 5 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
-| 6 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
-| 7 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 6 hydro validation tests. |
-| 8 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
-| 9 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
-| 10 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
-| 11 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
-| 12 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
-| 13 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
-| 14 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
-| 15 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
-| 16 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
-| 17 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+| 3 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
+| 4 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
+| 5 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 4 hydro validation tests. |
+| 6 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
+| 7 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
+| 8 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
+| 9 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
+| 10 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
+| 11 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
+| 12 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
+| 13 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
+| 14 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
+| 15 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+
+### Per-epoch verification standard
+
+Every epoch must satisfy this checklist before it is considered verified:
+
+- Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
+- At least one externally-grounded convergence test against an analytical solution
+  or observational data (not an engine-generated golden file); where an analytical
+  solution exists, the relevant `NumericFunction.symbolic` is declared so the
+  check runs automatically
+- Lane A/B/C classification stated in the PR description
 
 ---
 
@@ -405,17 +373,6 @@ extends the discrete and numerical layers minimally to evaluate them.
 | M1 | Verification infrastructure: convergence testing helpers, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
 | M3 | Executable mathematical narrative: first `validation/` implementations (Schwarzschild spacetime, GPS time dilation); notebooks in `docs/` that import from `validation/` and run in CI. Settles coordinate-to-chart binding and the `SymbolicFunction` interface on concrete fields. ✓ |
-| M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 4. |
+| M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 2. |
 | M5 | Reproducibility capsule tooling: self-executing builder. |
 | M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
-
-### Per-epoch verification standard
-
-Every physics epoch must satisfy this checklist before it is considered verified:
-
-- Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
-- At least one externally-grounded convergence test against an analytical solution
-  or observational data (not an engine-generated golden file); where an analytical
-  solution exists, the relevant `NumericFunction.symbolic` is declared so the
-  check runs automatically
-- Lane A/B/C classification stated in the PR description
