@@ -22,6 +22,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGES = [
     "cosmic_foundry.foundation",
     "cosmic_foundry.continuous",
+    "cosmic_foundry.discrete",
 ]
 
 

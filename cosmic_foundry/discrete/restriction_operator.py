@@ -1,0 +1,48 @@
+"""RestrictionOperator ABC."""
+
+from __future__ import annotations
+
+from abc import abstractmethod
+from typing import Generic, TypeVar
+
+from cosmic_foundry.discrete.mesh import Mesh
+from cosmic_foundry.discrete.mesh_function import MeshFunction
+from cosmic_foundry.foundation.function import Function
+from cosmic_foundry.foundation.numeric_function import NumericFunction
+
+M = TypeVar("M")
+V = TypeVar("V")
+
+
+class RestrictionOperator(
+    NumericFunction[Function[M, V], MeshFunction[V]], Generic[M, V]
+):
+    """The restriction operator Rₕ: the formal bridge from continuous to discrete.
+
+    A RestrictionOperator maps a continuous Function to a MeshFunction via
+    cell-averaged integration:
+
+        (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV
+
+    The output MeshFunction has .mesh == Rₕ.mesh by construction — the
+    cell averages are indexed by the cells of Rₕ.mesh and can live on
+    no other mesh.
+
+    When f is a Field (SymbolicFunction), the integral is computed
+    analytically via SymPy.  Rₕ is what defines the relationship between
+    Field and MeshFunction; this is why the earlier DiscreteField ABC was
+    wrong — the restriction depends on both the field and the mesh, not
+    either alone.
+
+    Required:
+        mesh    — the mesh defining the cell decomposition for restriction
+        __call__ — apply the restriction (inherited from NumericFunction)
+    """
+
+    @property
+    @abstractmethod
+    def mesh(self) -> Mesh:
+        """The mesh defining the cell decomposition for restriction."""
+
+
+__all__ = ["RestrictionOperator"]
