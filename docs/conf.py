@@ -82,6 +82,7 @@ linkcheck_ignore = [
     # Publisher sites that block bots with 403s
     r"^https://arc\.aiaa\.org/",
     r"^https://doi\.org/10\.1002/",  # Wiley
+    r"^https://doi\.org/10\.1146/",  # Annual Reviews
     r"^https://doi\.org/10\.1145/",  # ACM
     r"^https://doi\.org/10\.1177/",  # SAGE
     r"^https://dl\.acm\.org/",
