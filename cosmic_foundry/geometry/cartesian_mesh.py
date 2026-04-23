@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import Any
 
 import sympy
 
@@ -65,12 +64,33 @@ class CartesianMesh(StructuredMesh):
             return self._count
 
     class _BoundaryMap(Function):
-        """Boundary operator ∂_k; evaluation deferred to Epoch 3."""
+        """Boundary operator ∂_ndim: top-dimensional cell → oriented faces.
 
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            raise NotImplementedError(
-                "CartesianMesh boundary map evaluation deferred to Epoch 3"
-            )
+        Returns the signed face incidence list for a cell index.  Each entry
+        is (axis, face_idx, sign) where face_idx is the multi-index of the
+        face in the axis-perpendicular face array and sign ∈ {-1, +1} encodes
+        orientation: -1 for the low face (inward-pointing normal) and +1 for
+        the high face (outward-pointing normal).
+        """
+
+        def __init__(self, ndim: int) -> None:
+            self._ndim = ndim
+
+        def __call__(
+            self, idx: tuple[int, ...]
+        ) -> list[tuple[int, tuple[int, ...], int]]:
+            """Return oriented faces of the cell at idx.
+
+            Returns [(axis, face_idx, sign), ...] with 2*ndim entries.
+            """
+            faces: list[tuple[int, tuple[int, ...], int]] = []
+            for a in range(self._ndim):
+                # Low face: same multi-index, sign = -1
+                faces.append((a, idx, -1))
+                # High face: increment idx along axis a, sign = +1
+                hi = idx[:a] + (idx[a] + 1,) + idx[a + 1 :]
+                faces.append((a, hi, +1))
+            return faces
 
     def __init__(
         self,
@@ -112,11 +132,19 @@ class CartesianMesh(StructuredMesh):
         return len(self._shape) + 1
 
     def boundary(self, k: int) -> Function:
-        """Return the boundary operator ∂_k; evaluation deferred to Epoch 3."""
-        if k <= 0 or k > len(self._shape):
-            msg = f"k must be in [1, {len(self._shape)}], got {k}"
+        """Return the boundary operator ∂_k for k-cells.
+
+        Only k == ndim (top-dimensional cells) is implemented; lower-dimensional
+        boundary operators are deferred to Epoch 3.
+        """
+        ndim = len(self._shape)
+        if k == ndim:
+            return CartesianMesh._BoundaryMap(ndim)
+        if k <= 0 or k > ndim:
+            msg = f"k must be in [1, {ndim}], got {k}"
             raise IndexError(msg)
-        return CartesianMesh._BoundaryMap()
+        msg = f"∂_{k} on CartesianMesh deferred to Epoch 3; only ∂_{ndim} implemented"
+        raise NotImplementedError(msg)
 
     def coordinate(self, idx: tuple[int, ...]) -> tuple[sympy.Expr, ...]:
         """Return cell-center coordinates: origin + (idx + ½)·spacing."""
