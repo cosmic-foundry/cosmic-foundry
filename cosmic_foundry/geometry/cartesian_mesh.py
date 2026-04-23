@@ -6,7 +6,7 @@ from itertools import combinations
 
 import sympy
 
-from cosmic_foundry.geometry.euclidean_manifold import CartesianChart, EuclideanManifold
+from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.theory.continuous.manifold import Chart
 from cosmic_foundry.theory.discrete.structured_mesh import StructuredMesh
 from cosmic_foundry.theory.foundation.function import Function
@@ -106,7 +106,7 @@ class CartesianMesh(StructuredMesh):
         self._shape = shape
         ndim = len(shape)
         space = EuclideanManifold(ndim)
-        self._chart: CartesianChart = space.atlas[0]
+        self._chart: Chart = space.atlas[0]
 
     @property
     def chart(self) -> Chart:
