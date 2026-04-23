@@ -248,20 +248,27 @@ DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                               Not independently constructed from stencil coefficients.
 ```
 
-### computation/  · Epoch 2
+### geometry/
+
+```
+EuclideanManifold(RiemannianManifold)  — flat ℝⁿ; metric g = δᵢⱼ; free: ndim, symbol_names
+
+CartesianChart(Chart)                  — identity map φ: ℝⁿ → ℝⁿ on a EuclideanManifold;
+                                         derived: inverse = self, symbols from domain
+
+CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
+                                         derived: chart = CartesianChart on EuclideanManifold(ndim)
+                                                  coordinate = origin + (idx + ½)·spacing
+                                                  cell volume = ∏ Δxₖ
+                                                  face area = ∏_{k≠j} Δxₖ  (face ⊥ axis j)
+                                                  face normal = ê_j
+```
+
+### computation/
 
 JAX evaluation. The only layer that touches floats. Planned: concrete field
 storage as `jax.Array`; JIT-compiled stencil application; explicit time
 integration; HDF5 I/O with provenance.
-
-**Open question**
-
-**Kernel composition model.**
-A backend-agnostic interface separating kernel computation (Op) from
-spatial domain and execution policy (Policy) is a design goal. An
-earlier Op/Policy/Dispatch framing was dropped before it was realized.
-The formal model governing composition, backend substitutability, and
-dispatch is unsettled.
 
 ### Cross-cutting
 
@@ -271,6 +278,13 @@ reaction networks, opacity tables) need a discipline governing how
 numeric tables are transcribed, verified, and updated independently of
 the derivation-first lane policy. This decision is deferred to Epoch 7
 (microphysics), when the first such capability lands.
+
+**Kernel composition model.**
+A backend-agnostic interface separating kernel computation (Op) from
+spatial domain and execution policy (Policy) is a design goal. An
+earlier Op/Policy/Dispatch framing was dropped before it was realized.
+The formal model governing composition, backend substitutability, and
+dispatch is unsettled.
 
 **Physical constants ingestion (CODATA).**
 The engine will need physical constants (G, c, ħ, k_B, …) throughout the
@@ -313,15 +327,12 @@ commutation check in `Discretization._derive()` is the derivation document.
 
 ## Physics roadmap
 
-Each physics epoch adds new fields and equations to the continuous layer and
-extends the discrete and numerical layers minimally to evaluate them.
-
 ### Foundation epochs
 
-| Epoch | Name | Layer | Capability |
-|-------|------|-------|------------|
-| 1 | Discrete operators | Discrete | `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
-| 2 | — | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
+| Epoch | Layer | Capability |
+|-------|-------|------------|
+| 1 | Discrete | **Discrete operators.** `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
+| 2 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
 ### Physics epochs
 
@@ -341,6 +352,17 @@ extends the discrete and numerical layers minimally to evaluate them.
 | 14 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
 | 15 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
 
+### Per-epoch verification standard
+
+Every epoch must satisfy this checklist before it is considered verified:
+
+- Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
+- At least one externally-grounded convergence test against an analytical solution
+  or observational data (not an engine-generated golden file); where an analytical
+  solution exists, the relevant `NumericFunction.symbolic` is declared so the
+  check runs automatically
+- Lane A/B/C classification stated in the PR description
+
 ---
 
 ## Platform milestones
@@ -354,14 +376,3 @@ extends the discrete and numerical layers minimally to evaluate them.
 | M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 2. |
 | M5 | Reproducibility capsule tooling: self-executing builder. |
 | M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
-
-### Per-epoch verification standard
-
-Every physics epoch must satisfy this checklist before it is considered verified:
-
-- Derivation document with SymPy checks for any new numerical scheme (Lanes B and C)
-- At least one externally-grounded convergence test against an analytical solution
-  or observational data (not an engine-generated golden file); where an analytical
-  solution exists, the relevant `NumericFunction.symbolic` is declared so the
-  check runs automatically
-- Lane A/B/C classification stated in the PR description
