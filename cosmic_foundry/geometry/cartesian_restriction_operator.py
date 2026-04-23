@@ -52,7 +52,7 @@ class CartesianRestrictionOperator(RestrictionOperator):
     def mesh(self) -> Mesh:
         return self._mesh
 
-    def __call__(self, f: SymbolicFunction) -> _CartesianCellAverage:
+    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):
