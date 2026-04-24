@@ -445,7 +445,7 @@ Python's type system and are deferred to the form-degree redesign (see pre-C2
 open question). Lane C verified: `∇·(-∇φ) = -∇²φ = ρ` symbolically in
 `tests/test_poisson_equation.py`.
 
-**C2 — Full chain complex on `CartesianMesh`.** Extend
+**C2 — Full chain complex on `CartesianMesh`. ✓** Extend
 `CartesianMesh.boundary(k)` to all k ∈ [1, n]; verify `∂_{k−1} ∘ ∂_k = 0`
 symbolically in the `IndexedSet` of cells for n ∈ {1, 2, 3}. The face-sum
 machinery used by `FVMDiscretization` to assemble `∮_∂Ωᵢ F·n̂ dA` reads the
@@ -453,12 +453,20 @@ signed incidence from `boundary(n)`; the lower-k operators are carried
 because `CellComplex` earns its class by `∂² = 0` everywhere, not only at
 the top dimension. Lane C.
 
-**Open questions before C2 can open.**
+*Data structure decision (resolved at C2 open).* `Set` needs no change — it
+is a pure marker with no abstract methods; concrete implementations carry
+whatever indexing scheme they require.  k-cells in `CartesianMesh` are
+identified by `(active_axes: tuple[int,...], idx: tuple[int,...])` where
+`active_axes` is the sorted tuple of axes the cell extends along and `idx` is
+the lower-corner position in the full vertex grid (`shape[a]` values along
+active axes, `shape[a]+1` along inactive axes).  The boundary formula is the
+standard CW orientation: for the j-th active axis aⱼ, the high face carries
+sign (−1)ʲ and the low face carries sign (−1)ʲ⁺¹.  This resolves the
+disjoint-family question: a face with `active_axes=(0,2)` and an edge with
+`active_axes=(1,)` in the same mesh are distinguished by their axis sets, no
+extra disjoint-union wrapper is needed.
 
-*Data structure.* A 3-D Cartesian grid has three disjoint `IndexedSet`s of
-faces (one per axis orientation). The existing `CellComplex.complex[k] → Set`
-signature has not been examined for whether `Set` can represent this disjoint
-union, or whether a richer return type is needed for k < n.
+*Pre-C2 open questions.*
 
 *Phantom vs. real type parameters.* The general question underlying several
 open decisions: for each generic type parameter in the hierarchy, is it **real**

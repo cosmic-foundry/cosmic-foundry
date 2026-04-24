@@ -158,7 +158,7 @@ class _SchwarzschildChart(Chart[SchwarzschildManifold, SchwarzschildManifold]):
         raise NotImplementedError("codomain not yet represented as a manifold object")
 
     @property
-    def inverse(self) -> _SchwarzschildChart:
+    def inverse(self) -> Chart:
         raise NotImplementedError("inverse chart not yet implemented")
 
     def __call__(  # type: ignore[override]
