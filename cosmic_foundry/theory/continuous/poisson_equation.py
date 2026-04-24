@@ -16,7 +16,7 @@ from cosmic_foundry.theory.foundation.function import Function
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
 
-class _NegatedGradientField(TensorField):
+class _NegatedGradientField(TensorField[Any, sympy.Expr]):
     """The (0,1)-covector field -∇f for a scalar field f.
 
     Stores the negated gradient components as SymPy expressions derived
@@ -62,7 +62,7 @@ class _NegatedGradientFlux(NumericFunction[Field, TensorField]):
         return _NegatedGradientField(field)
 
 
-class _ScalarField(Field):
+class _ScalarField(Field[Any, sympy.Expr]):
     """A scalar field defined by a SymPy expression."""
 
     def __init__(

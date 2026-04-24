@@ -460,31 +460,53 @@ faces (one per axis orientation). The existing `CellComplex.complex[k] → Set`
 signature has not been examined for whether `Set` can represent this disjoint
 union, or whether a richer return type is needed for k < n.
 
-*Form-degree type system.* Named differential operators (`GradientOperator`,
-`CurlOperator`, `DivergenceOperator`) cannot be formally characterized by
-`DifferentialOperator` as currently defined: the identifying constraint is the
-principal symbol structure, which is beyond Python's type system. The correct
-approach is to introduce named form-degree classes (`ZeroForm`, `OneForm`,
-`TwoForm`, ...) as concrete subclasses of `DifferentialForm`, each deriving
-`degree`; and to reparameterize `DifferentialOperator` from `Function[Field, _C]`
-to `Function[_D, _C]` so that, e.g., the exterior derivative on 1-forms (curl)
-can be typed as `Function[OneForm, TwoForm]`. Under this design, named operator
-ABCs earn their classes via domain/codomain type narrowing, and Lane C tests
-verify that concrete implementations compute the correct mathematical operation.
+*Phantom vs. real type parameters.* The general question underlying several
+open decisions: for each generic type parameter in the hierarchy, is it **real**
+(constrains something mypy checks) or **phantom** (documents mathematical intent
+but provides no enforcement)?
 
-*`DivergenceFormEquation` consequent.* Once form-degree types exist,
-`DivergenceFormEquation` becomes `DifferentialOperator[_D, ZeroForm]`: its
-output is always a scalar (divergence of a flux is always a 0-form), and
-`flux` tightens from `Function[Field, TensorField]` to `Function[_D, OneForm]`.
-Two sub-questions must be resolved: (1) whether `_D` is always a scalar `Field`
-(sufficient for Poisson and scalar transport) or whether multi-component input
-(Euler: density, momentum, energy) requires a richer domain type; (2) whether
-the flux codomain is always `OneForm` (valid for scalar equations where the
-metric provides the isomorphism between vector fields and 1-forms) or must
-remain `TensorField` to accommodate rank-2 flux tensors in systems.
+Currently `D` and `C` in `Field[D, C]` are both phantom.  `C` is phantom
+because `SymbolicFunction.__call__` overrides the generic return type to
+`sympy.Expr` regardless of what `C` is bound to.  `D` is phantom because
+`__call__` takes `*args: Any` — there is no Python type for "a point on a
+manifold."  A manifold point has no representation in the type system: it is
+only accessible as a coordinate tuple after choosing a chart.  `Chart[D, C]`
+has the same problem: `__call__` returns coordinates (`tuple[Any, ...]`), not
+an instance of the codomain type `C`.
 
-All three decisions must be made and recorded in ARCHITECTURE.md before C2 is
-opened.
+Three decisions must be made before the type hierarchy can be considered
+well-founded:
+
+1. **The point type.**  What is the Python type of a manifold point — the input
+   to a field evaluation?  Options: (a) introduce `Point[M]` as a typed
+   coordinate carrier so `Field[Point[M], C].__call__` takes a `Point[M]` and
+   returns `C`; (b) accept `D = Any` permanently and document that symbolic
+   evaluation is coordinate-tuple-driven and untyped at the domain level;
+   (c) defer to Epoch 2, where `jax.Array` becomes the concrete point type and
+   D becomes real in the numerical layer.  The choice determines whether D is
+   meaningful in the symbolic layer at all.
+
+2. **Form-degree value types.**  `C` in `Field[D, C]` varies by tensor type:
+   `sympy.Expr` for scalars, `tuple[sympy.Expr, ...]` for covectors, a matrix
+   for rank-2 tensors.  Making `C` real requires form-degree classes (`ZeroForm`,
+   `OneForm`, `TwoForm`, ...) as concrete subclasses of `DifferentialForm`, each
+   deriving `degree`, with distinct Python value representations for `C`.
+   `DifferentialOperator` must be reparameterized from `Function[Field, _C]` to
+   `Function[_D, _C]` so that the exterior derivative on 1-forms is
+   `Function[OneForm, TwoForm]` and named operator ABCs earn their classes via
+   domain/codomain type narrowing verified by Lane C tests.
+
+3. **`DivergenceFormEquation` consequent.**  Once form-degree types exist,
+   `DivergenceFormEquation` becomes `DifferentialOperator[_D, ZeroForm]` (its
+   output is always a scalar) and `flux` tightens from `Function[Field,
+   TensorField]` to `Function[_D, OneForm]`.  Sub-questions: (a) whether `_D`
+   must accommodate multi-component input (Euler equations) or whether scalar
+   `Field` is sufficient through Epoch 3; (b) whether the flux codomain is always
+   `OneForm` (valid on Riemannian manifolds via the metric isomorphism) or must
+   remain `TensorField` for rank-2 flux tensors in systems.
+
+All four decisions (data structure + the three above) must be recorded in
+ARCHITECTURE.md before C2 is opened.
 
 **C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
 Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete
