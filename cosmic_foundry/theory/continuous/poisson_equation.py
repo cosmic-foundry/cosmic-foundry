@@ -7,34 +7,37 @@ from typing import Any
 
 import sympy
 
+from cosmic_foundry.theory.continuous.differential_form import (
+    DifferentialForm,
+    OneForm,
+    ZeroForm,
+)
 from cosmic_foundry.theory.continuous.divergence_form_equation import (
     DivergenceFormEquation,
 )
-from cosmic_foundry.theory.continuous.field import Field, TensorField
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.function import Function
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
 
-class _NegatedGradientField(TensorField[Any, sympy.Expr]):
-    """The (0,1)-covector field -∇f for a scalar field f.
+class _NegatedGradientField(OneForm[Any]):
+    """The covector field -∇f for a scalar field f.
 
     Stores the negated gradient components as SymPy expressions derived
     by differentiating f.expr with respect to each symbol in f.symbols.
     component(i) returns the i-th component -∂f/∂xᵢ.
+
+    Degree and tensor_type are derived from OneForm: degree = 1,
+    tensor_type = (0, 1).
     """
 
-    def __init__(self, field: Field[Manifold, sympy.Expr]) -> None:
+    def __init__(self, field: DifferentialForm[Any, Any]) -> None:
         self._source = field
         self._components = tuple(-sympy.diff(field.expr, s) for s in field.symbols)
 
     @property
-    def manifold(self) -> Manifold:
+    def manifold(self) -> Any:
         return self._source.manifold
-
-    @property
-    def tensor_type(self) -> tuple[int, int]:
-        return (0, 1)
 
     @property
     def expr(self) -> sympy.Expr:
@@ -51,23 +54,27 @@ class _NegatedGradientField(TensorField[Any, sympy.Expr]):
         return self._components[i]
 
 
-class _NegatedGradientFlux(NumericFunction[Field, TensorField]):
+class _NegatedGradientFlux(NumericFunction[DifferentialForm, OneForm]):
     """The flux function F(φ) = -∇φ for the Poisson equation.
 
-    Evaluates symbolically: given a scalar Field, returns a
+    Evaluates symbolically: given a DifferentialForm, returns a
     _NegatedGradientField whose i-th component is -∂φ/∂xᵢ.
     """
 
-    def __call__(self, field: Field) -> _NegatedGradientField:
+    def __call__(self, field: DifferentialForm[Any, Any]) -> _NegatedGradientField:
         return _NegatedGradientField(field)
 
 
-class _ScalarField(Field[Any, sympy.Expr]):
-    """A scalar field defined by a SymPy expression."""
+class _ZeroFormField(ZeroForm[Any]):
+    """A scalar field defined by a SymPy expression.
+
+    Degree and tensor_type are derived from ZeroForm: degree = 0,
+    tensor_type = (0, 0).
+    """
 
     def __init__(
         self,
-        manifold: Manifold,
+        manifold: Any,
         expr: sympy.Expr,
         symbols: tuple[sympy.Symbol, ...],
     ) -> None:
@@ -76,7 +83,7 @@ class _ScalarField(Field[Any, sympy.Expr]):
         self._symbols = symbols
 
     @property
-    def manifold(self) -> Manifold:
+    def manifold(self) -> Any:
         return self._manifold
 
     @property
@@ -113,7 +120,7 @@ class PoissonEquation(DivergenceFormEquation):
 
     Required:
         manifold — the domain on which the equation is posed
-        source   — the right-hand side field ρ
+        source   — the right-hand side scalar field ρ
 
     Derived:
         flux     — the negated gradient operator F(φ) = -∇φ
@@ -127,24 +134,24 @@ class PoissonEquation(DivergenceFormEquation):
 
     @property
     @abstractmethod
-    def source(self) -> Field:
-        """The right-hand side field ρ in -∇²φ = ρ."""
+    def source(self) -> ZeroForm:
+        """The right-hand side scalar field ρ in -∇²φ = ρ."""
 
     @property
-    def flux(self) -> Function[Field, TensorField]:
+    def flux(self) -> Function[DifferentialForm, OneForm]:
         """Derived: the negated gradient flux F(φ) = -∇φ."""
         return _NEGATED_GRADIENT_FLUX
 
-    def __call__(self, field: Field) -> _ScalarField:
+    def __call__(self, field: DifferentialForm) -> _ZeroFormField:
         """Apply the Poisson operator L(φ) = -∇²φ.
 
         Computes -Σᵢ ∂²φ/∂xᵢ² symbolically via SymPy and returns it
-        as a scalar Field on field.manifold.  The symbols are taken from
+        as a scalar ZeroForm on field.manifold.  The symbols are taken from
         field.symbols; the result is the strong-form residual that equals
         source.expr when φ solves the equation.
         """
         neg_laplacian = -sum(sympy.diff(field.expr, s, 2) for s in field.symbols)
-        return _ScalarField(field.manifold, neg_laplacian, field.symbols)
+        return _ZeroFormField(field.manifold, neg_laplacian, field.symbols)
 
 
 __all__ = ["PoissonEquation"]

@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.constraint import Constraint
-from cosmic_foundry.theory.continuous.differential_form import DifferentialForm
+from cosmic_foundry.theory.continuous.differential_form import (
+    DifferentialForm,
+    OneForm,
+    TwoForm,
+    ZeroForm,
+)
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.divergence_form_equation import (
     DivergenceFormEquation,
@@ -54,12 +59,15 @@ __all__ = [
     "Manifold",
     "MetricTensor",
     "NonLocalBoundaryCondition",
+    "OneForm",
     "Point",
     "PoissonEquation",
-    "SymbolicFunction",
     "PseudoRiemannianManifold",
     "RiemannianManifold",
+    "SymbolicFunction",
     "SymmetricTensorField",
     "TensorField",
     "TopologicalManifold",
+    "TwoForm",
+    "ZeroForm",
 ]
