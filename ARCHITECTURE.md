@@ -419,7 +419,105 @@ a MeshFunction pre-computed from a known-conditioning test operator.
 32, 64}: O(h²) with `CenteredDifferenceGradient`, O(h⁴) with
 `CenteredPolynomialGradient`. This is the externally-grounded verification
 the epoch requires; the Lane C checks in C1–C4 are the derivation, C6
-is the proof that the derivation was implemented.
+is the proof that the derivation was implemented. C6 lives as a narrative
+application in `validation/poisson/` with a mirror documentation page at
+`docs/poisson/`; see the layout below.
+
+**`validation/poisson/` and the Sphinx page.** C6 is a narrative
+application, not only a test. It walks the pipeline from manufactured
+solution to converged numerical result with every intermediate object
+visible — mirroring the `validation/schwarzschild/` pattern (`# %%`
+cells in a runnable Python file, plus a MyST page that re-executes in
+the Sphinx build via `myst_nb`).
+
+```
+validation/poisson/
+├── __init__.py
+├── manufactured.py         — φ, ρ as SymbolicFunctions on EuclideanManifold(2):
+│                               φ(x, y) = sin(πx) sin(πy)
+│                               ρ(x, y) = −∇²φ = 2π² sin(πx) sin(πy)
+│                             the identity ∇²φ + ρ = 0 is checked symbolically
+│                             at module load — the pair is a falsifiable claim,
+│                             not a hand-picked constant.
+├── poisson_square.py       — narrative script with `# %%` cells: compose
+│                             PoissonEquation + CartesianMesh +
+│                             FaceReconstruction + Dirichlet BC +
+│                             FVMDiscretization + DenseDirectSolver, solve,
+│                             emit solution and convergence figures.
+├── figures.py              — matplotlib figure functions (pure; returning Figure).
+└── test_poisson_square.py  — machine-checked claims (pytest).
+```
+
+**Tests (`test_poisson_square.py`).** Six claims, each independently
+falsifiable:
+
+1. *Commutation symbolic check on the test problem.* Using the
+   `manufactured` pair, verify via SymPy that `Lₕ Rₕ φ − Rₕ Lφ` expanded
+   at an interior cell has leading term `O(hᵖ)` for each reconstruction.
+   The derivation performed abstractly in C4 is re-executed on a concrete
+   problem, catching any specialization bug.
+2. *Numerical convergence, p = 2.* `assert_convergence_order(err_p2,
+   [8, 16, 32, 64], expected=2.0)` using the existing helper in
+   `tests/utils/convergence.py`; L² error against `manufactured.phi`.
+3. *Numerical convergence, p = 4.* Same with `expected=4.0`; resolutions
+   `[8, 16, 32]` to stay above the floating-point floor that h⁴ reaches
+   beyond N ≈ 100.
+4. *Symmetry preservation.* `sin(πx)sin(πy)` is symmetric under `x ↔ y`;
+   the numerical solution must respect this to floating-point precision
+   for any N. A break signals a stencil-assembly bug.
+5. *Operator SPD.* The assembled `Lₕ` matrix for Poisson + Dirichlet BC
+   must be symmetric positive-definite. Assembled once per reconstruction
+   via `DenseDirectSolver`; checked with `np.linalg.cholesky`.
+6. *Restriction commutes with the boundary condition.* `Rₕ` applied to
+   `φ` on `∂Ω` matches the Dirichlet boundary data analytically — a
+   Lane C check that BC data is consistent with the restriction.
+
+**Figures (`figures.py`).** Four pure functions, each returning a
+`matplotlib.figure.Figure`:
+
+- `solution_heatmap(N, p)` — `φ_numerical` as `imshow`, viridis, colorbar.
+- `error_heatmap(N, p)` — signed `φ_numerical − φ_exact`, diverging
+  colormap symmetric about 0; reveals whether the error is
+  boundary-dominated or interior-dominated.
+- `matrix_structure(N, p)` — `plt.spy(Lₕ)` at small N = 8, so the 5-point
+  (p = 2) vs. 9-point (p = 4) stencil pattern is directly visible.
+- `convergence_figure()` — the headline figure: log-log max-norm error
+  vs. `h` for both reconstructions, with reference lines at slopes 2 and
+  4 and the measured slopes annotated.
+
+**Documentation page (`docs/poisson/poisson_square.md`).** MyST notebook
+re-executed at Sphinx build time. Structure chosen so the derivation is
+visible in the rendered page, not only in test output:
+
+1. *Problem statement.* `∇²φ = −ρ` on the unit square with Dirichlet BC;
+   one code cell renders `sympy.Eq(lhs, rhs)` for the manufactured pair,
+   so the symbolic identity is visible on the page.
+2. *Continuous objects.* Instantiate `PoissonEquation(flux, source)`;
+   display `flux.expr` and `source.expr` to anchor the page in the C1
+   progenitors.
+3. *Mesh and chain complex.* Instantiate `CartesianMesh`; render the
+   face-incidence list from `mesh.boundary(n)` as a small table at
+   N = 4 — direct reuse of C2.
+4. *Reconstruction family.* Side-by-side table of stencil coefficients
+   for p = 2 and p = 4, derived symbolically from the concrete
+   `FaceReconstruction` classes. The page is about the family, not one
+   stencil.
+5. *Discretization assembly.* `FVMDiscretization(mesh, reconstruction,
+   bc)` produces `Lₕ`; `matrix_structure` at N = 8 shown side-by-side
+   for both reconstructions.
+6. *Solve.* `DenseDirectSolver` applied; `solution_heatmap` and
+   `error_heatmap` at N = 32 for each reconstruction.
+7. *Convergence.* `convergence_figure()` inline; measured slopes
+   annotated and compared to the expected 2 and 4.
+8. *Derivation re-execution.* The symbolic `Lₕ Rₕ φ − Rₕ Lφ` expansion
+   displayed as SymPy output — the truncation-error claim proved *in the
+   rendered page*, not only in a test file.
+
+The page is wired into `docs/index.md` under the "Validation" toctree as
+`poisson/index`, next to `schwarzschild/index`. A one-line
+`docs/poisson/index.md` with a toctree entry for `poisson_square`
+matches the Schwarzschild pattern and keeps room for future
+Poisson-family pages (Neumann, variable coefficient, 3-D).
 
 ---
 
