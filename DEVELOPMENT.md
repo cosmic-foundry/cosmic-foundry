@@ -487,3 +487,49 @@ invisible. Write tests liberally and source code parsimoniously.
 In practice: before adding a helper, ask whether the call site is already
 readable without it. Before adding a docstring sentence, ask whether a
 good name already says it. Before skipping a test case, write it anyway.
+
+---
+
+## Docstring conventions
+
+Docstrings serve multiple purposes: establishing the mathematical contract,
+educating readers without formal training, and guiding practical use. Structure
+docstrings in three parts, in order:
+
+**Part 1: Formal mathematical definition.** State what the object IS and DOES
+using mathematically rigorous language. Name function spaces, norms, and types
+explicitly. This is the contract reviewers check.
+
+**Part 2: Informal explanation.** Restate what Part 1 says at the level of a
+bright physics graduate student (strong practical calculus, no formal
+functional analysis assumed). Remove the heavy notation; explain the intuition.
+
+**Part 3: Practical context.** How is this used in the code? Why does this
+choice matter? What breaks if someone misuses it? When should I use this vs.
+a simpler alternative?
+
+Example:
+
+```python
+def inner_product_L2h(u, v, mesh):
+    """Discrete L² inner product on mesh cell averages.
+
+    ⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ, where |Ωᵢ| is the cell volume and
+    uᵢ, vᵢ are cell-average values. This is the norm in which FVM convergence
+    proofs are stated; discrete operators are symmetric and positive-definite
+    with respect to this pairing, not the Euclidean dot product.
+
+    In plain terms: multiply corresponding values at each cell, scale by the
+    cell's volume, and sum. This gives more weight to larger cells, which
+    matches the physics: a large cell has more influence on the solution.
+
+    Use this when verifying operator symmetry or testing convergence. DO NOT
+    use numpy's dot product — the cell volumes must be included. If the mesh
+    is uniform (constant Δx), the two norms are proportional; non-uniform
+    meshes expose the difference.
+    """
+```
+
+**Present tense only.** Describe current design, not historical decisions.
+"This replaces the raw kwargs-passing from version 2" belongs in the commit
+message. Docstrings say "This takes a Domain object to enforce type safety."

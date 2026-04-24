@@ -1,0 +1,6 @@
+name: rigorous-review
+description: Invoke the rigorous-reviewer agent to review an architecture document, sprint plan, or PR
+arguments:
+  - name: target
+    description: "What to review (e.g., 'ARCHITECTURE.md C1-C6', 'PR #233', 'current sprint plan'). If omitted, defaults to ARCHITECTURE.md."
+    required: false
