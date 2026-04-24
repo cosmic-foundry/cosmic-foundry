@@ -433,7 +433,7 @@ ingestion discipline for PDF-sourced defined constants is a separate decision.
 
 **Epoch 1 Poisson sprint.** The target is a working FVM Poisson solver on
 `CartesianMesh` with Dirichlet boundary conditions, verified against an
-analytic solution. The sprint is structured as six PRs (C1–C6); each earns
+analytic solution. The sprint is structured as eight PRs (C1–C8); each earns
 its scope by a Lane C symbolic derivation and each introduces only objects
 justified by a falsifiable constraint. The ambition is not "a working
 Poisson solver" — it is the reusable FVM machinery the rest of the engine
@@ -490,25 +490,19 @@ subclasses may introduce additional constructor parameters specific to the
 flux family (e.g. `HyperbolicFlux(order, riemann_solver)` adds a Riemann
 solver, while `DiffusiveFlux(order)` does not).
 
-**C4 — Generic `FVMDiscretization`.** Introduce
+**C4 — Generic `FVMDiscretization` with commutation Lane C.** Introduce
 `FVMDiscretization(mesh, numerical_flux, boundary_condition)`; it is
 generic over `ConservationLaw` — not Poisson-specific. The produced
 `DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f NF(U, f)` where `NF`
 is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
 law's flux function baked into `NF`. BC enters via the constructor parameter
-(see "Boundary condition application" in `discrete/`). C4 bundles three
-components: (a) the abstract `FVMDiscretization` generic over `ConservationLaw`,
-(b) commutation-diagram Lane C for both p=2 and p=4, and (c) SPD derivation
-with summation-by-parts. If reviewer load warrants, consider splitting into
-C4a (generic discretization + commutation) and C4b (SPD derivation). Lane C
-has two parts:
+(see "Boundary condition application" in `discrete/`). Lane C: verify the
+commutation diagram `‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)` at order p for
+`PoissonEquation` paired with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`,
+symbolically on test fields in `C^{p+2}(Ω)`. The SPD derivation is deferred
+to C5.
 
-*Part 1 — commutation.* Verify the commutation diagram
-`‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)` at order p for `PoissonEquation`
-paired with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, symbolically on
-test fields in `C^{p+2}(Ω)`.
-
-*Part 2 — SPD of Lₕ (Poisson + DiffusiveFlux specialization).* For
+**C5 — SPD analysis of the discrete Poisson operator.** For
 `FVMDiscretization(PoissonEquation, DiffusiveFlux(order), DirichletBC)`
 on `CartesianMesh`, the assembled operator is symmetric positive definite
 with respect to the discrete inner product `⟨u, v⟩_h`. The chain:
@@ -525,7 +519,7 @@ with respect to the discrete inner product `⟨u, v⟩_h`. The chain:
    `u_boundary = 0` from Dirichlet BC, this forces `u ≡ 0`. Hence
    `⟨u, Lₕ u⟩_h > 0` for all `u ≠ 0`.
 3. *Spectral inheritance.* Step 2 is the discrete analog of L² positive-
-   definiteness of `-∇²`. The explicit eigenvalues quoted in C5 are a
+   definiteness of `-∇²`. The explicit eigenvalues quoted in C6 are a
    consequence of SPD + translation invariance on `CartesianMesh`, not
    additional hypotheses.
 
@@ -535,20 +529,18 @@ column per cell. Lane C verifies SPD symbolically at N = 4 in 1-D and
 2-D for both `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, so the assertion
 does not depend on a numerical eigenvalue computation.
 
-**C5 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
+**C6 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
-(nonlinear problems need a separate `NonlinearSolver`). C5 bundles: (a)
-`LinearSolver` ABC, (b) `DenseJacobiSolver` implementation with matrix
-assembly via unit basis, (c) Jacobi spectral-radius derivation for p=2,
-and (d) deferred Lane B for p=4. If reviewer load warrants, consider
-splitting into C5a (solver interface + matrix assembly + spectral radius
-derivation) and C5b (convergence-count Lane B check). The derivation works
-simultaneously in two directions. Both directions are stated for
-`FVMDiscretization(PoissonEquation, DiffusiveFlux(2), DirichletBC)` on
+(nonlinear problems need a separate `NonlinearSolver`). This PR develops
+the interface, the `DenseJacobiSolver` implementation with matrix assembly
+via unit basis, and the Jacobi spectral-radius derivation for `DiffusiveFlux(2)`.
+The convergence-count Lane B check for order=4 is deferred to C7. The
+derivation works simultaneously in two directions. Both directions are stated
+for `FVMDiscretization(PoissonEquation, DiffusiveFlux(2), DirichletBC)` on
 `CartesianMesh`; the same construction applies to `DiffusiveFlux(4)` but
 the explicit spectral rate is different — see the "Order ≥ 4" remark below.
 
-*Forward from the formal ingredients already in the code.* At the point C5
+*Forward from the formal ingredients already in the code.* At the point C6
 runs, three objects are in hand:
 1. The `DiscreteOperator` Lₕ. *Linearity of Lₕ is specific to this
    specialization*: `DiffusiveFlux` produces a centered-difference stencil
@@ -559,7 +551,7 @@ runs, three objects are in hand:
 2. The assembled dense `(N^d × N^d)` matrix `A`, obtained by applying Lₕ
    to each unit-basis `MeshFunction` in lexicographic order (one column
    per cell).
-3. The SPD property of A, proved in C4's Lane C derivation (not asserted
+3. The SPD property of A, proved in C5's Lane C derivation (not asserted
    here) from summation-by-parts plus the sign convention `flux = -∇φ`.
 
 From SPD alone, the equation `Lₕ u = f` is equivalent to
@@ -605,38 +597,39 @@ diagram verifies.
 
 *Order ≥ 4 remark.* For `DiffusiveFlux(4)` the closed-form eigenvalues
 above do not apply; the wider stencil introduces different Fourier
-symbols. SPD (from C4) still guarantees convergence qualitatively for
+symbols. SPD (from C5) still guarantees convergence qualitatively for
 any α small enough, but the iteration-count bound must be re-derived
 numerically by a one-off dense eigenvalue scan on a representative
-grid. C6 reports the empirical rate for `DiffusiveFlux(4)` and flags it
-as Lane B evidence; the closed-form spectral derivation is deferred and
-re-opened when multigrid (Epoch 6) requires spectral bounds on
-wide-stencil operators.
+grid. The empirical rate for `DiffusiveFlux(4)` is deferred to C7; the
+closed-form spectral derivation is deferred and re-opened when multigrid
+(Epoch 6) requires spectral bounds on wide-stencil operators.
 
-All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK. The
-O(1/h²) iteration count bounds C6 to N ≤ 32 in 2-D for tractable CI
-time. Lane B: on an N = 8 system with `DiffusiveFlux(2)`, verify that
-`DenseJacobiSolver` reaches the prescribed tolerance within the
-iteration count predicted by the spectral bound above, and that the
-residual `‖f − Lₕ u^k‖_{L²_h}` decreases monotonically.
+All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK.
 
-**C6 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
+**C7 — DenseJacobiSolver convergence check (order=4 Lane B).** Verify that
+`DenseJacobiSolver` reaches the prescribed tolerance within tractable
+iteration counts on representative grids for `DiffusiveFlux(4)`. The O(1/h²)
+iteration count bounds C8 to N ≤ 32 in 2-D. Lane B: on an N = 8 system,
+verify that the solver reaches the prescribed tolerance within the
+iteration count implied by the SPD property and empirical spectral radius,
+and that the residual `‖f − Lₕ u^k‖_{L²_h}` decreases monotonically.
+
+**C8 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
 (C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux(2)`
-and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
-`DenseJacobiSolver` (C5) to solve `-∇²φ = ρ` against the analytic
-solution `φ = sin(πx)sin(πy)` on the unit square. Convergence tests:
-N ∈ {8, 12, 16, 24, 32} (five points) for p = 2; N ∈ {4, 6, 8, 12, 16}
-(five points) for p = 4 — capped to stay above the h⁴ floating-point
-floor. The reported error is the cell-volume-weighted discrete L² norm
-`‖φ_h − Rₕ φ_exact‖_{L²_h} = (Σᵢ |Ωᵢ|·(φ_h,ᵢ − (Rₕ φ)ᵢ)²)^{1/2}` — the
-natural norm for the FVM formulation and the one in which the SPD
-argument of C4 lives. A parallel max-norm
-`‖φ_h − Rₕ φ_exact‖_{∞,h}` is also reported to detect pointwise
-failure modes (boundary-adjacent rows, corners). The Lane C checks in
-C1–C4 are the derivation; C6 is the proof that the derivation was
-implemented. C6 lives as a narrative application in `validation/poisson/`
-with a mirror documentation page at `docs/poisson/`; see the layout
-below.
+and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + SPD analysis (C5) +
+Dirichlet `BoundaryCondition` + `DenseJacobiSolver` (C6, C7) to solve
+`-∇²φ = ρ` against the analytic solution `φ = sin(πx)sin(πy)` on the
+unit square. Convergence tests: N ∈ {8, 12, 16, 24, 32} (five points) for
+p = 2; N ∈ {4, 6, 8, 12, 16} (five points) for p = 4 — capped to stay
+above the h⁴ floating-point floor. The reported error is the cell-volume-
+weighted discrete L² norm `‖φ_h − Rₕ φ_exact‖_{L²_h} = (Σᵢ |Ωᵢ|·(φ_h,ᵢ − (Rₕ φ)ᵢ)²)^{1/2}` —
+the natural norm for the FVM formulation and the one in which the SPD
+argument of C5 lives. A parallel max-norm `‖φ_h − Rₕ φ_exact‖_{∞,h}`
+is also reported to detect pointwise failure modes (boundary-adjacent rows,
+corners). The Lane C checks in C1–C5 are the derivation; C8 is the proof
+that the derivation was implemented. C8 lives as a narrative application
+in `validation/poisson/` with a mirror documentation page at `docs/poisson/`;
+see the layout below.
 
 **`validation/poisson/` and the Sphinx page.** C6 is a narrative
 application, not only a test. It walks the pipeline from manufactured
@@ -683,7 +676,7 @@ falsifiable:
    the numerical solution must respect this to floating-point precision
    for any N. A break signals a stencil-assembly bug.
 6. *Operator symmetry and positive-definiteness.* For the assembled `Lₕ`
-   matrix, verify `⟨u, Lₕ v⟩_h = ⟨Lₕ u, v⟩_h` (symmetry) and
+   matrix from C5, verify `⟨u, Lₕ v⟩_h = ⟨Lₕ u, v⟩_h` (symmetry) and
    `⟨u, Lₕ u⟩_h > 0` for `u ≠ 0` (positive-definiteness) on several
    random unit MeshFunctions `u, v`. Hand-rolled — no `np.linalg.cholesky`.
 7. *Restriction commutes with boundary condition (nonzero data).* Using
@@ -739,7 +732,7 @@ The page is wired into `docs/index.md` under the "Validation" toctree as
 matches the Schwarzschild pattern and keeps room for future
 Poisson-family pages (Neumann, variable coefficient, 3-D).
 
-**Docs/test code parity.** The documentation page runs the exact same code
+****Docs/test code parity.** The documentation page runs the exact same code
 as `test_poisson_square.py` — no specialized paths, no mocked data. The
 Sphinx build may be slow as a result; static figure embedding is a deferred
 optimization. A general mechanism for running only a cheaper subset in the
