@@ -39,12 +39,15 @@ class StructuredMesh(Mesh):
     def evaluate(self, field: Field, idx: tuple[int, ...]) -> sympy.Expr:
         """Evaluate a field at cell center idx via the typed Point interface.
 
-        Constructs a Point carrying this mesh's chart and the cell-center
-        coordinates, then delegates to field.__call__ so that the chart-symbol
-        check and coord-count check in SymbolicFunction are exercised.
+        Constructs a Point using this mesh's chart and chart.domain as the
+        manifold — not field.manifold — to preserve the Point invariant that
+        chart: Chart[M, Any] and manifold: M refer to the same M.  Field
+        compatibility is enforced by the chart-symbol check in
+        SymbolicFunction.__call__: if the field's symbols differ from this
+        chart's symbols, a ValueError is raised before any substitution occurs.
         """
         coords = self.coordinate(idx)
-        point = Point(manifold=field.manifold, chart=self.chart, coords=coords)
+        point = Point(manifold=self.chart.domain, chart=self.chart, coords=coords)
         return field(point)
 
 

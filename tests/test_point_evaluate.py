@@ -43,6 +43,15 @@ def test_call_returns_correct_value() -> None:
     assert field(p) == 25
 
 
+def test_call_rejects_coord_count_mismatch() -> None:
+    m = _euclidean(2)
+    field = _ScalarField(m)
+    chart = m.atlas[0]
+    p = Point(manifold=m, chart=chart, coords=(3,))  # only 1 coord for a 2D field
+    with pytest.raises(ValueError, match="Coordinate count mismatch"):
+        field(p)
+
+
 def test_call_rejects_wrong_dimension_chart() -> None:
     # Tests the runtime symbol-tuple check: m3's chart has symbols (x, y, z)
     # while the 2D field expects (x, y).  Cross-manifold (EuclideanManifold vs
