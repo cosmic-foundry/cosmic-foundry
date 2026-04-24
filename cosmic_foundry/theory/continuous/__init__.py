@@ -37,6 +37,7 @@ from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     PseudoRiemannianManifold,
     RiemannianManifold,
 )
+from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.continuous.topological_manifold import TopologicalManifold
 
 __all__ = [
@@ -55,6 +56,7 @@ __all__ = [
     "NonLocalBoundaryCondition",
     "Point",
     "PoissonEquation",
+    "SymbolicFunction",
     "PseudoRiemannianManifold",
     "RiemannianManifold",
     "SymmetricTensorField",

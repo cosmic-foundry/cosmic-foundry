@@ -10,8 +10,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
-from cosmic_foundry.theory.continuous.point import Point
-from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
+from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 
 D = TypeVar("D")  # Domain manifold type
 C = TypeVar("C")  # Codomain value type
@@ -24,31 +23,14 @@ class Field(SymbolicFunction[D, C]):
     manifold type (e.g. EuclideanManifold); C is the value type (e.g.
     sympy.Expr for scalar fields).
 
-    Evaluation is typed via evaluate(point: Point[D]) → C, which verifies
-    that the point's chart matches the field's coordinate symbols before
-    substituting.  The inherited __call__(*args) remains available for
-    internal symbolic use where a typed Point is not needed.
+    Evaluation: field(Point(manifold=m, chart=c, coords=(...))) → C.
+    The chart check and substitution are inherited from SymbolicFunction.__call__.
     """
 
     @property
     @abstractmethod
     def manifold(self) -> D:
         """The manifold on which this field is defined."""
-
-    def evaluate(self, point: Point[D]) -> C:
-        """Evaluate this field at a typed point.
-
-        Verifies that point.chart.symbols matches self.symbols, then
-        substitutes point.coords into self.expr.  Raises ValueError on a
-        chart mismatch so that cross-manifold evaluation is caught at runtime
-        (and rejected by mypy at the type level via Point[D]).
-        """
-        if point.chart.symbols != self.symbols:
-            raise ValueError(
-                f"Chart mismatch: point uses chart with symbols "
-                f"{point.chart.symbols}, but field expects {self.symbols}"
-            )
-        return self(*point.coords)  # type: ignore[no-any-return]
 
 
 class TensorField(Field[D, C], Generic[D, C]):  # noqa: B024

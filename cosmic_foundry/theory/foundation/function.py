@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 D = TypeVar("D")  # Domain
 C = TypeVar("C")  # Codomain
@@ -20,7 +20,7 @@ class Function(ABC, Generic[D, C]):
     """
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwargs: Any) -> C: ...
+    def __call__(self, x: D) -> C: ...
 
 
 __all__ = ["Function"]

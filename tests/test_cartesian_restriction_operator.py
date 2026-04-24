@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import sympy
 
@@ -9,7 +11,7 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianRestrictionOperator,
 )
-from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
+from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,7 +23,7 @@ _ONE = sympy.Integer(1)
 _H = sympy.Symbol("h", positive=True)
 
 
-class _Func1D(SymbolicFunction):
+class _Func1D(SymbolicFunction[Any, sympy.Expr]):
     def __init__(self, expr: sympy.Expr, sym: sympy.Symbol) -> None:
         self._expr = expr
         self._sym = sym
@@ -35,7 +37,7 @@ class _Func1D(SymbolicFunction):
         return (self._sym,)
 
 
-class _Func2D(SymbolicFunction):
+class _Func2D(SymbolicFunction[Any, sympy.Expr]):
     def __init__(self, expr: sympy.Expr) -> None:
         self._expr = expr
 
@@ -147,7 +149,7 @@ def assert_cell_average_constant_1d() -> None:
     rh = CartesianRestrictionOperator(mesh)
     rf = rh(_Func1D(c, _x))
     for i in range(4):
-        assert sympy.simplify(rf((i,)) - c) == 0
+        assert sympy.simplify(rf((i,)) - c) == 0  # type: ignore[arg-type]
 
 
 def test_cell_average_constant_1d() -> None:
@@ -162,7 +164,7 @@ def assert_cell_average_linear_1d() -> None:
     rf = rh(_Func1D(_x, _x))
     for i in range(3):
         expected = a + (_H * i + _H / 2)
-        assert sympy.simplify(rf((i,)) - expected) == 0
+        assert sympy.simplify(rf((i,)) - expected) == 0  # type: ignore[arg-type]
 
 
 def test_cell_average_linear_1d() -> None:
@@ -177,7 +179,7 @@ def assert_cell_average_quadratic_1d() -> None:
     # ∫_{i*h}^{(i+1)*h} x² dx / h = h²(i² + i + 1/3)
     for i in range(2):
         expected = _H**2 * (i**2 + i + sympy.Rational(1, 3))
-        assert sympy.simplify(rf((i,)) - expected) == 0
+        assert sympy.simplify(rf((i,)) - expected) == 0  # type: ignore[arg-type]
 
 
 def test_cell_average_quadratic_1d() -> None:
@@ -195,7 +197,7 @@ def assert_cell_average_separable_2d() -> None:
         for j in range(2):
             cx = a + hx * i + hx / 2
             cy = b + hy * j + hy / 2
-            assert sympy.simplify(rf((i, j)) - cx * cy) == 0
+            assert sympy.simplify(rf((i, j)) - cx * cy) == 0  # type: ignore[arg-type]
 
 
 def test_cell_average_separable_2d() -> None:

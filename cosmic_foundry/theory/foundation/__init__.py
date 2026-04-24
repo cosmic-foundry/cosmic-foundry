@@ -13,7 +13,6 @@ from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
 from cosmic_foundry.theory.foundation.invertible_function import InvertibleFunction
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 from cosmic_foundry.theory.foundation.set import Set
-from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.foundation.topological_space import TopologicalSpace
 
 __all__ = [
@@ -24,6 +23,5 @@ __all__ = [
     "IndexedSet",
     "NumericFunction",
     "Set",
-    "SymbolicFunction",
     "TopologicalSpace",
 ]

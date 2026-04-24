@@ -1,4 +1,4 @@
-"""Tests for Point[M] typed field evaluation via Field.evaluate."""
+"""Tests for Point[M] typed field evaluation via Field.__call__."""
 
 from __future__ import annotations
 
@@ -35,19 +35,19 @@ class _ScalarField(Field[EuclideanManifold, sympy.Expr]):
         return self._manifold.symbols
 
 
-def test_evaluate_returns_correct_value() -> None:
+def test_call_returns_correct_value() -> None:
     m = _euclidean(2)
     field = _ScalarField(m)
     chart = m.atlas[0]
     p = Point(manifold=m, chart=chart, coords=(3, 4))
-    assert field.evaluate(p) == 25
+    assert field(p) == 25
 
 
-def test_evaluate_rejects_mismatched_chart() -> None:
+def test_call_rejects_mismatched_chart() -> None:
     m2 = _euclidean(2)
     m3 = _euclidean(3)
     field = _ScalarField(m2)
     wrong_chart = m3.atlas[0]
     p = Point(manifold=m3, chart=wrong_chart, coords=(1, 2, 3))
     with pytest.raises(ValueError, match="Chart mismatch"):
-        field.evaluate(p)
+        field(p)

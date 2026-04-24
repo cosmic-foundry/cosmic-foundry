@@ -8,10 +8,10 @@ from typing import Any
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.restriction_operator import RestrictionOperator
-from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
 
 
 class _CartesianCellAverage(MeshFunction[sympy.Expr]):
@@ -29,7 +29,10 @@ class _CartesianCellAverage(MeshFunction[sympy.Expr]):
     def mesh(self) -> CartesianMesh:
         return self._mesh
 
-    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:
+    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
+        # MeshFunction[V] is NumericFunction[Mesh, V], but discrete evaluation
+        # takes a cell-index tuple, not the Mesh object itself — the same
+        # phantom-D gap that Field had before Point[M].  Pre-C3 fix: CellIndex[M].
         return self._values[idx]
 
 
@@ -53,7 +56,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
     def mesh(self) -> Mesh:
         return self._mesh
 
-    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:
+    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:  # type: ignore[override]
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):

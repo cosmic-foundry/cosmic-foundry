@@ -161,7 +161,7 @@ class _SchwarzschildChart(Chart[SchwarzschildManifold, SchwarzschildManifold]):
     def inverse(self) -> _SchwarzschildChart:
         raise NotImplementedError("inverse chart not yet implemented")
 
-    def __call__(self, *args: Any, **kwargs: Any) -> SchwarzschildManifold:
+    def __call__(self, x: SchwarzschildManifold) -> SchwarzschildManifold:
         raise NotImplementedError("point-to-coordinate map not yet implemented")
 
 

@@ -26,7 +26,7 @@ class NumericFunction(Function[D, C], Generic[D, C]):
     """
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __call__(self, x: D) -> C: ...
 
     @property
     def symbolic(self) -> Any:

@@ -179,9 +179,11 @@ class CartesianChart(Chart[EuclideanManifold, EuclideanManifold]):
         """Ordered coordinate symbols (x, y, …) for this chart."""
         return self._manifold.symbols
 
-    def __call__(self, *args: Any, **kwargs: Any) -> tuple[Any, ...]:  # type: ignore[override]
+    def __call__(self, x: EuclideanManifold) -> tuple[Any, ...]:  # type: ignore[override]
         """Apply the identity map: return coordinates unchanged."""
-        return args
+        raise NotImplementedError(
+            "coordinate extraction requires a Point, not a bare manifold"
+        )
 
 
 class _CartesianAtlas(Atlas):
