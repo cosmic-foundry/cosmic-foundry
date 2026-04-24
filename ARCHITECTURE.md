@@ -114,11 +114,6 @@ DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: 
                                                not derivable from bare DifferentialOperator.
                                                free: flux: Function[Field, TensorField], source: Field
                                                derived: order = 1
-    ├── ConservationLaw                      — ∂ₜU + ∇·F(U) = S; F algebraic in U (hyperbolic).
-    │                                          Example: Euler, F = (ρv, ρv⊗v + pI, (E+p)v).
-    │                                          The ∂ₜ term is handled by the time integrator
-    │                                          (Epoch 2), not by this object.
-    │                                          Stable through Epoch 10.
     └── PoissonEquation                      — -∇²φ = ρ; earned by: derived flux = -∇(·).
                                                The sign convention (flux = -∇φ, not +∇φ) ensures
                                                the discrete operator is positive definite (see C4, C5).
@@ -133,14 +128,14 @@ Constraint(ABC)                       — interface: support → Manifold
     └── NonLocalBoundaryCondition     — constraint depends on values outside the immediate neighborhood
 ```
 
-**`DivergenceFormEquation` subclass justification.** `ConservationLaw` earns
-its class as the standard structure for hyperbolic systems (F algebraic in U);
-it is a named mathematical concept in the literature, not a PDE-classification
-marker. `PoissonEquation` earns its class by deriving `flux = -∇(·)`, removing
-a free parameter from `DivergenceFormEquation`. Intermediate classification
-ABCs (Elliptic, Parabolic, Hyperbolic as siblings) were considered and rejected:
-none adds a derived property or type narrowing that mypy can check, so none
-earns a class by the falsifiable-constraint rule.
+**`DivergenceFormEquation` subclass justification.** `PoissonEquation` earns
+its class by deriving `flux = -∇(·)`, removing a free parameter from
+`DivergenceFormEquation`. Classification ABCs (Elliptic, Parabolic, Hyperbolic,
+ConservationLaw) were considered and rejected: none adds a derived property or
+type narrowing that mypy can check — "F algebraic in U" and positivity of the
+principal symbol are runtime mathematical properties, not structural constraints
+expressible in the type hierarchy. None earns a class by the
+falsifiable-constraint rule.
 
 **`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
 covers Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin via the
@@ -166,12 +161,11 @@ belong to. Example: `Chart`, `Atlas`, `Diffeomorphism` in `manifold.py`;
 `MetricTensor`, `RiemannianManifold` in `pseudo_riemannian_manifold.py`.
 
 **`DivergenceFormEquation` and its subtypes are spatial only.** `∂ₜ` is
-handled by the time integrator (Epoch 2), not by these objects. For
-`ConservationLaw` specifically, this separation is preserved under the 3+1
-ADM decomposition: in GR, covariant equations `∇_μ F^μ = S` decompose to
-`∂ₜ(√γ U) + ∂ᵢ(√γ Fⁱ) = √γ S(α, β, γᵢⱼ, Kᵢⱼ)` — still a spatial
-divergence operator with metric factors entering through the `Chart` and
-curvature terms in `source`. `ConservationLaw` is stable through Epoch 10.
+handled by the time integrator (Epoch 2), not by these objects. This separation
+is preserved under the 3+1 ADM decomposition: in GR, covariant equations
+`∇_μ F^μ = S` decompose to `∂ₜ(√γ U) + ∂ᵢ(√γ Fⁱ) = √γ S(α, β, γᵢⱼ, Kᵢⱼ)`
+— still a spatial divergence operator with metric factors entering through the
+`Chart` and curvature terms in `source`.
 
 **Planned additions** (Epoch 10)
 
@@ -255,9 +249,9 @@ the cell decomposition. FDM and FEM are also derivable from this foundation:
 **Planned additions (Epoch 1 — Discrete operators):**
 
 ```
-Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
+Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
                             — free: mesh: Mesh
-                              maps a ConservationLaw to a DiscreteOperator;
+                              maps a DivergenceFormEquation to a DiscreteOperator;
                               encapsulates the scheme choice (reconstruction,
                               numerical flux, quadrature, boundary condition).
                               Defined by the commutation diagram:
@@ -274,9 +268,9 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                               by Lanes B and C.
                               Formally separate from Rₕ: Rₕ projects field values
                               (Function → MeshFunction); Discretization projects
-                              operators (ConservationLaw → DiscreteOperator).
+                              operators (DivergenceFormEquation → DiscreteOperator).
 └── FVMDiscretization       — free: mesh, numerical_flux, boundary_condition
-                              concrete FVM scheme; generic over ConservationLaw.
+                              concrete FVM scheme; generic over DivergenceFormEquation.
                               For each cell Ωᵢ, evaluates ∮_∂Ωᵢ F·n̂ dA by
                               delegating to the NumericalFlux at each face; BC
                               enters through boundary_condition (see below).
@@ -435,21 +429,20 @@ analytic solution. The sprint is structured as eight PRs (C1–C8); each earns
 its scope by a Lane C symbolic derivation and each introduces only objects
 justified by a falsifiable constraint. The ambition is not "a working
 Poisson solver" — it is the reusable FVM machinery the rest of the engine
-is built on. Epoch 4 (hydro) swaps the `ConservationLaw` and the
-`NumericalFlux`; the `FVMDiscretization` and `BoundaryCondition` machinery
-is unchanged. `LinearSolver` is NOT part of the Epoch 4 reuse: the Euler
+is built on. Epoch 4 (hydro) supplies a concrete `DivergenceFormEquation` for the Euler
+equations and swaps the `NumericalFlux`; the `FVMDiscretization` and
+`BoundaryCondition` machinery is unchanged. `LinearSolver` is NOT part of the Epoch 4 reuse: the Euler
 equations are nonlinear and require a separate `NonlinearSolver`.
 
 **C1 — Continuous progenitors. ✓** Added `GradientOperator(DifferentialOperator)`
 (derived `order = 1`) and `DivergenceFormEquation(DifferentialOperator)` as the
-parent for all divergence-form PDEs. `ConservationLaw` now subclasses
-`DivergenceFormEquation`. `PoissonEquation(DivergenceFormEquation)` is an ABC
-with `flux = -∇(·)` derived and `manifold`/`source` abstract; it earns its
-class by fixing the flux, removing a degree of freedom from
-`DivergenceFormEquation`. `Discretization` type parameter updated from
-`ConservationLaw` to `DivergenceFormEquation`. Intermediate classification ABCs
-(Elliptic, Parabolic, Hyperbolic as siblings) were not introduced: none earns a
-class by the falsifiable-constraint rule. Lane C verified: `∇·(-∇φ) = -∇²φ = ρ`
+parent for all divergence-form PDEs. `PoissonEquation(DivergenceFormEquation)`
+is an ABC with `flux = -∇(·)` derived and `manifold`/`source` abstract; it
+earns its class by fixing the flux, removing a degree of freedom from
+`DivergenceFormEquation`. Classification ABCs (Elliptic, Parabolic, Hyperbolic,
+ConservationLaw) were not introduced: none earns a class by the
+falsifiable-constraint rule — all such constraints are runtime mathematical
+properties, not type-hierarchy constraints. Lane C verified: `∇·(-∇φ) = -∇²φ = ρ`
 symbolically in `tests/test_poisson_equation.py`.
 
 **C2 — Full chain complex on `CartesianMesh`.** Extend
@@ -489,7 +482,7 @@ solver, while `DiffusiveFlux(order)` does not).
 
 **C4 — Generic `FVMDiscretization` with commutation Lane C.** Introduce
 `FVMDiscretization(mesh, numerical_flux, boundary_condition)`; it is
-generic over `ConservationLaw` — not Poisson-specific. The produced
+generic over `DivergenceFormEquation` — not Poisson-specific. The produced
 `DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f NF(U, f)` where `NF`
 is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
 law's flux function baked into `NF`. BC enters via the constructor parameter
@@ -763,7 +756,7 @@ across all validation pages, but not introduced as one-off code here.
 
 | Epoch | Layer | Capability |
 |-------|-------|------------|
-| 1 | Discrete | **Discrete operators and first Poisson solver.** `DivergenceFormEquation` hierarchy in `continuous/` (`EllipticEquation`, `ParabolicEquation`, `ConservationLaw`). `Discretization` ABC + generic `FVMDiscretization(mesh, numerical_flux, boundary_condition)`. `NumericalFlux` family (`DiffusiveFlux` for Epoch 1; `HyperbolicFlux` for Epoch 4); order = min(reconstruction, face-quadrature, deconvolution) — all three independently verified. `LinearSolver` with `DenseJacobiSolver` (hand-rolled, dense, no LAPACK); scoped to linear operators only. Boundary conditions via discretization constructor. Truncation error proved symbolically; convergence verified against `sin(πx)sin(πy)`. FVM machinery reused in Epoch 4 by swapping `ConservationLaw` and `NumericalFlux`; `LinearSolver` is *not* reused (Euler is nonlinear). |
+| 1 | Discrete | **Discrete operators and first Poisson solver.** `DivergenceFormEquation` hierarchy in `continuous/` (`PoissonEquation`). `Discretization` ABC + generic `FVMDiscretization(mesh, numerical_flux, boundary_condition)`. `NumericalFlux` family (`DiffusiveFlux` for Epoch 1; `HyperbolicFlux` for Epoch 4); order = min(reconstruction, face-quadrature, deconvolution) — all three independently verified. `LinearSolver` with `DenseJacobiSolver` (hand-rolled, dense, no LAPACK); scoped to linear operators only. Boundary conditions via discretization constructor. Truncation error proved symbolically; convergence verified against `sin(πx)sin(πy)`. FVM machinery reused in Epoch 4 by supplying a concrete Euler `DivergenceFormEquation` and swapping `NumericalFlux`; `LinearSolver` is *not* reused (Euler is nonlinear). |
 | 2 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
 ### Physics epochs
