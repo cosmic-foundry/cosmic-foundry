@@ -16,8 +16,13 @@ class Point(Generic[M]):
 
     A manifold point is chart-independent mathematically, but to compute with
     it you must choose a chart and record which one.  Point carries both so
-    that Field.evaluate can verify the chart matches the field's symbols and
-    perform the correct substitution.
+    that SymbolicFunction.__call__ can verify the chart matches the field's
+    symbols and perform the correct substitution.
+
+    frozen=True makes Point hashable so it can be used as a dict key or in
+    sets — e.g. to cache field evaluations at grid nodes.  All fields must
+    themselves be hashable for this to work in practice (coords should be
+    SymPy expressions or Python scalars, not mutable containers).
 
     Required:
         manifold — the manifold this point belongs to

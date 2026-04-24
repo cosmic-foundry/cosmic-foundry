@@ -16,7 +16,7 @@ D = TypeVar("D")  # Domain manifold type
 C = TypeVar("C")  # Codomain value type
 
 
-class Field(SymbolicFunction[D, C]):
+class Field(SymbolicFunction[D, C], Generic[D, C]):
     """Abstract base for all fields: f: M → V.
 
     A field assigns a value in V to every point in a manifold M.  D is the

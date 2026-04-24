@@ -43,7 +43,11 @@ def test_call_returns_correct_value() -> None:
     assert field(p) == 25
 
 
-def test_call_rejects_mismatched_chart() -> None:
+def test_call_rejects_wrong_dimension_chart() -> None:
+    # Tests the runtime symbol-tuple check: m3's chart has symbols (x, y, z)
+    # while the 2D field expects (x, y).  Cross-manifold (EuclideanManifold vs
+    # SchwarzschildManifold of the same ndim) is caught at the mypy level via
+    # Point[M] type parameter, not at runtime, because symbol names can collide.
     m2 = _euclidean(2)
     m3 = _euclidean(3)
     field = _ScalarField(m2)

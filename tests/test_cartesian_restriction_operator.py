@@ -24,6 +24,10 @@ _H = sympy.Symbol("h", positive=True)
 
 
 class _Func1D(SymbolicFunction[Any, sympy.Expr]):
+    # Any as M because CartesianRestrictionOperator calls f.expr and f.symbols
+    # directly, bypassing the Point interface — these helpers have no manifold.
+    # Once RestrictionOperator.__call__ is reparameterized in C3, these will
+    # carry a real manifold type and route through field(Point(...)) normally.
     def __init__(self, expr: sympy.Expr, sym: sympy.Symbol) -> None:
         self._expr = expr
         self._sym = sym

@@ -30,9 +30,10 @@ class _CartesianCellAverage(MeshFunction[sympy.Expr]):
         return self._mesh
 
     def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
-        # MeshFunction[V] is NumericFunction[Mesh, V], but discrete evaluation
-        # takes a cell-index tuple, not the Mesh object itself — the same
-        # phantom-D gap that Field had before Point[M].  Pre-C3 fix: CellIndex[M].
+        # LSP violation: MeshFunction inherits NumericFunction[Mesh, V] whose
+        # __call__ takes a Mesh, not a cell index.  Discrete evaluation should
+        # take a typed CellIndex[M]; that narrowing is deferred to C3.  The
+        # override is intentional and documented here; suppressed via type: ignore.
         return self._values[idx]
 
 
@@ -56,7 +57,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
     def mesh(self) -> Mesh:
         return self._mesh
 
-    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:  # type: ignore[override]
+    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:  # type: ignore[override]  # LSP: RestrictionOperator.__call__ takes (M, V) not SymbolicFunction; deferred to C3
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):

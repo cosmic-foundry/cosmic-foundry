@@ -43,6 +43,11 @@ class SymbolicFunction(Function[Point[M], C], Generic[M, C]):
                 f"Chart mismatch: point uses chart with symbols "
                 f"{point.chart.symbols}, but field expects {self.symbols}"
             )
+        if len(point.coords) != len(self.symbols):
+            raise ValueError(
+                f"Coordinate count mismatch: point has {len(point.coords)} "
+                f"coordinate(s) but field expects {len(self.symbols)}"
+            )
         return self.expr.subs(zip(self.symbols, point.coords, strict=False))  # type: ignore[no-any-return]
 
 

@@ -482,18 +482,20 @@ well-founded:
    matters: a field's domain is the manifold M as a whole; the evaluation input
    is a point on M expressed in some chart.  These are different concepts.
    `Field.manifold -> D` returns the manifold object (domain in the
-   field-theoretic sense); `Field.evaluate(point: Point[D]) -> C` accepts a
-   typed `Point[D]` carrying the manifold, chart, and coordinates.  `Point[M]`
-   is a frozen dataclass in `theory/continuous/point.py` with fields `manifold:
-   M`, `chart: Chart[M, Any]`, and `coords: tuple[Any, ...]`.  The chart is
+   field-theoretic sense); `field(point: Point[D]) -> C` evaluates via
+   `__call__`, which accepts a typed `Point[D]` carrying the manifold, chart,
+   and coordinates.  `Point[M]` is a frozen dataclass in
+   `theory/continuous/point.py` with fields `manifold: M`,
+   `chart: Chart[M, Any]`, and `coords: tuple[Any, ...]`.  The chart is
    required so that evaluation can verify `point.chart.symbols == field.symbols`
    and raise `ValueError` on mismatch — catching cross-chart evaluation at
    runtime, and cross-manifold evaluation at the mypy level (a
    `Point[SchwarzschildManifold]` is rejected by mypy when passed to a
-   `Field[EuclideanManifold, ...]`).  `SymbolicFunction.__call__(*args: Any)`
-   remains unchanged at the foundation layer (it is a general symbolic function
-   interface, not specific to fields); the typed evaluation surface lives on
-   `Field` at the continuous layer where `Point` and `Chart` are available.
+   `Field[EuclideanManifold, ...]`).  `SymbolicFunction` was moved from
+   `theory/foundation/` to `theory/continuous/` (it depends on `Point` and
+   `Chart`) and its `__call__` was tightened from `*args: Any` to
+   `point: Point[M]`; `Function.__call__` at the foundation layer remains the
+   generic `x: D` interface.
 
 2. **Form-degree value types.**  `C` in `Field[D, C]` varies by tensor type:
    `sympy.Expr` for scalars, `tuple[sympy.Expr, ...]` for covectors, a matrix

@@ -180,9 +180,15 @@ class CartesianChart(Chart[EuclideanManifold, EuclideanManifold]):
         return self._manifold.symbols
 
     def __call__(self, x: EuclideanManifold) -> tuple[Any, ...]:  # type: ignore[override]
-        """Apply the identity map: return coordinates unchanged."""
+        # LSP violation: Chart.__call__ is defined as (D) -> C, i.e. taking
+        # a manifold object, but a chart's actual job is to assign coordinates
+        # to a point — and points live in theory/continuous/point.py which is
+        # above this layer.  The correct signature is __call__(Point[M]) once
+        # C2 resolves the Chart.__call__ design (see ARCHITECTURE.md item 2).
+        # For now CartesianChart.symbols is the primary API; __call__ is a stub.
         raise NotImplementedError(
-            "coordinate extraction requires a Point, not a bare manifold"
+            "CartesianChart.__call__ is a stub: use Point + SymbolicFunction.__call__ "
+            "to evaluate fields at coordinates (see ARCHITECTURE.md C2)."
         )
 
 
