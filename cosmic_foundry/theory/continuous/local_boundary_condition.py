@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import Any
 
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.field import Field
@@ -42,7 +43,7 @@ class LocalBoundaryCondition(BoundaryCondition):
 
     @property
     @abstractmethod
-    def constraint(self) -> Field:
+    def constraint(self) -> Field[Manifold, Any]:
         """The prescribed boundary data g in α·f + β·∂f/∂n = g."""
 
     @property

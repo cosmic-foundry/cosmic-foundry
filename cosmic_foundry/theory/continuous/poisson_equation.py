@@ -24,7 +24,7 @@ class _NegatedGradientField(TensorField[Any, sympy.Expr]):
     component(i) returns the i-th component -∂f/∂xᵢ.
     """
 
-    def __init__(self, field: Field) -> None:
+    def __init__(self, field: Field[Manifold, sympy.Expr]) -> None:
         self._source = field
         self._components = tuple(-sympy.diff(field.expr, s) for s in field.symbols)
 

@@ -477,14 +477,23 @@ an instance of the codomain type `C`.
 Three decisions must be made before the type hierarchy can be considered
 well-founded:
 
-1. **The point type.**  What is the Python type of a manifold point — the input
-   to a field evaluation?  Options: (a) introduce `Point[M]` as a typed
-   coordinate carrier so `Field[Point[M], C].__call__` takes a `Point[M]` and
-   returns `C`; (b) accept `D = Any` permanently and document that symbolic
-   evaluation is coordinate-tuple-driven and untyped at the domain level;
-   (c) defer to Epoch 2, where `jax.Array` becomes the concrete point type and
-   D becomes real in the numerical layer.  The choice determines whether D is
-   meaningful in the symbolic layer at all.
+1. **The point type. ✓ Resolved.**  `D` in `Field[D, C]` is the manifold type
+   (e.g. `EuclideanManifold`), not a coordinate-tuple type.  The distinction
+   matters: a field's domain is the manifold M as a whole; the evaluation input
+   is a point on M expressed in some chart.  These are different concepts.
+   `Field.manifold -> D` returns the manifold object (domain in the
+   field-theoretic sense); `Field.evaluate(point: Point[D]) -> C` accepts a
+   typed `Point[D]` carrying the manifold, chart, and coordinates.  `Point[M]`
+   is a frozen dataclass in `theory/continuous/point.py` with fields `manifold:
+   M`, `chart: Chart[M, Any]`, and `coords: tuple[Any, ...]`.  The chart is
+   required so that evaluation can verify `point.chart.symbols == field.symbols`
+   and raise `ValueError` on mismatch — catching cross-chart evaluation at
+   runtime, and cross-manifold evaluation at the mypy level (a
+   `Point[SchwarzschildManifold]` is rejected by mypy when passed to a
+   `Field[EuclideanManifold, ...]`).  `SymbolicFunction.__call__(*args: Any)`
+   remains unchanged at the foundation layer (it is a general symbolic function
+   interface, not specific to fields); the typed evaluation surface lives on
+   `Field` at the continuous layer where `Point` and `Chart` are available.
 
 2. **Form-degree value types.**  `C` in `Field[D, C]` varies by tensor type:
    `sympy.Expr` for scalars, `tuple[sympy.Expr, ...]` for covectors, a matrix
@@ -505,8 +514,9 @@ well-founded:
    `OneForm` (valid on Riemannian manifolds via the metric isomorphism) or must
    remain `TensorField` for rank-2 flux tensors in systems.
 
-All four decisions (data structure + the three above) must be recorded in
-ARCHITECTURE.md before C2 is opened.
+All three remaining decisions (data structure + form-degree value types +
+`DivergenceFormEquation` consequent) must be recorded in ARCHITECTURE.md
+before C2 is opened.
 
 **C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
 Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete
