@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
@@ -11,7 +11,7 @@ from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 V = TypeVar("V")
 
 
-class MeshFunction(NumericFunction[Mesh, V], Generic[V]):
+class MeshFunction(NumericFunction[Mesh, V]):
     """A value assignment to mesh elements: cells, faces, or vertices.
 
     A MeshFunction is a NumericFunction whose domain is a Mesh.  It earns

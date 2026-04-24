@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from cosmic_foundry.theory.continuous.field import Field
 from cosmic_foundry.theory.continuous.manifold import Manifold
@@ -12,7 +12,7 @@ from cosmic_foundry.theory.foundation.function import Function
 _C = TypeVar("_C", bound=Field)
 
 
-class DifferentialOperator(Function[Field, _C], Generic[_C]):
+class DifferentialOperator(Function[Field, _C]):
     """Abstract base for differential operators L: Field → Field.
 
     A differential operator of order r maps smooth fields on a manifold

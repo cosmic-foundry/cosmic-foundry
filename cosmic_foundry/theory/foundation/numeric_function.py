@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from cosmic_foundry.theory.foundation.function import Function
 
@@ -11,7 +11,7 @@ D = TypeVar("D")
 C = TypeVar("C")
 
 
-class NumericFunction(Function[D, C], Generic[D, C]):
+class NumericFunction(Function[D, C]):
     """A Function implemented procedurally, with an optional symbolic counterpart.
 
     Declares the refinement relationship to a SymbolicFunction where the

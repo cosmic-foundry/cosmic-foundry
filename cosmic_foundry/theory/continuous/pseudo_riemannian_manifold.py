@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic
 
 from cosmic_foundry.theory.continuous.field import C, D, SymmetricTensorField
 from cosmic_foundry.theory.continuous.manifold import Manifold
@@ -72,7 +71,7 @@ class RiemannianManifold(PseudoRiemannianManifold):  # noqa: B024
         return (self.ndim, 0)
 
 
-class MetricTensor(SymmetricTensorField[D, C], Generic[D, C]):  # noqa: B024
+class MetricTensor(SymmetricTensorField[D, C]):  # noqa: B024
     """The metric tensor g on a pseudo-Riemannian manifold (M, g).
 
     g is a smoothly-varying non-degenerate symmetric (0,2)-tensor field.

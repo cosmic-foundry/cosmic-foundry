@@ -23,7 +23,7 @@ C = TypeVar("C")
 M = TypeVar("M")
 
 
-class Diffeomorphism(Homeomorphism[D, C], Generic[D, C]):
+class Diffeomorphism(Homeomorphism[D, C]):
     """A smooth bijection between manifolds with a smooth inverse: φ: U → V.
 
     A diffeomorphism is a homeomorphism whose forward map and inverse are
@@ -55,7 +55,7 @@ class Diffeomorphism(Homeomorphism[D, C], Generic[D, C]):
         """The smooth inverse φ⁻¹: V → U."""
 
 
-class Chart(Diffeomorphism[D, C], Generic[D, C]):
+class Chart(Diffeomorphism[D, C]):
     """A local coordinate system on a smooth manifold: φ: U → V.
 
     A chart maps an open subset U of a manifold M diffeomorphically onto an
