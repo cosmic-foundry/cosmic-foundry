@@ -492,18 +492,21 @@ good name already says it. Before skipping a test case, write it anyway.
 
 ## Docstring conventions
 
-Docstrings serve two audiences: (1) experts reviewing the mathematical rigor
-and (2) practitioners implementing or using the code. Both matter. Structure
-docstrings in two parts, in order:
+Docstrings serve multiple purposes: establishing the mathematical contract,
+educating readers without formal training, and guiding practical use. Structure
+docstrings in three parts, in order:
 
-**Part 1: Technical definition.** State what the object IS and DOES using
-mathematically rigorous language. Name function spaces, norms, and types
-explicitly.
+**Part 1: Formal mathematical definition.** State what the object IS and DOES
+using mathematically rigorous language. Name function spaces, norms, and types
+explicitly. This is the contract reviewers check.
 
-**Part 2: Practical context.** Explain what this means at the level of a
+**Part 2: Informal explanation.** Restate what Part 1 says at the level of a
 bright physics graduate student (strong practical calculus, no formal
-functional analysis assumed). Why does this choice matter? What breaks if
-someone misuses it?
+functional analysis assumed). Remove the heavy notation; explain the intuition.
+
+**Part 3: Practical context.** How is this used in the code? Why does this
+choice matter? What breaks if someone misuses it? When should I use this vs.
+a simpler alternative?
 
 Example:
 
@@ -511,22 +514,21 @@ Example:
 def inner_product_L2h(u, v, mesh):
     """Discrete L² inner product on mesh cell averages.
 
-    Returns ⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ, where |Ωᵢ| is the cell volume and
-    uᵢ, vᵢ are cell-average values. This is the norm in which FVM
-    convergence proofs are stated; discrete operators are symmetric and
-    positive-definite with respect to this pairing, not the Euclidean dot
-    product.
+    ⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ, where |Ωᵢ| is the cell volume and
+    uᵢ, vᵢ are cell-average values. This is the norm in which FVM convergence
+    proofs are stated; discrete operators are symmetric and positive-definite
+    with respect to this pairing, not the Euclidean dot product.
 
-    In practice: use this when verifying operator symmetry or testing
-    convergence. DO NOT use numpy's dot product for these checks — the
-    cell volumes matter. If the mesh is uniform (constant Δx), the two
-    norms are proportional, but non-uniform meshes expose the difference.
+    In plain terms: multiply corresponding values at each cell, scale by the
+    cell's volume, and sum. This gives more weight to larger cells, which
+    matches the physics: a large cell has more influence on the solution.
+
+    Use this when verifying operator symmetry or testing convergence. DO NOT
+    use numpy's dot product — the cell volumes must be included. If the mesh
+    is uniform (constant Δx), the two norms are proportional; non-uniform
+    meshes expose the difference.
     """
 ```
-
-**Why both?** Part 1 is the contract: reviewers check that the implementation
-satisfies it. Part 2 prevents misuse: users understand when this object is
-the right tool and when a simpler alternative suffices.
 
 **Present tense only.** Describe current design, not historical decisions.
 "This replaces the raw kwargs-passing from version 2" belongs in the commit
