@@ -105,9 +105,7 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     │   └── MetricTensor             — see above
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
 
-DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold, order
-├── GradientOperator                         — ∇: scalar Field → (0,1) TensorField;
-│                                              earned by: derived order = 1
+DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifold, order
 └── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
                                                earned by: integral form ∮_∂Ωᵢ F·n dA = ∫_Ωᵢ S dV
                                                is fully determined by flux + divergence theorem,
@@ -119,7 +117,8 @@ DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: 
                                                the discrete operator is positive definite (see C4, C5).
                                                free: manifold, source; derived: flux = -∇(·), order = 1.
                                                There is no LaplaceOperator class: -∇²φ = -∇·∇φ is
-                                               derivable from GradientOperator and the flux field.
+                                               the divergence of the flux field -∇φ; fully
+                                               captured by the flux + divergence theorem.
 
 Constraint(ABC)                       — interface: support → Manifold
 └── BoundaryCondition                 — support is ∂M
@@ -434,16 +433,17 @@ equations and swaps the `NumericalFlux`; the `FVMDiscretization` and
 `BoundaryCondition` machinery is unchanged. `LinearSolver` is NOT part of the Epoch 4 reuse: the Euler
 equations are nonlinear and require a separate `NonlinearSolver`.
 
-**C1 — Continuous progenitors. ✓** Added `GradientOperator(DifferentialOperator)`
-(derived `order = 1`) and `DivergenceFormEquation(DifferentialOperator)` as the
-parent for all divergence-form PDEs. `PoissonEquation(DivergenceFormEquation)`
+**C1 — Continuous progenitors. ✓** Added `DivergenceFormEquation(DifferentialOperator)`
+as the parent for all divergence-form PDEs. `PoissonEquation(DivergenceFormEquation)`
 is an ABC with `flux = -∇(·)` derived and `manifold`/`source` abstract; it
 earns its class by fixing the flux, removing a degree of freedom from
 `DivergenceFormEquation`. Classification ABCs (Elliptic, Parabolic, Hyperbolic,
-ConservationLaw) were not introduced: none earns a class by the
-falsifiable-constraint rule — all such constraints are runtime mathematical
-properties, not type-hierarchy constraints. Lane C verified: `∇·(-∇φ) = -∇²φ = ρ`
-symbolically in `tests/test_poisson_equation.py`.
+ConservationLaw) and named operator ABCs (`GradientOperator`) were not
+introduced: none earns a class by the falsifiable-constraint rule — the
+identifying constraints (principal symbol structure, form degree) are beyond
+Python's type system and are deferred to the form-degree redesign (see pre-C2
+open question). Lane C verified: `∇·(-∇φ) = -∇²φ = ρ` symbolically in
+`tests/test_poisson_equation.py`.
 
 **C2 — Full chain complex on `CartesianMesh`.** Extend
 `CartesianMesh.boundary(k)` to all k ∈ [1, n]; verify `∂_{k−1} ∘ ∂_k = 0`
@@ -453,12 +453,25 @@ signed incidence from `boundary(n)`; the lower-k operators are carried
 because `CellComplex` earns its class by `∂² = 0` everywhere, not only at
 the top dimension. Lane C.
 
-**Open question before C2 can open.** A 3-D Cartesian grid has three disjoint
-`IndexedSet`s of faces (one per axis orientation). The existing
-`CellComplex.complex[k] → Set` signature has not been examined for whether
-`Set` can represent this disjoint union, or whether a richer return type is
-needed for k < n. This data-structure question must be answered and the
-decision recorded in ARCHITECTURE.md before C2 is opened.
+**Open questions before C2 can open.**
+
+*Data structure.* A 3-D Cartesian grid has three disjoint `IndexedSet`s of
+faces (one per axis orientation). The existing `CellComplex.complex[k] → Set`
+signature has not been examined for whether `Set` can represent this disjoint
+union, or whether a richer return type is needed for k < n.
+
+*Form-degree type system.* Named differential operators (`GradientOperator`,
+`CurlOperator`, `DivergenceOperator`) cannot be formally characterized by
+`DifferentialOperator` as currently defined: the identifying constraint is the
+principal symbol structure, which is beyond Python's type system. The correct
+approach is to introduce named form-degree classes (`ZeroForm`, `OneForm`,
+`TwoForm`, ...) as concrete subclasses of `DifferentialForm`, each deriving
+`degree`; and to reparameterize `DifferentialOperator` from `Function[Field, _C]`
+to `Function[_D, _C]` so that, e.g., the exterior derivative on 1-forms (curl)
+can be typed as `Function[OneForm, TwoForm]`. Under this design, named operator
+ABCs earn their classes via domain/codomain type narrowing, and Lane C tests
+verify that concrete implementations compute the correct mathematical operation.
+Both decisions must be made and recorded in ARCHITECTURE.md before C2 is opened.
 
 **C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
 Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete

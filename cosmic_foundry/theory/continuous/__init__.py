@@ -18,7 +18,6 @@ from cosmic_foundry.theory.continuous.field import (
     SymmetricTensorField,
     TensorField,
 )
-from cosmic_foundry.theory.continuous.gradient_operator import GradientOperator
 from cosmic_foundry.theory.continuous.local_boundary_condition import (
     LocalBoundaryCondition,
 )
@@ -49,7 +48,6 @@ __all__ = [
     "DifferentialOperator",
     "DivergenceFormEquation",
     "Field",
-    "GradientOperator",
     "LocalBoundaryCondition",
     "Manifold",
     "MetricTensor",

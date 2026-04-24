@@ -103,9 +103,9 @@ class PoissonEquation(DivergenceFormEquation):
     not +∇φ) ensures the discrete operator assembled by FVMDiscretization
     is positive definite — see C4 and C5.
 
-    There is no LaplaceOperator class: -∇²φ = -∇·∇φ is derivable from
-    GradientOperator and the flux field, so it does not earn a class under
-    the falsifiable-constraint rule.
+    There is no LaplaceOperator class: -∇²φ = -∇·∇φ is fully captured by
+    the flux field -∇φ and the divergence theorem; it does not earn a class
+    under the falsifiable-constraint rule.
 
     PoissonEquation earns its class by deriving flux = -∇(·): the flux
     degree of freedom present in DivergenceFormEquation is removed.
