@@ -226,7 +226,7 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                             — free: mesh: Mesh
                               maps a ConservationLaw to a DiscreteOperator;
                               encapsulates the scheme choice (reconstruction,
-                              Riemann solver, quadrature).
+                              numerical flux, quadrature, boundary condition).
                               Defined by the commutation diagram:
                                 Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
                               The approximation order p is a property of the
@@ -238,6 +238,20 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                               Formally separate from Rₕ: Rₕ projects field values
                               (Function → MeshFunction); Discretization projects
                               operators (ConservationLaw → DiscreteOperator).
+└── FVMDiscretization       — free: mesh, reconstruction, boundary_condition
+                              concrete FVM scheme; generic over ConservationLaw.
+                              For each cell Ωᵢ, evaluates ∮_∂Ωᵢ F·n̂ dA by
+                              composing the conservation law's flux function with
+                              a FaceReconstruction at each face of Ωᵢ; the BC
+                              enters through boundary_condition (see below).
+                              Not specialized to any particular conservation law:
+                              the same class produces the Poisson operator in
+                              Epoch 1 (flux = ∇φ, linear reconstruction) and the
+                              Euler operator in Epoch 4 (flux = (ρv, ρv⊗v+pI,
+                              (E+p)v), MUSCL/PPM reconstruction with Riemann
+                              solver). Specializations belong in the flux
+                              function and the FaceReconstruction — not in a
+                              new Discretization subclass per equation.
 
 DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                             — the output of Discretization; the Lₕ that makes
@@ -246,7 +260,51 @@ DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                               output to the same mesh (operator.mesh == input.mesh ==
                               output.mesh), by analogy with DifferentialOperator.manifold.
                               Not independently constructed from stencil coefficients.
+
+FaceReconstruction          — free: order p
+                              reconstructs the values needed for face-flux
+                              evaluation from cell averages on a stencil around
+                              the face. The interface adapts per flux type:
+                              for linear diffusive flux (Poisson), reconstructs
+                              the face-centered gradient as a single value; for
+                              nonlinear hyperbolic flux (Euler), produces a
+                              two-sided state (U_L, U_R) that a Riemann solver
+                              consumes. Machine-checkable derivation (Lane C):
+                              symbolic Taylor expansion of the reconstruction
+                              against the progenitor face value yields leading
+                              error O(hᵖ) for smooth test functions.
+                              Epoch 1 concrete classes:
+                              CenteredDifferenceGradient(p=2),
+                              CenteredPolynomialGradient(p=4).
+                              Epoch 4 extends the family with MUSCL(p=2) and
+                              PPM(p=4) for hydro; the ABC is designed for that
+                              reuse from the outset.
+
+LinearSolver(NumericFunction[MeshFunction, MeshFunction])
+                            — given a DiscreteOperator Lₕ and rhs MeshFunction f,
+                              solves Lₕ u = f. Interface is general enough for
+                              matrix-free, sparse, and dense implementations; the
+                              choice is a concrete-class concern, not encoded in
+                              the abstract signature.
+                              Epoch 1 ships DenseDirectSolver first: assembles
+                              the dense matrix by applying Lₕ to unit MeshFunctions
+                              and calls LAPACK. Easiest to interpret, exact up to
+                              floating-point error, and the assembled matrix is a
+                              ground-truth reference for the sparse/matrix-free
+                              variants that follow. Iterative variants (CG,
+                              multigrid) land in Epoch 6 (self-gravity).
 ```
+
+**Boundary condition application (Option B, Epoch 1 decision).** `FVMDiscretization`
+takes the `BoundaryCondition` as a constructor parameter; the resulting
+`DiscreteOperator` is the discrete analog of `L` on the constrained function
+space `{φ : Bφ = g}`. This keeps the commutation diagram a property of a single
+operator, and lets the Epoch 6 multigrid ask the discretization for coarse
+operators rather than asking the operator for its BC. Not committed long-term:
+if time-dependent `g` arrives with Epoch 4 hydro (inflow/outflow BCs that change
+per step), BC can migrate to a solver-level parameter without breaking the
+interior-flux derivation — the interior `Lₕ` and the face-reconstruction family
+are independent of where BC is injected.
 
 ### geometry/
 
@@ -301,28 +359,67 @@ ingestion discipline for PDF-sourced defined constants is a separate decision.
 
 ## Current work
 
-**Discrete operators — Epoch 1.**
-`DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])` maps a `MeshFunction` to a
-`MeshFunction` and earns its class via `.mesh: Mesh` — constraining input and output to the
-same mesh, by analogy with `DifferentialOperator.manifold`.
-`Discretization(NumericFunction[ConservationLaw, DiscreteOperator])` is the scheme constructor:
-free parameter is `mesh: Mesh`; it produces the `DiscreteOperator` Lₕ making the commutation
-diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` hold to some order.  The approximation order is a property of
-the concrete scheme — proved by its convergence test — not a parameter of the abstract interface.
-The machine-checkable derivation required by Lane C: verify via SymPy that Taylor-expanding
-`Lₕ(Rₕ f) − Rₕ(Lf)` for a symbolic test function f yields a remainder whose leading term
-is `O(hᵖ)` for the order p the scheme claims.
+**Epoch 1 Poisson sprint.** The target is a working FVM Poisson solver on
+`CartesianMesh` with Dirichlet boundary conditions, verified against an
+analytic solution. The sprint is structured as six PRs (C1–C6); each earns
+its scope by a Lane C symbolic derivation and each introduces only objects
+justified by a falsifiable constraint. The ambition is not "a working
+Poisson solver" — it is the reusable FVM machinery the rest of the engine
+is built on. Epoch 4 (hydro) swaps the `ConservationLaw` and the
+`FaceReconstruction`; the `FVMDiscretization`, `LinearSolver`, and
+`BoundaryCondition` machinery is unchanged.
 
-**Concrete `Rₕ` and `CartesianMesh.boundary()`.** The `RestrictionOperator` ABC is in place;
-the concrete subclass for `CartesianMesh` integrates a `SymbolicFunction` analytically via SymPy:
-`(Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV`. `CartesianMesh.boundary(k)` (currently `NotImplementedError`)
-also lands here — it returns the signed face-incidence map needed to assemble FVM flux sums.
-Both are deferred from the discrete structure layer because their implementation pattern is shared
-with the truncation-error verification in the Lane C commutation check.
+**C1 — Continuous progenitors.** Add `GradientOperator(DifferentialOperator)`
+and `LaplaceOperator = Div ∘ Grad` in `theory/continuous/`; add
+`PoissonEquation(ConservationLaw)` with `flux = ∇φ`, `source = ρ`. Lane C:
+symbolic verification that the Cartesian-coordinate expansion of `∇²` equals
+`Σ_a ∂²/∂x_a²`, and that the divergence-theorem form of `PoissonEquation`
+recovers the standard `∇²φ = ρ` under the Cartesian chart. No discrete code.
 
-**First Poisson solver.** Target: a working second-order FVM discretization of `∇²φ = ρ` on
-a `CartesianMesh` with Dirichlet boundary conditions, verified against `φ = sin(πx)sin(πy)`
-via a convergence test demonstrating `O(h²)` error. Lane C (origination); the SymPy commutation check is the machine-checkable derivation.
+**C2 — Full chain complex on `CartesianMesh`.** Extend
+`CartesianMesh.boundary(k)` to all k ∈ [1, n]; verify `∂_{k−1} ∘ ∂_k = 0`
+symbolically in the `IndexedSet` of cells for n ∈ {1, 2, 3}. The face-sum
+machinery used by `FVMDiscretization` to assemble `∮_∂Ωᵢ F·n̂ dA` reads the
+signed incidence from `boundary(n)`; the lower-k operators are carried
+because `CellComplex` earns its class by `∂² = 0` everywhere, not only at
+the top dimension. Lane C.
+
+**C3 — `FaceReconstruction` family (p = 2 and p = 4 together).**
+Introduce the `FaceReconstruction` ABC and ship `CenteredDifferenceGradient`
+(p = 2, three-cell stencil) *and* `CenteredPolynomialGradient` (p = 4,
+five-cell stencil) in the same PR. Shipping both at once forces the ABC
+to actually generalize rather than codify the p = 2 case. Lane C per
+concrete class: symbolic Taylor expansion of the reconstructed face
+gradient against the exact face gradient of a smooth test function yields
+leading error O(hᵖ).
+
+**C4 — Generic `FVMDiscretization`.** Introduce
+`FVMDiscretization(mesh, reconstruction, boundary_condition)`; it is
+generic over `ConservationLaw` — not Poisson-specific. The produced
+`DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f F(recon(U, f)) · n̂_f |f|`
+where `F` comes from the conservation law's flux field and `recon` is
+the `FaceReconstruction`. BC enters via the constructor parameter (see
+"Boundary condition application" in `discrete/`). Lane C: verify the
+commutation diagram `Lₕ Rₕ ≈ Rₕ L` at order p for `PoissonEquation`
+paired with each of the two Epoch-1 reconstructions, symbolically.
+
+**C5 — `LinearSolver` hierarchy with dense direct solver.** Introduce the
+abstract `LinearSolver` interface and ship `DenseDirectSolver` as the first
+concrete class: assembles the dense matrix by applying `Lₕ` to unit
+`MeshFunction`s, then calls LAPACK. The assembled matrix is also the
+ground-truth reference used to verify matrix-free and sparse variants
+shipped later. Lane B: the solver reproduces, to floating-point precision,
+a MeshFunction pre-computed from a known-conditioning test operator.
+
+**C6 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
+(C1) + `CartesianMesh` with full chain complex (C2) + `FaceReconstruction`
+(C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
+`DenseDirectSolver` (C5) to solve `∇²φ = ρ` against the analytic solution
+`φ = sin(πx)sin(πy)` on the unit square. Convergence test at N ∈ {8, 16,
+32, 64}: O(h²) with `CenteredDifferenceGradient`, O(h⁴) with
+`CenteredPolynomialGradient`. This is the externally-grounded verification
+the epoch requires; the Lane C checks in C1–C4 are the derivation, C6
+is the proof that the derivation was implemented.
 
 ---
 
@@ -332,7 +429,7 @@ via a convergence test demonstrating `O(h²)` error. Lane C (origination); the S
 
 | Epoch | Layer | Capability |
 |-------|-------|------------|
-| 1 | Discrete | **Discrete operators.** `Discretization(NumericFunction[ConservationLaw, DiscreteOperator])`: maps conservation law + mesh + order to a `DiscreteOperator` via commutation diagram `Lₕ ∘ Rₕ ≈ Rₕ ∘ L` at `O(hᵖ)`; `DiscreteOperator` earns `.mesh: Mesh` (same-mesh constraint). Truncation error verified algebraically via SymPy. First working Poisson solver on `CartesianMesh`. |
+| 1 | Discrete | **Discrete operators and first Poisson solver.** `Discretization` ABC + generic `FVMDiscretization(mesh, reconstruction, boundary_condition)` that is not specialized to any particular conservation law. `FaceReconstruction` family parameterized by order p (Epoch 1 concrete classes at p = 2 and p = 4, shipped together to force the ABC to generalize). `LinearSolver` hierarchy accommodating matrix-free, sparse, and dense implementations; `DenseDirectSolver` ships first. Boundary conditions enter through the discretization's constructor (option B). Truncation error verified algebraically via SymPy (commutation diagram `Lₕ Rₕ ≈ Rₕ L` at `O(hᵖ)`); convergence verified against `sin(πx)sin(πy)`. The FVM machinery produced here is the foundation for Epoch 4 hydrodynamics — swapping `ConservationLaw` and `FaceReconstruction` (MUSCL/PPM) reuses the same `FVMDiscretization`, `LinearSolver`, and BC pipeline. |
 | 2 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
 ### Physics epochs
