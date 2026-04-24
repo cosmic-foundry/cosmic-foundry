@@ -19,7 +19,7 @@ from typing import Any
 import sympy
 
 from cosmic_foundry.theory.continuous.field import Field
-from cosmic_foundry.theory.continuous.manifold import Atlas, Chart, Manifold
+from cosmic_foundry.theory.continuous.manifold import Atlas, Chart, Manifold, Point
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     RiemannianManifold,
@@ -179,9 +179,13 @@ class CartesianChart(Chart[EuclideanManifold, EuclideanManifold]):
         """Ordered coordinate symbols (x, y, …) for this chart."""
         return self._manifold.symbols
 
-    def __call__(self, *args: Any, **kwargs: Any) -> tuple[Any, ...]:  # type: ignore[override]
-        """Apply the identity map: return coordinates unchanged."""
-        return args
+    def __call__(  # type: ignore[override]
+        self, point: Point[EuclideanManifold]
+    ) -> tuple[Any, ...]:
+        # Chart[EuclideanManifold, EuclideanManifold] declares C = EuclideanManifold,
+        # but a chart's image is a coordinate tuple.  Chart type parameters carry
+        # manifold types for domain/codomain; __call__ always returns tuple[Any, ...].
+        return point.coords
 
 
 class _CartesianAtlas(Atlas):

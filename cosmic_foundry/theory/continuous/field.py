@@ -10,22 +10,26 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Generic, TypeVar
 
-from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
+from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 
-D = TypeVar("D")  # Domain (point in manifold)
-C = TypeVar("C")  # Codomain (value type)
+D = TypeVar("D")  # Domain manifold type
+C = TypeVar("C")  # Codomain value type
 
 
-class Field(SymbolicFunction[D, C]):
+class Field(SymbolicFunction[D, C], Generic[D, C]):
     """Abstract base for all fields: f: M → V.
 
-    A field assigns a value in V to every point in a manifold M.
+    A field assigns a value in V to every point in a manifold M.  D is the
+    manifold type (e.g. EuclideanManifold); C is the value type (e.g.
+    sympy.Expr for scalar fields).
+
+    Evaluation: field(Point(manifold=m, chart=c, coords=(...))) → C.
+    The chart check and substitution are inherited from SymbolicFunction.__call__.
     """
 
     @property
     @abstractmethod
-    def manifold(self) -> Manifold:
+    def manifold(self) -> D:
         """The manifold on which this field is defined."""
 
 
@@ -35,11 +39,6 @@ class TensorField(Field[D, C], Generic[D, C]):  # noqa: B024
     Subclasses fix tensor_type to name specific tensor kinds;
     arbitrary (p, q) fields subclass TensorField directly.
     """
-
-    @property
-    @abstractmethod
-    def manifold(self) -> Manifold:
-        """The manifold on which this tensor field is defined."""
 
     @property
     @abstractmethod

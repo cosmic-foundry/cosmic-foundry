@@ -8,10 +8,10 @@ from typing import Any
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.restriction_operator import RestrictionOperator
-from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
 
 
 class _CartesianCellAverage(MeshFunction[sympy.Expr]):
@@ -29,7 +29,11 @@ class _CartesianCellAverage(MeshFunction[sympy.Expr]):
     def mesh(self) -> CartesianMesh:
         return self._mesh
 
-    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:
+    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
+        # LSP violation: MeshFunction inherits NumericFunction[Mesh, V] whose
+        # __call__ takes a Mesh, not a cell index.  Discrete evaluation should
+        # take a typed CellIndex[M]; that narrowing is deferred to C3.  The
+        # override is intentional and documented here; suppressed via type: ignore.
         return self._values[idx]
 
 
@@ -53,7 +57,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
     def mesh(self) -> Mesh:
         return self._mesh
 
-    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:
+    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:  # type: ignore[override]  # LSP: RestrictionOperator.__call__ takes (M, V) not SymbolicFunction; deferred to C3
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):

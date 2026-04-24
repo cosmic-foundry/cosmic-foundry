@@ -13,7 +13,7 @@ from typing import Any
 import sympy
 
 from cosmic_foundry.theory.continuous.field import Field
-from cosmic_foundry.theory.continuous.manifold import Atlas, Chart
+from cosmic_foundry.theory.continuous.manifold import Atlas, Chart, Point
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     PseudoRiemannianManifold,
@@ -139,7 +139,7 @@ class _SchwarzschildChart(Chart[SchwarzschildManifold, SchwarzschildManifold]):
 
     domain  — the Schwarzschild manifold (r > r_s, exterior region)
     codomain — ℝ⁴; not yet represented as a concrete manifold object
-    __call__ — point-to-coordinate map; not yet implemented
+    __call__ — returns point.coords (Schwarzschild coords are the chart coords)
     """
 
     def __init__(self, manifold: SchwarzschildManifold) -> None:
@@ -161,8 +161,10 @@ class _SchwarzschildChart(Chart[SchwarzschildManifold, SchwarzschildManifold]):
     def inverse(self) -> _SchwarzschildChart:
         raise NotImplementedError("inverse chart not yet implemented")
 
-    def __call__(self, *args: Any, **kwargs: Any) -> SchwarzschildManifold:
-        raise NotImplementedError("point-to-coordinate map not yet implemented")
+    def __call__(  # type: ignore[override]
+        self, point: Point[SchwarzschildManifold]
+    ) -> tuple[Any, ...]:
+        return point.coords
 
 
 # ---------------------------------------------------------------------------

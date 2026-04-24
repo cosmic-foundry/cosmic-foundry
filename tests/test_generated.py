@@ -82,7 +82,7 @@ _HIERARCHY_PAIRS = _discover_hierarchy_pairs()
 @pytest.mark.parametrize("cls", _ABCS, ids=lambda c: c.__qualname__)
 def test_abc_is_not_directly_instantiable(cls: type) -> None:
     with pytest.raises(TypeError):
-        cls()  # type: ignore[abstract]
+        cls()
 
 
 @pytest.mark.parametrize(

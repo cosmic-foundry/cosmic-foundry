@@ -1,9 +1,16 @@
-"""Manifold ABCs: diffeomorphism, chart, atlas, and smooth structure."""
+"""Manifold ABCs: diffeomorphism, chart, atlas, smooth structure, and Point.
+
+Point is co-located here to resolve the mutual dependency: Point carries a
+Chart, and Chart.__call__ maps a Point to coordinates.  With
+``from __future__ import annotations`` both forward references are lazy and
+the cycle never forms.
+"""
 
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 import sympy
 
@@ -13,6 +20,7 @@ from cosmic_foundry.theory.foundation.indexed_family import IndexedFamily
 
 D = TypeVar("D")
 C = TypeVar("C")
+M = TypeVar("M")
 
 
 class Diffeomorphism(Homeomorphism[D, C], Generic[D, C]):
@@ -47,7 +55,7 @@ class Diffeomorphism(Homeomorphism[D, C], Generic[D, C]):
         """The smooth inverse φ⁻¹: V → U."""
 
 
-class Chart(Diffeomorphism[D, C], Generic[D, C]):  # noqa: B024
+class Chart(Diffeomorphism[D, C], Generic[D, C]):
     """A local coordinate system on a smooth manifold: φ: U → V.
 
     A chart maps an open subset U of a manifold M diffeomorphically onto an
@@ -59,12 +67,17 @@ class Chart(Diffeomorphism[D, C], Generic[D, C]):  # noqa: B024
         codomain — the open subset V ⊂ ℝⁿ
         inverse  — the smooth inverse φ⁻¹: V → U
         symbols  — ordered SymPy symbols (x¹, …, xⁿ) for this chart's coordinates
+        __call__ — map a Point[D] on this manifold to its coordinate tuple
     """
 
     @property
     @abstractmethod
     def symbols(self) -> tuple[sympy.Symbol, ...]:
         """Ordered coordinate symbols (x¹, …, xⁿ) for this chart."""
+
+    @abstractmethod
+    def __call__(self, point: Point[D]) -> C:  # type: ignore[override]
+        """Return the coordinates of point in this chart."""
 
 
 class Atlas(IndexedFamily):
@@ -111,4 +124,34 @@ class Manifold(TopologicalManifold):
         """The smooth atlas constituting the smooth structure of M."""
 
 
-__all__ = ["Atlas", "Chart", "Diffeomorphism", "Manifold"]
+@dataclass(frozen=True)
+class Point(Generic[M]):
+    """A point on manifold M expressed as coordinates in a specific chart.
+
+    A manifold point is chart-independent mathematically, but to compute with
+    it you must choose a chart and record which one.  Point carries both so
+    that SymbolicFunction.__call__ can verify the chart matches the field's
+    symbols and perform the correct substitution.
+
+    Co-located with Chart in this module to resolve the mutual dependency:
+    Point.chart: Chart[M, Any] and Chart.__call__(Point[D]) -> C reference
+    each other.  Forward references under ``from __future__ import annotations``
+    avoid any import cycle.
+
+    frozen=True makes Point hashable so it can be used as a dict key or in
+    sets — e.g. to cache field evaluations at grid nodes.  All fields must
+    themselves be hashable for this to work in practice (coords should be
+    SymPy expressions or Python scalars, not mutable containers).
+
+    Required:
+        manifold — the manifold this point belongs to
+        chart    — the chart whose coordinate system the coords are expressed in
+        coords   — coordinate values in the order defined by chart.symbols
+    """
+
+    manifold: M
+    chart: Chart[M, Any]
+    coords: tuple[Any, ...]
+
+
+__all__ = ["Atlas", "Chart", "Diffeomorphism", "Manifold", "Point"]

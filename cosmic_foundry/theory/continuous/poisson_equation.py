@@ -24,7 +24,7 @@ class _NegatedGradientField(TensorField[Any, sympy.Expr]):
     component(i) returns the i-th component -∂f/∂xᵢ.
     """
 
-    def __init__(self, field: Field) -> None:
+    def __init__(self, field: Field[Manifold, sympy.Expr]) -> None:
         self._source = field
         self._components = tuple(-sympy.diff(field.expr, s) for s in field.symbols)
 
@@ -58,7 +58,7 @@ class _NegatedGradientFlux(NumericFunction[Field, TensorField]):
     _NegatedGradientField whose i-th component is -∂φ/∂xᵢ.
     """
 
-    def __call__(self, field: Field, **_: Any) -> _NegatedGradientField:
+    def __call__(self, field: Field) -> _NegatedGradientField:
         return _NegatedGradientField(field)
 
 
@@ -135,7 +135,7 @@ class PoissonEquation(DivergenceFormEquation):
         """Derived: the negated gradient flux F(φ) = -∇φ."""
         return _NEGATED_GRADIENT_FLUX
 
-    def __call__(self, field: Field, **_: Any) -> _ScalarField:
+    def __call__(self, field: Field) -> _ScalarField:
         """Apply the Poisson operator L(φ) = -∇²φ.
 
         Computes -Σᵢ ∂²φ/∂xᵢ² symbolically via SymPy and returns it
