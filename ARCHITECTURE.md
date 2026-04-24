@@ -439,18 +439,49 @@ law's flux function baked into `NF`. BC enters via the constructor parameter
 commutation diagram `Lₕ Rₕ ≈ Rₕ L` at order p for `PoissonEquation` paired
 with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, symbolically.
 
-**C5 — `LinearSolver` hierarchy with dense Jacobi solver.** Introduce the
+**C5 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
-(nonlinear problems need a separate `NonlinearSolver`). Ship
-`DenseJacobiSolver` as the first concrete class: assembles the dense
-N²×N² matrix by applying `Lₕ` to unit `MeshFunction`s (one column per
-cell), then iterates Jacobi sweeps until the residual falls below a
-prescribed tolerance. All linear algebra is hand-rolled — no NumPy
-`linalg`, no LAPACK, no external solvers. Performance optimization
-deferred. Jacobi converges at O(1/h²) iterations for an elliptic operator;
-the convergence test in C6 caps N ≤ 32 in 2-D accordingly. Lane B: on an
-N = 8 system with a known exact solution, verify that `DenseJacobiSolver`
-recovers it within the prescribed tolerance.
+(nonlinear problems need a separate `NonlinearSolver`). The derivation
+works simultaneously in two directions.
+
+*Forward from the formal ingredients already in the code.* At the point C5
+runs, three objects are in hand: (1) the `DiscreteOperator` Lₕ, which is
+linear in its `MeshFunction` argument — derivable from the FVM stencil
+being an affine combination of cell values; (2) the assembled dense matrix
+A, obtained by applying Lₕ to each unit-basis `MeshFunction` (one column
+per cell); (3) the SPD property of A, proved in C4's Lane C derivation from
+the commutation diagram and the inherited spectral structure of the
+continuous `-∇²`. From SPD alone, the equation `Lₕ u = f` is equivalent to
+`u = u + α(f − Au)` for any scalar α — every solution is a fixed point of
+this map. The map is a contraction iff `ρ(I − αA) < 1`, guaranteed for
+α ∈ (0, 2/λ_max) by SPD. Preconditioning by an easily invertible
+approximation to A accelerates convergence; the diagonal `D = diag(A)` is
+the simplest such choice: D is invertible because A is strictly diagonally
+dominant for Poisson with Dirichlet BC (provable from the stencil: each
+boundary-adjacent interior cell has fewer neighbors than an interior cell,
+so the diagonal strictly exceeds the off-diagonal sum). The resulting
+fixed-point map `u^{k+1} = D⁻¹(f − (A − D)u^k)` is Jacobi — arrived at
+from the ingredients, not imported as a recipe.
+
+*Backward from known convergence properties.* The spectral radius
+`ρ(D⁻¹R)`, where `R = A − D`, is computable from the eigenstructure of Lₕ
+on `CartesianMesh`. For the FVM Poisson stencil with Dirichlet BC the
+eigenvalues are `λ_k = (2/h²) Σ_a (1 − cos(kₐπh))` — the discrete analog
+of the continuous Laplacian spectrum `π²|k|²`, recovering it exactly as
+`h → 0`. With diagonal entries `D_{ii} = 2d/h²`, the Jacobi iteration
+matrix has eigenvalues `μ_k = Σ_a cos(kₐπh) / d`, and spectral radius
+`ρ = cos(πh) = 1 − π²h²/2 + O(h⁴)`. This is strictly less than 1,
+confirming convergence; iterations to reduce residual by factor ε:
+`⌈log ε / log cos(πh)⌉ ≈ 2 log(1/ε) / (π²h²)` — O(1/h²), derived from
+the spectral bound, not asserted. The eigenvalue formula ties the solver
+directly back to the continuous progenitor `-∇²`; the convergence guarantee
+comes from the same spectral theory that the commutation diagram verifies.
+
+All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK.
+The O(1/h²) iteration count bounds C6 to N ≤ 32 in 2-D for tractable CI
+time. Lane B: on an N = 8 system, verify that `DenseJacobiSolver` reaches
+the prescribed tolerance within the iteration count predicted by the
+spectral bound above, and that the residual decreases monotonically.
 
 **C6 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
 (C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux(2)`
