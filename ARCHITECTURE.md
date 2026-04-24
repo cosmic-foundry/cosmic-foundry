@@ -471,7 +471,20 @@ to `Function[_D, _C]` so that, e.g., the exterior derivative on 1-forms (curl)
 can be typed as `Function[OneForm, TwoForm]`. Under this design, named operator
 ABCs earn their classes via domain/codomain type narrowing, and Lane C tests
 verify that concrete implementations compute the correct mathematical operation.
-Both decisions must be made and recorded in ARCHITECTURE.md before C2 is opened.
+
+*`DivergenceFormEquation` consequent.* Once form-degree types exist,
+`DivergenceFormEquation` becomes `DifferentialOperator[_D, ZeroForm]`: its
+output is always a scalar (divergence of a flux is always a 0-form), and
+`flux` tightens from `Function[Field, TensorField]` to `Function[_D, OneForm]`.
+Two sub-questions must be resolved: (1) whether `_D` is always a scalar `Field`
+(sufficient for Poisson and scalar transport) or whether multi-component input
+(Euler: density, momentum, energy) requires a richer domain type; (2) whether
+the flux codomain is always `OneForm` (valid for scalar equations where the
+metric provides the isomorphism between vector fields and 1-forms) or must
+remain `TensorField` to accommodate rank-2 flux tensors in systems.
+
+All three decisions must be made and recorded in ARCHITECTURE.md before C2 is
+opened.
 
 **C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
 Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete
