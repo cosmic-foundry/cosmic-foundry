@@ -487,3 +487,44 @@ invisible. Write tests liberally and source code parsimoniously.
 In practice: before adding a helper, ask whether the call site is already
 readable without it. Before adding a docstring sentence, ask whether a
 good name already says it. Before skipping a test case, write it anyway.
+
+---
+
+## Docstring conventions
+
+Docstrings serve two audiences: (1) experts reviewing the mathematical rigor
+and (2) practitioners implementing or using the code. Both matter. Structure
+docstrings in two parts, in order:
+
+**Part 1: Technical definition.** State what the object IS and DOES using
+mathematically rigorous language. Name function spaces, norms, and types
+explicitly. Example:
+
+```python
+"""Discrete L² inner product on mesh cell averages.
+Returns ⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ, where |Ωᵢ| is the cell volume and
+uᵢ, vᵢ are cell-average values. This is the norm in which FVM convergence
+proofs are stated; discrete operators are symmetric and positive-definite
+with respect to this pairing, not the Euclidean dot product."""
+```
+
+**Part 2: Practical context.** Explain what this means at the level of a
+bright physics graduate student (strong practical calculus, no formal
+functional analysis assumed). Why does this choice matter? What breaks if
+someone misuses it? Example (continuing above):
+
+```
+# (continuing the docstring above)
+In practice: use this inner product when verifying operator symmetry or
+testing convergence. DO NOT use numpy's dot product for these checks — the
+cell volumes matter. If the mesh is uniform (constant Δx), the two norms
+are proportional, but non-uniform meshes expose the difference.
+```
+
+**Why both?** Part 1 is the contract: reviewers check that the implementation
+satisfies it. Part 2 prevents misuse: users understand when this object is
+the right tool and when a simpler alternative suffices.
+
+**Present tense only.** Describe current design, not historical decisions.
+"This replaces the raw kwargs-passing from version 2" belongs in the commit
+message. Docstrings say "This takes a Domain object to enforce type safety."
