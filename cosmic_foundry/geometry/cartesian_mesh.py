@@ -111,6 +111,12 @@ class CartesianMesh(StructuredMesh):
         if len(origin) != len(spacing) or len(origin) != len(shape):
             msg = "origin, spacing, and shape must have the same length"
             raise ValueError(msg)
+        if any(s < 1 for s in shape):
+            msg = f"all shape entries must be >= 1, got {shape}"
+            raise ValueError(msg)
+        if any(s.is_positive is False for s in spacing):
+            msg = f"all spacing entries must be > 0, got {spacing}"
+            raise ValueError(msg)
         self._origin = origin
         self._spacing = spacing
         self._shape = shape
