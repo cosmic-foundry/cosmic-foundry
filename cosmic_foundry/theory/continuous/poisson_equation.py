@@ -61,7 +61,7 @@ class _NegatedGradientFlux(NumericFunction[DifferentialForm, OneForm]):
     _NegatedGradientField whose i-th component is -∂φ/∂xᵢ.
     """
 
-    def __call__(self, field: DifferentialForm[Any, Any]) -> _NegatedGradientField:
+    def __call__(self, field: DifferentialForm[Any, Any]) -> OneForm:
         return _NegatedGradientField(field)
 
 
@@ -142,7 +142,7 @@ class PoissonEquation(DivergenceFormEquation):
         """Derived: the negated gradient flux F(φ) = -∇φ."""
         return _NEGATED_GRADIENT_FLUX
 
-    def __call__(self, field: DifferentialForm) -> _ZeroFormField:
+    def __call__(self, field: DifferentialForm) -> ZeroForm:
         """Apply the Poisson operator L(φ) = -∇²φ.
 
         Computes -Σᵢ ∂²φ/∂xᵢ² symbolically via SymPy and returns it
