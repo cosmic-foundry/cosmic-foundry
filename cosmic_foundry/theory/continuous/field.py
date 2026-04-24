@@ -8,12 +8,10 @@ SymmetricTensorField — symmetric covariant 2-tensor; g_{ij} = g_{ji}
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import Generic, TypeVar
 
+from cosmic_foundry.theory.continuous.point import Point
 from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
-
-if TYPE_CHECKING:
-    from cosmic_foundry.theory.continuous.point import Point
 
 D = TypeVar("D")  # Domain manifold type
 C = TypeVar("C")  # Codomain value type
