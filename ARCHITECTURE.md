@@ -480,9 +480,15 @@ orders." Shipping an `order` parameter that only changes the stencil width
 would fail: the ORDER of a FVM scheme is
 `min(reconstruction_order, face_quadrature_order, deconvolution_order)`.
 `DiffusiveFlux(order)` must independently configure all three components
-for each `order`. Lane C per instance: Taylor expansion of the *composite*
-face flux (not the reconstruction alone) against the exact face-averaged
-flux yields leading error O(hᵖ), where p = order.
+for each `order`. Lane C per instance requires eight separate symbolic
+checks: Taylor expansion of reconstruction, face-quadrature, deconvolution,
+and composite face flux — each against the exact face-averaged flux — for
+both p=2 and p=4. Each component must independently achieve the stated order,
+and the composite (their composition) must yield leading error O(hᵖ) where
+p = order. The `NumericalFlux` ABC defines `free: order: int`; concrete
+subclasses may introduce additional constructor parameters specific to the
+flux family (e.g. `HyperbolicFlux(order, riemann_solver)` adds a Riemann
+solver, while `DiffusiveFlux(order)` does not).
 
 **C4 — Generic `FVMDiscretization`.** Introduce
 `FVMDiscretization(mesh, numerical_flux, boundary_condition)`; it is
@@ -490,7 +496,12 @@ generic over `ConservationLaw` — not Poisson-specific. The produced
 `DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f NF(U, f)` where `NF`
 is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
 law's flux function baked into `NF`. BC enters via the constructor parameter
-(see "Boundary condition application" in `discrete/`). Lane C has two parts.
+(see "Boundary condition application" in `discrete/`). C4 bundles three
+components: (a) the abstract `FVMDiscretization` generic over `ConservationLaw`,
+(b) commutation-diagram Lane C for both p=2 and p=4, and (c) SPD derivation
+with summation-by-parts. If reviewer load warrants, consider splitting into
+C4a (generic discretization + commutation) and C4b (SPD derivation). Lane C
+has two parts:
 
 *Part 1 — commutation.* Verify the commutation diagram
 `‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)` at order p for `PoissonEquation`
@@ -521,13 +532,18 @@ with respect to the discrete inner product `⟨u, v⟩_h`. The chain:
 The row ordering for matrix assembly is lexicographic
 (idx → Σ_a idx[a]·N^a); unit-basis assembly `A eⱼ = Lₕ eⱼ` fills one
 column per cell. Lane C verifies SPD symbolically at N = 4 in 1-D and
-2-D, so the assertion does not depend on a numerical eigenvalue
-computation.
+2-D for both `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, so the assertion
+does not depend on a numerical eigenvalue computation.
 
 **C5 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
-(nonlinear problems need a separate `NonlinearSolver`). The derivation
-works simultaneously in two directions. Both directions are stated for
+(nonlinear problems need a separate `NonlinearSolver`). C5 bundles: (a)
+`LinearSolver` ABC, (b) `DenseJacobiSolver` implementation with matrix
+assembly via unit basis, (c) Jacobi spectral-radius derivation for p=2,
+and (d) deferred Lane B for p=4. If reviewer load warrants, consider
+splitting into C5a (solver interface + matrix assembly + spectral radius
+derivation) and C5b (convergence-count Lane B check). The derivation works
+simultaneously in two directions. Both directions are stated for
 `FVMDiscretization(PoissonEquation, DiffusiveFlux(2), DirichletBC)` on
 `CartesianMesh`; the same construction applies to `DiffusiveFlux(4)` but
 the explicit spectral rate is different — see the "Order ≥ 4" remark below.
@@ -554,17 +570,21 @@ approximation to A accelerates convergence; the diagonal `D = diag(A)`
 is the simplest such choice.
 
 *D is invertible* by a weak-diagonal-dominance + irreducibility argument,
-not strict dominance. Interior rows satisfy `A_{ii} = Σ_{j≠i} |A_{ij}|`
-(equality, weak); boundary-adjacent rows satisfy `A_{ii} > Σ_{j≠i}|A_{ij}|`
-(strict, because one stencil neighbor is absorbed into the RHS by the
-Dirichlet elimination). The mesh-cell adjacency graph is connected — a
-fact earned by `CellComplex` being irreducible in the sense that every
-cell reaches every other via repeated applications of `boundary(n)`.
-Weak dominance everywhere + strict dominance somewhere + irreducibility
-is the hypothesis of the Taussky theorem: A is invertible, and every
-diagonal entry is strictly positive (so D⁻¹ exists). The resulting
-fixed-point map `u^{k+1} = D⁻¹(f − (A − D)u^k)` is Jacobi — arrived at
-from the ingredients, not imported as a recipe.
+not strict dominance. The constrained operator on `{φ : φ|∂Ω = g}` is
+equivalent, after eliminating boundary unknowns via affine substitution,
+to the interior operator on `{φ_interior}` with modified RHS; diagonal
+dominance is evaluated on this reduced operator. Interior rows of the
+reduced system satisfy `A_{ii} = Σ_{j≠i} |A_{ij}|` (equality, weak);
+the reduction to interior-only unknowns automatically ensures all remaining
+rows have strict diagonal dominance (because one stencil neighbor per
+boundary-adjacent cell is absorbed into the RHS by Dirichlet elimination).
+The mesh-cell adjacency graph is connected — a fact earned by `CellComplex`
+being irreducible in the sense that every cell reaches every other via
+repeated applications of `boundary(n)`. Weak dominance everywhere + strict
+dominance somewhere + irreducibility is the hypothesis of the Taussky
+theorem: A is invertible, and every diagonal entry is strictly positive
+(so D⁻¹ exists). The resulting fixed-point map `u^{k+1} = D⁻¹(f − (A − D)u^k)`
+is Jacobi — arrived at from the ingredients, not imported as a recipe.
 
 *Backward from known convergence properties.* For `DiffusiveFlux(2)` the
 eigenstructure of Lₕ on `CartesianMesh` with Dirichlet BC is computable
@@ -589,7 +609,9 @@ symbols. SPD (from C4) still guarantees convergence qualitatively for
 any α small enough, but the iteration-count bound must be re-derived
 numerically by a one-off dense eigenvalue scan on a representative
 grid. C6 reports the empirical rate for `DiffusiveFlux(4)` and flags it
-as Lane B evidence; the closed-form spectral derivation is deferred.
+as Lane B evidence; the closed-form spectral derivation is deferred and
+re-opened when multigrid (Epoch 6) requires spectral bounds on
+wide-stencil operators.
 
 All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK. The
 O(1/h²) iteration count bounds C6 to N ≤ 32 in 2-D for tractable CI
@@ -641,7 +663,7 @@ validation/poisson/
 └── test_poisson_square.py  — machine-checked claims (pytest).
 ```
 
-**Tests (`test_poisson_square.py`).** Six claims, each independently
+**Tests (`test_poisson_square.py`).** Seven claims, each independently
 falsifiable:
 
 1. *Manufactured pair identity.* Verify symbolically that `-∇²φ − ρ = 0`
@@ -724,6 +746,24 @@ optimization. A general mechanism for running only a cheaper subset in the
 docs build (e.g. an environment variable honored by every validation
 module's `resolutions` default) is worth considering as a shared pattern
 across all validation pages, but not introduced as one-off code here.
+
+**Open questions — Cross-epoch design points (Epoch 1 expected adaptation).** The Epoch 1 Poisson machinery lays the foundation for later physics epochs. Two adaptation points are expected to be designed in their respective epochs:
+
+1. **AMR (Epoch 10).** `FVMDiscretization(mesh, numerical_flux, boundary_condition)`
+   currently takes a fixed `Mesh`. AMR hierarchies (Epoch 10) will require
+   localized discretization and coarse-grid operators across mesh levels.
+   The `Discretization` interface and `DiscreteOperator` design are expected
+   to generalize to hierarchical meshes; the specific adaptation (hierarchical
+   discretization, prolongation/restriction operators, multigrid composition)
+   is deferred to Epoch 10.
+
+2. **GR (Epoch 11).** `NumericalFlux.__call__(U, face)` receives cell-average
+   state and a face from a fixed mesh. In general relativity (Epoch 11) the
+   face geometry is state-dependent: the 3-metric `γ_ij` is a dynamical field
+   in the conservation law (via 3+1 ADM decomposition), so face areas and
+   normals depend on the solution. The adaptation — passing metric-field
+   state or chart information to the flux evaluator — is deferred to Epoch 11
+   when `DynamicManifold` and time-evolved metrics are introduced.
 
 ---
 
