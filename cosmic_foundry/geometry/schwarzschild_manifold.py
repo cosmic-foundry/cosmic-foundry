@@ -8,6 +8,8 @@ numerical value yields a specific spacetime (Earth, Sun, black hole, …).
 
 from __future__ import annotations
 
+from typing import Any
+
 import sympy
 
 from cosmic_foundry.theory.continuous.field import Field
@@ -43,113 +45,7 @@ _METRIC = sympy.Matrix(
 
 
 # ---------------------------------------------------------------------------
-# Private scalar field: a single SymPy expression on the manifold
-# ---------------------------------------------------------------------------
-
-
-class _ScalarField(Field):
-    def __init__(self, expr: sympy.Expr, manifold: SchwarzschildManifold) -> None:
-        self._expr = expr
-        self._manifold = manifold
-
-    @property
-    def expr(self) -> sympy.Expr:
-        return self._expr
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return _SYMBOLS
-
-    @property
-    def manifold(self) -> SchwarzschildManifold:
-        return self._manifold
-
-
-# ---------------------------------------------------------------------------
-# Metric tensor
-# ---------------------------------------------------------------------------
-
-
-class SchwarzschildMetric(MetricTensor):
-    def __init__(self, manifold: SchwarzschildManifold) -> None:
-        self._manifold = manifold
-
-    @property
-    def expr(self) -> sympy.Matrix:
-        return _METRIC
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return _SYMBOLS
-
-    @property
-    def manifold(self) -> SchwarzschildManifold:
-        return self._manifold
-
-    def as_matrix(self) -> sympy.Matrix:
-        """Return the metric components as a SymPy Matrix."""
-        return _METRIC
-
-    def component(self, i: int, j: int) -> Field:
-        return _ScalarField(_METRIC[i, j], self._manifold)
-
-
-# ---------------------------------------------------------------------------
-# Chart: Schwarzschild coordinates (t, r, θ, φ)
-# ---------------------------------------------------------------------------
-
-
-class _SchwarzschildChart(Chart):
-    """Schwarzschild coordinate chart: φ: M → ℝ⁴ via (t, r, θ, φ).
-
-    domain  — the Schwarzschild manifold (r > r_s, exterior region)
-    codomain — ℝ⁴; not yet represented as a concrete manifold object
-    __call__ — point-to-coordinate map; not yet implemented
-    """
-
-    def __init__(self, manifold: SchwarzschildManifold) -> None:
-        self._manifold = manifold
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return _SYMBOLS
-
-    @property
-    def domain(self) -> SchwarzschildManifold:
-        return self._manifold
-
-    @property
-    def codomain(self) -> SchwarzschildManifold:
-        raise NotImplementedError("codomain not yet represented as a manifold object")
-
-    @property
-    def inverse(self) -> _SchwarzschildChart:
-        raise NotImplementedError("inverse chart not yet implemented")
-
-    def __call__(self, *args: object, **kwargs: object) -> object:
-        raise NotImplementedError("point-to-coordinate map not yet implemented")
-
-
-# ---------------------------------------------------------------------------
-# Atlas: single-chart cover of the exterior region
-# ---------------------------------------------------------------------------
-
-
-class _SchwarzschildAtlas(Atlas):
-    def __init__(self, manifold: SchwarzschildManifold) -> None:
-        self._chart = _SchwarzschildChart(manifold)
-
-    def __getitem__(self, index: int) -> Chart:
-        if index != 0:
-            raise IndexError(index)
-        return self._chart
-
-    def __len__(self) -> int:
-        return 1
-
-
-# ---------------------------------------------------------------------------
-# Manifold
+# Manifold — defined first so private helpers can reference it as a type arg
 # ---------------------------------------------------------------------------
 
 
@@ -179,6 +75,112 @@ class SchwarzschildManifold(PseudoRiemannianManifold):
     @property
     def atlas(self) -> Atlas:
         return _SchwarzschildAtlas(self)
+
+
+# ---------------------------------------------------------------------------
+# Private scalar field: a single SymPy expression on the manifold
+# ---------------------------------------------------------------------------
+
+
+class _ScalarField(Field[Any, sympy.Expr]):
+    def __init__(self, expr: sympy.Expr, manifold: SchwarzschildManifold) -> None:
+        self._expr = expr
+        self._manifold = manifold
+
+    @property
+    def expr(self) -> sympy.Expr:
+        return self._expr
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return _SYMBOLS
+
+    @property
+    def manifold(self) -> SchwarzschildManifold:
+        return self._manifold
+
+
+# ---------------------------------------------------------------------------
+# Metric tensor
+# ---------------------------------------------------------------------------
+
+
+class SchwarzschildMetric(MetricTensor[Any, sympy.Expr]):
+    def __init__(self, manifold: SchwarzschildManifold) -> None:
+        self._manifold = manifold
+
+    @property
+    def expr(self) -> sympy.Matrix:
+        return _METRIC
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return _SYMBOLS
+
+    @property
+    def manifold(self) -> SchwarzschildManifold:
+        return self._manifold
+
+    def as_matrix(self) -> sympy.Matrix:
+        """Return the metric components as a SymPy Matrix."""
+        return _METRIC
+
+    def component(self, i: int, j: int) -> Field:
+        return _ScalarField(_METRIC[i, j], self._manifold)
+
+
+# ---------------------------------------------------------------------------
+# Chart: Schwarzschild coordinates (t, r, θ, φ)
+# ---------------------------------------------------------------------------
+
+
+class _SchwarzschildChart(Chart[SchwarzschildManifold, SchwarzschildManifold]):
+    """Schwarzschild coordinate chart: φ: M → ℝ⁴ via (t, r, θ, φ).
+
+    domain  — the Schwarzschild manifold (r > r_s, exterior region)
+    codomain — ℝ⁴; not yet represented as a concrete manifold object
+    __call__ — point-to-coordinate map; not yet implemented
+    """
+
+    def __init__(self, manifold: SchwarzschildManifold) -> None:
+        self._manifold = manifold
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return _SYMBOLS
+
+    @property
+    def domain(self) -> SchwarzschildManifold:
+        return self._manifold
+
+    @property
+    def codomain(self) -> SchwarzschildManifold:
+        raise NotImplementedError("codomain not yet represented as a manifold object")
+
+    @property
+    def inverse(self) -> _SchwarzschildChart:
+        raise NotImplementedError("inverse chart not yet implemented")
+
+    def __call__(self, *args: Any, **kwargs: Any) -> SchwarzschildManifold:
+        raise NotImplementedError("point-to-coordinate map not yet implemented")
+
+
+# ---------------------------------------------------------------------------
+# Atlas: single-chart cover of the exterior region
+# ---------------------------------------------------------------------------
+
+
+class _SchwarzschildAtlas(Atlas):
+    def __init__(self, manifold: SchwarzschildManifold) -> None:
+        self._chart = _SchwarzschildChart(manifold)
+
+    def __getitem__(self, index: int) -> Chart:
+        if index != 0:
+            raise IndexError(index)
+        return self._chart
+
+    def __len__(self) -> int:
+        return 1
 
 
 __all__ = [

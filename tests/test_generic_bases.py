@@ -6,10 +6,11 @@ mypy's --disallow-any-generics flag does not catch this in class
 definitions, only in annotations.  This test catches it at the structural
 level by inspecting __orig_bases__ at runtime.
 
-Detection logic: a base appearing in __orig_bases__ as a plain `type`
-(not a _GenericAlias) with non-empty __parameters__ is a generic class
-used without type arguments.  Parameterized bases like Function[Field, Field]
-appear as _GenericAlias objects, not plain types, so they pass.
+Detection logic: a class violates if its own __parameters__ is empty
+(it is not itself generic) but any base in __orig_bases__ has non-empty
+__parameters__ (the base still carries free TypeVars).  Classes that are
+themselves generic — i.e., they re-expose TypeVars for callers to bind —
+have non-empty __parameters__ and are excluded from the check.
 """
 
 from __future__ import annotations
@@ -41,14 +42,16 @@ def _all_local_classes() -> list[tuple[str, str, type]]:
 def test_all_generic_bases_are_parameterized() -> None:
     violations: list[str] = []
     for modname, clsname, cls in _all_local_classes():
+        if getattr(cls, "__parameters__", ()):
+            continue  # cls is itself generic — TypeVars intentionally free
         for base in getattr(cls, "__orig_bases__", ()):
-            if isinstance(base, type) and getattr(base, "__parameters__", ()):
+            if getattr(base, "__parameters__", ()):
                 violations.append(
-                    f"{modname}.{clsname}: "
-                    f"base '{base.__name__}' is generic but unparameterized"
+                    f"{modname}.{clsname}: base '{base}' has unbound TypeVars"
                 )
+                break
     if violations:
         raise AssertionError(
-            "Classes with unparameterized generic bases:\n"
+            "Classes that inherit from generic bases without binding all TypeVars:\n"
             + "\n".join(f"  {v}" for v in violations)
         )
