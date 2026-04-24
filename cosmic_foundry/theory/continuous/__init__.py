@@ -26,11 +26,11 @@ from cosmic_foundry.theory.continuous.manifold import (
     Chart,
     Diffeomorphism,
     Manifold,
+    Point,
 )
 from cosmic_foundry.theory.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
-from cosmic_foundry.theory.continuous.point import Point
 from cosmic_foundry.theory.continuous.poisson_equation import PoissonEquation
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,

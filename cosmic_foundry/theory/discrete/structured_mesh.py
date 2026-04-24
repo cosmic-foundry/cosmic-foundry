@@ -7,6 +7,7 @@ from abc import abstractmethod
 import sympy
 
 from cosmic_foundry.theory.continuous.field import Field
+from cosmic_foundry.theory.continuous.manifold import Point
 from cosmic_foundry.theory.discrete.mesh import Mesh
 
 
@@ -42,8 +43,6 @@ class StructuredMesh(Mesh):
         coordinates, then delegates to field.__call__ so that the chart-symbol
         check and coord-count check in SymbolicFunction are exercised.
         """
-        from cosmic_foundry.theory.continuous.point import Point  # local to avoid cycle
-
         coords = self.coordinate(idx)
         point = Point(manifold=field.manifold, chart=self.chart, coords=coords)
         return field(point)

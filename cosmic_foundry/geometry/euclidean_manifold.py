@@ -19,7 +19,7 @@ from typing import Any
 import sympy
 
 from cosmic_foundry.theory.continuous.field import Field
-from cosmic_foundry.theory.continuous.manifold import Atlas, Chart, Manifold
+from cosmic_foundry.theory.continuous.manifold import Atlas, Chart, Manifold, Point
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     RiemannianManifold,
@@ -179,17 +179,13 @@ class CartesianChart(Chart[EuclideanManifold, EuclideanManifold]):
         """Ordered coordinate symbols (x, y, …) for this chart."""
         return self._manifold.symbols
 
-    def __call__(self, x: EuclideanManifold) -> tuple[Any, ...]:  # type: ignore[override]
-        # LSP violation: Chart.__call__ is defined as (D) -> C, i.e. taking
-        # a manifold object, but a chart's actual job is to assign coordinates
-        # to a point — and points live in theory/continuous/point.py which is
-        # above this layer.  The correct signature is __call__(Point[M]) once
-        # C2 resolves the Chart.__call__ design (see ARCHITECTURE.md item 2).
-        # For now CartesianChart.symbols is the primary API; __call__ is a stub.
-        raise NotImplementedError(
-            "CartesianChart.__call__ is a stub: use Point + SymbolicFunction.__call__ "
-            "to evaluate fields at coordinates (see ARCHITECTURE.md C2)."
-        )
+    def __call__(  # type: ignore[override]
+        self, point: Point[EuclideanManifold]
+    ) -> tuple[Any, ...]:
+        # Chart[EuclideanManifold, EuclideanManifold] declares C = EuclideanManifold,
+        # but a chart's image is a coordinate tuple.  Chart type parameters carry
+        # manifold types for domain/codomain; __call__ always returns tuple[Any, ...].
+        return point.coords
 
 
 class _CartesianAtlas(Atlas):

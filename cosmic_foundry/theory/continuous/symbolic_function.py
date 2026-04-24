@@ -7,7 +7,7 @@ from typing import Generic, TypeVar
 
 import sympy
 
-from cosmic_foundry.theory.continuous.point import Point
+from cosmic_foundry.theory.continuous.manifold import Point
 from cosmic_foundry.theory.foundation.function import Function
 
 M = TypeVar("M")  # Manifold type

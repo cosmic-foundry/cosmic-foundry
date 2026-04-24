@@ -485,7 +485,8 @@ well-founded:
    field-theoretic sense); `field(point: Point[D]) -> C` evaluates via
    `__call__`, which accepts a typed `Point[D]` carrying the manifold, chart,
    and coordinates.  `Point[M]` is a frozen dataclass in
-   `theory/continuous/point.py` with fields `manifold: M`,
+   `theory/continuous/manifold.py` (co-located with Chart to avoid a circular
+   import) with fields `manifold: M`,
    `chart: Chart[M, Any]`, and `coords: tuple[Any, ...]`.  The chart is
    required so that evaluation can verify `point.chart.symbols == field.symbols`
    and raise `ValueError` on mismatch — catching cross-chart evaluation at

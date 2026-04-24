@@ -7,7 +7,7 @@ import sympy
 
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.theory.continuous.field import Field
-from cosmic_foundry.theory.continuous.point import Point
+from cosmic_foundry.theory.continuous.manifold import Point
 
 
 def _euclidean(ndim: int) -> EuclideanManifold:
