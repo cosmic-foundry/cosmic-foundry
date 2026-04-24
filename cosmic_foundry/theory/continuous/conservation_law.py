@@ -13,7 +13,7 @@ class ConservationLaw(DivergenceFormEquation):
     ConservationLaw narrows DivergenceFormEquation to the case where the
     flux function F depends algebraically on U — not on its derivatives.
     This is the defining property of hyperbolic systems (Euler equations,
-    scalar advection, MHD): the principal symbol of the linearised spatial
+    scalar advection, MHD): the principal symbol of the linearized spatial
     operator has real eigenvalues, and the equation admits characteristics.
 
     The ∂ₜ term is handled by the time integrator (Epoch 2), not this object.

@@ -13,7 +13,7 @@ class DivergenceFormEquation(DifferentialOperator):
     """A PDE expressed as a spatial divergence: ∇·F(U) = S.
 
     DivergenceFormEquation is the formal bridge between a continuous PDE
-    and its finite-volume discretisation.  The integral form
+    and its finite-volume discretization.  The integral form
 
         ∮_∂Ωᵢ F(U)·n̂ dA = ∫_Ωᵢ S dV
 
