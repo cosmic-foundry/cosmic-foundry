@@ -106,11 +106,18 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
 
 DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold, order
-└── ConservationLaw                          — divergence form: ∂ₜU + ∇·F(U) = S
-                                               free: flux: Function[Field, TensorField], source: Field
+└── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
                                                earned by: integral form ∮_∂Ωᵢ F·n dA = ∫_Ωᵢ S dV
-                                               is fully determined by flux + divergence theorem;
-                                               not derivable from bare DifferentialOperator
+                                               is fully determined by flux + divergence theorem,
+                                               not derivable from bare DifferentialOperator.
+                                               free: flux: Function[Field, TensorField], source: Field
+    ├── EllipticEquation                     — steady state; derived: time_derivative = 0
+    │                                          Example: PoissonEquation (flux = ∇φ, source = ρ)
+    ├── ParabolicEquation                    — ∂ₜU = ∇·F(U) + S; diffusion-type
+    └── ConservationLaw                      — ∂ₜU + ∇·F(U) = S; hyperbolic-type.
+                                               The ∂ₜ term is handled by the time integrator
+                                               (Epoch 2), not by this object.
+                                               Stable through Epoch 10.
 
 Constraint(ABC)                       — interface: support → Manifold
 └── BoundaryCondition                 — support is ∂M
@@ -142,9 +149,10 @@ Non-independent objects are co-located in the same file as the object they
 belong to. Example: `Chart`, `Atlas`, `Diffeomorphism` in `manifold.py`;
 `MetricTensor`, `RiemannianManifold` in `pseudo_riemannian_manifold.py`.
 
-**`ConservationLaw` is spatial only.** `∂ₜ` is handled by the time integrator
-(Epoch 2), not this object. This separation is preserved under the 3+1 ADM
-decomposition: in GR, covariant equations `∇_μ F^μ = S` decompose to
+**`DivergenceFormEquation` and its subtypes are spatial only.** `∂ₜ` is
+handled by the time integrator (Epoch 2), not by these objects. For
+`ConservationLaw` specifically, this separation is preserved under the 3+1
+ADM decomposition: in GR, covariant equations `∇_μ F^μ = S` decompose to
 `∂ₜ(√γ U) + ∂ᵢ(√γ Fⁱ) = √γ S(α, β, γᵢⱼ, Kᵢⱼ)` — still a spatial
 divergence operator with metric factors entering through the `Chart` and
 curvature terms in `source`. `ConservationLaw` is stable through Epoch 10.
@@ -238,20 +246,19 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                               Formally separate from Rₕ: Rₕ projects field values
                               (Function → MeshFunction); Discretization projects
                               operators (ConservationLaw → DiscreteOperator).
-└── FVMDiscretization       — free: mesh, reconstruction, boundary_condition
+└── FVMDiscretization       — free: mesh, numerical_flux, boundary_condition
                               concrete FVM scheme; generic over ConservationLaw.
                               For each cell Ωᵢ, evaluates ∮_∂Ωᵢ F·n̂ dA by
-                              composing the conservation law's flux function with
-                              a FaceReconstruction at each face of Ωᵢ; the BC
+                              delegating to the NumericalFlux at each face; BC
                               enters through boundary_condition (see below).
                               Not specialized to any particular conservation law:
-                              the same class produces the Poisson operator in
-                              Epoch 1 (flux = ∇φ, linear reconstruction) and the
-                              Euler operator in Epoch 4 (flux = (ρv, ρv⊗v+pI,
-                              (E+p)v), MUSCL/PPM reconstruction with Riemann
-                              solver). Specializations belong in the flux
-                              function and the FaceReconstruction — not in a
-                              new Discretization subclass per equation.
+                              Epoch 1 supplies a DiffusiveFlux for Poisson;
+                              Epoch 4 supplies a HyperbolicFlux for Euler.
+                              Specializations belong in the NumericalFlux —
+                              not in a new Discretization subclass per equation.
+                              Note: LinearSolver is NOT part of the Epoch 4
+                              reuse; the Euler equations are nonlinear and need
+                              a separate NonlinearSolver / Newton iteration.
 
 DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                             — the output of Discretization; the Lₕ that makes
@@ -261,38 +268,43 @@ DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                               output.mesh), by analogy with DifferentialOperator.manifold.
                               Not independently constructed from stencil coefficients.
 
-FaceReconstruction          — free: order p
-                              reconstructs the values needed for face-flux
-                              evaluation from cell averages on a stencil around
-                              the face. The interface adapts per flux type:
-                              for linear diffusive flux (Poisson), reconstructs
-                              the face-centered gradient as a single value; for
-                              nonlinear hyperbolic flux (Euler), produces a
-                              two-sided state (U_L, U_R) that a Riemann solver
-                              consumes. Machine-checkable derivation (Lane C):
-                              symbolic Taylor expansion of the reconstruction
-                              against the progenitor face value yields leading
-                              error O(hᵖ) for smooth test functions.
-                              Epoch 1 concrete classes:
-                              CenteredDifferenceGradient(p=2),
-                              CenteredPolynomialGradient(p=4).
-                              Epoch 4 extends the family with MUSCL(p=2) and
-                              PPM(p=4) for hydro; the ABC is designed for that
-                              reuse from the outset.
+NumericalFlux               — given cell averages U and a face, returns
+                              F·n̂·|face_area|. The ORDER of the resulting
+                              scheme is min(reconstruction_order,
+                              face_quadrature_order, deconvolution_order);
+                              all three must be ≥ ORDER. Conflating them
+                              into a single "reconstruction order" silently
+                              caps the scheme at O(h²) regardless of stencil.
+                              Machine-checkable derivation (Lane C): Taylor
+                              expansion of the COMPOSITE face flux (not
+                              reconstruction alone) against the exact face-
+                              averaged flux of a smooth test function yields
+                              leading error O(hᵖ).
+├── DiffusiveFlux           — F(U) = ∇U; returns ∇U·n̂·|face|.
+│                             Epoch 1 concrete: CenteredFlux(p=2),
+│                             HighOrderDiffusiveFlux(p=4). The p=4 class
+│                             carries face quadrature of order ≥ 4 AND the
+│                             cell-average / point-value deconvolution —
+│                             not reconstruction alone.
+└── HyperbolicFlux          — F(U) nonlinear; takes two-sided reconstructed
+                              state (U_L, U_R) and a Riemann solver, returns
+                              the numerical flux. Epoch 4 concrete:
+                              MUSCL_HLLC(p=2), PPM_HLLC(p=4).
 
-LinearSolver(NumericFunction[MeshFunction, MeshFunction])
-                            — given a DiscreteOperator Lₕ and rhs MeshFunction f,
-                              solves Lₕ u = f. Interface is general enough for
-                              matrix-free, sparse, and dense implementations; the
-                              choice is a concrete-class concern, not encoded in
-                              the abstract signature.
-                              Epoch 1 ships DenseDirectSolver first: assembles
-                              the dense matrix by applying Lₕ to unit MeshFunctions
-                              and calls LAPACK. Easiest to interpret, exact up to
-                              floating-point error, and the assembled matrix is a
-                              ground-truth reference for the sparse/matrix-free
-                              variants that follow. Iterative variants (CG,
-                              multigrid) land in Epoch 6 (self-gravity).
+LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperator Lₕ.
+                              SCOPE: linear operators only. Epoch 4 hydro (nonlinear
+                              flux) requires a separate NonlinearSolver / Newton
+                              iteration. LinearSolver is not the shared machinery
+                              for Epoch 4; only FVMDiscretization and NumericalFlux
+                              are reused across epochs.
+                              Epoch 1 ships DenseJacobiSolver: assembles the
+                              dense N²×N² matrix by applying Lₕ to unit
+                              MeshFunctions; iterates Jacobi sweeps until residual
+                              tolerance is met. All linear algebra hand-rolled —
+                              no LAPACK, no external solvers. Jacobi convergence
+                              rate is O(1/h²) iterations; C6 convergence tests cap
+                              at N ≤ 32 in 2-D (≤ 1024 unknowns) accordingly.
+                              Performance optimization deferred.
 ```
 
 **Boundary condition application (Option B, Epoch 1 decision).** `FVMDiscretization`
@@ -303,7 +315,7 @@ operator, and lets the Epoch 6 multigrid ask the discretization for coarse
 operators rather than asking the operator for its BC. Not committed long-term:
 if time-dependent `g` arrives with Epoch 4 hydro (inflow/outflow BCs that change
 per step), BC can migrate to a solver-level parameter without breaking the
-interior-flux derivation — the interior `Lₕ` and the face-reconstruction family
+interior-flux derivation — the interior `Lₕ` and the numerical-flux family
 are independent of where BC is injected.
 
 ### geometry/
@@ -366,15 +378,20 @@ its scope by a Lane C symbolic derivation and each introduces only objects
 justified by a falsifiable constraint. The ambition is not "a working
 Poisson solver" — it is the reusable FVM machinery the rest of the engine
 is built on. Epoch 4 (hydro) swaps the `ConservationLaw` and the
-`FaceReconstruction`; the `FVMDiscretization`, `LinearSolver`, and
-`BoundaryCondition` machinery is unchanged.
+`NumericalFlux`; the `FVMDiscretization` and `BoundaryCondition` machinery
+is unchanged. `LinearSolver` is NOT part of the Epoch 4 reuse: the Euler
+equations are nonlinear and require a separate `NonlinearSolver`.
 
 **C1 — Continuous progenitors.** Add `GradientOperator(DifferentialOperator)`
-and `LaplaceOperator = Div ∘ Grad` in `theory/continuous/`; add
-`PoissonEquation(ConservationLaw)` with `flux = ∇φ`, `source = ρ`. Lane C:
-symbolic verification that the Cartesian-coordinate expansion of `∇²` equals
-`Σ_a ∂²/∂x_a²`, and that the divergence-theorem form of `PoissonEquation`
-recovers the standard `∇²φ = ρ` under the Cartesian chart. No discrete code.
+and the `DivergenceFormEquation` hierarchy in `theory/continuous/`:
+`EllipticEquation`, `ParabolicEquation`, and `ConservationLaw` as siblings
+under `DivergenceFormEquation`. Add `PoissonEquation(EllipticEquation)` with
+`flux = ∇φ`, `source = ρ`. There is no `LaplaceOperator` class: `∇²φ = ∇·∇φ`
+is derivable from `GradientOperator` and the flux field, so it does not earn
+a class by the falsifiable-constraint rule. Lane C: verify symbolically that
+the divergence-theorem form of `PoissonEquation`
+(`∮_∂Ω ∇φ·n dA = ∫_Ω ρ dV`) recovers `∇²φ = ρ` under the Cartesian chart
+via integration by parts. No discrete code.
 
 **C2 — Full chain complex on `CartesianMesh`.** Extend
 `CartesianMesh.boundary(k)` to all k ∈ [1, n]; verify `∂_{k−1} ∘ ∂_k = 0`
@@ -384,44 +401,63 @@ signed incidence from `boundary(n)`; the lower-k operators are carried
 because `CellComplex` earns its class by `∂² = 0` everywhere, not only at
 the top dimension. Lane C.
 
-**C3 — `FaceReconstruction` family (p = 2 and p = 4 together).**
-Introduce the `FaceReconstruction` ABC and ship `CenteredDifferenceGradient`
-(p = 2, three-cell stencil) *and* `CenteredPolynomialGradient` (p = 4,
-five-cell stencil) in the same PR. Shipping both at once forces the ABC
-to actually generalize rather than codify the p = 2 case. Lane C per
-concrete class: symbolic Taylor expansion of the reconstructed face
-gradient against the exact face gradient of a smooth test function yields
-leading error O(hᵖ).
+**Open question before C2 can open.** A 3-D Cartesian grid has three disjoint
+`IndexedSet`s of faces (one per axis orientation). The existing
+`CellComplex.complex[k] → Set` signature has not been examined for whether
+`Set` can represent this disjoint union, or whether a richer return type is
+needed for k < n. This data-structure question must be answered and the
+decision recorded in ARCHITECTURE.md before C2 is opened.
+
+**C3 — `NumericalFlux` family (p = 2 and p = 4 together).** Introduce the
+`NumericalFlux` ABC and the `DiffusiveFlux` subclass. Ship `CenteredFlux`
+(p = 2) *and* `HighOrderDiffusiveFlux` (p = 4) in the same PR — both at
+once to force the ABC to actually generalize. The central design point of
+this PR: the ORDER of a FVM scheme is
+`min(reconstruction_order, face_quadrature_order, deconvolution_order)`.
+Labeling the parameter "reconstruction order" and varying only the stencil
+silently caps the scheme at O(h²) regardless of stencil width. The p = 4
+concrete class must independently carry: (a) a wider polynomial
+reconstruction, (b) a face-quadrature rule exact to O(h⁴), and (c) the
+cell-average / point-value deconvolution at O(h⁴). Lane C per concrete
+class: Taylor expansion of the *composite* face flux (reconstruction +
+quadrature + deconvolution) against the exact face-averaged flux of a
+smooth test function yields leading error O(hᵖ). Expanding the
+reconstruction alone is not sufficient.
 
 **C4 — Generic `FVMDiscretization`.** Introduce
-`FVMDiscretization(mesh, reconstruction, boundary_condition)`; it is
+`FVMDiscretization(mesh, numerical_flux, boundary_condition)`; it is
 generic over `ConservationLaw` — not Poisson-specific. The produced
-`DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f F(recon(U, f)) · n̂_f |f|`
-where `F` comes from the conservation law's flux field and `recon` is
-the `FaceReconstruction`. BC enters via the constructor parameter (see
-"Boundary condition application" in `discrete/`). Lane C: verify the
-commutation diagram `Lₕ Rₕ ≈ Rₕ L` at order p for `PoissonEquation`
-paired with each of the two Epoch-1 reconstructions, symbolically.
+`DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f NF(U, f)` where `NF`
+is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
+law's flux function baked into `NF`. BC enters via the constructor parameter
+(see "Boundary condition application" in `discrete/`). Lane C: verify the
+commutation diagram `Lₕ Rₕ ≈ Rₕ L` at order p for `PoissonEquation` paired
+with each of the two Epoch-1 `DiffusiveFlux` classes, symbolically.
 
-**C5 — `LinearSolver` hierarchy with dense direct solver.** Introduce the
-abstract `LinearSolver` interface and ship `DenseDirectSolver` as the first
-concrete class: assembles the dense matrix by applying `Lₕ` to unit
-`MeshFunction`s, then calls LAPACK. The assembled matrix is also the
-ground-truth reference used to verify matrix-free and sparse variants
-shipped later. Lane B: the solver reproduces, to floating-point precision,
-a MeshFunction pre-computed from a known-conditioning test operator.
+**C5 — `LinearSolver` hierarchy with dense Jacobi solver.** Introduce the
+abstract `LinearSolver` interface, scoped explicitly to *linear* operators
+(nonlinear problems need a separate `NonlinearSolver`). Ship
+`DenseJacobiSolver` as the first concrete class: assembles the dense
+N²×N² matrix by applying `Lₕ` to unit `MeshFunction`s (one column per
+cell), then iterates Jacobi sweeps until the residual falls below a
+prescribed tolerance. All linear algebra is hand-rolled — no NumPy
+`linalg`, no LAPACK, no external solvers. Performance optimization
+deferred. Jacobi converges at O(1/h²) iterations for an elliptic operator;
+the convergence test in C6 caps N ≤ 32 in 2-D accordingly. Lane B: on an
+N = 8 system with a known exact solution, verify that `DenseJacobiSolver`
+recovers it within the prescribed tolerance.
 
 **C6 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
-(C1) + `CartesianMesh` with full chain complex (C2) + `FaceReconstruction`
-(C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
-`DenseDirectSolver` (C5) to solve `∇²φ = ρ` against the analytic solution
-`φ = sin(πx)sin(πy)` on the unit square. Convergence test at N ∈ {8, 16,
-32, 64}: O(h²) with `CenteredDifferenceGradient`, O(h⁴) with
-`CenteredPolynomialGradient`. This is the externally-grounded verification
-the epoch requires; the Lane C checks in C1–C4 are the derivation, C6
-is the proof that the derivation was implemented. C6 lives as a narrative
-application in `validation/poisson/` with a mirror documentation page at
-`docs/poisson/`; see the layout below.
+(C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux`
+classes (C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
+`DenseJacobiSolver` (C5) to solve `∇²φ = ρ` against the analytic solution
+`φ = sin(πx)sin(πy)` on the unit square. Convergence tests: N ∈ {8, 12,
+16, 24, 32} (five points) for p = 2; N ∈ {4, 6, 8, 12, 16} (five points)
+for p = 4 — capped to stay above the h⁴ floating-point floor. The Lane C
+checks in C1–C4 are the derivation; C6 is the proof that the derivation
+was implemented. C6 lives as a narrative application in
+`validation/poisson/` with a mirror documentation page at `docs/poisson/`;
+see the layout below.
 
 **`validation/poisson/` and the Sphinx page.** C6 is a narrative
 application, not only a test. It walks the pipeline from manufactured
@@ -436,9 +472,9 @@ validation/poisson/
 ├── manufactured.py         — φ, ρ as SymbolicFunctions on EuclideanManifold(2):
 │                               φ(x, y) = sin(πx) sin(πy)
 │                               ρ(x, y) = −∇²φ = 2π² sin(πx) sin(πy)
-│                             the identity ∇²φ + ρ = 0 is checked symbolically
-│                             at module load — the pair is a falsifiable claim,
-│                             not a hand-picked constant.
+│                             the identity ∇²φ + ρ = 0 is NOT checked at
+│                             module load (import side-effects are avoided);
+│                             it is verified in test_poisson_square.py.
 ├── poisson_square.py       — narrative script with `# %%` cells: compose
 │                             PoissonEquation + CartesianMesh +
 │                             FaceReconstruction + Dirichlet BC +
@@ -451,26 +487,29 @@ validation/poisson/
 **Tests (`test_poisson_square.py`).** Six claims, each independently
 falsifiable:
 
-1. *Commutation symbolic check on the test problem.* Using the
+1. *Manufactured pair identity.* Verify symbolically that `∇²φ + ρ = 0`
+   for the `manufactured` pair — not at module load, but here as a test.
+2. *Commutation symbolic check on the test problem.* Using the
    `manufactured` pair, verify via SymPy that `Lₕ Rₕ φ − Rₕ Lφ` expanded
-   at an interior cell has leading term `O(hᵖ)` for each reconstruction.
+   at an interior cell has leading term `O(hᵖ)` for each `DiffusiveFlux`.
    The derivation performed abstractly in C4 is re-executed on a concrete
    problem, catching any specialization bug.
-2. *Numerical convergence, p = 2.* `assert_convergence_order(err_p2,
-   [8, 16, 32, 64], expected=2.0)` using the existing helper in
+3. *Numerical convergence, p = 2.* `assert_convergence_order(err_p2,
+   [8, 12, 16, 24, 32], expected=2.0)` using the existing helper in
    `tests/utils/convergence.py`; L² error against `manufactured.phi`.
-3. *Numerical convergence, p = 4.* Same with `expected=4.0`; resolutions
-   `[8, 16, 32]` to stay above the floating-point floor that h⁴ reaches
-   beyond N ≈ 100.
-4. *Symmetry preservation.* `sin(πx)sin(πy)` is symmetric under `x ↔ y`;
+4. *Numerical convergence, p = 4.* Same with `expected=4.0`; resolutions
+   `[4, 6, 8, 12, 16]` — five points, capped below the h⁴ FP floor.
+5. *Symmetry preservation.* `sin(πx)sin(πy)` is symmetric under `x ↔ y`;
    the numerical solution must respect this to floating-point precision
    for any N. A break signals a stencil-assembly bug.
-5. *Operator SPD.* The assembled `Lₕ` matrix for Poisson + Dirichlet BC
-   must be symmetric positive-definite. Assembled once per reconstruction
-   via `DenseDirectSolver`; checked with `np.linalg.cholesky`.
-6. *Restriction commutes with the boundary condition.* `Rₕ` applied to
-   `φ` on `∂Ω` matches the Dirichlet boundary data analytically — a
-   Lane C check that BC data is consistent with the restriction.
+6. *Operator positive-definiteness.* For the assembled `Lₕ` matrix, verify
+   `u · (Lₕ u) > 0` for several random unit vectors `u`. Hand-rolled —
+   no `np.linalg.cholesky`.
+7. *Restriction commutes with boundary condition (nonzero data).* Using
+   a separate test field `φ_bc(x, y) = x + y` (nonzero on all four sides),
+   verify that `Rₕ φ_bc` on each boundary face matches the Dirichlet data
+   analytically. The `sin(πx)sin(πy)` manufactured pair vanishes on `∂Ω`
+   and cannot test this claim.
 
 **Figures (`figures.py`).** Four pure functions, each returning a
 `matplotlib.figure.Figure`:
@@ -479,8 +518,9 @@ falsifiable:
 - `error_heatmap(N, p)` — signed `φ_numerical − φ_exact`, diverging
   colormap symmetric about 0; reveals whether the error is
   boundary-dominated or interior-dominated.
-- `matrix_structure(N, p)` — `plt.spy(Lₕ)` at small N = 8, so the 5-point
-  (p = 2) vs. 9-point (p = 4) stencil pattern is directly visible.
+- `matrix_structure(N, p)` — `plt.spy(Lₕ)` at small N = 8, revealing the
+  stencil pattern. Exact stencil width is determined in C3; do not
+  presuppose it here.
 - `convergence_figure()` — the headline figure: log-log max-norm error
   vs. `h` for both reconstructions, with reference lines at slopes 2 and
   4 and the measured slopes annotated.
@@ -498,15 +538,14 @@ visible in the rendered page, not only in test output:
 3. *Mesh and chain complex.* Instantiate `CartesianMesh`; render the
    face-incidence list from `mesh.boundary(n)` as a small table at
    N = 4 — direct reuse of C2.
-4. *Reconstruction family.* Side-by-side table of stencil coefficients
+4. *NumericalFlux family.* Side-by-side table of stencil coefficients
    for p = 2 and p = 4, derived symbolically from the concrete
-   `FaceReconstruction` classes. The page is about the family, not one
-   stencil.
-5. *Discretization assembly.* `FVMDiscretization(mesh, reconstruction,
-   bc)` produces `Lₕ`; `matrix_structure` at N = 8 shown side-by-side
-   for both reconstructions.
-6. *Solve.* `DenseDirectSolver` applied; `solution_heatmap` and
-   `error_heatmap` at N = 32 for each reconstruction.
+   `DiffusiveFlux` classes. The page is about the family, not one stencil.
+5. *Discretization assembly.* `FVMDiscretization(mesh, numerical_flux, bc)`
+   produces `Lₕ`; `matrix_structure` at N = 8 shown side-by-side for
+   both flux classes.
+6. *Solve.* `DenseJacobiSolver` applied; `solution_heatmap` and
+   `error_heatmap` at N = 16 for each flux class (capped for build time).
 7. *Convergence.* `convergence_figure()` inline; measured slopes
    annotated and compared to the expected 2 and 4.
 8. *Derivation re-execution.* The symbolic `Lₕ Rₕ φ − Rₕ Lφ` expansion
@@ -519,6 +558,14 @@ The page is wired into `docs/index.md` under the "Validation" toctree as
 matches the Schwarzschild pattern and keeps room for future
 Poisson-family pages (Neumann, variable coefficient, 3-D).
 
+**Docs/test code parity.** The documentation page runs the exact same code
+as `test_poisson_square.py` — no specialized paths, no mocked data. The
+Sphinx build may be slow as a result; static figure embedding is a deferred
+optimization. A general mechanism for running only a cheaper subset in the
+docs build (e.g. an environment variable honored by every validation
+module's `resolutions` default) is worth considering as a shared pattern
+across all validation pages, but not introduced as one-off code here.
+
 ---
 
 ## Physics roadmap
@@ -527,7 +574,7 @@ Poisson-family pages (Neumann, variable coefficient, 3-D).
 
 | Epoch | Layer | Capability |
 |-------|-------|------------|
-| 1 | Discrete | **Discrete operators and first Poisson solver.** `Discretization` ABC + generic `FVMDiscretization(mesh, reconstruction, boundary_condition)` that is not specialized to any particular conservation law. `FaceReconstruction` family parameterized by order p (Epoch 1 concrete classes at p = 2 and p = 4, shipped together to force the ABC to generalize). `LinearSolver` hierarchy accommodating matrix-free, sparse, and dense implementations; `DenseDirectSolver` ships first. Boundary conditions enter through the discretization's constructor (option B). Truncation error verified algebraically via SymPy (commutation diagram `Lₕ Rₕ ≈ Rₕ L` at `O(hᵖ)`); convergence verified against `sin(πx)sin(πy)`. The FVM machinery produced here is the foundation for Epoch 4 hydrodynamics — swapping `ConservationLaw` and `FaceReconstruction` (MUSCL/PPM) reuses the same `FVMDiscretization`, `LinearSolver`, and BC pipeline. |
+| 1 | Discrete | **Discrete operators and first Poisson solver.** `DivergenceFormEquation` hierarchy in `continuous/` (`EllipticEquation`, `ParabolicEquation`, `ConservationLaw`). `Discretization` ABC + generic `FVMDiscretization(mesh, numerical_flux, boundary_condition)`. `NumericalFlux` family (`DiffusiveFlux` for Epoch 1; `HyperbolicFlux` for Epoch 4); order = min(reconstruction, face-quadrature, deconvolution) — all three independently verified. `LinearSolver` with `DenseJacobiSolver` (hand-rolled, dense, no LAPACK); scoped to linear operators only. Boundary conditions via discretization constructor. Truncation error proved symbolically; convergence verified against `sin(πx)sin(πy)`. FVM machinery reused in Epoch 4 by swapping `ConservationLaw` and `NumericalFlux`; `LinearSolver` is *not* reused (Euler is nonlinear). |
 | 2 | Numerical | JAX evaluation layer: concrete field storage as `jax.Array`; JIT-compiled stencil application; explicit time integration; HDF5 I/O with provenance. |
 
 ### Physics epochs
