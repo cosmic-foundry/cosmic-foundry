@@ -10,11 +10,12 @@ not distinct ABCs.
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import Generic
 
-from cosmic_foundry.theory.continuous.field import TensorField
+from cosmic_foundry.theory.continuous.field import C, D, TensorField
 
 
-class DifferentialForm(TensorField):  # noqa: B024
+class DifferentialForm(TensorField[D, C], Generic[D, C]):  # noqa: B024
     """An antisymmetric (0, k)-tensor field on a smooth manifold M.
 
     A differential k-form assigns to each point p ∈ M a totally

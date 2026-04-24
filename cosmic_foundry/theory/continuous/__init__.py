@@ -7,10 +7,12 @@ cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 from __future__ import annotations
 
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
-from cosmic_foundry.theory.continuous.conservation_law import ConservationLaw
 from cosmic_foundry.theory.continuous.constraint import Constraint
 from cosmic_foundry.theory.continuous.differential_form import DifferentialForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.divergence_form_equation import (
+    DivergenceFormEquation,
+)
 from cosmic_foundry.theory.continuous.field import (
     Field,
     SymmetricTensorField,
@@ -28,6 +30,7 @@ from cosmic_foundry.theory.continuous.manifold import (
 from cosmic_foundry.theory.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
+from cosmic_foundry.theory.continuous.poisson_equation import PoissonEquation
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     PseudoRiemannianManifold,
@@ -39,16 +42,17 @@ __all__ = [
     "Atlas",
     "BoundaryCondition",
     "Chart",
-    "ConservationLaw",
     "Constraint",
     "Diffeomorphism",
     "DifferentialForm",
     "DifferentialOperator",
+    "DivergenceFormEquation",
     "Field",
     "LocalBoundaryCondition",
     "Manifold",
     "MetricTensor",
     "NonLocalBoundaryCondition",
+    "PoissonEquation",
     "PseudoRiemannianManifold",
     "RiemannianManifold",
     "SymmetricTensorField",

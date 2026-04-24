@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import Any
 
 import sympy
 
@@ -32,7 +33,7 @@ class _CartesianCellAverage(MeshFunction[sympy.Expr]):
         return self._values[idx]
 
 
-class CartesianRestrictionOperator(RestrictionOperator):
+class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
     """Restriction operator Rₕ for CartesianMesh via analytic SymPy integration.
 
     (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV
