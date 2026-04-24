@@ -498,27 +498,30 @@ docstrings in two parts, in order:
 
 **Part 1: Technical definition.** State what the object IS and DOES using
 mathematically rigorous language. Name function spaces, norms, and types
-explicitly. Example:
-
-```python
-"""Discrete L² inner product on mesh cell averages.
-Returns ⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ, where |Ωᵢ| is the cell volume and
-uᵢ, vᵢ are cell-average values. This is the norm in which FVM convergence
-proofs are stated; discrete operators are symmetric and positive-definite
-with respect to this pairing, not the Euclidean dot product."""
-```
+explicitly.
 
 **Part 2: Practical context.** Explain what this means at the level of a
 bright physics graduate student (strong practical calculus, no formal
 functional analysis assumed). Why does this choice matter? What breaks if
-someone misuses it? Example (continuing above):
+someone misuses it?
 
-```
-# (continuing the docstring above)
-In practice: use this inner product when verifying operator symmetry or
-testing convergence. DO NOT use numpy's dot product for these checks — the
-cell volumes matter. If the mesh is uniform (constant Δx), the two norms
-are proportional, but non-uniform meshes expose the difference.
+Example:
+
+```python
+def inner_product_L2h(u, v, mesh):
+    """Discrete L² inner product on mesh cell averages.
+
+    Returns ⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ, where |Ωᵢ| is the cell volume and
+    uᵢ, vᵢ are cell-average values. This is the norm in which FVM
+    convergence proofs are stated; discrete operators are symmetric and
+    positive-definite with respect to this pairing, not the Euclidean dot
+    product.
+
+    In practice: use this when verifying operator symmetry or testing
+    convergence. DO NOT use numpy's dot product for these checks — the
+    cell volumes matter. If the mesh is uniform (constant Δx), the two
+    norms are proportional, but non-uniform meshes expose the difference.
+    """
 ```
 
 **Why both?** Part 1 is the contract: reviewers check that the implementation
