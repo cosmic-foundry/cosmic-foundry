@@ -112,9 +112,13 @@ DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: 
                                                not derivable from bare DifferentialOperator.
                                                free: flux: Function[Field, TensorField], source: Field
     ├── EllipticEquation                     — steady state; derived: time_derivative = 0
-    │                                          Example: PoissonEquation (flux = ∇φ, source = ρ)
-    ├── ParabolicEquation                    — ∂ₜU = ∇·F(U) + S; diffusion-type
-    └── ConservationLaw                      — ∂ₜU + ∇·F(U) = S; hyperbolic-type.
+    │                                          Example: PoissonEquation (flux = -∇φ, source = ρ)
+    │                                          gives -∇²φ = ρ; the sign convention makes the
+    │                                          discrete operator positive definite (see C4, C5).
+    ├── ParabolicEquation                    — ∂ₜU = ∇·F(U) + S; F depends on ∂U (diffusive).
+    │                                          Example: heat equation, F(U) = k∇U.
+    └── ConservationLaw                      — ∂ₜU + ∇·F(U) = S; F algebraic in U (hyperbolic).
+                                               Example: Euler, F = (ρv, ρv⊗v + pI, (E+p)v).
                                                The ∂ₜ term is handled by the time integrator
                                                (Epoch 2), not by this object.
                                                Stable through Epoch 10.
@@ -125,6 +129,20 @@ Constraint(ABC)                       — interface: support → Manifold
                                         derived: support = constraint.manifold
     └── NonLocalBoundaryCondition     — constraint depends on values outside the immediate neighborhood
 ```
+
+**PDE-type classification.** The three `DivergenceFormEquation` subclasses
+correspond to the standard classification by the principal symbol of the
+linearized spatial operator: elliptic (no time derivative; symbol has
+definite spectrum — `-∇²` for Poisson), parabolic (first-order in ∂ₜ with
+flux that depends on ∂U, yielding a diffusive second-order spatial symbol),
+and hyperbolic (first-order in ∂ₜ with flux algebraic in U, yielding a
+first-order spatial symbol with real eigenvalues). The heat equation
+`∂ₜU − ∇·(k∇U) = 0` lands in `ParabolicEquation` because its flux depends
+on the gradient; `ConservationLaw` is reserved for flux algebraic in U
+(Euler, MHD, scalar advection). This is a design convention grounded in
+the symbol classification — it is not derivable from the form `∇·F = S`
+alone, because the same syntactic form can host both parabolic and
+hyperbolic physics depending on the flux structure.
 
 **`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
 covers Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin via the
@@ -206,6 +224,15 @@ RestrictionOperator(NumericFunction[Function[M,V], MeshFunction[V]])
                                   the restriction depends on both — neither alone suffices
 ```
 
+**Discrete inner product.** Symmetry, positive-definiteness, and truncation
+claims in this layer are stated in the cell-volume-weighted pairing
+`⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ` — the ℓ²(h) analog of `∫_Ω uv dV`. This is
+not a separate class (it carries no independent interface); it is a
+conventional bilinear form used in proofs. The convergence norm on
+`MeshFunction`s is the induced `‖u‖_{L²_h} := √⟨u, u⟩_h`; the local norm
+for pointwise truncation claims is `‖u‖_{∞,h} := max_i |uᵢ|` over interior
+cells.
+
 The discrete layer approximates the **integral form** of conservation laws, not
 the differential form. The derivation chain grounding every object in this layer:
 
@@ -237,9 +264,13 @@ Discretization(NumericFunction[ConservationLaw, DiscreteOperator])
                               numerical flux, quadrature, boundary condition).
                               Defined by the commutation diagram:
                                 Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
-                              The approximation order p is a property of the
-                              concrete scheme, proved by its convergence test —
-                              not a parameter of the abstract interface.
+                              interpreted on test fields f ∈ C^{p+2}(Ω); "≈"
+                              means ‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ) as h → 0,
+                              measured in the local ℓ∞ norm over interior
+                              cells. The approximation order p is a property
+                              of the concrete scheme, proved by its
+                              convergence test — not a parameter of the
+                              abstract interface.
                               The commutation check verified algebraically via
                               SymPy is the machine-checkable derivation required
                               by Lanes B and C.
@@ -275,13 +306,31 @@ NumericalFlux               — free: order: int
                                 order = min(reconstruction_order,
                                             face_quadrature_order,
                                             deconvolution_order)
-                              all three must be ≥ order; the class is
+                              Each of the three components is a distinct
+                              operator with its own Lane C expansion:
+                                • Reconstruction R_p: cell averages → polynomial
+                                  representation; Taylor expansion in h shows
+                                  leading error O(h^{p_R}) against the exact
+                                  pointwise value.
+                                • Face quadrature Q_p: integrates the polynomial
+                                  flux over the face; midpoint (O(h²)) or
+                                  Simpson (O(h⁴)) rule; Lane C: quadrature error
+                                  against the exact face average of a smooth
+                                  test function.
+                                • Deconvolution D_p: corrects between cell-average
+                                  and point-value representations,
+                                    Uᵢ = Ū_i - (h²/24)(∇²U)ᵢ + O(h⁴)  (p=4)
+                                    Uᵢ = Ū_i + O(h²)                  (p=2, identity)
+                                  Lane C: Taylor expansion of the finite-average
+                                  operator confirms the stated residual.
+                              All three must be ≥ order; the class is
                               responsible for ensuring they are.
                               Earned by: order is a verifiable claim —
                               the Lane C Taylor expansion of the composite
-                              face flux against the exact face-averaged flux
-                              of a smooth test function yields leading error
-                              O(hᵖ), where p = order.
+                              face flux F_face = Q_p ∘ F ∘ D_p ∘ R_p against
+                              the exact face-averaged flux of a smooth test
+                              function yields leading error O(hᵖ),
+                              where p = order.
 ├── DiffusiveFlux(order)    — free: order: int. F(U) = ∇U; constructs the
 │                             appropriate stencil, face-quadrature rule,
 │                             and cell-average/point-value deconvolution for
@@ -305,12 +354,16 @@ LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperato
                               for Epoch 4; only FVMDiscretization and NumericalFlux
                               are reused across epochs.
                               Epoch 1 ships DenseJacobiSolver: assembles the
-                              dense N²×N² matrix by applying Lₕ to unit
-                              MeshFunctions; iterates Jacobi sweeps until residual
-                              tolerance is met. All linear algebra hand-rolled —
-                              no LAPACK, no external solvers. Jacobi convergence
-                              rate is O(1/h²) iterations; C6 convergence tests cap
-                              at N ≤ 32 in 2-D (≤ 1024 unknowns) accordingly.
+                              dense (N^d × N^d) matrix on a d-dimensional grid
+                              with N cells per axis, by applying Lₕ to unit
+                              MeshFunctions ordered lexicographically
+                              (idx → Σ_a idx[a]·N^a). It iterates Jacobi sweeps
+                              until residual tolerance ‖f − Lₕ u‖_{L²_h} < τ.
+                              All linear algebra hand-rolled — no LAPACK, no
+                              external solvers. Jacobi convergence rate is
+                              O(1/h²) iterations for the DiffusiveFlux(2)
+                              Poisson operator; C6 convergence tests cap at
+                              N ≤ 32 in 2-D (≤ 1024 unknowns) accordingly.
                               Performance optimization deferred.
 ```
 
@@ -393,12 +446,14 @@ equations are nonlinear and require a separate `NonlinearSolver`.
 and the `DivergenceFormEquation` hierarchy in `theory/continuous/`:
 `EllipticEquation`, `ParabolicEquation`, and `ConservationLaw` as siblings
 under `DivergenceFormEquation`. Add `PoissonEquation(EllipticEquation)` with
-`flux = ∇φ`, `source = ρ`. There is no `LaplaceOperator` class: `∇²φ = ∇·∇φ`
-is derivable from `GradientOperator` and the flux field, so it does not earn
-a class by the falsifiable-constraint rule. Lane C: verify symbolically that
-the divergence-theorem form of `PoissonEquation`
-(`∮_∂Ω ∇φ·n dA = ∫_Ω ρ dV`) recovers `∇²φ = ρ` under the Cartesian chart
-via integration by parts. No discrete code.
+`flux = -∇φ`, `source = ρ`, giving the sign convention `-∇²φ = ρ` — chosen
+so that the discrete operator inherits positive definiteness from the
+continuous `-∇²` (see C4). There is no `LaplaceOperator` class:
+`-∇²φ = -∇·∇φ` is derivable from `GradientOperator` and the flux field,
+so it does not earn a class by the falsifiable-constraint rule. Lane C:
+verify symbolically that the divergence-theorem form of `PoissonEquation`
+(`∮_∂Ω (-∇φ)·n dA = ∫_Ω ρ dV`) recovers `-∇²φ = ρ` under the Cartesian
+chart via integration by parts. No discrete code.
 
 **C2 — Full chain complex on `CartesianMesh`.** Extend
 `CartesianMesh.boundary(k)` to all k ∈ [1, n]; verify `∂_{k−1} ∘ ∂_k = 0`
@@ -435,65 +490,131 @@ generic over `ConservationLaw` — not Poisson-specific. The produced
 `DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f NF(U, f)` where `NF`
 is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
 law's flux function baked into `NF`. BC enters via the constructor parameter
-(see "Boundary condition application" in `discrete/`). Lane C: verify the
-commutation diagram `Lₕ Rₕ ≈ Rₕ L` at order p for `PoissonEquation` paired
-with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, symbolically.
+(see "Boundary condition application" in `discrete/`). Lane C has two parts.
+
+*Part 1 — commutation.* Verify the commutation diagram
+`‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)` at order p for `PoissonEquation`
+paired with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, symbolically on
+test fields in `C^{p+2}(Ω)`.
+
+*Part 2 — SPD of Lₕ (Poisson + DiffusiveFlux specialization).* For
+`FVMDiscretization(PoissonEquation, DiffusiveFlux(order), DirichletBC)`
+on `CartesianMesh`, the assembled operator is symmetric positive definite
+with respect to the discrete inner product `⟨u, v⟩_h`. The chain:
+
+1. *Symmetry* follows from the centered flux stencil and uniform cell
+   volumes. Applying summation-by-parts to `⟨u, Lₕ v⟩_h`,
+   `Σᵢ |Ωᵢ| uᵢ (Lₕ v)ᵢ = Σ_faces (area/h_⊥)·(u_+ − u_−)(v_+ − v_−)`,
+   which is manifestly symmetric in `(u, v)`. The identity holds for any
+   centered `DiffusiveFlux(order)` at every interior face.
+2. *Positive definiteness* follows from the sign convention. With
+   `flux = -∇φ`, Lₕ is the discrete analog of `-∇²`. Setting `u = v` in
+   (1) yields `⟨u, Lₕ u⟩_h = Σ_faces (area/h_⊥)·(u_+ − u_−)² ≥ 0`.
+   Equality forces `u_+ = u_−` across every interior face; together with
+   `u_boundary = 0` from Dirichlet BC, this forces `u ≡ 0`. Hence
+   `⟨u, Lₕ u⟩_h > 0` for all `u ≠ 0`.
+3. *Spectral inheritance.* Step 2 is the discrete analog of L² positive-
+   definiteness of `-∇²`. The explicit eigenvalues quoted in C5 are a
+   consequence of SPD + translation invariance on `CartesianMesh`, not
+   additional hypotheses.
+
+The row ordering for matrix assembly is lexicographic
+(idx → Σ_a idx[a]·N^a); unit-basis assembly `A eⱼ = Lₕ eⱼ` fills one
+column per cell. Lane C verifies SPD symbolically at N = 4 in 1-D and
+2-D, so the assertion does not depend on a numerical eigenvalue
+computation.
 
 **C5 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
 (nonlinear problems need a separate `NonlinearSolver`). The derivation
-works simultaneously in two directions.
+works simultaneously in two directions. Both directions are stated for
+`FVMDiscretization(PoissonEquation, DiffusiveFlux(2), DirichletBC)` on
+`CartesianMesh`; the same construction applies to `DiffusiveFlux(4)` but
+the explicit spectral rate is different — see the "Order ≥ 4" remark below.
 
 *Forward from the formal ingredients already in the code.* At the point C5
-runs, three objects are in hand: (1) the `DiscreteOperator` Lₕ, which is
-linear in its `MeshFunction` argument — derivable from the FVM stencil
-being an affine combination of cell values; (2) the assembled dense matrix
-A, obtained by applying Lₕ to each unit-basis `MeshFunction` (one column
-per cell); (3) the SPD property of A, proved in C4's Lane C derivation from
-the commutation diagram and the inherited spectral structure of the
-continuous `-∇²`. From SPD alone, the equation `Lₕ u = f` is equivalent to
-`u = u + α(f − Au)` for any scalar α — every solution is a fixed point of
-this map. The map is a contraction iff `ρ(I − αA) < 1`, guaranteed for
-α ∈ (0, 2/λ_max) by SPD. Preconditioning by an easily invertible
-approximation to A accelerates convergence; the diagonal `D = diag(A)` is
-the simplest such choice: D is invertible because A is strictly diagonally
-dominant for Poisson with Dirichlet BC (provable from the stencil: each
-boundary-adjacent interior cell has fewer neighbors than an interior cell,
-so the diagonal strictly exceeds the off-diagonal sum). The resulting
+runs, three objects are in hand:
+1. The `DiscreteOperator` Lₕ. *Linearity of Lₕ is specific to this
+   specialization*: `DiffusiveFlux` produces a centered-difference stencil
+   that is an affine combination of cell values, so the induced operator
+   is linear. For `HyperbolicFlux` (Epoch 4) Lₕ is nonlinear and this
+   derivation does not apply — hence `LinearSolver` is scoped away from
+   the Euler path in Epoch 4.
+2. The assembled dense `(N^d × N^d)` matrix `A`, obtained by applying Lₕ
+   to each unit-basis `MeshFunction` in lexicographic order (one column
+   per cell).
+3. The SPD property of A, proved in C4's Lane C derivation (not asserted
+   here) from summation-by-parts plus the sign convention `flux = -∇φ`.
+
+From SPD alone, the equation `Lₕ u = f` is equivalent to
+`u = u + α(f − Au)` for any scalar α — every solution is a fixed point
+of this map. The map is a contraction iff `ρ(I − αA) < 1`, guaranteed
+for α ∈ (0, 2/λ_max) by SPD. Preconditioning by an easily invertible
+approximation to A accelerates convergence; the diagonal `D = diag(A)`
+is the simplest such choice.
+
+*D is invertible* by a weak-diagonal-dominance + irreducibility argument,
+not strict dominance. Interior rows satisfy `A_{ii} = Σ_{j≠i} |A_{ij}|`
+(equality, weak); boundary-adjacent rows satisfy `A_{ii} > Σ_{j≠i}|A_{ij}|`
+(strict, because one stencil neighbor is absorbed into the RHS by the
+Dirichlet elimination). The mesh-cell adjacency graph is connected — a
+fact earned by `CellComplex` being irreducible in the sense that every
+cell reaches every other via repeated applications of `boundary(n)`.
+Weak dominance everywhere + strict dominance somewhere + irreducibility
+is the hypothesis of the Taussky theorem: A is invertible, and every
+diagonal entry is strictly positive (so D⁻¹ exists). The resulting
 fixed-point map `u^{k+1} = D⁻¹(f − (A − D)u^k)` is Jacobi — arrived at
 from the ingredients, not imported as a recipe.
 
-*Backward from known convergence properties.* The spectral radius
-`ρ(D⁻¹R)`, where `R = A − D`, is computable from the eigenstructure of Lₕ
-on `CartesianMesh`. For the FVM Poisson stencil with Dirichlet BC the
-eigenvalues are `λ_k = (2/h²) Σ_a (1 − cos(kₐπh))` — the discrete analog
-of the continuous Laplacian spectrum `π²|k|²`, recovering it exactly as
-`h → 0`. With diagonal entries `D_{ii} = 2d/h²`, the Jacobi iteration
-matrix has eigenvalues `μ_k = Σ_a cos(kₐπh) / d`, and spectral radius
-`ρ = cos(πh) = 1 − π²h²/2 + O(h⁴)`. This is strictly less than 1,
-confirming convergence; iterations to reduce residual by factor ε:
+*Backward from known convergence properties.* For `DiffusiveFlux(2)` the
+eigenstructure of Lₕ on `CartesianMesh` with Dirichlet BC is computable
+in closed form. In the discrete inner product `⟨·,·⟩_h` the eigenvalues
+are `λ_k = (2/h²) Σ_a (1 − cos(kₐπh))` for multi-indices
+`k ∈ {1, …, N−1}^d` — the discrete analog of the continuous Laplacian
+spectrum `π²|k|²`, recovering it exactly as `h → 0`. With diagonal
+entries `D_{ii} = 2d/h²`, the Jacobi iteration matrix `M_J = D⁻¹(A − D)`
+has eigenvalues `μ_k = (1/d) Σ_a cos(kₐπh)`, and spectral radius
+`ρ(M_J) = cos(πh) = 1 − π²h²/2 + O(h⁴)` (attained at the smoothest mode
+`k = (1,…,1)`). This is strictly less than 1, confirming convergence;
+iterations to reduce residual by factor ε:
 `⌈log ε / log cos(πh)⌉ ≈ 2 log(1/ε) / (π²h²)` — O(1/h²), derived from
 the spectral bound, not asserted. The eigenvalue formula ties the solver
-directly back to the continuous progenitor `-∇²`; the convergence guarantee
-comes from the same spectral theory that the commutation diagram verifies.
+directly back to the continuous progenitor `-∇²`; the convergence
+guarantee comes from the same spectral theory that the commutation
+diagram verifies.
 
-All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK.
-The O(1/h²) iteration count bounds C6 to N ≤ 32 in 2-D for tractable CI
-time. Lane B: on an N = 8 system, verify that `DenseJacobiSolver` reaches
-the prescribed tolerance within the iteration count predicted by the
-spectral bound above, and that the residual decreases monotonically.
+*Order ≥ 4 remark.* For `DiffusiveFlux(4)` the closed-form eigenvalues
+above do not apply; the wider stencil introduces different Fourier
+symbols. SPD (from C4) still guarantees convergence qualitatively for
+any α small enough, but the iteration-count bound must be re-derived
+numerically by a one-off dense eigenvalue scan on a representative
+grid. C6 reports the empirical rate for `DiffusiveFlux(4)` and flags it
+as Lane B evidence; the closed-form spectral derivation is deferred.
+
+All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK. The
+O(1/h²) iteration count bounds C6 to N ≤ 32 in 2-D for tractable CI
+time. Lane B: on an N = 8 system with `DiffusiveFlux(2)`, verify that
+`DenseJacobiSolver` reaches the prescribed tolerance within the
+iteration count predicted by the spectral bound above, and that the
+residual `‖f − Lₕ u^k‖_{L²_h}` decreases monotonically.
 
 **C6 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
 (C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux(2)`
 and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
-`DenseJacobiSolver` (C5) to solve `∇²φ = ρ` against the analytic solution
-`φ = sin(πx)sin(πy)` on the unit square. Convergence tests: N ∈ {8, 12,
-16, 24, 32} (five points) for p = 2; N ∈ {4, 6, 8, 12, 16} (five points)
-for p = 4 — capped to stay above the h⁴ floating-point floor. The Lane C
-checks in C1–C4 are the derivation; C6 is the proof that the derivation
-was implemented. C6 lives as a narrative application in
-`validation/poisson/` with a mirror documentation page at `docs/poisson/`;
-see the layout below.
+`DenseJacobiSolver` (C5) to solve `-∇²φ = ρ` against the analytic
+solution `φ = sin(πx)sin(πy)` on the unit square. Convergence tests:
+N ∈ {8, 12, 16, 24, 32} (five points) for p = 2; N ∈ {4, 6, 8, 12, 16}
+(five points) for p = 4 — capped to stay above the h⁴ floating-point
+floor. The reported error is the cell-volume-weighted discrete L² norm
+`‖φ_h − Rₕ φ_exact‖_{L²_h} = (Σᵢ |Ωᵢ|·(φ_h,ᵢ − (Rₕ φ)ᵢ)²)^{1/2}` — the
+natural norm for the FVM formulation and the one in which the SPD
+argument of C4 lives. A parallel max-norm
+`‖φ_h − Rₕ φ_exact‖_{∞,h}` is also reported to detect pointwise
+failure modes (boundary-adjacent rows, corners). The Lane C checks in
+C1–C4 are the derivation; C6 is the proof that the derivation was
+implemented. C6 lives as a narrative application in `validation/poisson/`
+with a mirror documentation page at `docs/poisson/`; see the layout
+below.
 
 **`validation/poisson/` and the Sphinx page.** C6 is a narrative
 application, not only a test. It walks the pipeline from manufactured
@@ -507,14 +628,14 @@ validation/poisson/
 ├── __init__.py
 ├── manufactured.py         — φ, ρ as SymbolicFunctions on EuclideanManifold(2):
 │                               φ(x, y) = sin(πx) sin(πy)
-│                               ρ(x, y) = −∇²φ = 2π² sin(πx) sin(πy)
-│                             the identity ∇²φ + ρ = 0 is NOT checked at
+│                               ρ(x, y) = -∇²φ = 2π² sin(πx) sin(πy)
+│                             the identity -∇²φ − ρ = 0 is NOT checked at
 │                             module load (import side-effects are avoided);
 │                             it is verified in test_poisson_square.py.
 ├── poisson_square.py       — narrative script with `# %%` cells: compose
 │                             PoissonEquation + CartesianMesh +
-│                             FaceReconstruction + Dirichlet BC +
-│                             FVMDiscretization + DenseDirectSolver, solve,
+│                             DiffusiveFlux(order) + Dirichlet BC +
+│                             FVMDiscretization + DenseJacobiSolver, solve,
 │                             emit solution and convergence figures.
 ├── figures.py              — matplotlib figure functions (pure; returning Figure).
 └── test_poisson_square.py  — machine-checked claims (pytest).
@@ -523,7 +644,7 @@ validation/poisson/
 **Tests (`test_poisson_square.py`).** Six claims, each independently
 falsifiable:
 
-1. *Manufactured pair identity.* Verify symbolically that `∇²φ + ρ = 0`
+1. *Manufactured pair identity.* Verify symbolically that `-∇²φ − ρ = 0`
    for the `manufactured` pair — not at module load, but here as a test.
 2. *Commutation symbolic check on the test problem.* Using the
    `manufactured` pair, verify via SymPy that `Lₕ Rₕ φ − Rₕ Lφ` expanded
@@ -532,15 +653,17 @@ falsifiable:
    problem, catching any specialization bug.
 3. *Numerical convergence, p = 2.* `assert_convergence_order(err_p2,
    [8, 12, 16, 24, 32], expected=2.0)` using the existing helper in
-   `tests/utils/convergence.py`; L² error against `manufactured.phi`.
+   `tests/utils/convergence.py`; the error is the cell-volume-weighted
+   `L²_h` norm against `Rₕ manufactured.phi`.
 4. *Numerical convergence, p = 4.* Same with `expected=4.0`; resolutions
    `[4, 6, 8, 12, 16]` — five points, capped below the h⁴ FP floor.
 5. *Symmetry preservation.* `sin(πx)sin(πy)` is symmetric under `x ↔ y`;
    the numerical solution must respect this to floating-point precision
    for any N. A break signals a stencil-assembly bug.
-6. *Operator positive-definiteness.* For the assembled `Lₕ` matrix, verify
-   `u · (Lₕ u) > 0` for several random unit vectors `u`. Hand-rolled —
-   no `np.linalg.cholesky`.
+6. *Operator symmetry and positive-definiteness.* For the assembled `Lₕ`
+   matrix, verify `⟨u, Lₕ v⟩_h = ⟨Lₕ u, v⟩_h` (symmetry) and
+   `⟨u, Lₕ u⟩_h > 0` for `u ≠ 0` (positive-definiteness) on several
+   random unit MeshFunctions `u, v`. Hand-rolled — no `np.linalg.cholesky`.
 7. *Restriction commutes with boundary condition (nonzero data).* Using
    a separate test field `φ_bc(x, y) = x + y` (nonzero on all four sides),
    verify that `Rₕ φ_bc` on each boundary face matches the Dirichlet data
@@ -565,7 +688,7 @@ falsifiable:
 re-executed at Sphinx build time. Structure chosen so the derivation is
 visible in the rendered page, not only in test output:
 
-1. *Problem statement.* `∇²φ = −ρ` on the unit square with Dirichlet BC;
+1. *Problem statement.* `-∇²φ = ρ` on the unit square with Dirichlet BC;
    one code cell renders `sympy.Eq(lhs, rhs)` for the manufactured pair,
    so the symbolic identity is visible on the page.
 2. *Continuous objects.* Instantiate `PoissonEquation(flux, source)`;
