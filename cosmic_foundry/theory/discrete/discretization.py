@@ -4,19 +4,21 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from cosmic_foundry.theory.continuous.conservation_law import ConservationLaw
+from cosmic_foundry.theory.continuous.divergence_form_equation import (
+    DivergenceFormEquation,
+)
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
 
-class Discretization(NumericFunction[ConservationLaw, DiscreteOperator]):
-    """Maps a ConservationLaw to a DiscreteOperator at a given mesh and order.
+class Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator]):
+    """Maps a DivergenceFormEquation to a DiscreteOperator at a given mesh.
 
     A Discretization encapsulates the scheme choice — reconstruction,
-    Riemann solver, quadrature — for a particular mesh and approximation
-    order.  Calling it with a ConservationLaw produces the DiscreteOperator
-    Lₕ that makes the commutation diagram
+    numerical flux, quadrature — for a particular mesh and approximation
+    order.  Calling it with a DivergenceFormEquation produces the
+    DiscreteOperator Lₕ that makes the commutation diagram
 
         Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
 
@@ -31,7 +33,7 @@ class Discretization(NumericFunction[ConservationLaw, DiscreteOperator]):
 
     Required:
         mesh     — the mesh on which the scheme is defined
-        __call__ — produce the DiscreteOperator for a given ConservationLaw
+        __call__ — produce the DiscreteOperator for a given DivergenceFormEquation
                    (inherited from NumericFunction)
     """
 

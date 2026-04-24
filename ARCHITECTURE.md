@@ -106,22 +106,25 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
 
 DifferentialOperator(Function[Field, Field]) — L: Field → Field; interface: manifold, order
+├── GradientOperator                         — ∇: scalar Field → (0,1) TensorField;
+│                                              earned by: derived order = 1
 └── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
                                                earned by: integral form ∮_∂Ωᵢ F·n dA = ∫_Ωᵢ S dV
                                                is fully determined by flux + divergence theorem,
                                                not derivable from bare DifferentialOperator.
                                                free: flux: Function[Field, TensorField], source: Field
-    ├── EllipticEquation                     — steady state; derived: time_derivative = 0
-    │                                          Example: PoissonEquation (flux = -∇φ, source = ρ)
-    │                                          gives -∇²φ = ρ; the sign convention makes the
-    │                                          discrete operator positive definite (see C4, C5).
-    ├── ParabolicEquation                    — ∂ₜU = ∇·F(U) + S; F depends on ∂U (diffusive).
-    │                                          Example: heat equation, F(U) = k∇U.
-    └── ConservationLaw                      — ∂ₜU + ∇·F(U) = S; F algebraic in U (hyperbolic).
-                                               Example: Euler, F = (ρv, ρv⊗v + pI, (E+p)v).
-                                               The ∂ₜ term is handled by the time integrator
-                                               (Epoch 2), not by this object.
-                                               Stable through Epoch 10.
+                                               derived: order = 1
+    ├── ConservationLaw                      — ∂ₜU + ∇·F(U) = S; F algebraic in U (hyperbolic).
+    │                                          Example: Euler, F = (ρv, ρv⊗v + pI, (E+p)v).
+    │                                          The ∂ₜ term is handled by the time integrator
+    │                                          (Epoch 2), not by this object.
+    │                                          Stable through Epoch 10.
+    └── PoissonEquation                      — -∇²φ = ρ; earned by: derived flux = -∇(·).
+                                               The sign convention (flux = -∇φ, not +∇φ) ensures
+                                               the discrete operator is positive definite (see C4, C5).
+                                               free: manifold, source; derived: flux = -∇(·), order = 1.
+                                               There is no LaplaceOperator class: -∇²φ = -∇·∇φ is
+                                               derivable from GradientOperator and the flux field.
 
 Constraint(ABC)                       — interface: support → Manifold
 └── BoundaryCondition                 — support is ∂M
@@ -130,19 +133,14 @@ Constraint(ABC)                       — interface: support → Manifold
     └── NonLocalBoundaryCondition     — constraint depends on values outside the immediate neighborhood
 ```
 
-**PDE-type classification.** The three `DivergenceFormEquation` subclasses
-correspond to the standard classification by the principal symbol of the
-linearized spatial operator: elliptic (no time derivative; symbol has
-definite spectrum — `-∇²` for Poisson), parabolic (first-order in ∂ₜ with
-flux that depends on ∂U, yielding a diffusive second-order spatial symbol),
-and hyperbolic (first-order in ∂ₜ with flux algebraic in U, yielding a
-first-order spatial symbol with real eigenvalues). The heat equation
-`∂ₜU − ∇·(k∇U) = 0` lands in `ParabolicEquation` because its flux depends
-on the gradient; `ConservationLaw` is reserved for flux algebraic in U
-(Euler, MHD, scalar advection). This is a design convention grounded in
-the symbol classification — it is not derivable from the form `∇·F = S`
-alone, because the same syntactic form can host both parabolic and
-hyperbolic physics depending on the flux structure.
+**`DivergenceFormEquation` subclass justification.** `ConservationLaw` earns
+its class as the standard structure for hyperbolic systems (F algebraic in U);
+it is a named mathematical concept in the literature, not a PDE-classification
+marker. `PoissonEquation` earns its class by deriving `flux = -∇(·)`, removing
+a free parameter from `DivergenceFormEquation`. Intermediate classification
+ABCs (Elliptic, Parabolic, Hyperbolic as siblings) were considered and rejected:
+none adds a derived property or type narrowing that mypy can check, so none
+earns a class by the falsifiable-constraint rule.
 
 **`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
 covers Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin via the
@@ -442,18 +440,17 @@ is built on. Epoch 4 (hydro) swaps the `ConservationLaw` and the
 is unchanged. `LinearSolver` is NOT part of the Epoch 4 reuse: the Euler
 equations are nonlinear and require a separate `NonlinearSolver`.
 
-**C1 — Continuous progenitors.** Add `GradientOperator(DifferentialOperator)`
-and the `DivergenceFormEquation` hierarchy in `theory/continuous/`:
-`EllipticEquation`, `ParabolicEquation`, and `ConservationLaw` as siblings
-under `DivergenceFormEquation`. Add `PoissonEquation(EllipticEquation)` with
-`flux = -∇φ`, `source = ρ`, giving the sign convention `-∇²φ = ρ` — chosen
-so that the discrete operator inherits positive definiteness from the
-continuous `-∇²` (see C4). There is no `LaplaceOperator` class:
-`-∇²φ = -∇·∇φ` is derivable from `GradientOperator` and the flux field,
-so it does not earn a class by the falsifiable-constraint rule. Lane C:
-verify symbolically that the divergence-theorem form of `PoissonEquation`
-(`∮_∂Ω (-∇φ)·n dA = ∫_Ω ρ dV`) recovers `-∇²φ = ρ` under the Cartesian
-chart via integration by parts. No discrete code.
+**C1 — Continuous progenitors. ✓** Added `GradientOperator(DifferentialOperator)`
+(derived `order = 1`) and `DivergenceFormEquation(DifferentialOperator)` as the
+parent for all divergence-form PDEs. `ConservationLaw` now subclasses
+`DivergenceFormEquation`. `PoissonEquation(DivergenceFormEquation)` is an ABC
+with `flux = -∇(·)` derived and `manifold`/`source` abstract; it earns its
+class by fixing the flux, removing a degree of freedom from
+`DivergenceFormEquation`. `Discretization` type parameter updated from
+`ConservationLaw` to `DivergenceFormEquation`. Intermediate classification ABCs
+(Elliptic, Parabolic, Hyperbolic as siblings) were not introduced: none earns a
+class by the falsifiable-constraint rule. Lane C verified: `∇·(-∇φ) = -∇²φ = ρ`
+symbolically in `tests/test_poisson_equation.py`.
 
 **C2 — Full chain complex on `CartesianMesh`.** Extend
 `CartesianMesh.boundary(k)` to all k ∈ [1, n]; verify `∂_{k−1} ∘ ∂_k = 0`

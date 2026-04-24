@@ -11,11 +11,15 @@ from cosmic_foundry.theory.continuous.conservation_law import ConservationLaw
 from cosmic_foundry.theory.continuous.constraint import Constraint
 from cosmic_foundry.theory.continuous.differential_form import DifferentialForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.divergence_form_equation import (
+    DivergenceFormEquation,
+)
 from cosmic_foundry.theory.continuous.field import (
     Field,
     SymmetricTensorField,
     TensorField,
 )
+from cosmic_foundry.theory.continuous.gradient_operator import GradientOperator
 from cosmic_foundry.theory.continuous.local_boundary_condition import (
     LocalBoundaryCondition,
 )
@@ -28,6 +32,7 @@ from cosmic_foundry.theory.continuous.manifold import (
 from cosmic_foundry.theory.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
+from cosmic_foundry.theory.continuous.poisson_equation import PoissonEquation
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
     PseudoRiemannianManifold,
@@ -44,11 +49,14 @@ __all__ = [
     "Diffeomorphism",
     "DifferentialForm",
     "DifferentialOperator",
+    "DivergenceFormEquation",
     "Field",
+    "GradientOperator",
     "LocalBoundaryCondition",
     "Manifold",
     "MetricTensor",
     "NonLocalBoundaryCondition",
+    "PoissonEquation",
     "PseudoRiemannianManifold",
     "RiemannianManifold",
     "SymmetricTensorField",
