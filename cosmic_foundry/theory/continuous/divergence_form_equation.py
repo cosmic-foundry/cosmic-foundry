@@ -9,7 +9,7 @@ from cosmic_foundry.theory.continuous.field import Field, TensorField
 from cosmic_foundry.theory.foundation.function import Function
 
 
-class DivergenceFormEquation(DifferentialOperator):
+class DivergenceFormEquation(DifferentialOperator[Field]):
     """A PDE expressed as a spatial divergence: ∇·F(U) = S.
 
     DivergenceFormEquation is the formal bridge between a continuous PDE

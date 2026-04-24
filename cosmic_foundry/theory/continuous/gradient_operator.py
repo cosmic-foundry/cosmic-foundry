@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.field import TensorField
 
 
-class GradientOperator(DifferentialOperator):
+class GradientOperator(DifferentialOperator[TensorField]):
     """Abstract gradient operator ∇: scalar Field → covariant TensorField.
 
     The gradient of a scalar field f on a manifold M is the (0,1)-type

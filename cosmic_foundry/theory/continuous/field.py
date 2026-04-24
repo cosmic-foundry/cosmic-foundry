@@ -8,7 +8,7 @@ SymmetricTensorField — symmetric covariant 2-tensor; g_{ij} = g_{ji}
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.symbolic_function import SymbolicFunction
@@ -29,7 +29,7 @@ class Field(SymbolicFunction[D, C]):
         """The manifold on which this field is defined."""
 
 
-class TensorField(Field):  # noqa: B024
+class TensorField(Field[D, C], Generic[D, C]):  # noqa: B024
     """A field whose codomain is a tensor bundle T^(p,q)M.
 
     Subclasses fix tensor_type to name specific tensor kinds;
@@ -47,7 +47,7 @@ class TensorField(Field):  # noqa: B024
         """Return (p, q): p contravariant indices, q covariant indices."""
 
 
-class SymmetricTensorField(TensorField):
+class SymmetricTensorField(TensorField[D, C], Generic[D, C]):
     """A symmetric covariant 2-tensor field: tensor type (0, 2), g_{ij} = g_{ji}.
 
     Covers the metric tensor g, the viscous stress tensor σ, and any
