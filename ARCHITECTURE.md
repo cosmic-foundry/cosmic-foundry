@@ -268,28 +268,35 @@ DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                               output.mesh), by analogy with DifferentialOperator.manifold.
                               Not independently constructed from stencil coefficients.
 
-NumericalFlux               — given cell averages U and a face, returns
-                              F·n̂·|face_area|. The ORDER of the resulting
-                              scheme is min(reconstruction_order,
-                              face_quadrature_order, deconvolution_order);
-                              all three must be ≥ ORDER. Conflating them
-                              into a single "reconstruction order" silently
-                              caps the scheme at O(h²) regardless of stencil.
-                              Machine-checkable derivation (Lane C): Taylor
-                              expansion of the COMPOSITE face flux (not
-                              reconstruction alone) against the exact face-
-                              averaged flux of a smooth test function yields
-                              leading error O(hᵖ).
-├── DiffusiveFlux           — F(U) = ∇U; returns ∇U·n̂·|face|.
-│                             Epoch 1 concrete: CenteredFlux(p=2),
-│                             HighOrderDiffusiveFlux(p=4). The p=4 class
-│                             carries face quadrature of order ≥ 4 AND the
-│                             cell-average / point-value deconvolution —
-│                             not reconstruction alone.
-└── HyperbolicFlux          — F(U) nonlinear; takes two-sided reconstructed
-                              state (U_L, U_R) and a Riemann solver, returns
-                              the numerical flux. Epoch 4 concrete:
-                              MUSCL_HLLC(p=2), PPM_HLLC(p=4).
+NumericalFlux               — free: order: int
+                              given cell averages U and a face, returns
+                              F·n̂·|face_area|. order is the COMPOSITE
+                              convergence order of the scheme:
+                                order = min(reconstruction_order,
+                                            face_quadrature_order,
+                                            deconvolution_order)
+                              all three must be ≥ order; the class is
+                              responsible for ensuring they are.
+                              Earned by: order is a verifiable claim —
+                              the Lane C Taylor expansion of the composite
+                              face flux against the exact face-averaged flux
+                              of a smooth test function yields leading error
+                              O(hᵖ), where p = order.
+├── DiffusiveFlux(order)    — free: order: int. F(U) = ∇U; constructs the
+│                             appropriate stencil, face-quadrature rule,
+│                             and cell-average/point-value deconvolution for
+│                             that order. One class, not one class per order:
+│                             DiffusiveFlux(2) and DiffusiveFlux(4) are
+│                             *instances*, not subclasses. The test that forces
+│                             generalization is that both instances pass the
+│                             same Lane C contract.
+└── HyperbolicFlux(order, riemann_solver)
+                            — free: order: int, riemann_solver: RiemannSolver.
+                              F(U) nonlinear; reconstruction at the given order
+                              produces a two-sided state (U_L, U_R) that the
+                              Riemann solver consumes. Epoch 4 ships
+                              HyperbolicFlux(2, HLLC) and HyperbolicFlux(4, HLLC)
+                              as instances — not subclasses.
 
 LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperator Lₕ.
                               SCOPE: linear operators only. Epoch 4 hydro (nonlinear
@@ -408,21 +415,19 @@ the top dimension. Lane C.
 needed for k < n. This data-structure question must be answered and the
 decision recorded in ARCHITECTURE.md before C2 is opened.
 
-**C3 — `NumericalFlux` family (p = 2 and p = 4 together).** Introduce the
-`NumericalFlux` ABC and the `DiffusiveFlux` subclass. Ship `CenteredFlux`
-(p = 2) *and* `HighOrderDiffusiveFlux` (p = 4) in the same PR — both at
-once to force the ABC to actually generalize. The central design point of
-this PR: the ORDER of a FVM scheme is
+**C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
+Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete
+class. Construct `DiffusiveFlux(2)` *and* `DiffusiveFlux(4)` — two
+instances of the same class — and verify both in the same PR. The test that
+forces generalization is not "two subclasses pass the same test" but "one
+class parameterized by `order` satisfies the same Lane C contract at both
+orders." Shipping an `order` parameter that only changes the stencil width
+would fail: the ORDER of a FVM scheme is
 `min(reconstruction_order, face_quadrature_order, deconvolution_order)`.
-Labeling the parameter "reconstruction order" and varying only the stencil
-silently caps the scheme at O(h²) regardless of stencil width. The p = 4
-concrete class must independently carry: (a) a wider polynomial
-reconstruction, (b) a face-quadrature rule exact to O(h⁴), and (c) the
-cell-average / point-value deconvolution at O(h⁴). Lane C per concrete
-class: Taylor expansion of the *composite* face flux (reconstruction +
-quadrature + deconvolution) against the exact face-averaged flux of a
-smooth test function yields leading error O(hᵖ). Expanding the
-reconstruction alone is not sufficient.
+`DiffusiveFlux(order)` must independently configure all three components
+for each `order`. Lane C per instance: Taylor expansion of the *composite*
+face flux (not the reconstruction alone) against the exact face-averaged
+flux yields leading error O(hᵖ), where p = order.
 
 **C4 — Generic `FVMDiscretization`.** Introduce
 `FVMDiscretization(mesh, numerical_flux, boundary_condition)`; it is
@@ -432,7 +437,7 @@ is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
 law's flux function baked into `NF`. BC enters via the constructor parameter
 (see "Boundary condition application" in `discrete/`). Lane C: verify the
 commutation diagram `Lₕ Rₕ ≈ Rₕ L` at order p for `PoissonEquation` paired
-with each of the two Epoch-1 `DiffusiveFlux` classes, symbolically.
+with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, symbolically.
 
 **C5 — `LinearSolver` hierarchy with dense Jacobi solver.** Introduce the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
@@ -448,8 +453,8 @@ N = 8 system with a known exact solution, verify that `DenseJacobiSolver`
 recovers it within the prescribed tolerance.
 
 **C6 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
-(C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux`
-classes (C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
+(C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux(2)`
+and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + Dirichlet `BoundaryCondition` +
 `DenseJacobiSolver` (C5) to solve `∇²φ = ρ` against the analytic solution
 `φ = sin(πx)sin(πy)` on the unit square. Convergence tests: N ∈ {8, 12,
 16, 24, 32} (five points) for p = 2; N ∈ {4, 6, 8, 12, 16} (five points)
@@ -491,7 +496,7 @@ falsifiable:
    for the `manufactured` pair — not at module load, but here as a test.
 2. *Commutation symbolic check on the test problem.* Using the
    `manufactured` pair, verify via SymPy that `Lₕ Rₕ φ − Rₕ Lφ` expanded
-   at an interior cell has leading term `O(hᵖ)` for each `DiffusiveFlux`.
+   at an interior cell has leading term `O(hᵖ)` for each `DiffusiveFlux(order)` instance.
    The derivation performed abstractly in C4 is re-executed on a concrete
    problem, catching any specialization bug.
 3. *Numerical convergence, p = 2.* `assert_convergence_order(err_p2,
@@ -538,12 +543,12 @@ visible in the rendered page, not only in test output:
 3. *Mesh and chain complex.* Instantiate `CartesianMesh`; render the
    face-incidence list from `mesh.boundary(n)` as a small table at
    N = 4 — direct reuse of C2.
-4. *NumericalFlux family.* Side-by-side table of stencil coefficients
-   for p = 2 and p = 4, derived symbolically from the concrete
-   `DiffusiveFlux` classes. The page is about the family, not one stencil.
+4. *NumericalFlux family.* Side-by-side table of stencil coefficients for
+   `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, derived symbolically. The page
+   is about one class parameterized by `order`, not two separate classes.
 5. *Discretization assembly.* `FVMDiscretization(mesh, numerical_flux, bc)`
-   produces `Lₕ`; `matrix_structure` at N = 8 shown side-by-side for
-   both flux classes.
+   produces `Lₕ`; `matrix_structure` at N = 8 shown side-by-side for both
+   instances.
 6. *Solve.* `DenseJacobiSolver` applied; `solution_heatmap` and
    `error_heatmap` at N = 16 for each flux class (capped for build time).
 7. *Convergence.* `convergence_figure()` inline; measured slopes
