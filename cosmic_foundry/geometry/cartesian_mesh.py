@@ -63,34 +63,44 @@ class CartesianMesh(StructuredMesh):
             """Number of k-cells in this set."""
             return self._count
 
-    class _BoundaryMap(Function):
-        """Boundary operator ∂_ndim: top-dimensional cell → oriented faces.
+    class _GeneralBoundaryMap(Function):
+        """Boundary operator ∂_k for a Cartesian CW-complex.
 
-        Returns the signed face incidence list for a cell index.  Each entry
-        is (axis, face_idx, sign) where face_idx is the multi-index of the
-        face in the axis-perpendicular face array and sign ∈ {-1, +1} encodes
-        orientation: -1 for the low face (outward normal points inward along
-        axis) and +1 for the high face (outward normal points outward).
+        Implements the standard CW boundary formula for k-cells identified
+        by (active_axes, idx):
+          - active_axes: sorted tuple of the k axes the cell extends along
+          - idx: lower-corner position in the full n-dimensional vertex grid
+
+        For the j-th active axis aⱼ the boundary contributes:
+          high face (idx + ê_{aⱼ}): sign = (−1)^j
+          low  face (same idx):      sign = (−1)^{j+1}
+
+        The output list has 2k entries
+        [(remaining_axes, face_idx, sign), ...], each a (k−1)-cell in the
+        same (active_axes, idx) representation.
         """
 
-        def __init__(self, ndim: int) -> None:
-            self._ndim = ndim
+        def __init__(self, k: int) -> None:
+            self._k = k
 
         def __call__(
-            self, idx: tuple[int, ...]
-        ) -> list[tuple[int, tuple[int, ...], int]]:
-            """Return oriented faces of the cell at idx.
+            self,
+            cell: tuple[tuple[int, ...], tuple[int, ...]],
+        ) -> list[tuple[tuple[int, ...], tuple[int, ...], int]]:
+            """Return oriented (k−1)-cell faces of *cell*.
 
-            Returns [(axis, face_idx, sign), ...] with 2*ndim entries.
+            *cell* is (active_axes, idx).  Returns
+            [(remaining_axes, face_idx, sign), ...] with 2k entries.
             """
-            faces: list[tuple[int, tuple[int, ...], int]] = []
-            for a in range(self._ndim):
-                # Low face: same multi-index, sign = -1
-                faces.append((a, idx, -1))
-                # High face: increment idx along axis a, sign = +1
-                hi = idx[:a] + (idx[a] + 1,) + idx[a + 1 :]
-                faces.append((a, hi, +1))
-            return faces
+            active_axes, idx = cell
+            result: list[tuple[tuple[int, ...], tuple[int, ...], int]] = []
+            for j, a in enumerate(active_axes):
+                remaining = active_axes[:j] + active_axes[j + 1 :]
+                sign = (-1) ** j
+                hi_idx = idx[:a] + (idx[a] + 1,) + idx[a + 1 :]
+                result.append((remaining, hi_idx, sign))
+                result.append((remaining, idx, -sign))
+            return result
 
     def __init__(
         self,
@@ -132,19 +142,18 @@ class CartesianMesh(StructuredMesh):
         return len(self._shape) + 1
 
     def boundary(self, k: int) -> Function:
-        """Return the boundary operator ∂_k for k-cells.
+        """Return the boundary operator ∂_k for k-cells (k ∈ [1, ndim]).
 
-        Only k == ndim (top-dimensional cells) is implemented; lower-dimensional
-        boundary operators are not yet implemented.
+        The returned Function maps a k-cell identifier
+        (active_axes: tuple[int,...], idx: tuple[int,...]) to a list of
+        signed (k−1)-cell identifiers:
+        [(remaining_axes, face_idx, sign), ...] with 2k entries.
         """
         ndim = len(self._shape)
-        if k == ndim:
-            return CartesianMesh._BoundaryMap(ndim)
-        if k <= 0 or k > ndim:
+        if k < 1 or k > ndim:
             msg = f"k must be in [1, {ndim}], got {k}"
             raise IndexError(msg)
-        msg = f"∂_{k} on CartesianMesh not yet implemented; only ∂_{ndim} available"
-        raise NotImplementedError(msg)
+        return CartesianMesh._GeneralBoundaryMap(k)
 
     def coordinate(self, idx: tuple[int, ...]) -> tuple[sympy.Expr, ...]:
         """Return cell-center coordinates: origin + (idx + ½)·spacing."""
