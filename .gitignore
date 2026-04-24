@@ -51,6 +51,8 @@ environment/miniforge/
 !/.claude/
 /.claude/*
 !/.claude/settings.json
+!/.claude/agents/
+!/.claude/agents/*.md
 .codex
 .gemini
 
