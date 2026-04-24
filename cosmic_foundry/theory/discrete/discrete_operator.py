@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
@@ -12,9 +12,7 @@ from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 _V = TypeVar("_V")
 
 
-class DiscreteOperator(
-    NumericFunction[MeshFunction[_V], MeshFunction[_V]], Generic[_V]
-):
+class DiscreteOperator(NumericFunction[MeshFunction[_V], MeshFunction[_V]]):
     """The discrete analog of DifferentialOperator: Lₕ: MeshFunction → MeshFunction.
 
     A DiscreteOperator is the output of a Discretization — the Lₕ that makes

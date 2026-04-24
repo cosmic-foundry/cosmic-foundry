@@ -498,28 +498,24 @@ well-founded:
    `point: Point[M]`; `Function.__call__` at the foundation layer remains the
    generic `x: D` interface.
 
-2. **Form-degree value types.**  `C` in `Field[D, C]` varies by tensor type:
-   `sympy.Expr` for scalars, `tuple[sympy.Expr, ...]` for covectors, a matrix
-   for rank-2 tensors.  Making `C` real requires form-degree classes (`ZeroForm`,
-   `OneForm`, `TwoForm`, ...) as concrete subclasses of `DifferentialForm`, each
-   deriving `degree`, with distinct Python value representations for `C`.
-   `DifferentialOperator` must be reparameterized from `Function[Field, _C]` to
-   `Function[_D, _C]` so that the exterior derivative on 1-forms is
-   `Function[OneForm, TwoForm]` and named operator ABCs earn their classes via
-   domain/codomain type narrowing verified by Lane C tests.
+2. **Form-degree value types. ✓**  `ZeroForm[D]`, `OneForm[D]`, `TwoForm[D]`
+   are named ABCs in `theory/continuous/differential_form.py`, each deriving
+   `degree` from `DifferentialForm[D, C]` and fixing the Python value type:
+   `C = sympy.Expr` for scalars, `C = tuple[sympy.Expr, ...]` for covectors,
+   `C = sympy.Matrix` for antisymmetric rank-2 tensors.  `DifferentialOperator`
+   is reparameterized from `Function[Field, _C]` to `Function[_D, _C]` with
+   both TypeVars bound to `DifferentialForm`.
 
-3. **`DivergenceFormEquation` consequent.**  Once form-degree types exist,
-   `DivergenceFormEquation` becomes `DifferentialOperator[_D, ZeroForm]` (its
-   output is always a scalar) and `flux` tightens from `Function[Field,
-   TensorField]` to `Function[_D, OneForm]`.  Sub-questions: (a) whether `_D`
-   must accommodate multi-component input (Euler equations) or whether scalar
-   `Field` is sufficient through Epoch 3; (b) whether the flux codomain is always
-   `OneForm` (valid on Riemannian manifolds via the metric isomorphism) or must
-   remain `TensorField` for rank-2 flux tensors in systems.
-
-All three remaining decisions (data structure + form-degree value types +
-`DivergenceFormEquation` consequent) must be recorded in ARCHITECTURE.md
-before C2 is opened.
+3. **`DivergenceFormEquation` consequent. ✓**  `DivergenceFormEquation` is
+   `DifferentialOperator[DifferentialForm, ZeroForm]` — domain is open
+   (`DifferentialForm`, any degree) pending multi-component input in Epoch 3;
+   codomain is `ZeroForm` because ∇·F is always a scalar.  `flux` tightens to
+   `Function[DifferentialForm, OneForm]` (the Riemannian metric isomorphism
+   lets the flux live in Ω¹ rather than a general TensorField).  `source`
+   tightens to `ZeroForm`.  `_NegatedGradientField` in `PoissonEquation`
+   becomes a concrete `OneForm`; `_ZeroFormField` becomes a concrete `ZeroForm`.
+   The `_D` domain sub-question (scalar vs. multi-component) is deferred to C3
+   (Euler equations).
 
 **C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
 Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete

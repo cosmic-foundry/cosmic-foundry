@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from cosmic_foundry.theory.foundation.function import Function
 
@@ -11,7 +11,7 @@ D = TypeVar("D")
 C = TypeVar("C")
 
 
-class InvertibleFunction(Function[D, C], Generic[D, C]):
+class InvertibleFunction(Function[D, C]):
     """A bijection f: A → B admitting an inverse g: B → A.
 
     An invertible function (bijection) has a two-sided inverse: g∘f = id_A

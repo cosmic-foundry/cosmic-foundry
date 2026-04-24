@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
@@ -14,9 +14,7 @@ M = TypeVar("M")
 V = TypeVar("V")
 
 
-class RestrictionOperator(
-    NumericFunction[Function[M, V], MeshFunction[V]], Generic[M, V]
-):
+class RestrictionOperator(NumericFunction[Function[M, V], MeshFunction[V]]):
     """The restriction operator Rₕ: the formal bridge from continuous to discrete.
 
     A RestrictionOperator maps a continuous Function to a MeshFunction via

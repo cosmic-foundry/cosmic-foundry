@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 import sympy
 
@@ -14,7 +14,7 @@ M = TypeVar("M")  # Manifold type
 C = TypeVar("C")  # Codomain value type
 
 
-class SymbolicFunction(Function[Point[M], C], Generic[M, C]):
+class SymbolicFunction(Function[Point[M], C]):
     """A Function defined by a SymPy expression, evaluated at a typed Point[M].
 
     __call__ is derived: it verifies that the point's chart matches the
