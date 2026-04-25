@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any, cast
 
 import sympy
@@ -150,7 +149,8 @@ class FVMDiscretization(Discretization):
         The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
     boundary_condition:
         Optional DirichletBC; when supplied, ghost cells are applied in
-        __call__ and assemble_matrix uses the full boundary-aware operator.
+        __call__ and assemble_matrix (inherited from Discretization) uses
+        the full boundary-aware operator.
     """
 
     def __init__(
@@ -170,52 +170,6 @@ class FVMDiscretization(Discretization):
     def __call__(self) -> _AssembledFVMOperator:
         """Produce the assembled discrete operator."""
         return _AssembledFVMOperator(self._numerical_flux, self._boundary_condition)
-
-    def assemble_matrix(self) -> sympy.Matrix:
-        """Assemble the N^d × N^d stiffness matrix A via unit-basis evaluation.
-
-        Row ordering is lexicographic: flat index = Σ_a idx[a] · ∏_{b<a} shape[b],
-        so axis 0 varies fastest.  Column j is Lₕ eⱼ evaluated at each cell.
-        Requires a DirichletBC to be set so ghost cells are applied correctly.
-        """
-        mesh = cast(CartesianMesh, self._mesh)
-        op = self()
-        shape = mesh._shape
-        ndim = len(shape)
-        n_total = math.prod(shape)
-
-        def to_flat(idx: tuple[int, ...]) -> int:
-            result = 0
-            stride = 1
-            for a in range(ndim):
-                result += idx[a] * stride
-                stride *= shape[a]
-            return result
-
-        def to_multi(flat: int) -> tuple[int, ...]:
-            idx = []
-            for a in range(ndim):
-                idx.append(flat % shape[a])
-                flat //= shape[a]
-            return tuple(idx)
-
-        rows: list[list[sympy.Expr]] = [
-            [sympy.Integer(0)] * n_total for _ in range(n_total)
-        ]
-
-        for j in range(n_total):
-            target = to_multi(j)
-
-            def unit(idx: tuple[int, ...], t: tuple[int, ...] = target) -> sympy.Expr:
-                return sympy.Integer(1) if idx == t else sympy.Integer(0)
-
-            e_j: MeshFunction[sympy.Expr] = LazyMeshFunction(mesh, unit)
-            lh_ej = op(e_j)
-
-            for i in range(n_total):
-                rows[i][j] = sympy.Integer(lh_ej(to_multi(i)))
-
-        return sympy.Matrix(rows)
 
 
 __all__ = ["FVMDiscretization"]

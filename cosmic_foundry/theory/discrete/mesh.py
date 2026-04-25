@@ -35,5 +35,10 @@ class Mesh(CellComplex):
     def chart(self) -> Chart:
         """The chart grounding this complex in a manifold's coordinate system."""
 
+    @property
+    @abstractmethod
+    def shape(self) -> tuple[int, ...]:
+        """Number of top-level cells along each axis."""
+
 
 __all__ = ["Mesh"]

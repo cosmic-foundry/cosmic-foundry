@@ -128,6 +128,10 @@ class CartesianMesh(StructuredMesh):
     def chart(self) -> Chart:
         return self._chart
 
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._shape
+
     def __getitem__(self, k: int) -> Set:
         """Return the Set of k-cells."""
         ndim = len(self._shape)
