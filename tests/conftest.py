@@ -1,6 +1,6 @@
 """Shared pytest fixtures and configuration."""
 
-import tests.support.oracles  # noqa: F401 — registers all convergence instances
+import tests.support.instances  # noqa: F401 — registers all convergence instances
 from tests.support.convergence_registry import check_registry_complete, iter_instances
 
 check_registry_complete()
