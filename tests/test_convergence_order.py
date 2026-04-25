@@ -8,14 +8,17 @@ _CLAIMS; the single parametric test covers all entries.
   _SolverClaim(solver, flux, mesh)    — solver reaches tol with monotonically
                                         decreasing residuals and bounded count
   _ConvergenceRateClaim(solver, flux, meshes)
-                                      — L²_h error converges at >= O(h^{p-0.5})
+                                      — L²_h error converges at >= O(h^{p-0.1})
                                         over a mesh refinement sequence using a
                                         manufactured solution with exact cell
                                         averages for source and reference field
 
-_FLUXES, _SOLVERS, and _CONVERGENCE_MESHES are registries.  Adding a new
-NumericalFlux to _FLUXES or a new LinearSolver to _SOLVERS automatically
-generates all four claim types for that entry.
+_FLUXES contains all NumericalFlux instances; adding a new flux automatically
+generates _OrderClaim entries for it.  _ELLIPTIC_FLUXES is the SPD subset
+that also gets _SolverClaim and _ConvergenceRateClaim entries — fluxes whose
+assembled stiffness matrix is not SPD (e.g. AdvectiveFlux) belong only in
+_FLUXES.  _SOLVERS and _CONVERGENCE_MESHES are registries for the elliptic
+claims.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ import pytest
 import sympy
 
 from cosmic_foundry.computation.dense_jacobi_solver import DenseJacobiSolver
+from cosmic_foundry.geometry.advective_flux import AdvectiveFlux
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianRestrictionOperator,
@@ -254,7 +258,12 @@ _mesh_n8 = CartesianMesh(
 _FLUXES = [
     DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
     DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
+    AdvectiveFlux(AdvectiveFlux.min_order, _manifold),
+    AdvectiveFlux(AdvectiveFlux.min_order + AdvectiveFlux.order_step, _manifold),
 ]
+# SPD subset: only fluxes whose assembled stiffness matrix is SPD are compatible
+# with DenseJacobiSolver; AdvectiveFlux produces a skew-symmetric matrix.
+_ELLIPTIC_FLUXES = [f for f in _FLUXES if isinstance(f, DiffusiveFlux)]
 _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _CONVERGENCE_MESHES = [
     CartesianMesh(
@@ -268,11 +277,11 @@ _CONVERGENCE_MESHES = [
 _CLAIMS: list[_Claim] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
-    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _FLUXES],
+    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _ELLIPTIC_FLUXES],
     *[
         _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
         for s in _SOLVERS
-        for f in _FLUXES
+        for f in _ELLIPTIC_FLUXES
     ],
 ]
 
