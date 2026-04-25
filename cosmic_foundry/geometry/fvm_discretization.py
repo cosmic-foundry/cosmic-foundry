@@ -7,6 +7,7 @@ from typing import Any, cast
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
@@ -15,6 +16,32 @@ from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
+
+
+def _apply_dirichlet_ghosts(
+    U: MeshFunction[sympy.Expr],
+    mesh: CartesianMesh,
+) -> LazyMeshFunction[sympy.Expr]:
+    """Extend U with homogeneous Dirichlet ghost cells via odd reflection.
+
+    For each axis a and mesh size N = shape[a]:
+        U(i < 0)  → −U(−1 − i)   (left ghost: odd reflection about face at 0)
+        U(i >= N) → −U(2N − 1 − i) (right ghost: odd reflection about face at N)
+    Corners (out of bounds in multiple axes) are handled recursively.
+    """
+    shape = mesh._shape
+
+    def extended(idx: tuple[int, ...]) -> sympy.Expr:
+        for a, (i, N) in enumerate(zip(idx, shape, strict=True)):
+            if i < 0:
+                reflected = idx[:a] + (-1 - i,) + idx[a + 1 :]
+                return -extended(reflected)
+            if i >= N:
+                reflected = idx[:a] + (2 * N - 1 - i,) + idx[a + 1 :]
+                return -extended(reflected)
+        return U(idx)  # type: ignore[arg-type]
+
+    return LazyMeshFunction(mesh, extended)
 
 
 class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
@@ -55,11 +82,20 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     The mesh is read from U.mesh at call time, making this operator applicable
     to symbolic meshes (for convergence testing) and concrete meshes alike.
 
+    If a DirichletBC is supplied (via FVMDiscretization), homogeneous ghost
+    cells are applied before computing face fluxes, making the operator
+    well-defined for all cells including those adjacent to the boundary.
+
     continuous_operator is auto-derived as ∇·(numerical_flux.continuous_operator).
     """
 
-    def __init__(self, numerical_flux: NumericalFlux[sympy.Expr]) -> None:
+    def __init__(
+        self,
+        numerical_flux: NumericalFlux[sympy.Expr],
+        bc: BoundaryCondition | None = None,
+    ) -> None:
         self._numerical_flux = numerical_flux
+        self._bc = bc
 
     @property
     def order(self) -> int:
@@ -72,6 +108,8 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     def __call__(self, U: MeshFunction[sympy.Expr]) -> LazyMeshFunction[sympy.Expr]:
         """Apply the assembled operator; returns a lazy cell-residual MeshFunction."""
         mesh = cast(CartesianMesh, U.mesh)
+        if self._bc is not None:
+            U = _apply_dirichlet_ghosts(U, mesh)
         face_fluxes = self._numerical_flux(U)
         ndim = len(mesh._shape)
 
@@ -110,26 +148,23 @@ class FVMDiscretization(Discretization):
     numerical_flux:
         The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
     boundary_condition:
-        The boundary condition on ∂Ω.  Stored but not yet applied.
+        Optional DirichletBC; when supplied, ghost cells are applied in
+        __call__ and assemble_matrix (inherited from Discretization) uses
+        the full boundary-aware operator.
     """
 
     def __init__(
         self,
         mesh: Mesh,
         numerical_flux: NumericalFlux[Any],
-        boundary_condition: Any = None,
+        boundary_condition: BoundaryCondition | None = None,
     ) -> None:
-        self._mesh = mesh
+        super().__init__(mesh, boundary_condition)
         self._numerical_flux = numerical_flux
-        self._boundary_condition = boundary_condition
-
-    @property
-    def mesh(self) -> Mesh:
-        return self._mesh
 
     def __call__(self) -> _AssembledFVMOperator:
         """Produce the assembled discrete operator."""
-        return _AssembledFVMOperator(self._numerical_flux)
+        return _AssembledFVMOperator(self._numerical_flux, self._boundary_condition)
 
 
 __all__ = ["FVMDiscretization"]
