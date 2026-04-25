@@ -236,7 +236,8 @@ class _DirectSolverClaim(_Claim):
 class _ConvergenceRateClaim(_Claim):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
-    bc_type selects both the boundary condition and the manufactured solution:
+    The source ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator,
+    so no per-flux RHS formula is required.  bc_type selects φ:
       DirichletBC — φ = sin(πx)+sin(3πx), satisfies φ(0)=φ(1)=0
       PeriodicBC  — φ = sin(2πx), zero-mean and periodic on [0,1]
     """
@@ -263,90 +264,44 @@ class _ConvergenceRateClaim(_Claim):
         )
 
     def check(self) -> None:
+        space = EuclideanManifold(1)
+        _x = space.atlas[0].symbols[0]
         manifold = self._flux.continuous_operator.manifold
+
+        if self._bc_type is PeriodicBC:
+            phi_expr = sympy.sin(2 * sympy.pi * _x)
+        else:
+            phi_expr = sympy.sin(sympy.pi * _x) + sympy.sin(3 * sympy.pi * _x)
+
+        # Derive ρ = ∇·F(φ) symbolically from the flux's continuous operator.
+        one_form = self._flux.continuous_operator(ZeroForm(space, phi_expr, (_x,)))
+        rho_expr = sum(
+            sympy.diff(one_form.component(i), one_form.symbols[i])
+            for i in range(len(one_form.symbols))
+        )
+
+        # Lambdify antiderivatives for O(1) float cell-average evaluation:
+        # cell_avg(f, i) = (F(x_{i+1}) − F(x_i)) / h  where F' = f.
+        F_phi = sympy.lambdify(_x, sympy.integrate(phi_expr, _x), "math")
+        F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
+
         errors: list[float] = []
         for mesh in self._meshes:
-            h = float(mesh.cell_volume)  # 1-D: cell_volume == spacing
-            orig = float(mesh.coordinate((0,))[0]) - 0.5 * h
+            vol = float(mesh.cell_volume)
+            orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
+            n_cells = mesh.shape[0]
 
-            if self._bc_type is PeriodicBC:
+            def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
 
-                def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:
-                    xl, xr = _o + i * _h, _o + (i + 1) * _h
-                    return (math.cos(2 * math.pi * xl) - math.cos(2 * math.pi * xr)) / (
-                        2 * math.pi * _h
-                    )
-
-                def _rho_avg(i: int, _h: float = h, _o: float = orig) -> float:
-                    xl, xr = _o + i * _h, _o + (i + 1) * _h
-                    return (
-                        math.sin(2 * math.pi * xr) - math.sin(2 * math.pi * xl)
-                    ) / _h
-
-            elif isinstance(self._flux, AdvectionDiffusionFlux):
-                # φ = sin(πx) + sin(3πx) satisfies φ(0)=φ(1)=0 (same as DirichletBC).
-                # ρ = ∇·(φ − κ∇φ) = ∂_x φ − κ∂_xx φ.
-                # Diffusion part: cell avg of −∂_xx φ = π²sin(πx) + 9π²sin(3πx).
-                # Advection part: cell avg of ∂_x φ = πcos(πx) + 3πcos(3πx).
-                _kappa = float(self._flux._continuous_operator._kappa)
-
-                def _phi_avg(  # type: ignore[no-redef]
-                    i: int, _h: float = h, _o: float = orig
-                ) -> float:
-                    xl, xr = _o + i * _h, _o + (i + 1) * _h
-                    return (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / (
-                        math.pi * _h
-                    ) + (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr)) / (
-                        3 * math.pi * _h
-                    )
-
-                def _rho_avg(  # type: ignore[no-redef]
-                    i: int,
-                    _h: float = h,
-                    _o: float = orig,
-                    _k: float = _kappa,
-                ) -> float:
-                    xl, xr = _o + i * _h, _o + (i + 1) * _h
-                    diff_part = (
-                        math.pi * (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / _h
-                        + 3
-                        * math.pi
-                        * (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr))
-                        / _h
-                    )
-                    adv_part = (
-                        math.sin(math.pi * xr) - math.sin(math.pi * xl)
-                    ) / _h + (
-                        math.sin(3 * math.pi * xr) - math.sin(3 * math.pi * xl)
-                    ) / _h
-                    return _k * diff_part + adv_part
-
-            else:
-
-                def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:  # type: ignore[no-redef]
-                    xl, xr = _o + i * _h, _o + (i + 1) * _h
-                    return (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / (
-                        math.pi * _h
-                    ) + (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr)) / (
-                        3 * math.pi * _h
-                    )
-
-                def _rho_avg(i: int, _h: float = h, _o: float = orig) -> float:  # type: ignore[no-redef]
-                    xl, xr = _o + i * _h, _o + (i + 1) * _h
-                    return (
-                        math.pi * (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / _h
-                        + 3
-                        * math.pi
-                        * (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr))
-                        / _h
-                    )
+            def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
 
             bc = self._bc_type(manifold)
             disc = FVMDiscretization(mesh, self._flux, bc)
             rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
             u_h = self._solver.solve(disc, rhs)
-            vol = float(mesh.cell_volume)
-            n_cells = mesh.shape[0]
+
             if self._bc_type is PeriodicBC:
                 # The advection matrix has a null space (DC mode for all N; Nyquist
                 # mode additionally for even N).  φ_exact has zero projection onto
@@ -363,8 +318,6 @@ class _ConvergenceRateClaim(_Claim):
                     vol * (u_vals[i] - _phi_avg(i)) ** 2 for i in range(n_cells)
                 )
             else:
-                # All cells included: ghost values equal the exact extension of any
-                # solution satisfying the BC, so boundary cells converge at order p.
                 err_sq = sum(
                     vol * (float(u_h((i,))) - _phi_avg(i)) ** 2 for i in range(n_cells)
                 )
@@ -376,8 +329,8 @@ class _ConvergenceRateClaim(_Claim):
         n_pts = len(log_h)
         sx = sum(log_h)
         sy = sum(log_e)
-        sxy = sum(x * y for x, y in zip(log_h, log_e, strict=False))
-        sxx = sum(x * x for x in log_h)
+        sxy = sum(lh * le for lh, le in zip(log_h, log_e, strict=False))
+        sxx = sum(lh * lh for lh in log_h)
         slope = (n_pts * sxy - sx * sy) / (n_pts * sxx - sx**2)
         assert slope >= self._flux.order - 0.1, (
             f"Convergence rate {slope:.3f} < expected "
