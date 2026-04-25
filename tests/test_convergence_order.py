@@ -237,7 +237,7 @@ class _ConvergenceRateClaim(_Claim):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
     bc_type selects both the boundary condition and the manufactured solution:
-      DirichletBC — φ = sin(πx)+sin(3πx)/3, satisfies φ(0)=φ(1)=0
+      DirichletBC — φ = sin(πx)+sin(3πx), satisfies φ(0)=φ(1)=0
       PeriodicBC  — φ = sin(2πx), zero-mean and periodic on [0,1]
     """
 
