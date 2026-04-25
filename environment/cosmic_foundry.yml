@@ -44,3 +44,12 @@ dependencies:
   # agent tooling (Codex and Gemini CLIs run on Node; operators
   # npm-install the CLIs themselves once Node is available)
   - nodejs
+  # GPU / CUDA 12 (WSL2 and Linux with NVIDIA driver)
+  # jaxlib (CPU base) comes from conda-forge above; GPU dispatch is
+  # wired in via the pip CUDA 12 plugins below.
+  - cuda-toolkit=12.*
+  - cudnn
+  - pip
+  - pip:
+    - jax-cuda12-plugin
+    - jax-cuda12-pjrt
