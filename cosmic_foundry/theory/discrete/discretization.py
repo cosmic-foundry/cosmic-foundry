@@ -112,9 +112,7 @@ class Discretization(ABC):
         a = self.assemble()
         n = a.shape[0]
         u_vec = Tensor([float(u[j]) for j in range(n)])
-        result = a @ u_vec
-        assert isinstance(result, Tensor)
-        return result
+        return a @ u_vec
 
 
 __all__ = ["Discretization"]

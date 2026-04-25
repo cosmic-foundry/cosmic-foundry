@@ -42,19 +42,24 @@ class Tensor:
     the same length (jagged arrays are not supported).
 
     Construction:
-        Tensor([1.0, 2.0, 3.0])           — rank-1, shape (3,)
-        Tensor([[1.0, 2.0], [3.0, 4.0]])  — rank-2, shape (2, 2)
-        Tensor([[[...], ...], ...])        — rank-3+, arbitrary shape
-        Tensor.zeros(m, n, k)             — rank-3 zero array
-        Tensor.eye(n)                     — n × n identity
+        Tensor(1.0)                        — rank-0 scalar
+        Tensor([1.0, 2.0, 3.0])            — rank-1, shape (3,)
+        Tensor([[1.0, 2.0], [3.0, 4.0]])   — rank-2, shape (2, 2)
+        Tensor([[[...], ...], ...])         — rank-3+, arbitrary shape
+        Tensor.zeros()                      — rank-0 zero
+        Tensor.zeros(m, n, k)              — rank-3 zero array
+        Tensor.eye(n)                       — n × n identity
 
-    Indexing:
+    Indexing (rank ≥ 1 only):
         t[i]   — float for rank-1, rank-(n-1) Tensor for rank-n
 
     Arithmetic (element-wise, any rank):
         a + b, a - b, -a
         a * scalar, scalar * a, a / scalar
-        a @ b  — dot      (rank-1 @ rank-1 → float),
+        float(t)  — extract value from rank-0 Tensor
+
+    Matrix operations:
+        a @ b  — dot      (rank-1 @ rank-1 → rank-0 Tensor),
                   vecmat   (rank-1 @ rank-2 → rank-1),
                   matvec   (rank-n @ rank-1 → rank-(n-1)),
                   matmul   (rank-n @ rank-2 → rank-n)
@@ -64,34 +69,53 @@ class Tensor:
         t.svd()    — (U, s, Vt); singular values descending
 
     Any rank:
-        t.norm()   — Frobenius norm → float
-        t.to_list() — deep copy of the underlying nested list
+        t.norm()    — Frobenius norm (|value| for rank-0) → float
+        t.to_list() — underlying data; scalar for rank-0, nested list otherwise
     """
 
-    def __init__(self, data: Sequence[Any]) -> None:
-        # _to_list recursively converts nested sequences to nested lists so
-        # that all internal helpers can assume list as the container type.
-        self._data: list[Any] = _to_list(data)
-        self._shape: tuple[int, ...] = _infer_shape(self._data)
+    def __init__(self, data: Any) -> None:
+        if isinstance(data, Sequence) and not isinstance(data, str | bytes):
+            # rank ≥ 1: recursively convert to nested lists.
+            self._data: Any = _to_list(data)
+            self._shape: tuple[int, ...] = _infer_shape(self._data)
+        else:
+            # rank-0 scalar.
+            self._data = data
+            self._shape = ()
 
     @property
     def shape(self) -> tuple[int, ...]:
         return self._shape
 
+    def __float__(self) -> float:
+        """Extract the scalar value from a rank-0 Tensor."""
+        if self._shape:
+            raise TypeError(
+                f"cannot convert rank-{len(self._shape)} Tensor to float; "
+                "index to a scalar or call .norm() first"
+            )
+        return float(self._data)
+
     def __len__(self) -> int:
+        if not self._shape:
+            raise TypeError("rank-0 Tensor has no length")
         return self._shape[0]
 
     def __getitem__(self, idx: int) -> float | Tensor:
+        if not self._shape:
+            raise TypeError("rank-0 Tensor is not subscriptable")
         if len(self._shape) == 1:
             return float(self._data[idx])
         return Tensor(self._data[idx])
 
     def __iter__(self) -> Iterator[float | Tensor]:
+        if not self._shape:
+            raise TypeError("rank-0 Tensor is not iterable")
         for i in range(self._shape[0]):
             yield self[i]
 
-    def to_list(self) -> list[Any]:
-        """Return a deep copy of the underlying nested Python list."""
+    def to_list(self) -> Any:
+        """Scalar for rank-0; deep-copied nested list for rank ≥ 1."""
         return _deep_copy(self._data)
 
     def __repr__(self) -> str:
@@ -116,11 +140,11 @@ class Tensor:
     def __truediv__(self, scalar: float) -> Tensor:
         return self.__mul__(1.0 / float(scalar))
 
-    def __matmul__(self, other: Tensor) -> float | Tensor:
+    def __matmul__(self, other: Tensor) -> Tensor:
         r1, r2 = len(self._shape), len(other._shape)
         if r1 == 1 and r2 == 1:
-            # dot product
-            return float(
+            # dot product → rank-0
+            return Tensor(
                 sum(self._data[i] * other._data[i] for i in range(self._shape[0]))
             )
         if r1 == 1 and r2 == 2:
@@ -148,7 +172,9 @@ class Tensor:
         return Tensor([self._data[i][i] for i in range(n)])
 
     def norm(self) -> float:
-        """Frobenius norm: sqrt of sum of squares of all elements."""
+        """Frobenius norm (absolute value for rank-0)."""
+        if not self._shape:
+            return abs(float(self._data))
         return math.sqrt(sum(x * x for x in _flatten(self._data)))
 
     def svd(self) -> tuple[Tensor, Tensor, Tensor]:
@@ -220,9 +246,9 @@ class Tensor:
 
     @classmethod
     def zeros(cls, *shape: int) -> Tensor:
-        """Zero Tensor of the given shape (any rank ≥ 1)."""
+        """Zero Tensor of the given shape (any rank, including rank-0)."""
         if not shape:
-            raise ValueError("zeros requires at least one dimension")
+            return cls(0.0)
 
         def _make(dims: tuple[int, ...]) -> list[Any]:
             if len(dims) == 1:
@@ -238,7 +264,7 @@ class Tensor:
 
 
 # ---------------------------------------------------------------------------
-# Module-level helpers — operate on raw nested lists, not Tensor objects.
+# Module-level helpers — operate on raw data (scalar or nested list).
 # ---------------------------------------------------------------------------
 
 
@@ -259,22 +285,28 @@ def _infer_shape(data: list[Any]) -> tuple[int, ...]:
     return (len(data),)
 
 
-def _map(data: list[Any], fn: Callable[[Any], Any]) -> list[Any]:
-    """Apply fn to every leaf element of a nested list."""
+def _map(data: Any, fn: Callable[[Any], Any]) -> Any:
+    """Apply fn to every leaf element; data may be a scalar or nested list."""
+    if not isinstance(data, list):
+        return fn(data)
     if not data or not isinstance(data[0], list):
         return [fn(x) for x in data]
     return [_map(row, fn) for row in data]
 
 
-def _zip_map(a: list[Any], b: list[Any], fn: Callable[[Any, Any], Any]) -> list[Any]:
-    """Apply fn element-wise to two nested lists of the same shape."""
+def _zip_map(a: Any, b: Any, fn: Callable[[Any, Any], Any]) -> Any:
+    """Apply fn element-wise to two same-shape values (scalar or nested list)."""
+    if not isinstance(a, list):
+        return fn(a, b)
     if not a or not isinstance(a[0], list):
         return [fn(x, y) for x, y in zip(a, b, strict=False)]
     return [_zip_map(ra, rb, fn) for ra, rb in zip(a, b, strict=False)]
 
 
-def _flatten(data: list[Any]) -> list[float]:
+def _flatten(data: Any) -> list[float]:
     """Return all leaf elements as a flat list of floats."""
+    if not isinstance(data, list):
+        return [float(data)]
     if not data:
         return []
     if isinstance(data[0], list):
@@ -285,8 +317,10 @@ def _flatten(data: list[Any]) -> list[float]:
     return [float(x) for x in data]
 
 
-def _deep_copy(data: list[Any]) -> list[Any]:
-    """Deep copy a nested list."""
+def _deep_copy(data: Any) -> Any:
+    """Deep copy nested lists; return scalars as-is."""
+    if not isinstance(data, list):
+        return data
     if not data or not isinstance(data[0], list):
         return list(data)
     return [_deep_copy(row) for row in data]

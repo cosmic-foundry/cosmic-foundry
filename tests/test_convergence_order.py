@@ -362,7 +362,7 @@ class _ConvergenceRateClaim(_Claim):
 
             u_arr = Tensor([float(u_h((i,))) for i in range(n_cells)])
             for v in null_vecs:
-                u_arr = u_arr - (u_arr @ v) * v
+                u_arr = u_arr - float(u_arr @ v) * v
             phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
             diff = u_arr - phi_arr
             errors.append(math.sqrt(vol * (diff @ diff)))
