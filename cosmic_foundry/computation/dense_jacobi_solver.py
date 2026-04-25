@@ -108,11 +108,7 @@ class DenseJacobiSolver(LinearSolver):
                 stride *= shape[axis]
             return flat
 
-        # Assemble float matrix from sympy.Matrix (integer entries for rational h)
-        a_sym = discretization.assemble_matrix()
-        a: list[list[float]] = [
-            [float(a_sym[i, j]) for j in range(n)] for i in range(n)
-        ]
+        a: list[list[float]] = discretization.assemble()
 
         # RHS and diagonal vectors
         f: list[float] = [float(rhs(_to_multi(i))) for i in range(n)]  # type: ignore[arg-type]

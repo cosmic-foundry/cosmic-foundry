@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from typing import Any
 
 import sympy
 
@@ -32,7 +33,10 @@ class Discretization(ABC):
     Concrete:
         mesh               — the mesh on which the scheme is defined
         boundary_condition — the BoundaryCondition on ∂Ω (None if not yet set)
-        assemble_matrix    — unit-basis assembly of the N^d × N^d stiffness matrix
+        assemble_matrix    — unit-basis symbolic assembly; _OrderClaim only
+        assemble           — float matrix for direct solvers; derived from apply
+        diagonal           — diagonal of the assembled matrix; derived from assemble
+        apply              — apply Lₕ to a discrete field; override for matrix-free
     """
 
     def __init__(
@@ -94,6 +98,34 @@ class Discretization(ABC):
                 rows[i][j] = lh_ej(to_multi(i))  # type: ignore[arg-type]
 
         return sympy.Matrix(rows)
+
+    def assemble(self) -> list[list[float]]:
+        """Dense float matrix from basis-vector probing via assemble_matrix.
+
+        Returns the N^d × N^d stiffness matrix as a list of rows, with the
+        same lexicographic (axis-0-fastest) ordering as assemble_matrix.
+        Intended for direct solvers and inspection; not for large N.
+        """
+        a_sym = self.assemble_matrix()
+        n = a_sym.shape[0]
+        return [[float(a_sym[i, j]) for j in range(n)] for i in range(n)]
+
+    def diagonal(self) -> list[float]:
+        """Diagonal of the assembled stiffness matrix."""
+        a = self.assemble()
+        return [a[i][i] for i in range(len(a))]
+
+    def apply(self, u: Any) -> list[float]:
+        """Apply Lₕ to discrete field u; return the result as a list of floats.
+
+        u must be indexable with N^d float values in lexicographic
+        (axis-0-fastest) order.  The default materialises the full stiffness
+        matrix and performs a dense matrix-vector product — O(N^{2d}) memory.
+        Override this method for matrix-free implementations.
+        """
+        a = self.assemble()
+        n = len(a)
+        return [sum(a[i][j] * u[j] for j in range(n)) for i in range(n)]
 
 
 __all__ = ["Discretization"]

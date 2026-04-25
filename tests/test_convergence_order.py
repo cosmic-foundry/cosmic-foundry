@@ -289,8 +289,7 @@ class _ConvergenceRateClaim(_Claim):
         n_c = coarse.shape[0]
         vol_c = float(coarse.cell_volume)
         orig_c = float(coarse.coordinate((0,))[0]) - 0.5 * vol_c
-        a_sym_c = FVMDiscretization(coarse, self._flux, bc).assemble_matrix()
-        a_c = np.array([[float(a_sym_c[i, j]) for j in range(n_c)] for i in range(n_c)])
+        a_c = np.array(FVMDiscretization(coarse, self._flux, bc).assemble())
         k_max = max(1, n_c // p)
         phi_terms: list[sympy.Expr] = []
         for n in range(1, k_max + 1):
@@ -355,10 +354,7 @@ class _ConvergenceRateClaim(_Claim):
             # matrix's null space before measuring truncation error.  The SVD
             # threshold is relative to the largest singular value; for full-rank
             # systems no null vectors are found and the projection is a no-op.
-            a_sym = disc.assemble_matrix()
-            a_np = np.array(
-                [[float(a_sym[i, j]) for j in range(n_cells)] for i in range(n_cells)]
-            )
+            a_np = np.array(disc.assemble())
             _, s_vals, vt = np.linalg.svd(a_np)
             null_tol = s_vals[0] * n_cells * float(np.finfo(float).eps) ** 0.5
             null_vecs = vt[s_vals < null_tol]
