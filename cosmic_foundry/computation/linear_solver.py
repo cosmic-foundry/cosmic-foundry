@@ -12,7 +12,7 @@ class LinearSolver(ABC):
     """Abstract interface for solving the linear discrete equation Lₕ u = f.
 
     A LinearSolver takes a Discretization (which produces the linear operator
-    Lₕ via __call__ and assembles the stiffness matrix via assemble_matrix)
+    Lₕ via __call__ and assembles the stiffness matrix via assemble)
     together with a right-hand-side MeshFunction f, and returns a MeshFunction
     u satisfying Lₕ u = f.  The solver is scoped to linear operators: those
     whose assembled matrix A is a well-defined linear map from cell averages
@@ -43,7 +43,7 @@ class LinearSolver(ABC):
         Parameters
         ----------
         discretization:
-            Supplies Lₕ via assemble_matrix() and mesh geometry.
+            Supplies Lₕ via assemble() and mesh geometry.
         rhs:
             The right-hand-side MeshFunction f; must be callable with cell
             multi-indices and return values convertible to float.

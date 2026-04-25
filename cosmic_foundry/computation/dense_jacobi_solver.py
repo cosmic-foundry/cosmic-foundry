@@ -15,7 +15,7 @@ from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 class DenseJacobiSolver(LinearSolver):
     """Jacobi iterative solver for Lₕ u = f on the assembled N^d × N^d matrix.
 
-    Given the SPD stiffness matrix A assembled via Discretization.assemble_matrix,
+    Given the SPD stiffness matrix A assembled via Discretization.assemble,
     the damped fixed-point iteration u^{k+1} = u^k + ω D⁻¹(f − Au^k) is a
     contraction when ρ(I − ω D⁻¹A) < 1.  The relaxation factor ω is derived
     automatically from the Gershgorin bound on λ_max(D⁻¹A):

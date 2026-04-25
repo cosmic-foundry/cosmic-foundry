@@ -15,7 +15,7 @@ from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 class DenseLUSolver(LinearSolver):
     """Direct solver for Lₕ u = f via LU factorization of the N^d × N^d matrix.
 
-    Given the stiffness matrix A assembled via Discretization.assemble_matrix,
+    Given the stiffness matrix A assembled via Discretization.assemble,
     the system is solved exactly (up to floating-point rounding) in one pass:
 
         PA = LU   (Gaussian elimination with partial pivoting)

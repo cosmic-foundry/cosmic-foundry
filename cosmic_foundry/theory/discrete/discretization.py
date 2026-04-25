@@ -33,8 +33,7 @@ class Discretization(ABC):
     Concrete:
         mesh               — the mesh on which the scheme is defined
         boundary_condition — the BoundaryCondition on ∂Ω (None if not yet set)
-        assemble_matrix    — unit-basis symbolic assembly; _OrderClaim only
-        assemble           — float matrix for direct solvers; derived from apply
+        assemble           — float matrix; applies Lₕ to sympy basis vectors
         diagonal           — diagonal of the assembled matrix; derived from assemble
         apply              — apply Lₕ to a discrete field; override for matrix-free
     """
@@ -61,13 +60,13 @@ class Discretization(ABC):
     def __call__(self) -> DiscreteOperator:
         """Produce the assembled DiscreteOperator."""
 
-    def assemble_matrix(self) -> sympy.Matrix:
-        """Assemble the N^d × N^d stiffness matrix via unit-basis evaluation.
+    def assemble(self) -> list[list[float]]:
+        """Assemble the N^d × N^d stiffness matrix as a float list-of-rows.
 
-        Row ordering is lexicographic: flat index = Σ_a idx[a] · ∏_{b<a} shape[b],
-        so axis 0 varies fastest.  Column j is Lₕ eⱼ evaluated at each cell.
-        Any boundary condition must be baked into the operator returned by
-        __call__ so that ghost cells are applied correctly.
+        Applies Lₕ to each sympy unit-basis vector in turn and converts the
+        resulting sympy expressions to float.  Row and column ordering is
+        lexicographic with axis 0 varying fastest.  Intended for direct
+        solvers and inspection; not for large N.
         """
         op = self()
         shape = self.mesh.shape
@@ -81,9 +80,7 @@ class Discretization(ABC):
                 flat //= shape[a]
             return tuple(idx)
 
-        rows: list[list[sympy.Expr]] = [
-            [sympy.Integer(0)] * n_total for _ in range(n_total)
-        ]
+        rows: list[list[float]] = [[0.0] * n_total for _ in range(n_total)]
 
         for j in range(n_total):
             target = to_multi(j)
@@ -95,20 +92,9 @@ class Discretization(ABC):
             lh_ej = op(e_j)
 
             for i in range(n_total):
-                rows[i][j] = lh_ej(to_multi(i))  # type: ignore[arg-type]
+                rows[i][j] = float(lh_ej(to_multi(i)))  # type: ignore[arg-type]
 
-        return sympy.Matrix(rows)
-
-    def assemble(self) -> list[list[float]]:
-        """Dense float matrix from basis-vector probing via assemble_matrix.
-
-        Returns the N^d × N^d stiffness matrix as a list of rows, with the
-        same lexicographic (axis-0-fastest) ordering as assemble_matrix.
-        Intended for direct solvers and inspection; not for large N.
-        """
-        a_sym = self.assemble_matrix()
-        n = a_sym.shape[0]
-        return [[float(a_sym[i, j]) for j in range(n)] for i in range(n)]
+        return rows
 
     def diagonal(self) -> list[float]:
         """Diagonal of the assembled stiffness matrix."""

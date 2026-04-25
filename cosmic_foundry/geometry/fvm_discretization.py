@@ -171,8 +171,8 @@ class FVMDiscretization(Discretization):
         The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
     boundary_condition:
         Optional DirichletBC; when supplied, ghost cells are applied in
-        __call__ and assemble_matrix (inherited from Discretization) uses
-        the full boundary-aware operator.
+        __call__ and assemble (inherited from Discretization) uses the full
+        boundary-aware operator.
     """
 
     def __init__(
