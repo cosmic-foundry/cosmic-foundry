@@ -5,8 +5,12 @@ verified and how to verify it.  Adding a new claim requires only appending to
 _CLAIMS; the single parametric test covers all entries.
 
   _OrderClaim(instance)               — instance achieves O(h^p) at declared p
-  _SolverClaim(solver, flux, mesh)    — solver reaches tol with monotonically
-                                        decreasing residuals and bounded count
+  _SolverClaim(solver, flux, mesh)    — iterative solver reaches tol with
+                                        monotonically decreasing residuals and
+                                        analytically bounded iteration count
+  _DirectSolverClaim(solver, flux, mesh)
+                                      — direct solver residual < tol after one
+                                        factorization pass
   _ConvergenceRateClaim(solver, flux, meshes)
                                       — L²_h error converges at >= O(h^{p-0.1})
                                         over a mesh refinement sequence using a
@@ -15,10 +19,10 @@ _CLAIMS; the single parametric test covers all entries.
 
 _FLUXES contains all NumericalFlux instances; adding a new flux automatically
 generates _OrderClaim entries for it.  _ELLIPTIC_FLUXES is the SPD subset
-that also gets _SolverClaim and _ConvergenceRateClaim entries — fluxes whose
-assembled stiffness matrix is not SPD (e.g. AdvectiveFlux) belong only in
-_FLUXES.  _SOLVERS and _CONVERGENCE_MESHES are registries for the elliptic
-claims.
+that also gets solver/convergence claims — fluxes whose assembled stiffness
+matrix is not SPD (e.g. AdvectiveFlux) belong only in _FLUXES.  _SOLVERS
+(iterative), _DIRECT_SOLVERS (direct), and _CONVERGENCE_MESHES are registries
+for the elliptic claims.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ import pytest
 import sympy
 
 from cosmic_foundry.computation.dense_jacobi_solver import DenseJacobiSolver
+from cosmic_foundry.computation.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.geometry.advective_flux import AdvectiveFlux
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
@@ -170,12 +175,48 @@ class _SolverClaim(_Claim):
         ), f"Iteration count {len(r)} exceeds spectral-radius bound {k_bound}"
 
 
+class _DirectSolverClaim(_Claim):
+    """Claim: direct solver residual < tol after one factorization pass.
+
+    Builds the discretization from flux and mesh, then verifies:
+      1. Final residual ‖f − Au‖_{L²_h} < tol.
+    No monotonicity or iteration-count checks: a direct solver produces the
+    exact solution (up to floating-point rounding) in a single pass.
+    """
+
+    def __init__(
+        self,
+        solver: DenseLUSolver,
+        flux: Any,
+        mesh: CartesianMesh,
+    ) -> None:
+        self._solver = solver
+        self._flux = flux
+        self._mesh = mesh
+
+    @property
+    def description(self) -> str:
+        n = math.prod(self._mesh.shape)
+        return (
+            f"{type(self._solver).__name__}/"
+            f"{type(self._flux).__name__}(order={self._flux.order})/N={n}"
+        )
+
+    def check(self) -> None:
+        manifold = self._flux.continuous_operator.manifold
+        disc = FVMDiscretization(self._mesh, self._flux, DirichletBC(manifold))
+        rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
+        self._solver.solve(disc, rhs)
+        r = self._solver.residuals
+        assert r[-1] < self._solver._tol, f"Direct solve residual {r[-1]:.3e} >= tol"
+
+
 class _ConvergenceRateClaim(_Claim):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence."""
 
     def __init__(
         self,
-        solver: DenseJacobiSolver,
+        solver: Any,
         flux: Any,
         meshes: list[CartesianMesh],
     ) -> None:
@@ -265,6 +306,7 @@ _FLUXES = [
 # with DenseJacobiSolver; AdvectiveFlux produces a skew-symmetric matrix.
 _ELLIPTIC_FLUXES = [f for f in _FLUXES if isinstance(f, DiffusiveFlux)]
 _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
+_DIRECT_SOLVERS = [DenseLUSolver(tol=1e-10)]
 _CONVERGENCE_MESHES = [
     CartesianMesh(
         origin=(sympy.Rational(0),),
@@ -279,8 +321,13 @@ _CLAIMS: list[_Claim] = [
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
     *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _ELLIPTIC_FLUXES],
     *[
+        _DirectSolverClaim(s, f, _mesh_n8)
+        for s in _DIRECT_SOLVERS
+        for f in _ELLIPTIC_FLUXES
+    ],
+    *[
         _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
-        for s in _SOLVERS
+        for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _ELLIPTIC_FLUXES
     ],
 ]
