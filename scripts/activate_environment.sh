@@ -37,3 +37,9 @@ source "$CONDA_SH"
 conda activate cosmic_foundry
 [ "$_prev_nounset" = 1 ] && set -u
 unset _prev_nounset
+
+# On WSL2, expose the Windows NVIDIA driver libraries so JAX's PJRT
+# client can find libcuda.so at runtime.
+if [ -d /usr/lib/wsl/lib ]; then
+  export LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
