@@ -10,7 +10,28 @@ from __future__ import annotations
 
 import math
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
+from typing import Any, Protocol, runtime_checkable
+
+
+@runtime_checkable
+class Real(Protocol):
+    """Protocol for scalar numeric types usable as Tensor elements.
+
+    Any type satisfying these operations qualifies: Python float, int,
+    numpy.float16/32/64, and JAX scalar types all conform.  The protocol
+    covers exactly the operations Tensor performs on its elements.
+    """
+
+    def __neg__(self) -> Real: ...
+    def __add__(self, other: Any) -> Real: ...
+    def __radd__(self, other: Any) -> Real: ...
+    def __sub__(self, other: Any) -> Real: ...
+    def __rsub__(self, other: Any) -> Real: ...
+    def __mul__(self, other: Any) -> Real: ...
+    def __rmul__(self, other: Any) -> Real: ...
+    def __truediv__(self, other: Any) -> Real: ...
+    def __float__(self) -> float: ...
 
 
 class Tensor:
@@ -45,8 +66,11 @@ class Tensor:
         t.svd()             — rank-2 → (U, s, Vt); singular values descending
     """
 
-    def __init__(self, data: list) -> None:
-        self._data = data
+    def __init__(self, data: Sequence[Real] | Sequence[Sequence[Real]]) -> None:
+        # _data is list[Any] internally; the Sequence[Real] parameter annotation
+        # documents what callers should pass.  list[Any] avoids invariance errors
+        # when threading Real through nested list operations.
+        self._data: list[Any] = list(data)
         self._shape: tuple[int, ...] = _infer_shape(data)
 
     @property
@@ -65,7 +89,7 @@ class Tensor:
         for i in range(self._shape[0]):
             yield self[i]
 
-    def to_list(self) -> list:
+    def to_list(self) -> list[Any]:
         """Return a copy of the underlying nested Python list."""
         if len(self._shape) == 1:
             return list(self._data)
@@ -237,12 +261,14 @@ class Tensor:
         return cls([[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)])
 
 
-def _infer_shape(data: list) -> tuple[int, ...]:
-    if not isinstance(data, list) or not data:
+def _infer_shape(
+    data: Sequence[Real] | Sequence[Sequence[Real]],
+) -> tuple[int, ...]:
+    if not data:
         return (0,)
-    if isinstance(data[0], list):
+    if isinstance(data[0], Sequence) and not isinstance(data[0], str | bytes):
         return (len(data), len(data[0]))
     return (len(data),)
 
 
-__all__ = ["Tensor"]
+__all__ = ["Real", "Tensor"]
