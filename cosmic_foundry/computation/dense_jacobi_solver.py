@@ -6,6 +6,7 @@ import math
 from typing import cast
 
 from cosmic_foundry.computation.linear_solver import LinearSolver
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -72,14 +73,14 @@ class DenseJacobiSolver(LinearSolver):
         self._residuals: list[float] = []
 
     @property
-    def residuals(self) -> list[float]:
+    def residuals(self) -> Tensor:
         """Residual history ‖f − Au^k‖_{L²_h} from the most recent solve.
 
         residuals[k] is the discrete L²_h residual norm at the start of
         iteration k, before the k-th damped-Jacobi update is applied.
-        The list is populated by solve() and replaced on each call.
+        The Tensor is populated by solve() and replaced on each call.
         """
-        return list(self._residuals)
+        return Tensor(list(self._residuals))
 
     def solve(
         self,
@@ -108,16 +109,16 @@ class DenseJacobiSolver(LinearSolver):
                 stride *= shape[axis]
             return flat
 
-        a: list[list[float]] = discretization.assemble()
+        a: Tensor = discretization.assemble()
 
         # RHS and diagonal vectors
-        f: list[float] = [float(rhs(_to_multi(i))) for i in range(n)]  # type: ignore[arg-type]
-        diag: list[float] = [a[i][i] for i in range(n)]
+        f: Tensor = Tensor([rhs(_to_multi(i)) for i in range(n)])  # type: ignore[arg-type]
+        diag: Tensor = a.diag()
         vol: float = float(cast(CartesianMesh, mesh).cell_volume)
 
         # Gershgorin bound on λ_max(D⁻¹A): ω = min(2/G, 1) guarantees contraction.
         lambda_max_bound: float = max(
-            sum(abs(a[i][j] / diag[i]) for j in range(n)) for i in range(n)
+            sum(abs(a[i, j] / diag[i]) for j in range(n)) for i in range(n)
         )
         omega: float = min(2.0 / lambda_max_bound, 1.0)
 
@@ -129,7 +130,7 @@ class DenseJacobiSolver(LinearSolver):
         c_flat = _to_flat(c_multi)
         d_c = diag[c_flat]
         mu_1: float = sum(
-            a[c_flat][j]
+            a[c_flat, j]
             / d_c
             * math.prod(
                 math.cos(abs(_to_multi(j)[ax] - c_multi[ax]) * math.pi / shape[ax])
@@ -138,7 +139,7 @@ class DenseJacobiSolver(LinearSolver):
             for j in range(n)
         )
         rho: float = abs(1.0 - omega * mu_1)
-        r0_norm: float = math.sqrt(sum(vol * fi**2 for fi in f))
+        r0_norm: float = math.sqrt(vol) * f.norm()
         # Add 10 to absorb the ~0.1% underestimate of rho_fourier vs rho_actual
         # caused by boundary-row diagonal modifications; negligible for large N.
         k_max: int = (
@@ -148,22 +149,20 @@ class DenseJacobiSolver(LinearSolver):
         )
 
         # Damped Jacobi: u^{k+1} = u^k + ω D⁻¹(f − Au^k)
-        u: list[float] = [0.0] * n
+        u: Tensor = Tensor.zeros(n)
         self._residuals = []
         for _ in range(min(self._max_iter, k_max)):
-            r: list[float] = [
-                f[i] - sum(a[i][j] * u[j] for j in range(n)) for i in range(n)
-            ]
-            residual: float = (sum(vol * ri**2 for ri in r)) ** 0.5
+            r: Tensor = f - a @ u
+            residual: float = math.sqrt(vol) * r.norm()
             self._residuals.append(residual)
             if residual < self._tol:
                 break
-            u = [u[i] + omega * r[i] / diag[i] for i in range(n)]
+            u = u + omega * (r / diag)
 
-        u_list = u
+        u_tens = u
 
         def _solution(idx: tuple[int, ...]) -> float:
-            return u_list[_to_flat(idx)]
+            return float(u_tens[_to_flat(idx)])
 
         return LazyMeshFunction(mesh, _solution)
 

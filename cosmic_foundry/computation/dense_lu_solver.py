@@ -6,6 +6,7 @@ import math
 from typing import cast
 
 from cosmic_foundry.computation.linear_solver import LinearSolver
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -53,13 +54,13 @@ class DenseLUSolver(LinearSolver):
         self._residuals: list[float] = []
 
     @property
-    def residuals(self) -> list[float]:
-        """Residual history from the most recent solve: [‖f − Au‖_{L²_h}].
+    def residuals(self) -> Tensor:
+        """Residual history from the most recent solve as a rank-1 Tensor.
 
-        For a direct solver the list has exactly one entry — the final
+        For a direct solver the Tensor has exactly one entry — the final
         residual after back-substitution — rather than an iteration trace.
         """
-        return list(self._residuals)
+        return Tensor(list(self._residuals))
 
     def solve(
         self,
@@ -88,13 +89,13 @@ class DenseLUSolver(LinearSolver):
                 stride *= shape[axis]
             return flat
 
-        a_orig: list[list[float]] = discretization.assemble()
-        a: list[list[float]] = [row[:] for row in a_orig]
-        f: list[float] = [float(rhs(_to_multi(i))) for i in range(n)]  # type: ignore[arg-type]
+        a_orig: Tensor = discretization.assemble()
+        a: Tensor = a_orig.copy()
+        f: Tensor = Tensor([rhs(_to_multi(i)) for i in range(n)])  # type: ignore[arg-type]
         vol: float = float(cast(CartesianMesh, mesh).cell_volume)
 
         # LU factorization with partial pivoting: PA = LU.
-        # After factorization, a[i][j] holds U for j >= i and L for j < i
+        # After factorization, a[i,j] holds U for j >= i and L for j < i
         # (L has implicit unit diagonal).  pivot[i] records the source row.
         # singular_cols records columns where the post-pivot diagonal is below
         # the threshold — these correspond to null-space modes in consistently
@@ -104,55 +105,53 @@ class DenseLUSolver(LinearSolver):
         singular_cols: set[int] = set()
         pivot = list(range(n))
         for k in range(n):
-            max_val = abs(a[k][k])
+            max_val = abs(a[k, k])
             max_row = k
             for i in range(k + 1, n):
-                if abs(a[i][k]) > max_val:
-                    max_val = abs(a[i][k])
+                if abs(a[i, k]) > max_val:
+                    max_val = abs(a[i, k])
                     max_row = i
             if max_row != k:
                 a[k], a[max_row] = a[max_row], a[k]
                 pivot[k], pivot[max_row] = pivot[max_row], pivot[k]
-            if abs(a[k][k]) < singular_tol:
+            if abs(a[k, k]) < singular_tol:
                 singular_cols.add(k)
-                a[k][k] = 1.0  # placeholder diagonal; x[k] forced to 0
+                a[k, k] = 1.0  # placeholder diagonal; x[k] forced to 0
                 for i in range(k + 1, n):
-                    a[i][k] = 0.0  # L factor = 0: no elimination for this column
+                    a[i, k] = 0.0  # L factor = 0: no elimination for this column
                 continue
             for i in range(k + 1, n):
-                factor = a[i][k] / a[k][k]
-                a[i][k] = factor
+                factor = a[i, k] / a[k, k]
+                a[i, k] = factor
                 for j in range(k + 1, n):
-                    a[i][j] -= factor * a[k][j]
+                    a[i, j] = a[i, j] - factor * a[k, j]
 
         # Forward substitution: Ly = Pb (L has unit diagonal).
-        y: list[float] = [f[pivot[i]] for i in range(n)]
+        y: Tensor = Tensor([f[pivot[i]] for i in range(n)])
         for k in range(n):
             for j in range(k):
-                y[k] -= a[k][j] * y[j]
+                y[k] = y[k] - a[k, j] * y[j]
 
         # Back substitution: Ux = y.  Null-space components are pinned to 0
         # (minimum-norm solution for consistently singular systems).
-        x: list[float] = [0.0] * n
+        x: Tensor = Tensor.zeros(n)
         for k in range(n - 1, -1, -1):
             if k in singular_cols:
                 x[k] = 0.0
                 continue
             x[k] = y[k]
             for j in range(k + 1, n):
-                x[k] -= a[k][j] * x[j]
-            x[k] /= a[k][k]
+                x[k] = x[k] - a[k, j] * x[j]
+            x[k] = x[k] / a[k, k]
 
         # Recompute residual from original matrix (a is now LU, not A).
-        r: list[float] = [
-            f[i] - sum(a_orig[i][j] * x[j] for j in range(n)) for i in range(n)
-        ]
-        self._residuals = [math.sqrt(sum(vol * ri**2 for ri in r))]
+        r: Tensor = f - a_orig @ x
+        self._residuals = [math.sqrt(vol) * r.norm()]
 
-        u_list = x
+        u_tens = x
 
         def _solution(idx: tuple[int, ...]) -> float:
-            return u_list[_to_flat(idx)]
+            return float(u_tens[_to_flat(idx)])
 
         return LazyMeshFunction(mesh, _solution)
 

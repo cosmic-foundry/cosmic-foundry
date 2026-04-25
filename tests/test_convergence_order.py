@@ -28,15 +28,16 @@ for the elliptic claims.
 from __future__ import annotations
 
 import math
+import sys
 from abc import ABC, abstractmethod
 from typing import Any
 
-import numpy as np
 import pytest
 import sympy
 
 from cosmic_foundry.computation.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.dense_lu_solver import DenseLUSolver
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.advection_diffusion_flux import AdvectionDiffusionFlux
 from cosmic_foundry.geometry.advective_flux import AdvectiveFlux
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
@@ -289,7 +290,7 @@ class _ConvergenceRateClaim(_Claim):
         n_c = coarse.shape[0]
         vol_c = float(coarse.cell_volume)
         orig_c = float(coarse.coordinate((0,))[0]) - 0.5 * vol_c
-        a_c = np.array(FVMDiscretization(coarse, self._flux, bc).assemble())
+        a_c = FVMDiscretization(coarse, self._flux, bc).assemble()
         k_max = max(1, n_c // p)
         phi_terms: list[sympy.Expr] = []
         for n in range(1, k_max + 1):
@@ -303,21 +304,19 @@ class _ConvergenceRateClaim(_Claim):
             )
             F_pn = sympy.lambdify(_x, sympy.integrate(phi_n, _x), "math")
             F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
-            v_n = np.array(
+            v_n = Tensor(
                 [
                     (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
                 ]
             )
-            r_n = np.array(
+            r_n = Tensor(
                 [
                     (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
                 ]
             )
-            rel_err = float(np.linalg.norm(a_c @ v_n - r_n)) / (
-                float(np.linalg.norm(r_n)) + 1e-30
-            )
+            rel_err = (a_c @ v_n - r_n).norm() / (r_n.norm() + 1e-30)
             if rel_err < 0.1:
                 phi_terms.append(phi_n)
         assert phi_terms, "No admissible manufactured-solution modes found"
@@ -354,20 +353,19 @@ class _ConvergenceRateClaim(_Claim):
             # matrix's null space before measuring truncation error.  The SVD
             # threshold is relative to the largest singular value; for full-rank
             # systems no null vectors are found and the projection is a no-op.
-            a_np = np.array(disc.assemble())
-            _, s_vals, vt = np.linalg.svd(a_np)
-            null_tol = s_vals[0] * n_cells * float(np.finfo(float).eps) ** 0.5
-            null_vecs = vt[s_vals < null_tol]
+            _, s_vec, vt = disc.assemble().svd()
+            null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
+            null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
 
             rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
             u_h = self._solver.solve(disc, rhs)
 
-            u_arr = np.array([float(u_h((i,))) for i in range(n_cells)])
+            u_arr = Tensor([float(u_h((i,))) for i in range(n_cells)])
             for v in null_vecs:
-                u_arr -= float(np.dot(u_arr, v)) * v
-            phi_arr = np.array([_phi_avg(i) for i in range(n_cells)])
-            err_sq = float(vol * np.dot(u_arr - phi_arr, u_arr - phi_arr))
-            errors.append(math.sqrt(err_sq))
+                u_arr = u_arr - float(u_arr @ v) * v
+            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
+            diff = u_arr - phi_arr
+            errors.append(math.sqrt(vol * (diff @ diff)))
 
         hs = [float(m.cell_volume) for m in self._meshes]
         log_h = [math.log(hv) for hv in hs]
