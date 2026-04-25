@@ -41,5 +41,15 @@ class RestrictionOperator(NumericFunction[Function[M, V], MeshFunction[V]]):
     def mesh(self) -> Mesh:
         """The mesh defining the cell decomposition for restriction."""
 
+    @property
+    @abstractmethod
+    def degree(self) -> int:
+        """DEC degree k of the discrete values produced by this restriction.
+
+        degree == ndim restricts a ZeroForm to cell averages (n-chains).
+        degree == ndim - 1 restricts a OneForm's normal component to face
+        integrals ((n-1)-chains).
+        """
+
 
 __all__ = ["RestrictionOperator"]

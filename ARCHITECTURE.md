@@ -524,11 +524,12 @@ concrete class.  Key design decisions:
   Validity declared as class attributes: `min_order=2`, `order_step=2`.
   The `__init__` guard is derived from these, making the constraint explicit.
 - Convergence testing infrastructure: `tests/support/` provides a
-  `ConvergenceOracle` protocol, `CONVERGENCE_ORACLES` registry, and
-  `CONVERGENT_ABCS` list.  `conftest.py` enforces at collection time that
-  every concrete `DiscreteOperator` subclass has a registered oracle.
-  `test_convergence_order.py` is the single parametric test for all of them.
-  Oracle files stay until C5 automates them away.
+  `CONVERGENCE_INSTANCES` registry and `CONVERGENT_ABCS` list.
+  `conftest.py` enforces at collection time that every concrete
+  `DiscreteOperator` subclass has instances registered.
+  `test_convergence_order.py` auto-computes exact values via
+  `CartesianRestrictionOperator(mesh, degree)(instance.continuous_operator(phi))`
+  — no per-class oracle `error()` method is needed.
 
 **C4 — `DiffusionOperator`, `continuous_operator`, `Discretization`. ✓**
 Four additions delivered together:
@@ -558,7 +559,7 @@ Lane C verified: commutation diagram at order p for `DiffusiveFlux(2)` and
 registered in `tests/support/oracles/fvm_discretization.py`.  SPD derivation
 deferred to C6.
 
-**C5 — Automated convergence framework via `RestrictionOperator.degree`.**
+**C5 — Automated convergence framework via `RestrictionOperator.degree`. ✓**
 Complete the oracle-free convergence testing infrastructure:
 
 1. `RestrictionOperator` gains abstract `degree: int` — the dimension of

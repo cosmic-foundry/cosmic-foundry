@@ -54,7 +54,7 @@ class ZeroForm(DifferentialForm[D, sympy.Expr]):  # noqa: B024
         return 0
 
 
-class OneForm(DifferentialForm[D, tuple[sympy.Expr, ...]]):  # noqa: B024
+class OneForm(DifferentialForm[D, tuple[sympy.Expr, ...]]):
     """A differential 1-form: a covector field.
 
     Fixes degree = 1 and C = tuple[sympy.Expr, ...].  The default
@@ -62,12 +62,16 @@ class OneForm(DifferentialForm[D, tuple[sympy.Expr, ...]]):  # noqa: B024
     evaluated at a point); concrete implementations may override __call__
     to return all n components.
 
-    Earns its class by deriving degree.
+    Earns its class by deriving degree and requiring component(axis).
     """
 
     @property
     def degree(self) -> int:
         return 1
+
+    @abstractmethod
+    def component(self, axis: int) -> sympy.Expr:
+        """The axis-th coordinate component of this one-form."""
 
 
 class TwoForm(DifferentialForm[D, sympy.Matrix]):  # noqa: B024
