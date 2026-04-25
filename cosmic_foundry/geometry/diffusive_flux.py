@@ -9,6 +9,7 @@ import sympy
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
+from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
@@ -56,9 +57,9 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
         (order - min_order) % order_step == 0.  Stencil coefficients are
         derived via SymPy at construction time (~10–40 ms); __call__ uses
         only arithmetic.
-    continuous_operator:
-        The DiffusionOperator (-∇: Ω⁰ → Ω¹) that this instance approximates.
-        Must be a DiffusionOperator; the constructor guard enforces this.
+    manifold:
+        The manifold on which the operator acts; used to construct the
+        DiffusionOperator (-∇: Ω⁰ → Ω¹) that this instance approximates.
 
     __call__ signature:
         (U: MeshFunction) -> MeshFunction
@@ -74,19 +75,14 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
     min_order: ClassVar[int] = 2
     order_step: ClassVar[int] = 2
 
-    def __init__(self, order: int, continuous_operator: DifferentialOperator) -> None:
+    def __init__(self, order: int, manifold: Manifold) -> None:
         if order < self.min_order or (order - self.min_order) % self.order_step != 0:
             raise ValueError(
                 f"DiffusiveFlux order must be >= {self.min_order} and satisfy "
                 f"(order - {self.min_order}) % {self.order_step} == 0; got {order}"
             )
-        if not isinstance(continuous_operator, DiffusionOperator):
-            raise TypeError(
-                f"DiffusiveFlux continuous_operator must be a DiffusionOperator; "
-                f"got {type(continuous_operator).__name__}"
-            )
         self._order = order
-        self._continuous_operator = continuous_operator
+        self._continuous_operator = DiffusionOperator(manifold)
 
         # Derive stencil coefficients from first principles.
         #

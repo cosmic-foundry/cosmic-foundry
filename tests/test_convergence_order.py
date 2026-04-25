@@ -24,7 +24,6 @@ from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     ZeroForm,
 )
-from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 
 
 class _ZeroFormField(ZeroForm[Any]):
@@ -52,18 +51,18 @@ class _ZeroFormField(ZeroForm[Any]):
 
 
 _manifold = EuclideanManifold(1)
-_x = _manifold.atlas[0].symbols[0]
-_diffusion_op = DiffusionOperator(_manifold)
-_lo, _step = DiffusiveFlux.min_order, DiffusiveFlux.order_step
 _dummy_mesh = CartesianMesh(
     origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
 )
 
 _INSTANCES = [
-    DiffusiveFlux(_lo, _diffusion_op),
-    DiffusiveFlux(_lo + _step, _diffusion_op),
-    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo, _diffusion_op))(),
-    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo + _step, _diffusion_op))(),
+    DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
+    DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
+    FVMDiscretization(_dummy_mesh, DiffusiveFlux(DiffusiveFlux.min_order, _manifold))(),
+    FVMDiscretization(
+        _dummy_mesh,
+        DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
+    )(),
 ]
 
 
