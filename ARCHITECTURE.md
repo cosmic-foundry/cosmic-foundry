@@ -236,7 +236,11 @@ NumericalFlux(DiscreteOperator)
                               HyperbolicFlux(2, HLLC) and HyperbolicFlux(4, HLLC)
                               as instances — not subclasses.
 
-LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperator Lₕ.
+LinearSolver                — mesh-agnostic interface: solve(a: Tensor, b: Tensor) → Tensor.
+                              Accepts an assembled N×N stiffness matrix and an N-vector
+                              RHS; returns the solution vector. Assembly and index mapping
+                              are the caller's responsibility, keeping computation/ free
+                              of geometry/ and theory/discrete/ dependencies.
                               SCOPE: linear operators only. Epoch 5 hydro (nonlinear
                               flux) requires a separate NonlinearSolver / Newton
                               iteration. LinearSolver is not the shared machinery
