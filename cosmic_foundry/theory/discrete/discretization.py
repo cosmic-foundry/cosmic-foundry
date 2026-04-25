@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -72,7 +71,7 @@ class Discretization(ABC):
         op = self()
         shape = self.mesh.shape
         ndim = len(shape)
-        n_total = math.prod(shape)
+        n_total = self.mesh.n_cells
 
         def to_multi(flat: int) -> tuple[int, ...]:
             idx = []
