@@ -6,6 +6,9 @@ cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 
 from __future__ import annotations
 
+from cosmic_foundry.theory.continuous.advection_diffusion_operator import (
+    AdvectionDiffusionOperator,
+)
 from cosmic_foundry.theory.continuous.advection_operator import AdvectionOperator
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.constraint import Constraint
@@ -50,6 +53,7 @@ from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.continuous.topological_manifold import TopologicalManifold
 
 __all__ = [
+    "AdvectionDiffusionOperator",
     "AdvectionOperator",
     "Atlas",
     "BoundaryCondition",

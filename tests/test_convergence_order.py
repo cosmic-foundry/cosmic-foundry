@@ -36,6 +36,7 @@ import sympy
 
 from cosmic_foundry.computation.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.dense_lu_solver import DenseLUSolver
+from cosmic_foundry.geometry.advection_diffusion_flux import AdvectionDiffusionFlux
 from cosmic_foundry.geometry.advective_flux import AdvectiveFlux
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
@@ -282,6 +283,44 @@ class _ConvergenceRateClaim(_Claim):
                         math.sin(2 * math.pi * xr) - math.sin(2 * math.pi * xl)
                     ) / _h
 
+            elif isinstance(self._flux, AdvectionDiffusionFlux):
+                # φ = sin(πx) + sin(3πx) satisfies φ(0)=φ(1)=0 (same as DirichletBC).
+                # ρ = ∇·(φ − κ∇φ) = ∂_x φ − κ∂_xx φ.
+                # Diffusion part: cell avg of −∂_xx φ = π²sin(πx) + 9π²sin(3πx).
+                # Advection part: cell avg of ∂_x φ = πcos(πx) + 3πcos(3πx).
+                _kappa = float(self._flux._continuous_operator._kappa)
+
+                def _phi_avg(  # type: ignore[no-redef]
+                    i: int, _h: float = h, _o: float = orig
+                ) -> float:
+                    xl, xr = _o + i * _h, _o + (i + 1) * _h
+                    return (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / (
+                        math.pi * _h
+                    ) + (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr)) / (
+                        3 * math.pi * _h
+                    )
+
+                def _rho_avg(  # type: ignore[no-redef]
+                    i: int,
+                    _h: float = h,
+                    _o: float = orig,
+                    _k: float = _kappa,
+                ) -> float:
+                    xl, xr = _o + i * _h, _o + (i + 1) * _h
+                    diff_part = (
+                        math.pi * (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / _h
+                        + 3
+                        * math.pi
+                        * (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr))
+                        / _h
+                    )
+                    adv_part = (
+                        math.sin(math.pi * xr) - math.sin(math.pi * xl)
+                    ) / _h + (
+                        math.sin(3 * math.pi * xr) - math.sin(3 * math.pi * xl)
+                    ) / _h
+                    return _k * diff_part + adv_part
+
             else:
 
                 def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:  # type: ignore[no-redef]
@@ -365,10 +404,18 @@ _ADVECTIVE_FLUXES = [
     AdvectiveFlux(AdvectiveFlux.min_order, _manifold),
     AdvectiveFlux(AdvectiveFlux.min_order + AdvectiveFlux.order_step, _manifold),
 ]
-_FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES]
+_ADVECTION_DIFFUSION_FLUXES = [
+    AdvectionDiffusionFlux(AdvectionDiffusionFlux.min_order, _manifold),
+    AdvectionDiffusionFlux(
+        AdvectionDiffusionFlux.min_order + AdvectionDiffusionFlux.order_step, _manifold
+    ),
+]
+_FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES, *_ADVECTION_DIFFUSION_FLUXES]
 # DiffusiveFlux assembles an SPD matrix (DirichletBC); compatible with all solvers.
 # AdvectiveFlux assembles a rank-(N-1) circulant matrix under PeriodicBC; compatible
 # with DenseLUSolver only (zero-mean null-space convention handles the singularity).
+# AdvectionDiffusionFlux assembles A_adv + κ·A_diff; non-singular under DirichletBC
+# for any κ > 0, compatible with all solvers at unit Péclet number (κ=1, h≈1/N).
 _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver(tol=1e-10)]
 _CONVERGENCE_MESHES = [
@@ -405,6 +452,22 @@ _CLAIMS: list[_Claim] = [
         _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES, PeriodicBC)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
+    ],
+    # Advection-diffusion (non-singular under DirichletBC for κ>0): all solvers
+    *[
+        _SolverClaim(s, f, _mesh_n8)
+        for s in _SOLVERS
+        for f in _ADVECTION_DIFFUSION_FLUXES
+    ],
+    *[
+        _DirectSolverClaim(s, f, _mesh_n8)
+        for s in _DIRECT_SOLVERS
+        for f in _ADVECTION_DIFFUSION_FLUXES
+    ],
+    *[
+        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
+        for s in [*_SOLVERS, *_DIRECT_SOLVERS]
+        for f in _ADVECTION_DIFFUSION_FLUXES
     ],
 ]
 
