@@ -160,13 +160,13 @@ belong to. Example: `Chart`, `Atlas`, `Diffeomorphism` in `manifold.py`;
 `MetricTensor`, `RiemannianManifold` in `pseudo_riemannian_manifold.py`.
 
 **`DivergenceFormEquation` and its subtypes are spatial only.** `∂ₜ` is
-handled by the time integrator (Epoch 2), not by these objects. This separation
+handled by the time integrator (Epoch 3), not by these objects. This separation
 is preserved under the 3+1 ADM decomposition: in GR, covariant equations
 `∇_μ F^μ = S` decompose to `∂ₜ(√γ U) + ∂ᵢ(√γ Fⁱ) = √γ S(α, β, γᵢⱼ, Kᵢⱼ)`
 — still a spatial divergence operator with metric factors entering through the
 `Chart` and curvature terms in `source`.
 
-**Planned additions** (Epoch 10)
+**Planned additions** (Epoch 12)
 
 **`DynamicManifold(PseudoRiemannianManifold)`** — A manifold whose metric
 tensor is a dynamical field in the simulation state. Required for full GR
@@ -272,11 +272,11 @@ Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
                               delegating to the NumericalFlux at each face; BC
                               enters through boundary_condition (see below).
                               Not specialized to any particular conservation law:
-                              Epoch 1 supplies a DiffusiveFlux for Poisson;
-                              Epoch 4 supplies a HyperbolicFlux for Euler.
+                              Epoch 2 supplies a DiffusiveFlux for Poisson;
+                              Epoch 5 supplies a HyperbolicFlux for Euler.
                               Specializations belong in the NumericalFlux —
                               not in a new Discretization subclass per equation.
-                              Note: LinearSolver is NOT part of the Epoch 4
+                              Note: LinearSolver is NOT part of the Epoch 5
                               reuse; the Euler equations are nonlinear and need
                               a separate NonlinearSolver / Newton iteration.
 
@@ -316,15 +316,15 @@ NumericalFlux(DiscreteOperator)
                             — free: order: int, riemann_solver: RiemannSolver.
                               F(U) nonlinear; reconstruction at the given order
                               produces a two-sided state (U_L, U_R) that the
-                              Riemann solver consumes. Epoch 4 ships
+                              Riemann solver consumes. Epoch 5 ships
                               HyperbolicFlux(2, HLLC) and HyperbolicFlux(4, HLLC)
                               as instances — not subclasses.
 
 LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperator Lₕ.
-                              SCOPE: linear operators only. Epoch 4 hydro (nonlinear
+                              SCOPE: linear operators only. Epoch 5 hydro (nonlinear
                               flux) requires a separate NonlinearSolver / Newton
                               iteration. LinearSolver is not the shared machinery
-                              for Epoch 4; only FVMDiscretization and NumericalFlux
+                              for Epoch 5; only FVMDiscretization and NumericalFlux
                               are reused across epochs.
                               Ships DenseJacobiSolver (weighted Jacobi, ω derived
                               from Gershgorin bound; works for both order=2 and
@@ -334,13 +334,13 @@ LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperato
                               tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
 ```
 
-**Boundary condition application (Option B, Epoch 1 decision).** `FVMDiscretization`
+**Boundary condition application (Option B, Epoch 2 decision).** `FVMDiscretization`
 takes the `BoundaryCondition` as a constructor parameter; the resulting
 `DiscreteOperator` is the discrete analog of `L` on the constrained function
 space `{φ : Bφ = g}`. This keeps the commutation diagram a property of a single
-operator, and lets the Epoch 6 multigrid ask the discretization for coarse
+operator, and lets the Epoch 7 multigrid ask the discretization for coarse
 operators rather than asking the operator for its BC. Not committed long-term:
-if time-dependent `g` arrives with Epoch 4 hydro (inflow/outflow BCs that change
+if time-dependent `g` arrives with Epoch 5 hydro (inflow/outflow BCs that change
 per step), BC can migrate to a solver-level parameter without breaking the
 interior-flux derivation — the interior `Lₕ` and the numerical-flux family
 are independent of where BC is injected.
@@ -388,10 +388,10 @@ Backend(Protocol)   — per-instance dispatch strategy. Mixed-backend
                     — NumPy ndarray; dtype inferred from input by default
                       or fixed to an explicit numpy dtype; vectorized via
                       BLAS/LAPACK.
-    JaxBackend      — JAX array; planned (Epoch 2, C5).
+    JaxBackend      — JAX array; planned (Epoch 3, C5).
 ```
 
-**Planned additions (Epoch 2):** `JaxBackend`; field storage (`MeshFunction`
+**Planned additions (Epoch 3):** `JaxBackend`; field storage (`MeshFunction`
 backed by `Tensor`); explicit time integrators (`RungeKutta2`,
 `RungeKutta4`); HDF5 checkpoint/restart with provenance sidecars.
 
@@ -401,7 +401,7 @@ backed by `Tensor`); explicit time integrators (`RungeKutta2`,
 Physics capabilities sourced from reference tables (EOS polynomial fits,
 reaction networks, opacity tables) need a discipline governing how
 numeric tables are transcribed, verified, and updated independently of
-the derivation-first lane policy. This decision is deferred to Epoch 7
+the derivation-first lane policy. This decision is deferred to Epoch 8
 (microphysics), when the first such capability lands.
 
 **Kernel composition model.**
@@ -427,41 +427,41 @@ ingestion discipline for PDF-sourced defined constants is a separate decision.
 
 ---
 
-## Finalized: Epoch 1 — FVM Poisson solver
+## Finalized epochs
 
-The Epoch 1 sprint delivered the reusable FVM machinery the rest of the
-engine is built on. The Poisson solver is not the end goal; it is the
-exercise that proved the layer architecture and the derivation-first
-discipline on a concrete PDE before Epoch 4 introduces nonlinear flux.
+**Epoch 0 — Mathematical foundations.** Established the layer architecture
+(`foundation/`, `continuous/`, `discrete/`, `geometry/`, `computation/`) and
+the symbolic-reasoning import boundary. Delivered `Set`, `Function`,
+`TopologicalManifold`, `Manifold`, `PseudoRiemannianManifold`,
+`DifferentialForm`, `DivergenceFormEquation`, `CellComplex`, `Mesh`,
+`StructuredMesh`, `MeshFunction`, and `RestrictionOperator`. Wired process
+discipline (M0–M2): branch/PR standards, convergence-testing helpers, and the
+`ARCHITECTURE.md`-as-living-document convention.
 
-**What was built.** `DivergenceFormEquation` and `PoissonEquation` in
-`continuous/`; `CartesianMesh` with a full chain complex verified `∂² = 0`;
-`DiffusiveFlux(order)` deriving its stencil symbolically;
-`FVMDiscretization`, `DiscreteOperator`, and `NumericalFlux` ABCs;
-oracle-free convergence testing via `RestrictionOperator.degree` and the
-commutation-diagram closure; SPD analysis of the assembled Poisson operator;
-`LinearSolver` ABC with `DenseJacobiSolver` (weighted Jacobi, ω from
-Gershgorin bound) and `DenseLUSolver` (direct LU with partial pivoting);
-end-to-end convergence sweep confirming O(hᵖ) rates for p = 2 and p = 4.
+**Epoch 1 — Observational grounding.** Implemented `EuclideanManifold`,
+`CartesianChart`, and `CartesianMesh` in `geometry/`; built the first
+`validation/` notebook (Schwarzschild spacetime and GPS time dilation) that
+runs end-to-end in CI. Settled the `SymbolicFunction` interface on concrete
+fields, the coordinate-to-chart binding, and the `Point` type (M3).
 
-**Reuse across epochs.** `FVMDiscretization` and `NumericalFlux` are reused
-in every physics epoch by supplying a new `DivergenceFormEquation` and flux.
-`LinearSolver` is scoped to linear operators only; Epoch 4 needs a separate
-`NonlinearSolver`.
-
-**Open questions carried forward:**
-- AMR: fixed-mesh `Discretization` will need hierarchical extension (Epoch 10).
-- GR: face geometry is state-dependent when the 3-metric is a dynamical field (Epoch 11).
-- Multi-dimensional convergence sweep: currently 1-D only; 2-D/3-D deferred.
+**Epoch 2 — FVM Poisson solver.** Delivered `PoissonEquation`,
+`DiffusiveFlux(order)` with symbolically derived stencil coefficients,
+`FVMDiscretization`, `DiscreteOperator`, `NumericalFlux` ABCs,
+oracle-free convergence testing via `RestrictionOperator.degree`, SPD analysis
+of the assembled operator, `LinearSolver` ABC with `DenseJacobiSolver`
+(weighted Jacobi, ω from Gershgorin bound) and `DenseLUSolver` (direct LU),
+and end-to-end O(hᵖ) convergence for p = 2 and p = 4. The FVM machinery
+(`FVMDiscretization`, `NumericalFlux`) is reused in every subsequent physics
+epoch; `LinearSolver` is scoped to linear operators only.
 
 ---
 
-## Current work: Epoch 2 — Computation layer
+## Current work: Epoch 3 — Computation layer
 
 **Target.** A fully-capable, backend-agnostic computation layer: `Tensor`
 operating on any registered backend (Python, NumPy, JAX), with JAX enabling
 GPU/TPU execution and JIT compilation of full solve loops, plus the explicit
-time integration needed by Epoch 3 hydro.
+time integration needed by Epoch 4 hydro.
 
 **C1 — Pure-Python Tensor class. ✓** Arbitrary-rank numeric array backed by
 nested lists. `Real` protocol. `einsum` general contraction. `__matmul__` fast
@@ -508,7 +508,7 @@ derivation: truncation error O(hᵖ), p = 2, 4, confirmed symbolically.
 provenance sidecars (git hash, timestamp, parameter record). GPU-written
 checkpoints readable on CPU-only machines.
 
-**Open questions — Epoch 2 design points:**
+**Open questions — Epoch 3 design points:**
 
 1. **`@jax.jit` scope.** The natural granularity for JIT in this architecture
    is the full solve loop (assemble → iterate → residual), not individual
@@ -520,10 +520,10 @@ checkpoints readable on CPU-only machines.
    backends (e.g., CPU for assembly, GPU for iteration), a per-solver backend
    argument to `LinearSolver.solve` may be needed. Deferred to C7.
 
-**Open questions carried forward into Epoch 2:**
+**Open questions carried forward into Epoch 3:**
 
-- AMR (Epoch 10): fixed-mesh `Discretization` will need hierarchical extension.
-- GR (Epoch 11): face geometry is state-dependent when the 3-metric is a dynamical field.
+- AMR (Epoch 11): fixed-mesh `Discretization` will need hierarchical extension.
+- GR (Epoch 12): face geometry is state-dependent when the 3-metric is a dynamical field.
 - Multi-dimensional convergence sweep: currently 1-D only; 2-D/3-D deferred.
 
 ---
@@ -534,26 +534,28 @@ checkpoints readable on CPU-only machines.
 
 | Epoch | Layer | Capability |
 |-------|-------|------------|
-| 1 | Discrete | **Discrete operators and first Poisson solver. ✓** `DivergenceFormEquation` / `PoissonEquation`; `FVMDiscretization` + `NumericalFlux` family (`DiffusiveFlux(2,4)`); oracle-free convergence framework via `RestrictionOperator.degree`; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` (weighted Jacobi) and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused in Epoch 4 by supplying a new flux; `LinearSolver` is not reused (Euler is nonlinear). |
-| 2 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `TimeIntegrator` (RK2/RK4); field storage; HDF5 checkpoint/restart. In progress. |
+| 0 | Theory / Geometry | **Mathematical foundations. ✓** Layer architecture and symbolic-reasoning import boundary; `foundation/`, `continuous/`, `discrete/`, `geometry/` type hierarchies; `CellComplex`, `Mesh`, `StructuredMesh`, `MeshFunction`, `RestrictionOperator`; process discipline M0–M2. |
+| 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
+| 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `FVMDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 5 onward. |
+| 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `TimeIntegrator` (RK2/RK4); field storage; HDF5 checkpoint/restart. In progress. |
 
 ### Physics epochs
 
 | Epoch | Capability |
 |-------|------------|
-| 3 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
-| 4 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
-| 5 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 4 hydro validation tests. |
-| 6 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
-| 7 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
-| 8 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
-| 9 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
-| 10 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
-| 11 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
-| 12 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
-| 13 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
-| 14 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
-| 15 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+| 4 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
+| 5 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
+| 6 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 5 hydro validation tests. |
+| 7 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
+| 8 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
+| 9 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
+| 10 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
+| 11 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
+| 12 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
+| 13 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
+| 14 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
+| 15 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
+| 16 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
 
 ### Per-epoch verification standard
 
@@ -576,6 +578,6 @@ Every epoch must satisfy this checklist before it is considered verified:
 | M1 | Verification infrastructure: convergence testing helpers, externally-grounded test pattern. ✓ |
 | M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
 | M3 | Executable mathematical narrative: first `validation/` implementations (Schwarzschild spacetime, GPS time dilation); notebooks in `docs/` that import from `validation/` and run in CI. Settles coordinate-to-chart binding and the `SymbolicFunction` interface on concrete fields. ✓ |
-| M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 2. |
+| M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 3. |
 | M5 | Reproducibility capsule tooling: self-executing builder. |
 | M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
