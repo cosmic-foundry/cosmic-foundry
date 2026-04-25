@@ -4,12 +4,17 @@ Each convergence claim is a _Claim subclass that encodes both what is being
 verified and how to verify it.  Adding a new claim requires only appending to
 _CLAIMS; the single parametric test covers all entries.
 
-  _OrderClaim(instance)   — instance converges at its declared order p
-  _SolverClaim(...)       — solver reaches tol with monotonically decreasing
-                            residuals and a tractable iteration count
+  _OrderClaim(instance)        — instance converges at its declared order p
+  _SolverClaim(solver, flux, mesh)
+                               — solver reaches tol on FVMDiscretization(mesh,
+                                 flux, DirichletBC) with monotonically
+                                 decreasing residuals and a tractable count
 
-When adding a new concrete DiscreteOperator subclass, add an _OrderClaim.
-When adding a new (solver, discretization) pair, add a _SolverClaim.
+Both claim types are generated from _FLUXES, the single source of truth for
+which NumericalFlux instances are in scope.  When adding a new concrete
+NumericalFlux, add an instance to _FLUXES; order and solver claims follow
+automatically.  When adding a new concrete LinearSolver, add _SolverClaim
+entries to _CLAIMS directly.
 """
 
 from __future__ import annotations
@@ -108,9 +113,9 @@ class _OrderClaim(_Claim):
 
 
 class _SolverClaim(_Claim):
-    """Claim: solver reaches tol with monotonically decreasing residuals.
+    """Claim: solver converges on FVMDiscretization(mesh, flux, DirichletBC).
 
-    On the supplied (discretization, rhs) pair, verifies:
+    Builds the discretization from flux and mesh, then verifies:
       1. Final residual < tol.
       2. ‖f − Au^k‖_{L²_h} decreases at every step.
       3. Asymptotic convergence rate (geometric mean of last 20 ratios) < 1.
@@ -121,21 +126,26 @@ class _SolverClaim(_Claim):
     def __init__(
         self,
         solver: DenseJacobiSolver,
-        disc: Any,
-        rhs: Any,
-        label: str,
+        flux: Any,
+        mesh: CartesianMesh,
     ) -> None:
         self._solver = solver
-        self._disc = disc
-        self._rhs = rhs
-        self._label = label
+        self._flux = flux
+        self._mesh = mesh
 
     @property
     def description(self) -> str:
-        return self._label
+        n = math.prod(self._mesh.shape)
+        return (
+            f"{type(self._solver).__name__}/"
+            f"{type(self._flux).__name__}(order={self._flux.order})/N={n}"
+        )
 
     def check(self) -> None:
-        self._solver.solve(self._disc, self._rhs)
+        manifold = self._flux.continuous_operator.manifold
+        disc = FVMDiscretization(self._mesh, self._flux, DirichletBC(manifold))
+        rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
+        self._solver.solve(disc, rhs)
         r = self._solver.residuals
 
         assert r[-1] < self._solver._tol, f"Did not converge: final residual {r[-1]}"
@@ -165,36 +175,18 @@ _mesh_n8 = CartesianMesh(
     shape=(8,),
 )
 
+_FLUXES = [
+    DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
+    DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
+]
+
 _CLAIMS: list[_Claim] = [
-    _OrderClaim(DiffusiveFlux(DiffusiveFlux.min_order, _manifold)),
-    _OrderClaim(
-        DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold)
-    ),
-    _OrderClaim(
-        FVMDiscretization(
-            _dummy_mesh, DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
-        )()
-    ),
-    _OrderClaim(
-        FVMDiscretization(
-            _dummy_mesh,
-            DiffusiveFlux(
-                DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold
-            ),
-        )()
-    ),
-    _SolverClaim(
-        solver=DenseJacobiSolver(tol=1e-8, max_iter=10_000),
-        disc=FVMDiscretization(
-            _mesh_n8,
-            DiffusiveFlux(
-                DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold
-            ),
-            DirichletBC(_manifold),
-        ),
-        rhs=LazyMeshFunction(_mesh_n8, lambda idx: 1.0),
-        label="DenseJacobiSolver/DiffusiveFlux(order=4)/N=8",
-    ),
+    *[_OrderClaim(f) for f in _FLUXES],
+    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
+    *[
+        _SolverClaim(DenseJacobiSolver(tol=1e-8, max_iter=10_000), f, _mesh_n8)
+        for f in _FLUXES
+    ],
 ]
 
 
