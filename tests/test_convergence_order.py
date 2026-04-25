@@ -28,8 +28,10 @@ the machine's FMA rate; see _convergence_n_max.
 
 from __future__ import annotations
 
+import functools
 import math
 import sys
+import time
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -68,30 +70,66 @@ _MAX_WALLTIME_S = 60.0
 # mesh size is an integer whenever N_max is a multiple of 8.
 _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 
-# Empirical cost coefficient: T_claim ≈ _ALPHA × N_max^4 × Σ(f^4) / fma_rate.
-# Jacobi on 1D Poisson requires O(N²/π²) iterations (spectral radius 1−π²/N²),
-# each costing O(N²) FMAs for a dense matvec, giving O(N⁴) total FMAs.  The
-# Python-loop overhead raises the effective coefficient ~4× above the bare
-# FMA count.  Calibrated: 3.87 s/claim at fma_rate=4.9e7, N_max=64, fractions
-# above → ALPHA = 3.87 × 4.9e7 / (64^4 × Σf^4) ≈ 8.10.
-_ALPHA = 8.10
+_JACOBI_CALIB_N = 32  # mesh size used to calibrate the Jacobi cost coefficient
+
+
+@functools.cache
+def _calibrate_jacobi_alpha(fma_rate: float) -> float:
+    """Calibrate the Jacobi cost coefficient from a small timed solve.
+
+    The Jacobi cost model is T ≈ ALPHA × N^4 × Σ(f^4) / fma_rate.  ALPHA
+    encodes the constant factor: O(N²/π²) iterations (spectral radius
+    1 − π²/N²), each costing O(N²) FMAs for a dense matvec, plus Python-loop
+    overhead on top of the bare FMA count.
+
+    Rather than hardcoding ALPHA, this function times DenseJacobiSolver at a
+    fixed calibration size and derives ALPHA = T × fma_rate / N_calib^4.  The
+    result is memoised on fma_rate so the solve runs once per session (the
+    session-scoped fma_rate fixture guarantees a single value per run).
+
+    Calibrating at _JACOBI_CALIB_N = 32 runs in ~0.15 s and gives ALPHA ≈ 7,
+    close enough to the asymptotic value that rounding N_max to the nearest
+    multiple of 8 eliminates any residual error.  If the Jacobi implementation
+    changes speed by a factor k, ALPHA changes by k and N_max adjusts by k^0.25
+    automatically.
+    """
+    n = _JACOBI_CALIB_N
+    mesh = CartesianMesh(
+        origin=(sympy.Rational(0),),
+        spacing=(sympy.Rational(1, n),),
+        shape=(n,),
+    )
+    flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
+    disc = FVMDiscretization(mesh, flux, DirichletBC(_manifold))
+    rhs = LazyMeshFunction(mesh, lambda idx: 1.0)
+    solver = DenseJacobiSolver(tol=1e-8)
+    solver.solve(disc, rhs)  # warm-up: ensure any lazy initialization is done
+    best = float("inf")
+    for _ in range(3):
+        t0 = time.perf_counter()
+        solver.solve(disc, rhs)
+        best = min(best, time.perf_counter() - t0)
+    return best * fma_rate / n**4
 
 
 def _convergence_n_max(fma_rate: float, n_convergence_claims: int) -> int:
     """N_max for the convergence mesh sequence given the machine's FMA rate.
 
     Allocates _MAX_WALLTIME_S equally across all convergence-rate claims using
-    the Jacobi cost model T ≈ _ALPHA × N_max^4 × Σ(f^4) / fma_rate and solves
-    for N_max.  Rounding to the nearest multiple of 8 keeps all mesh sizes exact
-    integers (since every fraction in _MESH_FRACTIONS is an exact rational over
-    multiples of 8).
+    the Jacobi cost model T ≈ alpha × N_max^4 × Σ(f^4) / fma_rate — where
+    alpha is calibrated at session start by _calibrate_jacobi_alpha — and
+    solves for N_max.  Rounding to the nearest multiple of 8 keeps all mesh
+    sizes exact integers (since every fraction in _MESH_FRACTIONS is an exact
+    rational over multiples of 8).
 
-    The result is a lower bound: LU claims are faster than Jacobi (O(N³) vs
-    O(N⁴)), so the actual total will be below _MAX_WALLTIME_S on all hardware.
+    The result is a conservative bound: LU claims are O(N³) so they run faster
+    than the budget at the same N_max, keeping the actual total below
+    _MAX_WALLTIME_S on all hardware.
     """
+    alpha = _calibrate_jacobi_alpha(fma_rate)
     sum_f4 = sum(f**4 for f in _MESH_FRACTIONS)
     budget_per_claim = _MAX_WALLTIME_S / n_convergence_claims
-    n_raw = (budget_per_claim * fma_rate / (_ALPHA * sum_f4)) ** 0.25
+    n_raw = (budget_per_claim * fma_rate / (alpha * sum_f4)) ** 0.25
     return max(16, round(n_raw / 8) * 8)
 
 
@@ -427,11 +465,19 @@ class _ConvergenceRateClaim(_Claim):
         sy = sum(log_e)
         sxy = sum(lh * le for lh, le in zip(log_h, log_e, strict=False))
         sxx = sum(lh * lh for lh in log_h)
-        slope = (n_pts * sxy - sx * sy) / (n_pts * sxx - sx**2)
+        syy = sum(le * le for le in log_e)
+        denom_x = n_pts * sxx - sx**2
+        slope = (n_pts * sxy - sx * sy) / denom_x
+        r2 = (n_pts * sxy - sx * sy) ** 2 / (denom_x * (n_pts * syy - sy**2))
         assert slope >= self._flux.order - 0.1, (
             f"Convergence rate {slope:.3f} < expected "
             f"{self._flux.order - 0.1:.1f} for "
             f"{type(self._flux).__name__}(order={self._flux.order})"
+        )
+        assert r2 >= 0.999, (
+            f"Convergence not clean power-law: R²={r2:.4f} for "
+            f"{type(self._flux).__name__}(order={self._flux.order}) — "
+            f"errors do not lie on h^p even though the slope is correct"
         )
 
 
