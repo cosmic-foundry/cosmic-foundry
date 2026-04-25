@@ -24,6 +24,7 @@ from cosmic_foundry.geometry.cartesian_restriction_operator import (
 )
 from cosmic_foundry.geometry.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
+from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 from cosmic_foundry.theory.continuous.field import Field
 
 
@@ -55,7 +56,8 @@ class DiffusiveFluxOracle:
     def instances(self) -> list[DiffusiveFlux]:
         lo = DiffusiveFlux.min_order
         step = DiffusiveFlux.order_step
-        return [DiffusiveFlux(lo), DiffusiveFlux(lo + step)]
+        diffusion_op = DiffusionOperator(EuclideanManifold(1))
+        return [DiffusiveFlux(lo, diffusion_op), DiffusiveFlux(lo + step, diffusion_op)]
 
     def error(self, instance: DiffusiveFlux, h: sympy.Symbol) -> sympy.Expr:
         order = instance.order

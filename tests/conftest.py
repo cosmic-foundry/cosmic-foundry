@@ -6,7 +6,7 @@ from tests.support.convergence_registry import check_registry_complete, iter_cas
 check_registry_complete()
 
 
-def pytest_generate_tests(metafunc):
+def pytest_generate_tests(metafunc):  # type: ignore[no-untyped-def]
     if "convergence_case" in metafunc.fixturenames:
         cases = list(iter_cases())
         ids = [

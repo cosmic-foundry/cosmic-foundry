@@ -12,13 +12,18 @@ that all oracles are loaded before check_registry_complete() runs.
 
 from __future__ import annotations
 
-from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
+from collections.abc import Iterator
+from typing import Any
+
+from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from tests.support.convergence_oracle import ConvergenceOracle
 
-# Extend this list when new convergent ABCs are introduced.
-CONVERGENT_ABCS: list[type] = [NumericalFlux]
+# DiscreteOperator is the single convergence root: every concrete subclass
+# (NumericalFlux family, assembled FVM operators, future LinearSolver outputs)
+# must have an oracle registered.
+CONVERGENT_ABCS: list[type] = [DiscreteOperator]
 
-CONVERGENCE_ORACLES: dict[type, ConvergenceOracle] = {}  # type: ignore[type-arg]
+CONVERGENCE_ORACLES: dict[type, ConvergenceOracle[Any]] = {}
 
 
 def _all_concrete_subclasses(cls: type) -> list[type]:
@@ -45,7 +50,7 @@ def check_registry_complete() -> None:
             )
 
 
-def iter_cases():  # type: ignore[return]
+def iter_cases() -> Iterator[tuple[ConvergenceOracle[Any], Any]]:
     """Yield (oracle, instance) for every registered (class, parameter) pair."""
     for oracle in CONVERGENCE_ORACLES.values():
         yield from ((oracle, instance) for instance in oracle.instances())
