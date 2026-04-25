@@ -1,4 +1,4 @@
-"""Convergence order verification for all concrete DiscreteOperator subclasses.
+"""Convergence order verification for all registered DiscreteOperator subclasses.
 
 Exact values are computed automatically: given instance.continuous_operator L
 and a test field phi, the exact discrete output is Rₕ(L phi), where the
@@ -9,23 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianRestrictionOperator,
 )
-from cosmic_foundry.geometry.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
-from cosmic_foundry.geometry.fvm_discretization import FVMDiscretization
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     ZeroForm,
 )
-from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
-from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.continuous.poisson_equation import PoissonEquation
 
 
 class _ZeroFormField(ZeroForm[Any]):
@@ -52,56 +46,18 @@ class _ZeroFormField(ZeroForm[Any]):
         return self._symbols
 
 
-class _ConcretePoissonEquation(PoissonEquation):
-    def __init__(self, manifold: Manifold, source: ZeroForm) -> None:
-        self._manifold = manifold
-        self._source = source
-
-    @property
-    def manifold(self) -> Manifold:
-        return self._manifold
-
-    @property
-    def source(self) -> ZeroForm:
-        return self._source
-
-
-_manifold = EuclideanManifold(1)
-_x = _manifold.atlas[0].symbols[0]
-_diffusion_op = DiffusionOperator(_manifold)
-_lo, _step = DiffusiveFlux.min_order, DiffusiveFlux.order_step
-_poisson = _ConcretePoissonEquation(
-    _manifold, _ZeroFormField(_manifold, sympy.Integer(0), (_x,))
-)
-_dummy_mesh = CartesianMesh(
-    origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
-)
-
-_INSTANCES = [
-    DiffusiveFlux(_lo, _diffusion_op),
-    DiffusiveFlux(_lo + _step, _diffusion_op),
-    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo, _diffusion_op))(_poisson),
-    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo + _step, _diffusion_op))(_poisson),
-]
-
-
-@pytest.mark.parametrize(
-    "instance",
-    _INSTANCES,
-    ids=[f"{type(i).__name__}(order={i.order})" for i in _INSTANCES],
-)
-def test_convergence_order(instance: Any) -> None:
+def test_convergence_order(convergence_case: Any) -> None:
+    instance = convergence_case
     h = sympy.Symbol("h", positive=True)
     order = instance.order
     n = order // 2
-    num_cells = 2 * n + 2
 
     space = EuclideanManifold(1)
     x = space.atlas[0].symbols[0]
     mesh = CartesianMesh(
         origin=(sympy.Integer(0),),
         spacing=(h,),
-        shape=(num_cells,),
+        shape=(2 * n + 2,),
     )
     ndim = len(mesh._shape)
 
@@ -109,8 +65,7 @@ def test_convergence_order(instance: Any) -> None:
     phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
     phi = _ZeroFormField(space, phi_expr, (x,))
 
-    Rh_cell = CartesianRestrictionOperator(mesh, degree=ndim)
-    U = Rh_cell(phi)
+    U = CartesianRestrictionOperator(mesh, degree=ndim)(phi)
     numerical_mf = instance(U)
 
     cont_result = instance.continuous_operator(phi)
