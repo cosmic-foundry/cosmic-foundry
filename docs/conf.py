@@ -101,6 +101,8 @@ linkcheck_ignore = [
     r"^https://github\.com/Flash-X/Flash-X$",  # repo moved/deleted
     r"^https://github\.com/applied-numerical-algorithms-group-lbnl/Chombo$",
     r"^https://www\.asme\.org/codes-standards/find-codes-standards/v-v-20",
+    # GitHub repos that intermittently return 502 in CI
+    r"^https://github\.com/parthenon-hpc-lab/parthenon$",
 ]
 
 # doi.org 301/302 redirects to publisher landing pages are expected.

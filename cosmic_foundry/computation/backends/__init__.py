@@ -1,0 +1,72 @@
+"""Pluggable backend system for Tensor.
+
+Backends define how Tensor stores and operates on its raw data.  Two
+backends ship by default:
+
+- ``PythonBackend`` — nested Python lists; the reference implementation.
+- ``NumpyBackend``  — NumPy float64 arrays; vectorized via BLAS/LAPACK.
+
+The module maintains a process-wide default backend (initially
+``PythonBackend``).  Individual Tensors can override it at construction
+time via ``Tensor(..., backend=b)`` or be migrated later with
+``t.to(backend)``.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Protocol, runtime_checkable
+
+from cosmic_foundry.computation.backends.numpy_backend import NumpyBackend
+from cosmic_foundry.computation.backends.python_backend import PythonBackend
+
+
+@runtime_checkable
+class Backend(Protocol):
+    """Protocol satisfied by every Tensor backend."""
+
+    def to_native(self, data: Any) -> Any: ...
+    def from_native(self, raw: Any) -> Any: ...
+    def infer_shape(self, raw: Any) -> tuple[int, ...]: ...
+    def copy(self, raw: Any) -> Any: ...
+    def zeros(self, shape: tuple[int, ...]) -> Any: ...
+    def eye(self, n: int) -> Any: ...
+    def flatten(self, raw: Any) -> list[float]: ...
+    def norm(self, raw: Any) -> float: ...
+    def neg(self, a: Any) -> Any: ...
+    def add(self, a: Any, b: Any) -> Any: ...
+    def sub(self, a: Any, b: Any) -> Any: ...
+    def mul_scalar(self, a: Any, s: float) -> Any: ...
+    def mul_elem(self, a: Any, b: Any) -> Any: ...
+    def div_scalar(self, a: Any, s: float) -> Any: ...
+    def div_elem(self, a: Any, b: Any) -> Any: ...
+    def matmul(
+        self, a: Any, b: Any, shape_a: tuple[int, ...], shape_b: tuple[int, ...]
+    ) -> Any: ...
+    def einsum(
+        self, spec: str, raws: list[Any], shapes: list[tuple[int, ...]]
+    ) -> Any: ...
+    def diag(self, raw: Any, shape: tuple[int, ...]) -> Any: ...
+    def svd(self, raw: Any, shape: tuple[int, ...]) -> tuple[Any, Any, Any]: ...
+
+
+_default_backend: Backend = PythonBackend()
+
+
+def get_default_backend() -> Backend:
+    """Return the process-wide default Tensor backend."""
+    return _default_backend
+
+
+def set_default_backend(backend: Backend) -> None:
+    """Set the process-wide default Tensor backend."""
+    global _default_backend
+    _default_backend = backend
+
+
+__all__ = [
+    "Backend",
+    "NumpyBackend",
+    "PythonBackend",
+    "get_default_backend",
+    "set_default_backend",
+]
