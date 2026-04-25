@@ -16,21 +16,25 @@ class DenseJacobiSolver(LinearSolver):
     """Jacobi iterative solver for Lₕ u = f on the assembled N^d × N^d matrix.
 
     Given the SPD stiffness matrix A assembled via Discretization.assemble_matrix,
-    the fixed-point iteration u^{k+1} = D⁻¹(f − (A − D)u^k) is a contraction
-    when ρ(I − D⁻¹A) < 1.  For FVMDiscretization(PoissonEquation,
-    DiffusiveFlux(order), DirichletBC) on CartesianMesh, this is guaranteed by
-    the SPD property of the assembled operator: SPD implies all eigenvalues of D⁻¹A are
-    positive, and the ghost-cell Dirichlet stencil gives A_{ii} > Σ_{j≠i}|A_{ij}|
-    for boundary-adjacent rows with A_{ii} = Σ_{j≠i}|A_{ij}| for interior rows
-    (weak diagonal dominance everywhere, strict at boundary rows, irreducible mesh
-    graph) — by Taussky's theorem D⁻¹A is invertible and Jacobi converges.
+    the damped fixed-point iteration u^{k+1} = u^k + ω D⁻¹(f − Au^k) is a
+    contraction when ρ(I − ω D⁻¹A) < 1.  The relaxation factor ω is derived
+    automatically from the Gershgorin bound on λ_max(D⁻¹A):
 
-    In plain terms: split A = D − (D − A) where D = diag(A).  Each Jacobi
-    step solves the trivially-inverted diagonal system for u^{k+1} given u^k.
-    Convergence is guaranteed for the Poisson operator at any order; the
-    rate is ρ(M_J) = ρ(I − D⁻¹A), which approaches cos(πh) for large N and
-    DiffusiveFlux(2) — derived from the Fourier symbol of the tridiagonal
-    Laplacian in the limit h → 0.
+        G = max_i Σ_j |A_{ij}/A_{ii}|   (Gershgorin bound, includes j = i term)
+        ω = min(2/G, 1)
+
+    G is an upper bound on λ_max(D⁻¹A) by the Gershgorin circle theorem;
+    ω = 2/G guarantees ρ(I − ω D⁻¹A) < 1 whenever λ_max < G.  For
+    DiffusiveFlux(2) the interior stencil has G = 2, giving ω = 1 (standard
+    Jacobi, the optimal choice).  For DiffusiveFlux(4) the wider stencil
+    violates diagonal dominance (G = 32/15 > 2), so standard Jacobi diverges
+    and ω = 15/16 is applied automatically.
+
+    In plain terms: split A = D − (D − A) where D = diag(A).  Each damped
+    Jacobi step scales the correction by ω before applying the diagonal inverse.
+    With ω derived from the Gershgorin bound the iteration contracts for any
+    SPD operator assembled by FVMDiscretization with DirichletBC, regardless of
+    stencil width.
 
     All linear algebra is hand-rolled: no NumPy linalg, no LAPACK.  The
     dense matrix assembly scales as O(N^{2d}) in memory and the iteration
@@ -49,13 +53,24 @@ class DenseJacobiSolver(LinearSolver):
     def __init__(self, tol: float = 1e-10, max_iter: int = 100_000) -> None:
         self._tol = tol
         self._max_iter = max_iter
+        self._residuals: list[float] = []
+
+    @property
+    def residuals(self) -> list[float]:
+        """Residual history ‖f − Au^k‖_{L²_h} from the most recent solve.
+
+        residuals[k] is the discrete L²_h residual norm at the start of
+        iteration k, before the k-th damped-Jacobi update is applied.
+        The list is populated by solve() and replaced on each call.
+        """
+        return list(self._residuals)
 
     def solve(
         self,
         discretization: Discretization,
         rhs: MeshFunction,
     ) -> LazyMeshFunction[float]:
-        """Solve Lₕ u = rhs via Jacobi iteration; return the solution MeshFunction."""
+        """Solve Lₕ u = rhs via damped Jacobi; return the solution MeshFunction."""
         mesh = discretization.mesh
         shape = mesh.shape
         ndim = len(shape)
@@ -88,23 +103,24 @@ class DenseJacobiSolver(LinearSolver):
         diag: list[float] = [a[i][i] for i in range(n)]
         vol: float = float(cast(CartesianMesh, mesh).cell_volume)
 
-        # Jacobi iteration: u^{k+1}_i = (f_i − Σ_{j≠i} A_{ij} u^k_j) / A_{ii}
+        # Gershgorin bound on λ_max(D⁻¹A): ω = min(2/G, 1) guarantees contraction.
+        lambda_max_bound: float = max(
+            sum(abs(a[i][j] / diag[i]) for j in range(n)) for i in range(n)
+        )
+        omega: float = min(2.0 / lambda_max_bound, 1.0)
+
+        # Damped Jacobi: u^{k+1} = u^k + ω D⁻¹(f − Au^k)
         u: list[float] = [0.0] * n
+        self._residuals = []
         for _ in range(self._max_iter):
-            u_new: list[float] = [
-                (f[i] - sum(a[i][j] * u[j] for j in range(n) if j != i)) / diag[i]
-                for i in range(n)
+            r: list[float] = [
+                f[i] - sum(a[i][j] * u[j] for j in range(n)) for i in range(n)
             ]
-            u = u_new
-            # Residual ‖f − Au‖_{L²_h}
-            residual: float = (
-                sum(
-                    vol * (f[i] - sum(a[i][j] * u[j] for j in range(n))) ** 2
-                    for i in range(n)
-                )
-            ) ** 0.5
+            residual: float = (sum(vol * ri**2 for ri in r)) ** 0.5
+            self._residuals.append(residual)
             if residual < self._tol:
                 break
+            u = [u[i] + omega * r[i] / diag[i] for i in range(n)]
 
         u_list = u
 
