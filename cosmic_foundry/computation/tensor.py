@@ -51,7 +51,10 @@ class Tensor:
         Tensor.eye(n)                       — n × n identity
 
     Indexing (rank ≥ 1 only):
-        t[i]   — float for rank-1, rank-(n-1) Tensor for rank-n
+        t[i]         — Real for rank-1, rank-(n-1) Tensor for rank-n
+        t[i, j, ...]  — Real when all indices supplied, Tensor otherwise
+        t[i] = v     — assign element (Real) or sub-tensor to position i
+        t[i, j] = v  — assign element or sub-tensor at multi-index
 
     Arithmetic (element-wise, any rank):
         a + b, a - b, -a
@@ -99,14 +102,35 @@ class Tensor:
             raise TypeError("rank-0 Tensor has no length")
         return self._shape[0]
 
-    def __getitem__(self, idx: int) -> float | Tensor:
+    def __getitem__(self, idx: int | tuple[int, ...]) -> Any:
         if not self._shape:
             raise TypeError("rank-0 Tensor is not subscriptable")
+        if isinstance(idx, tuple):
+            result: Any = self
+            for i in idx:
+                if not isinstance(result, Tensor):
+                    raise IndexError("too many indices for Tensor")
+                result = result[i]
+            return result
         if len(self._shape) == 1:
-            return float(self._data[idx])
+            return self._data[idx]
         return Tensor(self._data[idx])
 
-    def __iter__(self) -> Iterator[float | Tensor]:
+    def __setitem__(self, idx: int | tuple[int, ...], value: Any) -> None:
+        if not self._shape:
+            raise TypeError("rank-0 Tensor is not subscriptable")
+        v = value._data if isinstance(value, Tensor) else value
+        if isinstance(idx, tuple):
+            if not idx:
+                raise IndexError("empty index tuple")
+            data = self._data
+            for i in idx[:-1]:
+                data = data[i]
+            data[idx[-1]] = v
+        else:
+            self._data[idx] = v
+
+    def __iter__(self) -> Iterator[Any]:
         if not self._shape:
             raise TypeError("rank-0 Tensor is not iterable")
         for i in range(self._shape[0]):
