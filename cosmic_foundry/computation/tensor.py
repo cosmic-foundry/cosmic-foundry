@@ -1,4 +1,4 @@
-"""Tensor: a pure-Python rank-1 / rank-2 numeric array.
+"""Tensor: a pure-Python numeric array of arbitrary rank.
 
 All arithmetic is implemented with Python lists and the math module.
 No NumPy or JAX is used.  This is the reference implementation — kept
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -35,43 +35,44 @@ class Real(Protocol):
 
 
 class Tensor:
-    """A rank-1 or rank-2 numeric array backed by nested Python lists.
+    """A numeric array of arbitrary rank backed by nested Python lists.
 
-    Supports the arithmetic and linear algebra operations needed by the
-    computation layer: addition, scaling, matrix multiply, norm, SVD.
-    All operations return new Tensor objects; the original is never mutated.
+    Leaf elements must satisfy the Real protocol.  Rank is inferred from
+    the nesting depth of the input; all slices along any axis must have
+    the same length (jagged arrays are not supported).
 
     Construction:
         Tensor([1.0, 2.0, 3.0])           — rank-1, shape (3,)
         Tensor([[1.0, 2.0], [3.0, 4.0]])  — rank-2, shape (2, 2)
-        Tensor.zeros(m, n)                — rank-2 zero matrix
+        Tensor([[[...], ...], ...])        — rank-3+, arbitrary shape
+        Tensor.zeros(m, n, k)             — rank-3 zero array
         Tensor.eye(n)                     — n × n identity
 
     Indexing:
-        t[i]       — float for rank-1, rank-1 Tensor (row i) for rank-2
-        t[i][j]    — float via chain for rank-2
+        t[i]   — float for rank-1, rank-(n-1) Tensor for rank-n
 
-    Arithmetic:
-        a + b, a - b        — element-wise, same shape
-        -a                  — element-wise negation
-        a * scalar          — element-wise scaling
-        a / scalar          — element-wise scaling by reciprocal
-        a @ b               — dot (rank-1 @ rank-1 → float),
-                              matvec (rank-2 @ rank-1 → rank-1),
-                              matmul (rank-2 @ rank-2 → rank-2)
+    Arithmetic (element-wise, any rank):
+        a + b, a - b, -a
+        a * scalar, scalar * a, a / scalar
+        a @ b  — dot      (rank-1 @ rank-1 → float),
+                  vecmat   (rank-1 @ rank-2 → rank-1),
+                  matvec   (rank-n @ rank-1 → rank-(n-1)),
+                  matmul   (rank-n @ rank-2 → rank-n)
 
-    Linear algebra:
-        t.diag()            — rank-2 → rank-1: main diagonal
-        t.norm()            — L² norm (rank-1) or Frobenius norm (rank-2) → float
-        t.svd()             — rank-2 → (U, s, Vt); singular values descending
+    Linear algebra (rank-2 only):
+        t.diag()   — main diagonal → rank-1
+        t.svd()    — (U, s, Vt); singular values descending
+
+    Any rank:
+        t.norm()   — Frobenius norm → float
+        t.to_list() — deep copy of the underlying nested list
     """
 
-    def __init__(self, data: Sequence[Real] | Sequence[Sequence[Real]]) -> None:
-        # _data is list[Any] internally; the Sequence[Real] parameter annotation
-        # documents what callers should pass.  list[Any] avoids invariance errors
-        # when threading Real through nested list operations.
-        self._data: list[Any] = list(data)
-        self._shape: tuple[int, ...] = _infer_shape(data)
+    def __init__(self, data: Sequence[Any]) -> None:
+        # _to_list recursively converts nested sequences to nested lists so
+        # that all internal helpers can assume list as the container type.
+        self._data: list[Any] = _to_list(data)
+        self._shape: tuple[int, ...] = _infer_shape(self._data)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -90,48 +91,24 @@ class Tensor:
             yield self[i]
 
     def to_list(self) -> list[Any]:
-        """Return a copy of the underlying nested Python list."""
-        if len(self._shape) == 1:
-            return list(self._data)
-        return [list(row) for row in self._data]
+        """Return a deep copy of the underlying nested Python list."""
+        return _deep_copy(self._data)
 
     def __repr__(self) -> str:
         return f"Tensor({self._data!r})"
 
     def __neg__(self) -> Tensor:
-        if len(self._shape) == 1:
-            return Tensor([-x for x in self._data])
-        return Tensor([[-x for x in row] for row in self._data])
+        return Tensor(_map(self._data, lambda x: -x))
 
     def __add__(self, other: Tensor) -> Tensor:
-        if len(self._shape) == 1:
-            return Tensor(
-                [self._data[i] + other._data[i] for i in range(self._shape[0])]
-            )
-        return Tensor(
-            [
-                [self._data[i][j] + other._data[i][j] for j in range(self._shape[1])]
-                for i in range(self._shape[0])
-            ]
-        )
+        return Tensor(_zip_map(self._data, other._data, lambda x, y: x + y))
 
     def __sub__(self, other: Tensor) -> Tensor:
-        if len(self._shape) == 1:
-            return Tensor(
-                [self._data[i] - other._data[i] for i in range(self._shape[0])]
-            )
-        return Tensor(
-            [
-                [self._data[i][j] - other._data[i][j] for j in range(self._shape[1])]
-                for i in range(self._shape[0])
-            ]
-        )
+        return Tensor(_zip_map(self._data, other._data, lambda x, y: x - y))
 
     def __mul__(self, scalar: float) -> Tensor:
         s = float(scalar)
-        if len(self._shape) == 1:
-            return Tensor([x * s for x in self._data])
-        return Tensor([[x * s for x in row] for row in self._data])
+        return Tensor(_map(self._data, lambda x: x * s))
 
     def __rmul__(self, scalar: float) -> Tensor:
         return self.__mul__(scalar)
@@ -140,30 +117,27 @@ class Tensor:
         return self.__mul__(1.0 / float(scalar))
 
     def __matmul__(self, other: Tensor) -> float | Tensor:
-        if len(self._shape) == 1 and len(other._shape) == 1:
+        r1, r2 = len(self._shape), len(other._shape)
+        if r1 == 1 and r2 == 1:
+            # dot product
             return float(
                 sum(self._data[i] * other._data[i] for i in range(self._shape[0]))
             )
-        if len(self._shape) == 2 and len(other._shape) == 1:
-            m, n = self._shape
+        if r1 == 1 and r2 == 2:
+            # vecmat: (k,) @ (k, n) → (n,)
+            k, n = other._shape
             return Tensor(
                 [
-                    sum(self._data[i][j] * other._data[j] for j in range(n))
-                    for i in range(m)
+                    sum(self._data[p] * other._data[p][j] for p in range(k))
+                    for j in range(n)
                 ]
             )
-        if len(self._shape) == 2 and len(other._shape) == 2:
-            m, k = self._shape
-            _, n = other._shape
-            return Tensor(
-                [
-                    [
-                        sum(self._data[i][p] * other._data[p][j] for p in range(k))
-                        for j in range(n)
-                    ]
-                    for i in range(m)
-                ]
-            )
+        if r2 == 1:
+            # batched matvec: (..., m, k) @ (k,) → (..., m)
+            return Tensor(_matvec(self._data, other._data))
+        if r2 == 2:
+            # batched matmul: (..., m, k) @ (k, n) → (..., m, n)
+            return Tensor(_matmul(self._data, other._data))
         raise ValueError(f"unsupported matmul: {self._shape} @ {other._shape}")
 
     def diag(self) -> Tensor:
@@ -174,10 +148,8 @@ class Tensor:
         return Tensor([self._data[i][i] for i in range(n)])
 
     def norm(self) -> float:
-        """L² norm (rank-1) or Frobenius norm (rank-2)."""
-        if len(self._shape) == 1:
-            return math.sqrt(sum(x * x for x in self._data))
-        return math.sqrt(sum(x * x for row in self._data for x in row))
+        """Frobenius norm: sqrt of sum of squares of all elements."""
+        return math.sqrt(sum(x * x for x in _flatten(self._data)))
 
     def svd(self) -> tuple[Tensor, Tensor, Tensor]:
         """One-sided Jacobi SVD: returns (U, s, Vt) with singular values descending.
@@ -248,12 +220,16 @@ class Tensor:
 
     @classmethod
     def zeros(cls, *shape: int) -> Tensor:
-        """Zero Tensor of the given shape (rank 1 or 2)."""
-        if len(shape) == 1:
-            return cls([0.0] * shape[0])
-        if len(shape) == 2:
-            return cls([[0.0] * shape[1] for _ in range(shape[0])])
-        raise ValueError(f"zeros supports rank 1 or 2, got shape {shape}")
+        """Zero Tensor of the given shape (any rank ≥ 1)."""
+        if not shape:
+            raise ValueError("zeros requires at least one dimension")
+
+        def _make(dims: tuple[int, ...]) -> list[Any]:
+            if len(dims) == 1:
+                return [0.0] * dims[0]
+            return [_make(dims[1:]) for _ in range(dims[0])]
+
+        return cls(_make(shape))
 
     @classmethod
     def eye(cls, n: int) -> Tensor:
@@ -261,14 +237,79 @@ class Tensor:
         return cls([[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)])
 
 
-def _infer_shape(
-    data: Sequence[Real] | Sequence[Sequence[Real]],
-) -> tuple[int, ...]:
+# ---------------------------------------------------------------------------
+# Module-level helpers — operate on raw nested lists, not Tensor objects.
+# ---------------------------------------------------------------------------
+
+
+def _to_list(data: Sequence[Any]) -> list[Any]:
+    """Recursively convert nested sequences to nested lists."""
+    if not data:
+        return []
+    if isinstance(data[0], Sequence) and not isinstance(data[0], str | bytes):
+        return [_to_list(item) for item in data]
+    return list(data)
+
+
+def _infer_shape(data: list[Any]) -> tuple[int, ...]:
     if not data:
         return (0,)
-    if isinstance(data[0], Sequence) and not isinstance(data[0], str | bytes):
-        return (len(data), len(data[0]))
+    if isinstance(data[0], list):
+        return (len(data),) + _infer_shape(data[0])
     return (len(data),)
+
+
+def _map(data: list[Any], fn: Callable[[Any], Any]) -> list[Any]:
+    """Apply fn to every leaf element of a nested list."""
+    if not data or not isinstance(data[0], list):
+        return [fn(x) for x in data]
+    return [_map(row, fn) for row in data]
+
+
+def _zip_map(a: list[Any], b: list[Any], fn: Callable[[Any, Any], Any]) -> list[Any]:
+    """Apply fn element-wise to two nested lists of the same shape."""
+    if not a or not isinstance(a[0], list):
+        return [fn(x, y) for x, y in zip(a, b, strict=False)]
+    return [_zip_map(ra, rb, fn) for ra, rb in zip(a, b, strict=False)]
+
+
+def _flatten(data: list[Any]) -> list[float]:
+    """Return all leaf elements as a flat list of floats."""
+    if not data:
+        return []
+    if isinstance(data[0], list):
+        result: list[float] = []
+        for row in data:
+            result.extend(_flatten(row))
+        return result
+    return [float(x) for x in data]
+
+
+def _deep_copy(data: list[Any]) -> list[Any]:
+    """Deep copy a nested list."""
+    if not data or not isinstance(data[0], list):
+        return list(data)
+    return [_deep_copy(row) for row in data]
+
+
+def _matvec(a: list[Any], x: list[Any]) -> list[Any]:
+    """Batched matvec: a has shape (..., m, k), x has shape (k,) → (..., m)."""
+    if not isinstance(a[0][0], list):
+        # a is rank-2
+        return [sum(row[j] * x[j] for j in range(len(x))) for row in a]
+    return [_matvec(sub, x) for sub in a]
+
+
+def _matmul(a: list[Any], b: list[Any]) -> list[Any]:
+    """Batched matmul: a has shape (..., m, k), b has shape (k, n) → (..., m, n)."""
+    if not isinstance(a[0][0], list):
+        # a is rank-2
+        k, n = len(b), len(b[0])
+        return [
+            [sum(a[i][p] * b[p][j] for p in range(k)) for j in range(n)]
+            for i in range(len(a))
+        ]
+    return [_matmul(sub, b) for sub in a]
 
 
 __all__ = ["Real", "Tensor"]
