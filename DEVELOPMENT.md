@@ -108,25 +108,6 @@ Before opening or pushing to a PR:
   pytest marker descriptions, API notes, or overview copy as a
   statement of current project state.
 
-### Test authorship
-
-Tests are the primary link between the code and the mathematical
-narrative notebooks. Structure them so notebooks can import and
-display them exactly:
-
-- **Assertion logic lives in a named `assert_*` function.** The
-  `test_*` function is a thin wrapper that calls it and nothing else.
-  Notebooks import `assert_*` functions and display their source via
-  `inspect.getsource` — what the reader sees is exactly what CI runs.
-- **Parametrized test parameter sets are named module-level
-  constants.** No anonymous inline literals in
-  `@pytest.mark.parametrize`. Notebooks import these constants to
-  display the coverage explicitly.
-- **Refactor existing tests to follow this convention as you write
-  the corresponding notebook for each concept.** Tests in files that
-  have no notebook yet may remain in the old style until their
-  notebook is written.
-
 ---
 
 ## Environment
@@ -342,9 +323,9 @@ complementary forms:
 
 **Algebraic step verification.** Executable SymPy checks on the
 load-bearing algebraic steps of the numerical scheme, expressed as
-`assert_*` functions in `tests/` following the standard test authorship
-convention. This keeps derivations automatically discoverable by CI and
-displayable in notebooks, as a separate concern from production code.
+regular `test_*` functions in `tests/`.  This keeps derivations
+automatically discoverable by CI as a separate concern from production
+code.
 
 **Convergence order verification.** Every concrete `DiscreteOperator`
 subclass (e.g. `DiffusiveFlux`) that claims a convergence order must be
