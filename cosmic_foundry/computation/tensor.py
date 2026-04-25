@@ -57,7 +57,8 @@ class Tensor:
         t[i, j] = v  — assign element or sub-tensor at multi-index
 
     Arithmetic (element-wise, any rank):
-        a + b, a - b, -a
+        a + b, a - b, -a           — element-wise Tensor ± Tensor
+        a * b, a / b               — element-wise Tensor × Tensor (Hadamard)
         a * scalar, scalar * a, a / scalar
         float(t)  — extract value from rank-0 Tensor
 
@@ -70,6 +71,7 @@ class Tensor:
         t.svd()    — (U, s, Vt); singular values descending
 
     Any rank:
+        t.copy()    — deep copy
         t.norm()    — Frobenius norm (|value| for rank-0) → float
         t.to_list() — underlying data; scalar for rank-0, nested list otherwise
     """
@@ -136,6 +138,10 @@ class Tensor:
         for i in range(self._shape[0]):
             yield self[i]
 
+    def copy(self) -> Tensor:
+        """Return a deep copy of this Tensor."""
+        return Tensor(_deep_copy(self._data))
+
     def to_list(self) -> Any:
         """Scalar for rank-0; deep-copied nested list for rank ≥ 1."""
         return _deep_copy(self._data)
@@ -152,15 +158,19 @@ class Tensor:
     def __sub__(self, other: Tensor) -> Tensor:
         return Tensor(_zip_map(self._data, other._data, lambda x, y: x - y))
 
-    def __mul__(self, scalar: float) -> Tensor:
-        s = float(scalar)
+    def __mul__(self, other: Any) -> Tensor:
+        if isinstance(other, Tensor):
+            return Tensor(_zip_map(self._data, other._data, lambda x, y: x * y))
+        s = float(other)
         return Tensor(_map(self._data, lambda x: x * s))
 
-    def __rmul__(self, scalar: float) -> Tensor:
-        return self.__mul__(scalar)
+    def __rmul__(self, other: Any) -> Tensor:
+        return self.__mul__(other)
 
-    def __truediv__(self, scalar: float) -> Tensor:
-        return self.__mul__(1.0 / float(scalar))
+    def __truediv__(self, other: Any) -> Tensor:
+        if isinstance(other, Tensor):
+            return Tensor(_zip_map(self._data, other._data, lambda x, y: x / y))
+        return self.__mul__(1.0 / float(other))
 
     def __matmul__(self, other: Tensor) -> Tensor:
         r1, r2 = len(self._shape), len(other._shape)
