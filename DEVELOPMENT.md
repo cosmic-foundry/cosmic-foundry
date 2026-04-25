@@ -337,13 +337,48 @@ require machine-checkable derivations that Lane A defers to the reference).
   A derivation document is required; principled disagreements with the
   literature are recorded inside it.
 
-Lanes B and C require a machine-checkable derivation: executable SymPy
-checks on the load-bearing algebraic steps of the numerical scheme,
-expressed as `assert_*` functions in `tests/` following the standard test
-authorship convention. This keeps derivations automatically discoverable
-by CI and displayable in notebooks, as a separate concern from production
-code. Infrastructure capabilities (mesh topology, I/O, field placement)
-are out of scope for lane classification.
+Lanes B and C require machine-checkable derivations. There are two
+complementary forms:
+
+**Algebraic step verification.** Executable SymPy checks on the
+load-bearing algebraic steps of the numerical scheme, expressed as
+`assert_*` functions in `tests/` following the standard test authorship
+convention. This keeps derivations automatically discoverable by CI and
+displayable in notebooks, as a separate concern from production code.
+
+**Convergence order verification.** Every concrete `DiscreteOperator`
+subclass (e.g. `DiffusiveFlux`) that claims a convergence order must be
+registered in the convergence oracle framework in `tests/support/`. The
+framework enforces at pytest collection time that no concrete convergent
+class is silently untested. The structure:
+
+- The class declares `order: int` (inherited from `DiscreteOperator`) and
+  `min_order: ClassVar[int]` + `order_step: ClassVar[int]` at the class
+  level — the validity range of the `order` parameter.
+- The class carries `continuous_operator: DifferentialOperator` (from C4)
+  — the continuous operator it approximates.  This is the mathematical
+  specification; the convergence test verifies the implementation converges
+  to it at the claimed order.
+- A `ConvergenceOracle` subclass in `tests/support/oracles/` provides a
+  manufactured-solution error expression as a SymPy polynomial in `h`.
+  The oracle is the only test-side object needed; it is registered in
+  `tests/support/oracles/__init__.py`.
+- `tests/test_convergence_order.py` is the single parametric test: it
+  verifies the error polynomial has zeros at `h⁰…h^{p-1}` and a nonzero
+  `h^p` leading term, where `p = instance.order`.  One test function covers
+  all convergent classes.
+- From C5 onward, oracle files are replaced by the `continuous_operator`
+  annotation + `RestrictionOperator(mesh, degree=n−1)`.  The oracle file
+  is a temporary shim until the full DEC restriction machinery exists.
+
+The two forms are complementary: algebraic checks verify individual
+derivation steps (e.g. that the moment system has a unique solution);
+convergence order checks verify that the derived stencil, assembled and
+applied, achieves the claimed O(h^p) error against the exact continuous
+result.
+
+Infrastructure capabilities (mesh topology, I/O, field placement) are
+out of scope for lane classification.
 
 The lane must be stated in the PR description, e.g. `Lane C (origination).
 Reference papers: [...]`. For Lane B, explicitly record that the reference
