@@ -56,7 +56,6 @@ from cosmic_foundry.theory.continuous.differential_form import (
 )
 from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
-from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 
 # ---------------------------------------------------------------------------
 # Adaptive mesh-size selection
@@ -101,13 +100,14 @@ def _calibrate_jacobi_alpha(fma_rate: float) -> float:
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
     disc = FVMDiscretization(mesh, flux, DirichletBC(_manifold))
-    rhs = LazyMeshFunction(mesh, lambda idx: 1.0)
+    a_cal = disc.assemble()
+    b_cal = Tensor([1.0] * n)
     solver = DenseJacobiSolver(tol=1e-8)
-    solver.solve(disc, rhs)  # warm-up: ensure any lazy initialization is done
+    solver.solve(a_cal, b_cal)  # warm-up: ensure any lazy initialization is done
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        solver.solve(disc, rhs)
+        solver.solve(a_cal, b_cal)
         best = min(best, time.perf_counter() - t0)
     return best * fma_rate / n**4
 
@@ -240,8 +240,10 @@ class _SolverClaim(_Claim):
     def check(self, fma_rate: float) -> None:
         manifold = self._flux.continuous_operator.manifold
         disc = FVMDiscretization(self._mesh, self._flux, DirichletBC(manifold))
-        rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
-        self._solver.solve(disc, rhs)
+        n = math.prod(self._mesh.shape)
+        a = disc.assemble()
+        b = Tensor([1.0] * n)
+        self._solver.solve(a, b)
         r = self._solver.residuals
 
         assert r[-1] < self._solver._tol, f"Did not converge: final residual {r[-1]}"
@@ -299,20 +301,24 @@ class _DirectSolverClaim(_Claim):
         manifold = self._flux.continuous_operator.manifold
         bc = self._bc_type(manifold)
         disc = FVMDiscretization(self._mesh, self._flux, bc)
+        n = math.prod(self._mesh.shape)
+        a = disc.assemble()
         if self._bc_type is PeriodicBC:
             h = float(self._mesh.cell_volume)
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
-            rhs = LazyMeshFunction(
-                self._mesh,
-                lambda idx, _h=h, _o=orig: (
-                    math.sin(2 * math.pi * (_o + (idx[0] + 1) * _h))
-                    - math.sin(2 * math.pi * (_o + idx[0] * _h))
-                )
-                / _h,
+            b = Tensor(
+                [
+                    (
+                        math.sin(2 * math.pi * (orig + (i + 1) * h))
+                        - math.sin(2 * math.pi * (orig + i * h))
+                    )
+                    / h
+                    for i in range(n)
+                ]
             )
         else:
-            rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
-        self._solver.solve(disc, rhs)
+            b = Tensor([1.0] * n)
+        self._solver.solve(a, b)
         r = self._solver.residuals
         assert r[-1] < self._solver._tol, f"Direct solve residual {r[-1]:.3e} >= tol"
 
@@ -443,14 +449,13 @@ class _ConvergenceRateClaim(_Claim):
             # matrix's null space before measuring truncation error.  The SVD
             # threshold is relative to the largest singular value; for full-rank
             # systems no null vectors are found and the projection is a no-op.
-            _, s_vec, vt = disc.assemble().svd()
+            a_m = disc.assemble()
+            _, s_vec, vt = a_m.svd()
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
 
-            rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
-            u_h = self._solver.solve(disc, rhs)
-
-            u_arr = Tensor([float(u_h((i,))) for i in range(n_cells)])
+            b_m = Tensor([_rho_avg(i) for i in range(n_cells)])
+            u_arr = self._solver.solve(a_m, b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
             phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
