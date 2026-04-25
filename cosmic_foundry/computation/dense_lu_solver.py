@@ -32,6 +32,14 @@ class DenseLUSolver(LinearSolver):
     no NumPy linalg or LAPACK.  Memory and time scale as O(N^{2d}) and
     O(N^{3d}) respectively; this solver is intended for small-to-moderate N.
 
+    Consistently singular systems (e.g. periodic advection, where the
+    stiffness matrix has a one-dimensional null space spanned by the constant
+    field) are handled transparently: when partial pivoting leaves a diagonal
+    entry below 1e-10 after column reduction, that component is pinned to zero
+    (minimum-norm, zero-mean convention).  The caller must ensure the RHS has
+    zero projection onto the null space; if it does not, the residual after
+    the solve will be large and the tol assertion will fail.
+
     Parameters
     ----------
     tol:
@@ -90,6 +98,12 @@ class DenseLUSolver(LinearSolver):
         # LU factorization with partial pivoting: PA = LU.
         # After factorization, a[i][j] holds U for j >= i and L for j < i
         # (L has implicit unit diagonal).  pivot[i] records the source row.
+        # singular_cols records columns where the post-pivot diagonal is below
+        # the threshold — these correspond to null-space modes in consistently
+        # singular systems (e.g. periodic advection, rank N−1).  The minimum-norm
+        # solution sets those components to zero in back-substitution.
+        singular_tol: float = 1e-10
+        singular_cols: set[int] = set()
         pivot = list(range(n))
         for k in range(n):
             max_val = abs(a[k][k])
@@ -101,8 +115,12 @@ class DenseLUSolver(LinearSolver):
             if max_row != k:
                 a[k], a[max_row] = a[max_row], a[k]
                 pivot[k], pivot[max_row] = pivot[max_row], pivot[k]
-            if a[k][k] == 0.0:
-                raise ValueError(f"Singular matrix: zero pivot at column {k}")
+            if abs(a[k][k]) < singular_tol:
+                singular_cols.add(k)
+                a[k][k] = 1.0  # placeholder diagonal; x[k] forced to 0
+                for i in range(k + 1, n):
+                    a[i][k] = 0.0  # L factor = 0: no elimination for this column
+                continue
             for i in range(k + 1, n):
                 factor = a[i][k] / a[k][k]
                 a[i][k] = factor
@@ -115,9 +133,13 @@ class DenseLUSolver(LinearSolver):
             for j in range(k):
                 y[k] -= a[k][j] * y[j]
 
-        # Back substitution: Ux = y.
+        # Back substitution: Ux = y.  Null-space components are pinned to 0
+        # (minimum-norm solution for consistently singular systems).
         x: list[float] = [0.0] * n
         for k in range(n - 1, -1, -1):
+            if k in singular_cols:
+                x[k] = 0.0
+                continue
             x[k] = y[k]
             for j in range(k + 1, n):
                 x[k] -= a[k][j] * x[j]

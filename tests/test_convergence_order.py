@@ -49,6 +49,7 @@ from cosmic_foundry.theory.continuous.differential_form import (
     ZeroForm,
 )
 from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
+from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 
 
@@ -178,10 +179,13 @@ class _SolverClaim(_Claim):
 class _DirectSolverClaim(_Claim):
     """Claim: direct solver residual < tol after one factorization pass.
 
-    Builds the discretization from flux and mesh, then verifies:
+    Builds the discretization from flux, mesh, and bc_type, then verifies:
       1. Final residual ‖f − Au‖_{L²_h} < tol.
     No monotonicity or iteration-count checks: a direct solver produces the
     exact solution (up to floating-point rounding) in a single pass.
+
+    For PeriodicBC the RHS is a zero-mean sinusoid so the system is consistent
+    (in the column space of the circulant advection matrix).
     """
 
     def __init__(
@@ -189,47 +193,72 @@ class _DirectSolverClaim(_Claim):
         solver: DenseLUSolver,
         flux: Any,
         mesh: CartesianMesh,
+        bc_type: type = DirichletBC,
     ) -> None:
         self._solver = solver
         self._flux = flux
         self._mesh = mesh
+        self._bc_type = bc_type
 
     @property
     def description(self) -> str:
         n = math.prod(self._mesh.shape)
+        suffix = "/periodic" if self._bc_type is PeriodicBC else ""
         return (
             f"{type(self._solver).__name__}/"
-            f"{type(self._flux).__name__}(order={self._flux.order})/N={n}"
+            f"{type(self._flux).__name__}(order={self._flux.order})"
+            f"/N={n}{suffix}"
         )
 
     def check(self) -> None:
         manifold = self._flux.continuous_operator.manifold
-        disc = FVMDiscretization(self._mesh, self._flux, DirichletBC(manifold))
-        rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
+        bc = self._bc_type(manifold)
+        disc = FVMDiscretization(self._mesh, self._flux, bc)
+        if self._bc_type is PeriodicBC:
+            h = float(self._mesh.cell_volume)
+            orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
+            rhs = LazyMeshFunction(
+                self._mesh,
+                lambda idx, _h=h, _o=orig: (
+                    math.sin(2 * math.pi * (_o + (idx[0] + 1) * _h))
+                    - math.sin(2 * math.pi * (_o + idx[0] * _h))
+                )
+                / _h,
+            )
+        else:
+            rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
         self._solver.solve(disc, rhs)
         r = self._solver.residuals
         assert r[-1] < self._solver._tol, f"Direct solve residual {r[-1]:.3e} >= tol"
 
 
 class _ConvergenceRateClaim(_Claim):
-    """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence."""
+    """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
+
+    bc_type selects both the boundary condition and the manufactured solution:
+      DirichletBC — φ = sin(πx)+sin(3πx)/3, satisfies φ(0)=φ(1)=0
+      PeriodicBC  — φ = sin(2πx), zero-mean and periodic on [0,1]
+    """
 
     def __init__(
         self,
         solver: Any,
         flux: Any,
         meshes: list[CartesianMesh],
+        bc_type: type = DirichletBC,
     ) -> None:
         self._solver = solver
         self._flux = flux
         self._meshes = meshes
+        self._bc_type = bc_type
 
     @property
     def description(self) -> str:
+        suffix = "/periodic" if self._bc_type is PeriodicBC else ""
         return (
             f"{type(self._solver).__name__}/"
             f"{type(self._flux).__name__}(order={self._flux.order})/"
-            "convergence_rate"
+            f"convergence_rate{suffix}"
         )
 
     def check(self) -> None:
@@ -239,35 +268,67 @@ class _ConvergenceRateClaim(_Claim):
             h = float(mesh.cell_volume)  # 1-D: cell_volume == spacing
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * h
 
-            def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:
-                xl, xr = _o + i * _h, _o + (i + 1) * _h
-                return (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / (
-                    math.pi * _h
-                ) + (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr)) / (
-                    3 * math.pi * _h
-                )
+            if self._bc_type is PeriodicBC:
 
-            def _rho_avg(i: int, _h: float = h, _o: float = orig) -> float:
-                xl, xr = _o + i * _h, _o + (i + 1) * _h
-                return (
-                    math.pi * (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / _h
-                    + 3
-                    * math.pi
-                    * (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr))
-                    / _h
-                )
+                def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:
+                    xl, xr = _o + i * _h, _o + (i + 1) * _h
+                    return (math.cos(2 * math.pi * xl) - math.cos(2 * math.pi * xr)) / (
+                        2 * math.pi * _h
+                    )
 
-            disc = FVMDiscretization(mesh, self._flux, DirichletBC(manifold))
+                def _rho_avg(i: int, _h: float = h, _o: float = orig) -> float:
+                    xl, xr = _o + i * _h, _o + (i + 1) * _h
+                    return (
+                        math.sin(2 * math.pi * xr) - math.sin(2 * math.pi * xl)
+                    ) / _h
+
+            else:
+
+                def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:  # type: ignore[no-redef]
+                    xl, xr = _o + i * _h, _o + (i + 1) * _h
+                    return (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / (
+                        math.pi * _h
+                    ) + (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr)) / (
+                        3 * math.pi * _h
+                    )
+
+                def _rho_avg(i: int, _h: float = h, _o: float = orig) -> float:  # type: ignore[no-redef]
+                    xl, xr = _o + i * _h, _o + (i + 1) * _h
+                    return (
+                        math.pi * (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / _h
+                        + 3
+                        * math.pi
+                        * (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr))
+                        / _h
+                    )
+
+            bc = self._bc_type(manifold)
+            disc = FVMDiscretization(mesh, self._flux, bc)
             rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
             u_h = self._solver.solve(disc, rhs)
             vol = float(mesh.cell_volume)
-            # All cells included: for homogeneous Dirichlet BC, odd-reflection ghost
-            # values equal the exact odd-extension cell averages of any solution
-            # satisfying φ(0)=φ(1)=0, so boundary cells converge at full order p.
-            err_sq: float = sum(
-                vol * (float(u_h((i,))) - _phi_avg(i)) ** 2
-                for i in range(mesh.shape[0])
-            )
+            n_cells = mesh.shape[0]
+            if self._bc_type is PeriodicBC:
+                # The advection matrix has a null space (DC mode for all N; Nyquist
+                # mode additionally for even N).  φ_exact has zero projection onto
+                # both modes, so project them out of u_h before measuring the error —
+                # this isolates the truncation error from the arbitrary null-space
+                # component introduced by the direct solver.
+                u_vals = [float(u_h((i,))) for i in range(n_cells)]
+                dc = sum(u_vals) / n_cells
+                u_vals = [u - dc for u in u_vals]
+                if n_cells % 2 == 0:
+                    nyq = sum((-1) ** i * u_vals[i] for i in range(n_cells)) / n_cells
+                    u_vals = [u - (-1) ** i * nyq for i, u in enumerate(u_vals)]
+                err_sq = sum(
+                    vol * (u_vals[i] - _phi_avg(i)) ** 2 for i in range(n_cells)
+                )
+            else:
+                # All cells included: ghost values equal the exact extension of any
+                # solution satisfying the BC, so boundary cells converge at order p.
+                err_sq = sum(
+                    vol * (float(u_h((i,))) - _phi_avg(i)) ** 2 for i in range(n_cells)
+                )
             errors.append(math.sqrt(err_sq))
 
         hs = [float(m.cell_volume) for m in self._meshes]
@@ -296,15 +357,18 @@ _mesh_n8 = CartesianMesh(
     shape=(8,),
 )
 
-_FLUXES = [
+_DIFFUSIVE_FLUXES = [
     DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
     DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
+]
+_ADVECTIVE_FLUXES = [
     AdvectiveFlux(AdvectiveFlux.min_order, _manifold),
     AdvectiveFlux(AdvectiveFlux.min_order + AdvectiveFlux.order_step, _manifold),
 ]
-# SPD subset: only fluxes whose assembled stiffness matrix is SPD are compatible
-# with DenseJacobiSolver; AdvectiveFlux produces a skew-symmetric matrix.
-_ELLIPTIC_FLUXES = [f for f in _FLUXES if isinstance(f, DiffusiveFlux)]
+_FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES]
+# DiffusiveFlux assembles an SPD matrix (DirichletBC); compatible with all solvers.
+# AdvectiveFlux assembles a rank-(N-1) circulant matrix under PeriodicBC; compatible
+# with DenseLUSolver only (zero-mean null-space convention handles the singularity).
 _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver(tol=1e-10)]
 _CONVERGENCE_MESHES = [
@@ -319,16 +383,28 @@ _CONVERGENCE_MESHES = [
 _CLAIMS: list[_Claim] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
-    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _ELLIPTIC_FLUXES],
+    # Diffusive (SPD, DirichletBC): all solvers
+    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _DIFFUSIVE_FLUXES],
     *[
         _DirectSolverClaim(s, f, _mesh_n8)
         for s in _DIRECT_SOLVERS
-        for f in _ELLIPTIC_FLUXES
+        for f in _DIFFUSIVE_FLUXES
     ],
     *[
         _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
-        for f in _ELLIPTIC_FLUXES
+        for f in _DIFFUSIVE_FLUXES
+    ],
+    # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
+    *[
+        _DirectSolverClaim(s, f, _mesh_n8, PeriodicBC)
+        for s in _DIRECT_SOLVERS
+        for f in _ADVECTIVE_FLUXES
+    ],
+    *[
+        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES, PeriodicBC)
+        for s in _DIRECT_SOLVERS
+        for f in _ADVECTIVE_FLUXES
     ],
 ]
 

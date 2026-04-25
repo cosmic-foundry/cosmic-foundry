@@ -10,6 +10,7 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -40,6 +41,25 @@ def _apply_dirichlet_ghosts(
                 reflected = idx[:a] + (2 * N - 1 - i,) + idx[a + 1 :]
                 return -extended(reflected)
         return U(idx)  # type: ignore[arg-type]
+
+    return LazyMeshFunction(mesh, extended)
+
+
+def _apply_periodic_ghosts(
+    U: MeshFunction[sympy.Expr],
+    mesh: CartesianMesh,
+) -> LazyMeshFunction[sympy.Expr]:
+    """Extend U with periodic ghost cells via wrap-around.
+
+    For each axis a and mesh size N = shape[a]:
+        U(i < 0)  → U(N + i)   (left ghost: wrap to right end)
+        U(i >= N) → U(i - N)   (right ghost: wrap to left end)
+    """
+    shape = mesh._shape
+
+    def extended(idx: tuple[int, ...]) -> sympy.Expr:
+        wrapped = tuple(i % N for i, N in zip(idx, shape, strict=True))
+        return U(wrapped)  # type: ignore[arg-type]
 
     return LazyMeshFunction(mesh, extended)
 
@@ -108,7 +128,9 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     def __call__(self, U: MeshFunction[sympy.Expr]) -> LazyMeshFunction[sympy.Expr]:
         """Apply the assembled operator; returns a lazy cell-residual MeshFunction."""
         mesh = cast(CartesianMesh, U.mesh)
-        if self._bc is not None:
+        if isinstance(self._bc, PeriodicBC):
+            U = _apply_periodic_ghosts(U, mesh)
+        elif self._bc is not None:
             U = _apply_dirichlet_ghosts(U, mesh)
         face_fluxes = self._numerical_flux(U)
         ndim = len(mesh._shape)
