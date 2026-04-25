@@ -6,6 +6,7 @@ abstract interfaces and contributes nothing back to that layer.
 
 Exported objects
 ----------------
+AdvectiveFlux                — NumericalFlux for F(φ) = v·φ; order ∈ {2, 4}
 CartesianChart               — identity coordinate chart on EuclideanManifold
 CartesianMesh                — uniform Cartesian mesh on flat Euclidean space
 CartesianRestrictionOperator — analytic cell-average restriction on CartesianMesh
@@ -16,6 +17,7 @@ SchwarzschildManifold        — Schwarzschild vacuum solution; static spherical
                                symmetric spacetime with Lorentzian signature
 """
 
+from cosmic_foundry.geometry.advective_flux import AdvectiveFlux
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianRestrictionOperator,
@@ -26,6 +28,7 @@ from cosmic_foundry.geometry.fvm_discretization import FVMDiscretization
 from cosmic_foundry.geometry.schwarzschild_manifold import SchwarzschildManifold
 
 __all__ = [
+    "AdvectiveFlux",
     "CartesianChart",
     "CartesianMesh",
     "CartesianRestrictionOperator",
