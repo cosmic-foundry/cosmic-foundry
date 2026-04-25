@@ -112,93 +112,8 @@ Before opening or pushing to a PR:
 
 ## Environment
 
-This repo uses miniforge to provide a self-contained environment.
-DO NOT use system Python or any external `python`/`pytest` command.
-
-### Setup (One-Time)
-
-If `environment/miniforge/` directory is missing:
-```bash
-bash scripts/setup_environment.sh
-```
-
-### Before Any Work
-
-**Run the startup health check** immediately at the start of every
-session:
-```bash
-./scripts/agent_health_check.sh
-```
-
-The script verifies three things in order:
-1. `cosmic_foundry` conda environment is active
-2. `pre_commit` Python package is importable
-3. `.git/hooks/pre-commit` is installed
-
-**If the env check fails** (script prints `✗ WRONG ENVIRONMENT` and
-exits non-zero), stop immediately. The correct way to start a session
-is:
-```bash
-./scripts/start_agent.sh claude   # or gemini / codex
-```
-`start_agent.sh` activates the environment automatically before
-launching the agent. Alternatively, activate manually:
-```bash
-source scripts/activate_environment.sh
-```
-
-**If the env check passes but either follow-up check fails**, re-run
-`setup_environment.sh` or the remediation commands printed by the
-script — both are needed so `pre-commit run --all-files` works
-locally before pushing (see *Branches and PRs*).
-
-If the session starts from a parent organization workspace, run the
-script from the `cosmic-foundry` checkout directory.
-
----
-
-## Secret and environment hygiene
-
-Leaking credentials, tokens, or local machine details into a public GitHub
-repository is a critical risk. This section explains the layered defenses in
-place and how to work within them.
-
-### What we protect against
-
-| Risk | Defense |
-|---|---|
-| Committing `.env`, key files, cloud credentials | `.gitignore` patterns |
-| High-entropy strings or known secret formats | `detect-secrets` pre-commit hook |
-
-### The detect-secrets baseline
-
-`.secrets.baseline` is committed to the repo. It records every "potential
-secret" that was audited and confirmed safe so the hook does not re-alert on
-them. **Never delete this file.**
-
-When the hook fires on your branch:
-
-1. **If it is a real secret** — remove it, rotate the credential immediately,
-   and do not push that commit.
-2. **If it is a false positive** — audit the flagged line, confirm it is not
-   sensitive, then update the baseline:
-   ```bash
-   detect-secrets scan --update .secrets.baseline
-   detect-secrets audit .secrets.baseline   # mark each finding as safe
-   git add .secrets.baseline
-   ```
-
-### Rules for secrets in development
-
-- **Never hardcode secrets.** Use environment variables loaded from a local
-  `.env` file (already in `.gitignore`).
-- **Never commit `.env` files**, cloud credential directories (`.aws/`,
-  `.gcloud/`, `.azure/`), or private key material (`*.pem`, `*.key`, `*.p12`).
-- Keep tokens out of commit messages, issue comments, and PR descriptions —
-  GitHub's history is public and permanent.
-- If a secret has been pushed at any point, treat it as compromised: rotate it
-  immediately and notify the security owner, regardless of whether the branch
-  was merged.
+Run `./scripts/agent_health_check.sh` at the start of every session. If it
+fails, run `bash scripts/setup_environment.sh` to repair the environment.
 
 ---
 
@@ -240,55 +155,13 @@ the next item is always fully specified before the current one lands.
 
 ## Epoch retrospective
 
-**When an epoch is declared complete**, before opening any code PR for
-the next epoch, perform a retrospective review. The retrospective
-produces only documentation changes — ARCHITECTURE.md updates, roadmap updates,
-process document corrections. It does not introduce code changes or
-new features. Any code issue discovered during the retrospective
-becomes a separate PR with its own spec and tests. The question the
-retrospective asks is: *what did we learn during this epoch that
-should update our plans?*
-
-The retrospective covers:
-
-1. **`ARCHITECTURE.md`**. Did the implementation reveal that any live
-   decision needs updating? Were any open questions resolved? Are any
-   paragraphs now self-evident from the code and therefore removable?
-
-2. **Epoch sequence and current work.** Does the upcoming simulation or
-   V&V scope still make sense given what we built? Should any epoch
-   one-liner be reworded, reordered, or split? Is the current work
-   section still accurate?
-
-3. **Process documents** (`DEVELOPMENT.md`, `ARCHITECTURE.md`). Did any
-   development rules prove unworkable, insufficient, or in need of
-   precision?
-
-4. **Surprises and pain points**. What was harder than expected? What
-   design decisions caused rework? What would have been better to
-   decide earlier? Capture these as updates to `ARCHITECTURE.md` or
-   `DEVELOPMENT.md` — wherever the lesson is most actionable for the
-   next epoch.
-
-The output is one or more documentation PRs landing before Epoch N+1
-code begins.
+When an epoch is declared complete, open a documentation-only PR before any
+code PR for the next epoch. Update `ARCHITECTURE.md` (close the epoch row in
+the table, update `## Current work`, record any open questions resolved) and
+`DEVELOPMENT.md` (any process rules that proved unworkable). No code changes;
+any code issue discovered becomes a separate PR.
 
 ---
-
-## Architectural Decisions
-
-Architectural decisions live in `ARCHITECTURE.md`. Each live decision
-is a one-paragraph claim. When a decision is made, add a paragraph in
-the appropriate section. When a decision is superseded by the code or
-withdrawn, remove it. When an open question is resolved, move it from
-the *Open questions* section to the appropriate live section and update
-the affected modules.
-
-Any architecture review should also include a subjective pass over the
-`*(Current inconsistency: ...)*` annotations in `ARCHITECTURE.md
-§Architectural basis`. For each one, ask: has recent work resolved this
-inconsistency? If yes, remove the annotation and close or update the
-corresponding ARCHITECTURE.md gap-closure item.
 
 ---
 
@@ -360,32 +233,6 @@ source was not consulted.
 The following guidelines supplement the workflow rules above and apply
 to all AI agents working on this repository, regardless of platform
 (Claude Code, Codex, Gemini, or others).
-
-### Platform role
-
-Cosmic Foundry is the **organizational platform** for the simulation
-ecosystem. Application repositories — covering stellar physics,
-cosmology, galactic dynamics, planetary formation, and other domains
-— build on top of it. The platform/application split is documented in
-`ARCHITECTURE.md §Platform and application split`.
-
-In practice this means:
-
-- Reusable computation infrastructure (kernels, mesh, fields, I/O,
-  diagnostics) belongs here.
-- Domain-specific physics implementations and observational validation
-  data belong in the relevant application repo.
-- If a task spans the platform and an application repo, use separate
-  branches and pull requests for each repository. Keep the platform
-  change minimal and self-contained; the application repo change
-  depends on it.
-- Cross-scale workflows that compose two or more application domains
-  belong in their own repository, not here.
-- **This file is the authoritative source for all contributor and
-  AI-agent behavior across the organization.** Application repo
-  `DEVELOPMENT.md` files are intentionally thin: they delegate here
-  for workflow rules and agent behavior, adding only what genuinely
-  differs for that repo.
 
 ### Session startup
 

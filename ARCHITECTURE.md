@@ -127,60 +127,6 @@ Constraint(ABC)                       — interface: support → Manifold
     └── NonLocalBoundaryCondition     — constraint depends on values outside the immediate neighborhood
 ```
 
-**`DivergenceFormEquation` subclass justification.** `PoissonEquation` earns
-its class by deriving `flux = -∇(·)`, removing a free parameter from
-`DivergenceFormEquation`. Classification ABCs (Elliptic, Parabolic, Hyperbolic,
-ConservationLaw) were considered and rejected: none adds a derived property or
-type narrowing that mypy can check — "F algebraic in U" and positivity of the
-principal symbol are runtime mathematical properties, not structural constraints
-expressible in the type hierarchy. None earns a class by the
-falsifiable-constraint rule.
-
-**`Constraint` / `BoundaryCondition` hierarchy.** `LocalBoundaryCondition`
-covers Dirichlet (`α=1, β=0`), Neumann (`α=0, β=1`), and Robin via the
-unified `α·f + β·∂f/∂n = g` form. `NonLocalBoundaryCondition` makes no
-claim about the form of the non-locality; concrete subclasses declare
-whatever geometric references they need.
-
-**Class existence is justified by a falsifiable constraint, not anticipation.**
-Every ABC in `continuous/` and `foundation/` must earn its place. A new class
-is warranted only when it removes a degree of freedom from its parent: either
-a derived property (a non-abstract property fully determined by abstract ones)
-or a type narrowing that mypy can check. A property describing *regularity* of
-`__call__` (continuous, smooth) is not falsifiable in Python's type system and
-does not justify a new class.
-
-Concretely: `PseudoRiemannianManifold` earns its place via `ndim =
-sum(signature)`; `RiemannianManifold` via `signature = (ndim, 0)`;
-`Homeomorphism` by narrowing `domain`/`codomain` to `TopologicalSpace`. A
-hypothetical `SmoothMap` would not qualify.
-
-Non-independent objects are co-located in the same file as the object they
-belong to. Example: `Chart`, `Atlas`, `Diffeomorphism` in `manifold.py`;
-`MetricTensor`, `RiemannianManifold` in `pseudo_riemannian_manifold.py`.
-
-**`DivergenceFormEquation` and its subtypes are spatial only.** `∂ₜ` is
-handled by the time integrator (Epoch 3), not by these objects. This separation
-is preserved under the 3+1 ADM decomposition: in GR, covariant equations
-`∇_μ F^μ = S` decompose to `∂ₜ(√γ U) + ∂ᵢ(√γ Fⁱ) = √γ S(α, β, γᵢⱼ, Kᵢⱼ)`
-— still a spatial divergence operator with metric factors entering through the
-`Chart` and curvature terms in `source`.
-
-**Planned additions** (Epoch 12)
-
-**`DynamicManifold(PseudoRiemannianManifold)`** — A manifold whose metric
-tensor is a dynamical field in the simulation state. Required for full GR
-(3+1 ADM formalism): signature is fixed (Lorentzian), but the metric is
-evolved by the Einstein equations. In the 3+1 decomposition the
-computational domain is a 3-D Riemannian spatial hypersurface; the
-3-metric `γ_ij` and extrinsic curvature `K_ij` are evolved fields. The
-concrete entry would be `Spacetime3Plus1(DynamicManifold)`. Interface not
-yet designed.
-
-**`Connection` / `AffineConnection`** — Covariant derivative; not a tensor
-field (inhomogeneous transformation law). Required for curvature
-computations and parallel transport.
-
 ### discrete/
 
 ```
@@ -214,36 +160,6 @@ RestrictionOperator(NumericFunction[Function[M,V], MeshFunction[V]])
                                   a Function plus a Mesh yields a MeshFunction;
                                   the restriction depends on both — neither alone suffices
 ```
-
-**Discrete inner product.** Symmetry, positive-definiteness, and truncation
-claims in this layer are stated in the cell-volume-weighted pairing
-`⟨u, v⟩_h := Σᵢ |Ωᵢ| uᵢ vᵢ` — the ℓ²(h) analog of `∫_Ω uv dV`. This is
-not a separate class (it carries no independent interface); it is a
-conventional bilinear form used in proofs. The convergence norm on
-`MeshFunction`s is the induced `‖u‖_{L²_h} := √⟨u, u⟩_h`; the local norm
-for pointwise truncation claims is `‖u‖_{∞,h} := max_i |uᵢ|` over interior
-cells.
-
-The discrete layer approximates the **integral form** of conservation laws, not
-the differential form. The derivation chain grounding every object in this layer:
-
-1. A conservation law in divergence form on a domain Ω ⊂ M: ∂ₜU + ∇·F(U) = S
-2. Integrate over each control volume Ωᵢ and apply the divergence theorem:
-   ∂ₜ∫_Ωᵢ U dV + ∮_∂Ωᵢ F·n dA = ∫_Ωᵢ S dV
-3. Approximate cell averages Ūᵢ ≈ |Ωᵢ|⁻¹ ∫_Ωᵢ U dV and face fluxes at each
-   shared interface; this yields the discrete scheme
-
-Finite volume (FVM) is the primary method — every term has a geometric
-interpretation (cell volume, face area, face normal) derived from the chart and
-the cell decomposition. FDM and FEM are also derivable from this foundation:
-
-- **FDM**: On a Cartesian mesh with midpoint quadrature and piecewise-constant
-  reconstruction, FVM reduces to FDM. Finite difference is a special case of
-  FVM on regular meshes, not a separate derivation.
-- **FEM**: Multiplying by a test function and integrating by parts yields the
-  weak formulation; choosing a finite-dimensional function space Vₕ yields FEM.
-  Additional machinery (basis functions, bilinear forms, function spaces) extends
-  the current foundation; deferred.
 
 ```
 Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
@@ -334,17 +250,6 @@ LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperato
                               tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
 ```
 
-**Boundary condition application (Option B, Epoch 2 decision).** `FVMDiscretization`
-takes the `BoundaryCondition` as a constructor parameter; the resulting
-`DiscreteOperator` is the discrete analog of `L` on the constrained function
-space `{φ : Bφ = g}`. This keeps the commutation diagram a property of a single
-operator, and lets the Epoch 7 multigrid ask the discretization for coarse
-operators rather than asking the operator for its BC. Not committed long-term:
-if time-dependent `g` arrives with Epoch 5 hydro (inflow/outflow BCs that change
-per step), BC can migrate to a solver-level parameter without breaking the
-interior-flux derivation — the interior `Lₕ` and the numerical-flux family
-are independent of where BC is injected.
-
 ### geometry/
 
 ```
@@ -397,13 +302,6 @@ backed by `Tensor`); explicit time integrators (`RungeKutta2`,
 
 ### Cross-cutting
 
-**Numerical transcription discipline.**
-Physics capabilities sourced from reference tables (EOS polynomial fits,
-reaction networks, opacity tables) need a discipline governing how
-numeric tables are transcribed, verified, and updated independently of
-the derivation-first lane policy. This decision is deferred to Epoch 8
-(microphysics), when the first such capability lands.
-
 **Kernel composition model.**
 Realized as the `Backend` protocol in `computation/backends/`. `Tensor`
 is the single public interface; `Backend` is the strategy that governs
@@ -413,46 +311,6 @@ satisfying the protocol are first-class. Open questions: `@jax.jit`
 tracing policy for `JaxBackend` (per-call JIT vs. solver-level JIT);
 whether `set_default_backend` is sufficient for solver-level selection
 or a solver-level override is needed.
-
-**Physical constants ingestion (CODATA).**
-The engine will need physical constants (G, c, ħ, k_B, …) throughout the
-physics epochs. The authoritative machine-readable source is NIST CODATA
-(public domain), available at `https://physics.nist.gov/cuu/Constants/Table/allascii.txt`.
-Open questions: where the constants module lives (`foundation/`? `computation/`?)
-and whether it must respect the symbolic-reasoning import boundary; how constants
-are exposed (SymPy symbols with known numerical values, plain floats, or both);
-how the CODATA revision is pinned and updated. WGS 84 / GPS-specific defined
-constants (μ, Ω_E, GPS semi-major axis) have no machine-readable API; the
-ingestion discipline for PDF-sourced defined constants is a separate decision.
-
----
-
-## Finalized epochs
-
-**Epoch 0 — Mathematical foundations.** Established the layer architecture
-(`foundation/`, `continuous/`, `discrete/`, `geometry/`, `computation/`) and
-the symbolic-reasoning import boundary. Delivered `Set`, `Function`,
-`TopologicalManifold`, `Manifold`, `PseudoRiemannianManifold`,
-`DifferentialForm`, `DivergenceFormEquation`, `CellComplex`, `Mesh`,
-`StructuredMesh`, `MeshFunction`, and `RestrictionOperator`. Wired process
-discipline (M0–M2): branch/PR standards, convergence-testing helpers, and the
-`ARCHITECTURE.md`-as-living-document convention.
-
-**Epoch 1 — Observational grounding.** Implemented `EuclideanManifold`,
-`CartesianChart`, and `CartesianMesh` in `geometry/`; built the first
-`validation/` notebook (Schwarzschild spacetime and GPS time dilation) that
-runs end-to-end in CI. Settled the `SymbolicFunction` interface on concrete
-fields, the coordinate-to-chart binding, and the `Point` type (M3).
-
-**Epoch 2 — FVM Poisson solver.** Delivered `PoissonEquation`,
-`DiffusiveFlux(order)` with symbolically derived stencil coefficients,
-`FVMDiscretization`, `DiscreteOperator`, `NumericalFlux` ABCs,
-oracle-free convergence testing via `RestrictionOperator.degree`, SPD analysis
-of the assembled operator, `LinearSolver` ABC with `DenseJacobiSolver`
-(weighted Jacobi, ω from Gershgorin bound) and `DenseLUSolver` (direct LU),
-and end-to-end O(hᵖ) convergence for p = 2 and p = 4. The FVM machinery
-(`FVMDiscretization`, `NumericalFlux`) is reused in every subsequent physics
-epoch; `LinearSolver` is scoped to linear operators only.
 
 ---
 
@@ -567,17 +425,3 @@ Every epoch must satisfy this checklist before it is considered verified:
   solution exists, the relevant `NumericFunction.symbolic` is declared so the
   check runs automatically
 - Lane A/B/C classification stated in the PR description
-
----
-
-## Platform milestones
-
-| Milestone | Capability |
-|-----------|------------|
-| M0 | Process discipline: branch/PR/commit/attribution standards. ✓ |
-| M1 | Verification infrastructure: convergence testing helpers, externally-grounded test pattern. ✓ |
-| M2 | Documentation architecture: all live architectural decisions in `ARCHITECTURE.md`; `docs/` as API reference index. ✓ |
-| M3 | Executable mathematical narrative: first `validation/` implementations (Schwarzschild spacetime, GPS time dilation); notebooks in `docs/` that import from `validation/` and run in CI. Settles coordinate-to-chart binding and the `SymbolicFunction` interface on concrete fields. ✓ |
-| M4 | Validation infrastructure: manifests, provenance sidecars, comparison-result schema. Planned alongside Epoch 3. |
-| M5 | Reproducibility capsule tooling: self-executing builder. |
-| M6 | Application-repo capsule integration and multi-repository evidence regeneration. |
