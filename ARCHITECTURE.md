@@ -617,7 +617,7 @@ column per cell. Lane C verifies SPD symbolically at N = 4 in 1-D and
 2-D for both `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, so the assertion
 does not depend on a numerical eigenvalue computation.
 
-**C7 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
+**C7 — `LinearSolver` hierarchy with `DenseJacobiSolver`. ✓** Introduced the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
 (nonlinear problems need a separate `NonlinearSolver`). This PR develops
 the interface, the `DenseJacobiSolver` implementation with matrix assembly
