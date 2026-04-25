@@ -16,32 +16,14 @@ from cosmic_foundry.theory.continuous.manifold import Manifold
 
 
 class _NegatedGradientField(OneForm[Any]):
-    """The covector field -∇f for a scalar field f, as a concrete OneForm.
-
-    Stores the negated gradient components as SymPy expressions derived
-    by differentiating f.expr with respect to each symbol in f.symbols.
-    component(i) returns the i-th component -∂f/∂xᵢ.
-    """
+    """The covector field -∇f for a scalar field f."""
 
     def __init__(self, field: DifferentialForm[Any, Any]) -> None:
-        self._source = field
-        self._components = tuple(-sympy.diff(field.expr, s) for s in field.symbols)
-
-    @property
-    def manifold(self) -> Any:
-        return self._source.manifold
-
-    @property
-    def expr(self) -> sympy.Expr:
-        return self._components[0]
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return self._source.symbols
-
-    def component(self, i: int) -> sympy.Expr:
-        """Return the i-th component -∂f/∂xᵢ."""
-        return self._components[i]
+        super().__init__(
+            field.manifold,
+            tuple(-sympy.diff(field.expr, s) for s in field.symbols),
+            field.symbols,
+        )
 
 
 class DiffusionOperator(DifferentialOperator[ZeroForm, OneForm]):

@@ -326,31 +326,25 @@ the right response is to extend the framework so the check applies to the
 whole class of objects, not just the instance in front of you.
 
 **Convergence order verification.** Every concrete `DiscreteOperator`
-subclass (e.g. `DiffusiveFlux`) that claims a convergence order must be
-registered in the convergence oracle framework in `tests/support/`. The
-framework enforces at pytest collection time that no concrete convergent
-class is silently untested. The structure:
+subclass (e.g. `DiffusiveFlux`) that claims a convergence order must have
+instances added to `_INSTANCES` in `tests/test_convergence_order.py`. The
+structure:
 
 - The class declares `order: int` (inherited from `DiscreteOperator`) and
   `min_order: ClassVar[int]` + `order_step: ClassVar[int]` at the class
   level — the validity range of the `order` parameter.
-- The class carries `continuous_operator: DifferentialOperator` (from C4)
-  — the continuous operator it approximates.  This is the mathematical
-  specification; the convergence test verifies the implementation converges
-  to it at the claimed order.
-- A `ConvergenceOracle` subclass in `tests/support/oracles/` provides a
-  manufactured-solution error expression as a SymPy polynomial in `h`.
-  The oracle is the only test-side object needed; it is registered in
-  `tests/support/oracles/__init__.py`.
+- The class carries `continuous_operator: DifferentialOperator` — the
+  continuous operator it approximates.  The convergence test auto-computes
+  the exact value as `Rₕ(L φ)` using `CartesianRestrictionOperator` and
+  `continuous_operator`; no per-class oracle is needed.
 - `tests/test_convergence_order.py` is the single parametric test: it
   verifies the error polynomial has zeros at `h⁰…h^{p-1}` and a nonzero
   `h^p` leading term, where `p = instance.order`.  One test function covers
   all convergent classes.  No additional `test_*` functions are written for
-  convergence — new discretizations extend the oracle registry, not the
-  test file.
-- From C5 onward, oracle files are replaced by the `continuous_operator`
-  annotation + `RestrictionOperator(mesh, degree=n−1)`.  The oracle file
-  is a temporary shim until the full DEC restriction machinery exists.
+  convergence.
+- When adding a new concrete `DiscreteOperator` subclass, add its instances
+  to `_INSTANCES` in `tests/test_convergence_order.py`.  That is the only
+  required change.
 
 Infrastructure capabilities (mesh topology, I/O, field placement) are
 out of scope for lane classification.
