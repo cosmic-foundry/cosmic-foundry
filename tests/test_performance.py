@@ -32,32 +32,6 @@ EFFICIENCY_FACTOR = 8
 _TRIALS = 20
 
 
-def _measure_fma_rate() -> float:
-    """Return the pure-Python list FMA rate in FMAs/second.
-
-    Runs the same inner loop as Tensor._matvec — list-element
-    multiply-accumulate — and returns the peak rate across _TRIALS
-    repetitions.  Using the maximum rate (minimum elapsed time) gives
-    the tightest roofline: a factor-of-N regression shows up as the
-    measured time exceeding EFFICIENCY_FACTOR × (flops / fma_rate).
-    """
-    n = 100
-    a = [float(i) * 0.001 + 1.0 for i in range(n)]
-    b = [float(i) * 0.001 + 1.0 for i in range(n)]
-    best_elapsed = float("inf")
-    for _ in range(_TRIALS):
-        t0 = time.perf_counter()
-        _ = sum(a[i] * b[i] for i in range(n))
-        best_elapsed = min(best_elapsed, time.perf_counter() - t0)
-    return n / best_elapsed
-
-
-@pytest.fixture(scope="session")
-def fma_rate() -> float:
-    """Session-scoped FMA roofline: pure-Python list FMAs per second."""
-    return _measure_fma_rate()
-
-
 # ---------------------------------------------------------------------------
 # Claim base class and concrete types
 # ---------------------------------------------------------------------------

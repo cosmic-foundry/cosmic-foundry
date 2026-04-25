@@ -11,7 +11,7 @@ _CLAIMS; the single parametric test covers all entries.
   _DirectSolverClaim(solver, flux, mesh)
                                       — direct solver residual < tol after one
                                         factorization pass
-  _ConvergenceRateClaim(solver, flux, meshes)
+  _ConvergenceRateClaim(solver, flux)
                                       — L²_h error converges at >= O(h^{p-0.1})
                                         over a mesh refinement sequence using a
                                         manufactured solution with exact cell
@@ -21,8 +21,9 @@ _FLUXES contains all NumericalFlux instances; adding a new flux automatically
 generates _OrderClaim entries for it.  _ELLIPTIC_FLUXES is the SPD subset
 that also gets solver/convergence claims — fluxes whose assembled stiffness
 matrix is not SPD (e.g. AdvectiveFlux) belong only in _FLUXES.  _SOLVERS
-(iterative), _DIRECT_SOLVERS (direct), and _CONVERGENCE_MESHES are registries
-for the elliptic claims.
+(iterative) and _DIRECT_SOLVERS (direct) are registries for the elliptic
+claims.  The convergence mesh sequence is computed adaptively at runtime from
+the machine's FMA rate; see _convergence_n_max.
 """
 
 from __future__ import annotations
@@ -55,6 +56,49 @@ from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 
+# ---------------------------------------------------------------------------
+# Adaptive mesh-size selection
+# ---------------------------------------------------------------------------
+
+# The only hardcoded time constant: total allowed test-suite walltime.
+_MAX_WALLTIME_S = 60.0
+
+# Mesh fractions: each convergence-rate claim sweeps N_max × f for f in this
+# tuple.  The fractions are exact rationals over multiples of 8, so every
+# mesh size is an integer whenever N_max is a multiple of 8.
+_MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
+
+# Empirical cost coefficient: T_claim ≈ _ALPHA × N_max^4 × Σ(f^4) / fma_rate.
+# Jacobi on 1D Poisson requires O(N²/π²) iterations (spectral radius 1−π²/N²),
+# each costing O(N²) FMAs for a dense matvec, giving O(N⁴) total FMAs.  The
+# Python-loop overhead raises the effective coefficient ~4× above the bare
+# FMA count.  Calibrated: 3.87 s/claim at fma_rate=4.9e7, N_max=64, fractions
+# above → ALPHA = 3.87 × 4.9e7 / (64^4 × Σf^4) ≈ 8.10.
+_ALPHA = 8.10
+
+
+def _convergence_n_max(fma_rate: float, n_convergence_claims: int) -> int:
+    """N_max for the convergence mesh sequence given the machine's FMA rate.
+
+    Allocates _MAX_WALLTIME_S equally across all convergence-rate claims using
+    the Jacobi cost model T ≈ _ALPHA × N_max^4 × Σ(f^4) / fma_rate and solves
+    for N_max.  Rounding to the nearest multiple of 8 keeps all mesh sizes exact
+    integers (since every fraction in _MESH_FRACTIONS is an exact rational over
+    multiples of 8).
+
+    The result is a lower bound: LU claims are faster than Jacobi (O(N³) vs
+    O(N⁴)), so the actual total will be below _MAX_WALLTIME_S on all hardware.
+    """
+    sum_f4 = sum(f**4 for f in _MESH_FRACTIONS)
+    budget_per_claim = _MAX_WALLTIME_S / n_convergence_claims
+    n_raw = (budget_per_claim * fma_rate / (_ALPHA * sum_f4)) ** 0.25
+    return max(16, round(n_raw / 8) * 8)
+
+
+# ---------------------------------------------------------------------------
+# Claim base class and concrete types
+# ---------------------------------------------------------------------------
+
 
 class _Claim(ABC):
     @property
@@ -62,7 +106,7 @@ class _Claim(ABC):
     def description(self) -> str: ...
 
     @abstractmethod
-    def check(self) -> None: ...
+    def check(self, fma_rate: float) -> None: ...
 
 
 class _OrderClaim(_Claim):
@@ -81,7 +125,7 @@ class _OrderClaim(_Claim):
     def description(self) -> str:
         return f"{type(self._instance).__name__}(order={self._instance.order})"
 
-    def check(self) -> None:
+    def check(self, fma_rate: float) -> None:
         instance = self._instance
         h = sympy.Symbol("h", positive=True)
         order = instance.order
@@ -155,7 +199,7 @@ class _SolverClaim(_Claim):
             f"{type(self._flux).__name__}(order={self._flux.order})/N={n}"
         )
 
-    def check(self) -> None:
+    def check(self, fma_rate: float) -> None:
         manifold = self._flux.continuous_operator.manifold
         disc = FVMDiscretization(self._mesh, self._flux, DirichletBC(manifold))
         rhs = LazyMeshFunction(self._mesh, lambda idx: 1.0)
@@ -213,7 +257,7 @@ class _DirectSolverClaim(_Claim):
             f"/N={n}{suffix}"
         )
 
-    def check(self) -> None:
+    def check(self, fma_rate: float) -> None:
         manifold = self._flux.continuous_operator.manifold
         bc = self._bc_type(manifold)
         disc = FVMDiscretization(self._mesh, self._flux, bc)
@@ -258,12 +302,10 @@ class _ConvergenceRateClaim(_Claim):
         self,
         solver: Any,
         flux: Any,
-        meshes: list[CartesianMesh],
         bc_type: type = DirichletBC,
     ) -> None:
         self._solver = solver
         self._flux = flux
-        self._meshes = meshes
         self._bc_type = bc_type
 
     @property
@@ -275,7 +317,17 @@ class _ConvergenceRateClaim(_Claim):
             f"convergence_rate{suffix}"
         )
 
-    def check(self) -> None:
+    def check(self, fma_rate: float) -> None:
+        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS)
+        meshes = [
+            CartesianMesh(
+                origin=(sympy.Rational(0),),
+                spacing=(sympy.Rational(1, int(n_max * f)),),
+                shape=(int(n_max * f),),
+            )
+            for f in _MESH_FRACTIONS
+        ]
+
         manifold = self._flux.continuous_operator.manifold
         _x = manifold.atlas[0].symbols[0]
         p = self._flux.order
@@ -286,7 +338,7 @@ class _ConvergenceRateClaim(_Claim):
         # Each candidate sin(nπx) is tested for BC consistency: if
         # ||A·R_h(φ_n) - R_h(ρ_n)|| / ||R_h(ρ_n)|| >= 0.1 the mode violates
         # the ghost-cell convention (O(1) boundary error) and is dropped.
-        coarse = min(self._meshes, key=lambda m: m.shape[0])
+        coarse = meshes[0]  # fractions are ascending; first entry is smallest
         n_c = coarse.shape[0]
         vol_c = float(coarse.cell_volume)
         orig_c = float(coarse.coordinate((0,))[0]) - 0.5 * vol_c
@@ -336,7 +388,7 @@ class _ConvergenceRateClaim(_Claim):
         F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
 
         errors: list[float] = []
-        for mesh in self._meshes:
+        for mesh in meshes:
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
@@ -367,7 +419,7 @@ class _ConvergenceRateClaim(_Claim):
             diff = u_arr - phi_arr
             errors.append(math.sqrt(vol * (diff @ diff)))
 
-        hs = [float(m.cell_volume) for m in self._meshes]
+        hs = [float(m.cell_volume) for m in meshes]
         log_h = [math.log(hv) for hv in hs]
         log_e = [math.log(ev) for ev in errors]
         n_pts = len(log_h)
@@ -415,14 +467,6 @@ _FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES, *_ADVECTION_DIFFUSION_FLUXES]
 # for any κ > 0, compatible with all solvers at unit Péclet number (κ=1, h≈1/N).
 _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver(tol=1e-10)]
-_CONVERGENCE_MESHES = [
-    CartesianMesh(
-        origin=(sympy.Rational(0),),
-        spacing=(sympy.Rational(1, n),),
-        shape=(n,),
-    )
-    for n in [16, 24, 32, 48, 64]
-]
 
 
 _CLAIMS: list[_Claim] = [
@@ -436,7 +480,7 @@ _CLAIMS: list[_Claim] = [
         for f in _DIFFUSIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
+        _ConvergenceRateClaim(s, f)
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _DIFFUSIVE_FLUXES
     ],
@@ -447,7 +491,7 @@ _CLAIMS: list[_Claim] = [
         for f in _ADVECTIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES, PeriodicBC)
+        _ConvergenceRateClaim(s, f, PeriodicBC)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
@@ -463,13 +507,19 @@ _CLAIMS: list[_Claim] = [
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
+        _ConvergenceRateClaim(s, f)
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
 ]
 
+# Count convergence-rate claims after the list is built so that adding or
+# removing claims automatically updates the per-claim time budget.
+_N_CONVERGENCE_CLAIMS: int = sum(
+    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim)
+)
+
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_convergence(claim: _Claim) -> None:
-    claim.check()
+def test_convergence(claim: _Claim, fma_rate: float) -> None:
+    claim.check(fma_rate)
