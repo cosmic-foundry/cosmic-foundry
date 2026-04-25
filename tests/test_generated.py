@@ -24,6 +24,7 @@ _PACKAGES = [
     "cosmic_foundry.theory.continuous",
     "cosmic_foundry.theory.discrete",
     "cosmic_foundry.geometry",
+    "cosmic_foundry.computation",
 ]
 
 
