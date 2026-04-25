@@ -26,8 +26,8 @@ class DiscreteOperator(NumericFunction[MeshFunction[_V], MeshFunction[_V]]):
                               against which the convergence test measures error
 
     A DiscreteOperator is not constructed directly from stencil coefficients;
-    it is produced by a Discretization, which threads continuous_operator
-    automatically (it is the input L to Discretization.__call__).
+    it is produced by a Discretization, which derives continuous_operator
+    automatically from the numerical flux.
 
     Required:
         order               — composite convergence order

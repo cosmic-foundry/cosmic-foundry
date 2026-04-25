@@ -1,4 +1,4 @@
-"""FVMDiscretization: assemble a DiscreteOperator from a DivergenceFormEquation."""
+"""FVMDiscretization: assemble a DiscreteOperator from a NumericalFlux."""
 
 from __future__ import annotations
 
@@ -7,16 +7,64 @@ from typing import Any, cast
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
-from cosmic_foundry.theory.continuous.divergence_form_equation import (
-    DivergenceFormEquation,
-)
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
+
+
+class _ConcreteZeroForm(ZeroForm[Any]):
+    def __init__(
+        self,
+        manifold: Any,
+        expr: sympy.Expr,
+        symbols: tuple[sympy.Symbol, ...],
+    ) -> None:
+        self._manifold = manifold
+        self._expr = expr
+        self._symbols = symbols
+
+    @property
+    def manifold(self) -> Any:
+        return self._manifold
+
+    @property
+    def expr(self) -> sympy.Expr:
+        return self._expr
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return self._symbols
+
+
+class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
+    """∇·F: the divergence of a DifferentialOperator F mapping ZeroForm → OneForm."""
+
+    def __init__(self, flux_op: DifferentialOperator) -> None:
+        self._flux_op = flux_op
+
+    @property
+    def manifold(self) -> Any:
+        return self._flux_op.manifold
+
+    @property
+    def order(self) -> int:
+        return self._flux_op.order + 1
+
+    def __call__(self, phi: Any) -> ZeroForm[Any]:
+        one_form = self._flux_op(phi)
+        div: sympy.Expr = sum(
+            (
+                sympy.diff(one_form.component(i), one_form.symbols[i])
+                for i in range(len(one_form.symbols))
+            ),
+            sympy.Integer(0),
+        )
+        return _ConcreteZeroForm(phi.manifold, div, phi.symbols)
 
 
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
@@ -31,17 +79,11 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     The mesh is read from U.mesh at call time, making this operator applicable
     to symbolic meshes (for convergence testing) and concrete meshes alike.
 
-    Carries continuous_operator = L (the DivergenceFormEquation passed to
-    FVMDiscretization.__call__) so the commutation diagram is traceable.
+    continuous_operator is auto-derived as ∇·(numerical_flux.continuous_operator).
     """
 
-    def __init__(
-        self,
-        numerical_flux: NumericalFlux[sympy.Expr],
-        continuous_operator: DifferentialOperator,
-    ) -> None:
+    def __init__(self, numerical_flux: NumericalFlux[sympy.Expr]) -> None:
         self._numerical_flux = numerical_flux
-        self._continuous_operator = continuous_operator
 
     @property
     def order(self) -> int:
@@ -49,7 +91,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
 
     @property
     def continuous_operator(self) -> DifferentialOperator:
-        return self._continuous_operator
+        return _DivergenceComposition(self._numerical_flux.continuous_operator)
 
     def __call__(self, U: MeshFunction[sympy.Expr]) -> LazyMeshFunction[sympy.Expr]:
         """Apply the assembled operator; returns a lazy cell-residual MeshFunction."""
@@ -74,20 +116,16 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
 
 
 class FVMDiscretization(Discretization):
-    """Finite-volume discretization of a DivergenceFormEquation on a CartesianMesh.
+    """Finite-volume discretization of a divergence-form equation on a CartesianMesh.
 
-    FVMDiscretization(mesh, numerical_flux, boundary_condition) assembles the
-    discrete operator Lₕ that makes the commutation diagram
+    FVMDiscretization(mesh, numerical_flux) assembles the discrete operator Lₕ
+    that makes the commutation diagram
 
         Lₕ Rₕ φ ≈ Rₕ L φ   (to O(hᵖ))
 
-    hold for DifferentialEquation L and convergence order p = numerical_flux.order.
-    Calling it with L produces an _AssembledFVMOperator carrying
-    continuous_operator = L, closing the diagram from birth.
-
-    Interior cells are evaluated correctly with no boundary input.  The
-    boundary_condition is stored for later use; boundary face handling is
-    deferred to a subsequent PR once a concrete LocalBoundaryCondition lands.
+    hold at convergence order p = numerical_flux.order.  Calling it produces an
+    _AssembledFVMOperator whose continuous_operator is auto-derived as
+    ∇·(numerical_flux.continuous_operator).
 
     Parameters
     ----------
@@ -113,9 +151,9 @@ class FVMDiscretization(Discretization):
     def mesh(self) -> Mesh:
         return self._mesh
 
-    def __call__(self, L: DivergenceFormEquation) -> _AssembledFVMOperator:
-        """Produce the assembled discrete operator for L."""
-        return _AssembledFVMOperator(self._numerical_flux, L)
+    def __call__(self) -> _AssembledFVMOperator:
+        """Produce the assembled discrete operator."""
+        return _AssembledFVMOperator(self._numerical_flux)
 
 
 __all__ = ["FVMDiscretization"]

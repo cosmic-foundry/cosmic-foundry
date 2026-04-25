@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
@@ -24,8 +25,6 @@ from cosmic_foundry.theory.continuous.differential_form import (
     ZeroForm,
 )
 from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
-from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.continuous.poisson_equation import PoissonEquation
 
 
 class _ZeroFormField(ZeroForm[Any]):
@@ -52,27 +51,10 @@ class _ZeroFormField(ZeroForm[Any]):
         return self._symbols
 
 
-class _ConcretePoissonEquation(PoissonEquation):
-    def __init__(self, manifold: Manifold, source: ZeroForm) -> None:
-        self._manifold = manifold
-        self._source = source
-
-    @property
-    def manifold(self) -> Manifold:
-        return self._manifold
-
-    @property
-    def source(self) -> ZeroForm:
-        return self._source
-
-
 _manifold = EuclideanManifold(1)
 _x = _manifold.atlas[0].symbols[0]
 _diffusion_op = DiffusionOperator(_manifold)
 _lo, _step = DiffusiveFlux.min_order, DiffusiveFlux.order_step
-_poisson = _ConcretePoissonEquation(
-    _manifold, _ZeroFormField(_manifold, sympy.Integer(0), (_x,))
-)
 _dummy_mesh = CartesianMesh(
     origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
 )
@@ -80,12 +62,9 @@ _dummy_mesh = CartesianMesh(
 _INSTANCES = [
     DiffusiveFlux(_lo, _diffusion_op),
     DiffusiveFlux(_lo + _step, _diffusion_op),
-    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo, _diffusion_op))(_poisson),
-    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo + _step, _diffusion_op))(_poisson),
+    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo, _diffusion_op))(),
+    FVMDiscretization(_dummy_mesh, DiffusiveFlux(_lo + _step, _diffusion_op))(),
 ]
-
-
-import pytest  # noqa: E402
 
 
 @pytest.mark.parametrize(
