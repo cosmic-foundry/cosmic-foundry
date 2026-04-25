@@ -39,6 +39,7 @@ from cosmic_foundry.theory.continuous.manifold import (
 from cosmic_foundry.theory.continuous.non_local_boundary_condition import (
     NonLocalBoundaryCondition,
 )
+from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
 from cosmic_foundry.theory.continuous.poisson_equation import PoissonEquation
 from cosmic_foundry.theory.continuous.pseudo_riemannian_manifold import (
     MetricTensor,
@@ -66,6 +67,7 @@ __all__ = [
     "MetricTensor",
     "NonLocalBoundaryCondition",
     "OneForm",
+    "PeriodicBC",
     "Point",
     "PoissonEquation",
     "PseudoRiemannianManifold",
