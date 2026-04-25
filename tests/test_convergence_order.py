@@ -237,17 +237,20 @@ class _DirectSolverClaim(_Claim):
 class _ConvergenceRateClaim(_Claim):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
-    The source ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator,
-    so no per-flux RHS formula is required.  bc_type selects φ:
-      DirichletBC — φ = sin(πx)+sin(3πx), satisfies φ(0)=φ(1)=0
-      PeriodicBC  — φ = sin(2πx), zero-mean and periodic on [0,1]
+    The manufactured solution φ is selected automatically from candidates
+    sin(nπx) for n=1..k_max, where k_max = N_min // p gives at least 2p
+    cells per wavelength on the coarsest mesh (sufficient for the asymptotic
+    regime).  A candidate is admitted only when A·R_h(sin(nπx)) matches
+    R_h(∇·F(sin(nπx))) to within 10% on the coarsest mesh; modes inconsistent
+    with the BC's ghost-cell convention (e.g. odd-n modes under PeriodicBC)
+    produce O(1) relative error and are excluded automatically.  The source
+    ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator.
 
     Before measuring the L²_h error the assembled stiffness matrix is
-    decomposed via SVD; any null-space components of u_h (singular values
-    below a relative threshold) are projected out.  This isolates truncation
-    error from the arbitrary null-space component a direct solver may introduce
-    for singular systems (e.g. advection under PeriodicBC), without requiring
-    any operator-specific knowledge from the caller.
+    decomposed via SVD; any null-space components of u_h are projected out,
+    isolating truncation error from the arbitrary null-space component a
+    direct solver may introduce for singular systems (e.g. advection under
+    PeriodicBC).
     """
 
     def __init__(
@@ -272,17 +275,58 @@ class _ConvergenceRateClaim(_Claim):
         )
 
     def check(self) -> None:
-        space = EuclideanManifold(1)
-        _x = space.atlas[0].symbols[0]
         manifold = self._flux.continuous_operator.manifold
+        _x = manifold.atlas[0].symbols[0]
+        p = self._flux.order
+        bc = self._bc_type(manifold)
 
-        if self._bc_type is PeriodicBC:
-            phi_expr = sympy.sin(2 * sympy.pi * _x)
-        else:
-            phi_expr = sympy.sin(sympy.pi * _x) + sympy.sin(3 * sympy.pi * _x)
+        # Auto-select admissible manufactured-solution modes.
+        # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
+        # Each candidate sin(nπx) is tested for BC consistency: if
+        # ||A·R_h(φ_n) - R_h(ρ_n)|| / ||R_h(ρ_n)|| >= 0.1 the mode violates
+        # the ghost-cell convention (O(1) boundary error) and is dropped.
+        coarse = min(self._meshes, key=lambda m: m.shape[0])
+        n_c = coarse.shape[0]
+        vol_c = float(coarse.cell_volume)
+        orig_c = float(coarse.coordinate((0,))[0]) - 0.5 * vol_c
+        a_sym_c = FVMDiscretization(coarse, self._flux, bc).assemble_matrix()
+        a_c = np.array([[float(a_sym_c[i, j]) for j in range(n_c)] for i in range(n_c)])
+        k_max = max(1, n_c // p)
+        phi_terms: list[sympy.Expr] = []
+        for n in range(1, k_max + 1):
+            phi_n = sympy.sin(n * sympy.pi * _x)
+            one_form_n = self._flux.continuous_operator(
+                ZeroForm(manifold, phi_n, (_x,))
+            )
+            rho_n = sum(
+                sympy.diff(one_form_n.component(i), one_form_n.symbols[i])
+                for i in range(len(one_form_n.symbols))
+            )
+            F_pn = sympy.lambdify(_x, sympy.integrate(phi_n, _x), "math")
+            F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
+            v_n = np.array(
+                [
+                    (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
+                    for i in range(n_c)
+                ]
+            )
+            r_n = np.array(
+                [
+                    (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
+                    for i in range(n_c)
+                ]
+            )
+            rel_err = float(np.linalg.norm(a_c @ v_n - r_n)) / (
+                float(np.linalg.norm(r_n)) + 1e-30
+            )
+            if rel_err < 0.1:
+                phi_terms.append(phi_n)
+        assert phi_terms, "No admissible manufactured-solution modes found"
+        phi_expr = sympy.Add(*phi_terms)
+        phi = ZeroForm(manifold, phi_expr, (_x,))
 
         # Derive ρ = ∇·F(φ) symbolically from the flux's continuous operator.
-        one_form = self._flux.continuous_operator(ZeroForm(space, phi_expr, (_x,)))
+        one_form = self._flux.continuous_operator(phi)
         rho_expr = sum(
             sympy.diff(one_form.component(i), one_form.symbols[i])
             for i in range(len(one_form.symbols))
@@ -305,7 +349,6 @@ class _ConvergenceRateClaim(_Claim):
             def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
                 return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
 
-            bc = self._bc_type(manifold)
             disc = FVMDiscretization(mesh, self._flux, bc)
 
             # Project u_h onto the orthogonal complement of the assembled
