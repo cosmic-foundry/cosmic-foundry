@@ -15,6 +15,7 @@ from cosmic_foundry.theory.continuous.differential_form import (
     ZeroForm,
 )
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 from cosmic_foundry.theory.continuous.divergence_form_equation import (
     DivergenceFormEquation,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "Atlas",
     "BoundaryCondition",
     "Chart",
+    "DiffusionOperator",
     "Constraint",
     "Diffeomorphism",
     "DifferentialForm",

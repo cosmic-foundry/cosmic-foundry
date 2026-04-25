@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TypeVar
 
+from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
@@ -16,27 +17,33 @@ class DiscreteOperator(NumericFunction[MeshFunction[_V], MeshFunction[_V]]):
 
     A DiscreteOperator is the output of a Discretization — the Lₕ that makes
     the commutation diagram Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the chosen approximation
-    order.  It earns its class via the verifiable integer claim .order: int —
-    the composite convergence order of the approximation scheme.
+    order.  It earns its class by two falsifiable claims:
 
-    In C4, DiscreteOperator gains a second required property:
-    .continuous_operator: DifferentialOperator — the continuous operator this
-    instance approximates.  Together order and continuous_operator are the two
-    falsifiable claims every discrete operator makes.
+        order               — integer convergence order; verified by Lane C
+                              Taylor expansion in test_convergence_order.py
+        continuous_operator — the DifferentialOperator L this instance
+                              approximates; the mathematical specification
+                              against which the convergence test measures error
 
     A DiscreteOperator is not constructed directly from stencil coefficients;
     it is produced by a Discretization, which threads continuous_operator
-    automatically (it is the input L to the Discretization).
+    automatically (it is the input L to Discretization.__call__).
 
     Required:
-        order    — composite convergence order of the approximation scheme
-        __call__ — apply the operator (inherited from NumericFunction)
+        order               — composite convergence order
+        continuous_operator — the continuous operator this approximates
+        __call__            — apply the operator (inherited from NumericFunction)
     """
 
     @property
     @abstractmethod
     def order(self) -> int:
         """Composite convergence order of the approximation scheme."""
+
+    @property
+    @abstractmethod
+    def continuous_operator(self) -> DifferentialOperator:
+        """The continuous operator this DiscreteOperator approximates."""
 
 
 __all__ = ["DiscreteOperator"]

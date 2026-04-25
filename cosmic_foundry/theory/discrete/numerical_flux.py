@@ -22,9 +22,7 @@ class NumericalFlux(DiscreteOperator[_V]):
     NumericalFlux commits to the cell-average → face-flux direction, which
     is the FVM face-flux assembly pattern.
 
-    In C4, NumericalFlux gains continuous_operator: DifferentialOperator
-    (inherited from DiscreteOperator), identifying the continuous flux this
-    instance approximates.  The convergence order is the composite minimum:
+    The convergence order is the composite minimum:
 
         order = min(reconstruction_order, face_quadrature_order,
                     deconvolution_order)
@@ -35,8 +33,9 @@ class NumericalFlux(DiscreteOperator[_V]):
     tests/test_convergence_order.py.
 
     Required (inherited from DiscreteOperator):
-        order    — composite convergence order
-        __call__ — apply the operator: MeshFunction → MeshFunction
+        order               — composite convergence order
+        continuous_operator — the continuous flux operator approximated
+        __call__            — apply the operator: MeshFunction → MeshFunction
     """
 
 
