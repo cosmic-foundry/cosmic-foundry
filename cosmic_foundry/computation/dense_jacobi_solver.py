@@ -108,7 +108,7 @@ class DenseJacobiSolver(LinearSolver):
                 stride *= shape[axis]
             return flat
 
-        a: list[list[float]] = discretization.assemble()
+        a: list[list[float]] = discretization.assemble().to_list()
 
         # RHS and diagonal vectors
         f: list[float] = [float(rhs(_to_multi(i))) for i in range(n)]  # type: ignore[arg-type]

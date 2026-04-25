@@ -8,6 +8,7 @@ from typing import Any
 
 import sympy
 
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -33,9 +34,9 @@ class Discretization(ABC):
     Concrete:
         mesh               — the mesh on which the scheme is defined
         boundary_condition — the BoundaryCondition on ∂Ω (None if not yet set)
-        assemble           — float matrix; applies Lₕ to sympy basis vectors
-        diagonal           — diagonal of the assembled matrix; derived from assemble
-        apply              — apply Lₕ to a discrete field; override for matrix-free
+        assemble           — stiffness matrix as a Tensor
+        diagonal           — diagonal of the stiffness matrix as a Tensor
+        apply              — apply Lₕ to a discrete field; returns a Tensor
     """
 
     def __init__(
@@ -60,8 +61,8 @@ class Discretization(ABC):
     def __call__(self) -> DiscreteOperator:
         """Produce the assembled DiscreteOperator."""
 
-    def assemble(self) -> list[list[float]]:
-        """Assemble the N^d × N^d stiffness matrix as a float list-of-rows.
+    def assemble(self) -> Tensor:
+        """Assemble the N^d × N^d stiffness matrix as a rank-2 Tensor.
 
         Applies Lₕ to each sympy unit-basis vector in turn and converts the
         resulting sympy expressions to float.  Row and column ordering is
@@ -94,15 +95,14 @@ class Discretization(ABC):
             for i in range(n_total):
                 rows[i][j] = float(lh_ej(to_multi(i)))  # type: ignore[arg-type]
 
-        return rows
+        return Tensor(rows)
 
-    def diagonal(self) -> list[float]:
-        """Diagonal of the assembled stiffness matrix."""
-        a = self.assemble()
-        return [a[i][i] for i in range(len(a))]
+    def diagonal(self) -> Tensor:
+        """Diagonal of the assembled stiffness matrix as a rank-1 Tensor."""
+        return self.assemble().diag()
 
-    def apply(self, u: Any) -> list[float]:
-        """Apply Lₕ to discrete field u; return the result as a list of floats.
+    def apply(self, u: Any) -> Tensor:
+        """Apply Lₕ to discrete field u; return the result as a rank-1 Tensor.
 
         u must be indexable with N^d float values in lexicographic
         (axis-0-fastest) order.  The default materialises the full stiffness
@@ -110,8 +110,11 @@ class Discretization(ABC):
         Override this method for matrix-free implementations.
         """
         a = self.assemble()
-        n = len(a)
-        return [sum(a[i][j] * u[j] for j in range(n)) for i in range(n)]
+        n = a.shape[0]
+        u_vec = Tensor([float(u[j]) for j in range(n)])
+        result = a @ u_vec
+        assert isinstance(result, Tensor)
+        return result
 
 
 __all__ = ["Discretization"]

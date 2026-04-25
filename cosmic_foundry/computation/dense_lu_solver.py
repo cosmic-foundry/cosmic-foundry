@@ -88,7 +88,7 @@ class DenseLUSolver(LinearSolver):
                 stride *= shape[axis]
             return flat
 
-        a_orig: list[list[float]] = discretization.assemble()
+        a_orig: list[list[float]] = discretization.assemble().to_list()
         a: list[list[float]] = [row[:] for row in a_orig]
         f: list[float] = [float(rhs(_to_multi(i))) for i in range(n)]  # type: ignore[arg-type]
         vol: float = float(cast(CartesianMesh, mesh).cell_volume)
