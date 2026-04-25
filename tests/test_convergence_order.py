@@ -255,7 +255,7 @@ _FLUXES = [
     DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
     DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
 ]
-_SOLVERS = [DenseJacobiSolver(tol=1e-8, max_iter=25_000)]
+_SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _CONVERGENCE_MESHES = [
     CartesianMesh(
         origin=(sympy.Rational(0),),
