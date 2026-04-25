@@ -216,10 +216,12 @@ class _ConvergenceRateClaim(_Claim):
             rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
             u_h = self._solver.solve(disc, rhs)
             vol = float(mesh.cell_volume)
-            n_skip = self._flux.order // 2
+            # All cells included: for homogeneous Dirichlet BC, odd-reflection ghost
+            # values equal the exact odd-extension cell averages of any solution
+            # satisfying φ(0)=φ(1)=0, so boundary cells converge at full order p.
             err_sq: float = sum(
                 vol * (float(u_h((i,))) - _phi_avg(i)) ** 2
-                for i in range(n_skip, mesh.shape[0] - n_skip)
+                for i in range(mesh.shape[0])
             )
             errors.append(math.sqrt(err_sq))
 
@@ -232,9 +234,9 @@ class _ConvergenceRateClaim(_Claim):
         sxy = sum(x * y for x, y in zip(log_h, log_e, strict=False))
         sxx = sum(x * x for x in log_h)
         slope = (n_pts * sxy - sx * sy) / (n_pts * sxx - sx**2)
-        assert slope >= self._flux.order - 0.5, (
+        assert slope >= self._flux.order - 0.1, (
             f"Convergence rate {slope:.3f} < expected "
-            f"{self._flux.order - 0.5:.1f} for "
+            f"{self._flux.order - 0.1:.1f} for "
             f"{type(self._flux).__name__}(order={self._flux.order})"
         )
 
@@ -253,14 +255,14 @@ _FLUXES = [
     DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
     DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
 ]
-_SOLVERS = [DenseJacobiSolver(tol=1e-8, max_iter=10_000)]
+_SOLVERS = [DenseJacobiSolver(tol=1e-8, max_iter=25_000)]
 _CONVERGENCE_MESHES = [
     CartesianMesh(
         origin=(sympy.Rational(0),),
         spacing=(sympy.Rational(1, n),),
         shape=(n,),
     )
-    for n in [8, 12, 16, 24, 32]
+    for n in [16, 24, 32, 48, 64]
 ]
 
 _CLAIMS: list[_Claim] = [
