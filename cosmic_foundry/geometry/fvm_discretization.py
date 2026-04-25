@@ -7,9 +7,9 @@ from typing import Any, cast
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
-from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -92,7 +92,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     def __init__(
         self,
         numerical_flux: NumericalFlux[sympy.Expr],
-        bc: DirichletBC | None = None,
+        bc: BoundaryCondition | None = None,
     ) -> None:
         self._numerical_flux = numerical_flux
         self._bc = bc
@@ -157,15 +157,10 @@ class FVMDiscretization(Discretization):
         self,
         mesh: Mesh,
         numerical_flux: NumericalFlux[Any],
-        boundary_condition: DirichletBC | None = None,
+        boundary_condition: BoundaryCondition | None = None,
     ) -> None:
-        self._mesh = mesh
+        super().__init__(mesh, boundary_condition)
         self._numerical_flux = numerical_flux
-        self._boundary_condition = boundary_condition
-
-    @property
-    def mesh(self) -> Mesh:
-        return self._mesh
 
     def __call__(self) -> _AssembledFVMOperator:
         """Produce the assembled discrete operator."""

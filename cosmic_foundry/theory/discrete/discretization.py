@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 
 import sympy
 
+from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 from cosmic_foundry.theory.discrete.mesh import Mesh
@@ -26,17 +27,31 @@ class Discretization(ABC):
     hold, where p is the approximation order.
 
     Required:
-        mesh     — the mesh on which the scheme is defined
         __call__ — produce the DiscreteOperator (signature defined by subclass)
 
-    Derived:
-        assemble_matrix — unit-basis assembly of the N^d × N^d stiffness matrix
+    Concrete:
+        mesh               — the mesh on which the scheme is defined
+        boundary_condition — the BoundaryCondition on ∂Ω (None if not yet set)
+        assemble_matrix    — unit-basis assembly of the N^d × N^d stiffness matrix
     """
 
+    def __init__(
+        self,
+        mesh: Mesh,
+        boundary_condition: BoundaryCondition | None = None,
+    ) -> None:
+        self._mesh = mesh
+        self._boundary_condition = boundary_condition
+
     @property
-    @abstractmethod
     def mesh(self) -> Mesh:
         """The mesh on which the scheme is defined."""
+        return self._mesh
+
+    @property
+    def boundary_condition(self) -> BoundaryCondition | None:
+        """The boundary condition on ∂Ω."""
+        return self._boundary_condition
 
     @abstractmethod
     def __call__(self) -> DiscreteOperator:
@@ -54,14 +69,6 @@ class Discretization(ABC):
         shape = self.mesh.shape
         ndim = len(shape)
         n_total = math.prod(shape)
-
-        def to_flat(idx: tuple[int, ...]) -> int:
-            result = 0
-            stride = 1
-            for a in range(ndim):
-                result += idx[a] * stride
-                stride *= shape[a]
-            return result
 
         def to_multi(flat: int) -> tuple[int, ...]:
             idx = []
