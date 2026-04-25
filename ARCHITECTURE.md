@@ -530,26 +530,33 @@ concrete class.  Key design decisions:
   `test_convergence_order.py` is the single parametric test for all of them.
   Oracle files stay until C5 automates them away.
 
-**C4 — `DiffusionOperator`, `continuous_operator`, `Discretization`.**
-Three tightly coupled additions delivered in one PR (mirrors C1 pattern):
+**C4 — `DiffusionOperator`, `continuous_operator`, `Discretization`. ✓**
+Four additions delivered together:
 
-1. `DiffusionOperator` in `theory/continuous/` — concrete
+1. `LazyMeshFunction[V](mesh, fn)` in `theory/discrete/` — callable-backed
+   `MeshFunction`; generalizes the private `_FaceMeshFunction` that `DiffusiveFlux`
+   previously returned.  All full-field `NumericalFlux.__call__` returns use it.
+2. `DiffusionOperator` in `theory/continuous/` — concrete
    `DifferentialOperator[ZeroForm, OneForm]` representing `-d: Ω⁰ → Ω¹`.
-   The continuous operator that `DiffusiveFlux` approximates.
-2. `DiscreteOperator` gains abstract `continuous_operator: DifferentialOperator`
+   `_NegatedGradientField` moved here from `poisson_equation.py` and shared.
+3. `DiscreteOperator` gains abstract `continuous_operator: DifferentialOperator`
    — the second falsifiable claim every discrete operator makes.
    `DiffusiveFlux.__init__` takes `continuous_operator` as a required
-   constructor argument; the `__init__` guard ensures it matches the
-   expected type.
-3. `Discretization` ABC + `FVMDiscretization(mesh, numerical_flux,
-   boundary_condition)` — threads `continuous_operator` automatically
-   (it is the input `L` to `Discretization.__call__`).  The produced
-   `DiscreteOperator` carries the annotation from birth.
+   constructor argument; the `__init__` guard enforces `isinstance(_, DiffusionOperator)`.
+4. `FVMDiscretization(mesh, numerical_flux, boundary_condition)` —
+   `Discretization` subclass in `geometry/`; `__call__(L)` produces
+   `_AssembledFVMOperator` carrying `continuous_operator = L` from birth.
+   `_AssembledFVMOperator.__call__(U)` computes
+   `(1/|Ωᵢ|) · Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]` lazily via `LazyMeshFunction`;
+   mesh is read from `U.mesh` at call time (symbolic or concrete).
+5. `CONVERGENT_ABCS = [DiscreteOperator]` replaces `[NumericalFlux]` as the
+   single convergence root; `_AssembledFVMOperator` gets a `FVMDiscretizationOracle`
+   that verifies `‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)` symbolically.
 
-Lane C: verify the commutation diagram `‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)`
-at order p for `PoissonEquation` paired with `DiffusiveFlux(2)` and
-`DiffusiveFlux(4)`, symbolically on test fields in `C^{p+2}(Ω)`.  The SPD
-derivation is deferred to C6.
+Lane C verified: commutation diagram at order p for `DiffusiveFlux(2)` and
+`DiffusiveFlux(4)` via manufactured-solution polynomial on a 1D symbolic mesh,
+registered in `tests/support/oracles/fvm_discretization.py`.  SPD derivation
+deferred to C6.
 
 **C5 — Automated convergence framework via `RestrictionOperator.degree`.**
 Complete the oracle-free convergence testing infrastructure:
