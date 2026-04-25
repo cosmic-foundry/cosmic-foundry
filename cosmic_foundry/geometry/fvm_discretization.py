@@ -17,30 +17,6 @@ from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
-class _ConcreteZeroForm(ZeroForm[Any]):
-    def __init__(
-        self,
-        manifold: Any,
-        expr: sympy.Expr,
-        symbols: tuple[sympy.Symbol, ...],
-    ) -> None:
-        self._manifold = manifold
-        self._expr = expr
-        self._symbols = symbols
-
-    @property
-    def manifold(self) -> Any:
-        return self._manifold
-
-    @property
-    def expr(self) -> sympy.Expr:
-        return self._expr
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return self._symbols
-
-
 class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
     """∇·F: the divergence of a DifferentialOperator F mapping ZeroForm → OneForm."""
 
@@ -64,7 +40,7 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
             ),
             sympy.Integer(0),
         )
-        return _ConcreteZeroForm(phi.manifold, div, phi.symbols)
+        return ZeroForm(phi.manifold, div, phi.symbols)
 
 
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):

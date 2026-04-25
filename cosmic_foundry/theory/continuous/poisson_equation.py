@@ -32,36 +32,6 @@ class _NegatedGradientFlux(NumericFunction[DifferentialForm, OneForm]):
         return _NegatedGradientField(field)
 
 
-class _ZeroFormField(ZeroForm[Any]):
-    """A scalar field defined by a SymPy expression.
-
-    Degree and tensor_type are derived from ZeroForm: degree = 0,
-    tensor_type = (0, 0).
-    """
-
-    def __init__(
-        self,
-        manifold: Any,
-        expr: sympy.Expr,
-        symbols: tuple[sympy.Symbol, ...],
-    ) -> None:
-        self._manifold = manifold
-        self._expr = expr
-        self._symbols = symbols
-
-    @property
-    def manifold(self) -> Any:
-        return self._manifold
-
-    @property
-    def expr(self) -> sympy.Expr:
-        return self._expr
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return self._symbols
-
-
 _NEGATED_GRADIENT_FLUX = _NegatedGradientFlux()
 
 
@@ -118,7 +88,7 @@ class PoissonEquation(DivergenceFormEquation):
         source.expr when φ solves the equation.
         """
         neg_laplacian = -sum(sympy.diff(field.expr, s, 2) for s in field.symbols)
-        return _ZeroFormField(field.manifold, neg_laplacian, field.symbols)
+        return ZeroForm(field.manifold, neg_laplacian, field.symbols)
 
 
 __all__ = ["PoissonEquation"]

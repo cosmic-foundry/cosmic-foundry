@@ -9,6 +9,7 @@ enabling type-level discrimination of operator signatures.
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import Any
 
 import sympy
 
@@ -38,54 +39,115 @@ class DifferentialForm(TensorField[D, C]):  # noqa: B024
         return (0, self.degree)
 
 
-class ZeroForm(DifferentialForm[D, sympy.Expr]):  # noqa: B024
+class ZeroForm(DifferentialForm[D, sympy.Expr]):
     """A differential 0-form: a scalar field.
 
-    Fixes degree = 0 and C = sympy.Expr, so the SymbolicFunction.__call__
-    default (expr.subs) produces a scalar value.  This is the correct Python
-    value type for a 0-form.
-
-    Earns its class by deriving degree — the one degree of freedom present
-    in DifferentialForm is removed.
+    Fixes degree = 0 and C = sympy.Expr.  Concrete: ZeroForm(manifold,
+    expr, symbols) constructs a scalar field directly.  Subclass when the
+    field is computed or derived rather than given as a stored expression.
     """
+
+    def __init__(
+        self,
+        manifold: D,
+        expr: sympy.Expr,
+        symbols: tuple[sympy.Symbol, ...],
+    ) -> None:
+        self._manifold = manifold
+        self._expr = expr
+        self._symbols = symbols
 
     @property
     def degree(self) -> int:
         return 0
 
+    @property
+    def manifold(self) -> D:
+        return self._manifold
+
+    @property
+    def expr(self) -> sympy.Expr:
+        return self._expr
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return self._symbols
+
 
 class OneForm(DifferentialForm[D, tuple[sympy.Expr, ...]]):
     """A differential 1-form: a covector field.
 
-    Fixes degree = 1 and C = tuple[sympy.Expr, ...].  The default
-    SymbolicFunction.__call__ returns a single sympy.Expr (the expr
-    evaluated at a point); concrete implementations may override __call__
-    to return all n components.
-
-    Earns its class by deriving degree and requiring component(axis).
+    Fixes degree = 1 and C = tuple[sympy.Expr, ...].  Concrete:
+    OneForm(manifold, components, symbols) constructs a covector field
+    directly.  Subclass when the components are computed or derived.
+    component(axis) returns components[axis]; expr returns components[0].
     """
+
+    def __init__(
+        self,
+        manifold: D,
+        components: tuple[sympy.Expr, ...],
+        symbols: tuple[sympy.Symbol, ...],
+    ) -> None:
+        self._manifold = manifold
+        self._components = components
+        self._symbols = symbols
 
     @property
     def degree(self) -> int:
         return 1
 
-    @abstractmethod
+    @property
+    def manifold(self) -> D:
+        return self._manifold
+
+    @property
+    def expr(self) -> sympy.Expr:
+        return self._components[0]
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return self._symbols
+
     def component(self, axis: int) -> sympy.Expr:
         """The axis-th coordinate component of this one-form."""
+        return self._components[axis]
 
 
-class TwoForm(DifferentialForm[D, sympy.Matrix]):  # noqa: B024
+class TwoForm(DifferentialForm[D, sympy.Matrix]):
     """A differential 2-form: an antisymmetric rank-2 tensor field.
 
-    Fixes degree = 2 and C = sympy.Matrix.  The antisymmetry condition
-    T_{ij} = -T_{ji} must be enforced by concrete implementations.
-
-    Earns its class by deriving degree.
+    Fixes degree = 2 and C = sympy.Matrix.  Concrete: TwoForm(manifold,
+    matrix, symbols) constructs a 2-form directly.  The antisymmetry
+    condition T_{ij} = -T_{ji} must be enforced by the caller.
+    expr returns matrix[0, 0] as the primary scalar component.
     """
+
+    def __init__(
+        self,
+        manifold: D,
+        matrix: sympy.Matrix,
+        symbols: tuple[sympy.Symbol, ...],
+    ) -> None:
+        self._manifold: Any = manifold
+        self._matrix = matrix
+        self._symbols = symbols
 
     @property
     def degree(self) -> int:
         return 2
+
+    @property
+    def manifold(self) -> Any:
+        return self._manifold
+
+    @property
+    def expr(self) -> sympy.Expr:
+        return self._matrix[0, 0]
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return self._symbols
 
 
 __all__ = [

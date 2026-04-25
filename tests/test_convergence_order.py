@@ -25,31 +25,6 @@ from cosmic_foundry.theory.continuous.differential_form import (
     ZeroForm,
 )
 
-
-class _ZeroFormField(ZeroForm[Any]):
-    def __init__(
-        self,
-        manifold: Any,
-        expr: sympy.Expr,
-        symbols: tuple[sympy.Symbol, ...],
-    ) -> None:
-        self._manifold = manifold
-        self._expr = expr
-        self._symbols = symbols
-
-    @property
-    def manifold(self) -> Any:
-        return self._manifold
-
-    @property
-    def expr(self) -> sympy.Expr:
-        return self._expr
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return self._symbols
-
-
 _manifold = EuclideanManifold(1)
 _dummy_mesh = CartesianMesh(
     origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
@@ -87,7 +62,7 @@ def test_convergence_order(instance: Any) -> None:
 
     coeffs = sympy.symbols(f"a:{order + 4}")
     phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
-    phi = _ZeroFormField(space, phi_expr, (x,))
+    phi = ZeroForm(space, phi_expr, (x,))
 
     U = CartesianRestrictionOperator(mesh, degree=ndim)(phi)
     numerical_mf = instance(U)
