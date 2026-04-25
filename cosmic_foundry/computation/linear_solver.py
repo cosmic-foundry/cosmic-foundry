@@ -16,8 +16,7 @@ class LinearSolver(ABC):
     together with a right-hand-side MeshFunction f, and returns a MeshFunction
     u satisfying Lₕ u = f.  The solver is scoped to linear operators: those
     whose assembled matrix A is a well-defined linear map from cell averages
-    to cell residuals.  Nonlinear operators (HyperbolicFlux, Euler equations)
-    require a separate NonlinearSolver hierarchy.
+    to cell residuals.
 
     In plain terms: given a discrete PDE assembled into a matrix system Au = f,
     find u.  The Discretization owns the assembly; the LinearSolver owns only
@@ -37,8 +36,8 @@ class LinearSolver(ABC):
         """Solve Lₕ u = rhs for u; return the solution MeshFunction.
 
         The solution is well-defined only when the operator assembled by
-        discretization is invertible (e.g. the SPD operator from
-        FVMDiscretization with DirichletBC, proved in C6).  No convergence
+        discretization is invertible (e.g. FVMDiscretization with DirichletBC
+        produces an SPD operator for diffusion equations).  No convergence
         guarantee is made for non-invertible or indefinite operators.
 
         Parameters

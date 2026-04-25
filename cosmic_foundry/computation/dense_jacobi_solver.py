@@ -19,7 +19,7 @@ class DenseJacobiSolver(LinearSolver):
     the fixed-point iteration u^{k+1} = D⁻¹(f − (A − D)u^k) is a contraction
     when ρ(I − D⁻¹A) < 1.  For FVMDiscretization(PoissonEquation,
     DiffusiveFlux(order), DirichletBC) on CartesianMesh, this is guaranteed by
-    the SPD property proved in C6: SPD implies all eigenvalues of D⁻¹A are
+    the SPD property of the assembled operator: SPD implies all eigenvalues of D⁻¹A are
     positive, and the ghost-cell Dirichlet stencil gives A_{ii} > Σ_{j≠i}|A_{ij}|
     for boundary-adjacent rows with A_{ii} = Σ_{j≠i}|A_{ij}| for interior rows
     (weak diagonal dominance everywhere, strict at boundary rows, irreducible mesh
@@ -34,8 +34,7 @@ class DenseJacobiSolver(LinearSolver):
 
     All linear algebra is hand-rolled: no NumPy linalg, no LAPACK.  The
     dense matrix assembly scales as O(N^{2d}) in memory and the iteration
-    as O(N^{2d}) per step; this solver is intended for small-to-moderate N
-    (up to ~32 in 2D) as used in C9 convergence studies.
+    as O(N^{2d}) per step; this solver is intended for small-to-moderate N.
 
     Parameters
     ----------
