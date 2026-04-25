@@ -128,3 +128,15 @@ class NumpyBackend:
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         U, s, Vt = np.linalg.svd(raw, full_matrices=False)
         return U, s, Vt
+
+    # ------------------------------------------------------------------
+    # Slice indexing
+    # ------------------------------------------------------------------
+
+    def slice_get(self, raw: np.ndarray, idx: Any, shape: tuple[int, ...]) -> Any:
+        return raw[idx]
+
+    def slice_set(
+        self, raw: np.ndarray, idx: Any, value: Any, shape: tuple[int, ...]
+    ) -> None:
+        raw[idx] = value

@@ -57,6 +57,15 @@ from cosmic_foundry.computation.backends import (
 )
 
 
+def _has_slice(idx: Any) -> bool:
+    """Return True if idx is or contains a slice object."""
+    if isinstance(idx, slice):
+        return True
+    if isinstance(idx, tuple):
+        return any(isinstance(i, slice) for i in idx)
+    return False
+
+
 @runtime_checkable
 class Real(Protocol):
     """Protocol for scalar numeric types usable as Tensor elements.
@@ -134,9 +143,12 @@ class Tensor:
             raise TypeError("rank-0 Tensor has no length")
         return self._shape[0]
 
-    def __getitem__(self, idx: int | tuple[int, ...]) -> Any:
+    def __getitem__(self, idx: int | slice | tuple[int | slice, ...]) -> Any:
         if not self._shape:
             raise TypeError("rank-0 Tensor is not subscriptable")
+        if _has_slice(idx):
+            raw = self._backend.slice_get(self._data, idx, self._shape)
+            return Tensor._wrap(raw, self._backend)
         if isinstance(idx, tuple):
             result: Any = self
             for i in idx:
@@ -149,10 +161,15 @@ class Tensor:
             return item  # scalar (Python float or np.float64)
         return Tensor._wrap(item, self._backend)
 
-    def __setitem__(self, idx: int | tuple[int, ...], value: Any) -> None:
+    def __setitem__(
+        self, idx: int | slice | tuple[int | slice, ...], value: Any
+    ) -> None:
         if not self._shape:
             raise TypeError("rank-0 Tensor is not subscriptable")
         v = value._data if isinstance(value, Tensor) else value
+        if _has_slice(idx):
+            self._backend.slice_set(self._data, idx, v, self._shape)
+            return
         if isinstance(idx, tuple):
             if not idx:
                 raise IndexError("empty index tuple")

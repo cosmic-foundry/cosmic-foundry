@@ -174,6 +174,44 @@ class PythonBackend:
         n = min(shape)
         return [raw[i][i] for i in range(n)]
 
+    # ------------------------------------------------------------------
+    # Slice indexing
+    # ------------------------------------------------------------------
+
+    def slice_get(self, raw: Any, idx: Any, shape: tuple[int, ...]) -> Any:
+        """Read raw[idx]; idx contains at least one slice object."""
+        if isinstance(idx, slice):
+            return raw[idx]
+        if isinstance(idx, tuple) and len(idx) == 2:
+            r0, r1 = idx
+            if isinstance(r0, int) and isinstance(r1, slice):
+                return raw[r0][r1]
+            if isinstance(r0, slice) and isinstance(r1, int):
+                return [row[r1] for row in raw[r0]]
+            if isinstance(r0, slice) and isinstance(r1, slice):
+                return [row[r1] for row in raw[r0]]
+        raise NotImplementedError(f"PythonBackend.slice_get: unsupported idx {idx!r}")
+
+    def slice_set(self, raw: Any, idx: Any, value: Any, shape: tuple[int, ...]) -> None:
+        """Assign raw[idx] = value in-place; idx contains at least one slice."""
+        if isinstance(idx, slice):
+            raw[idx] = value
+            return
+        if isinstance(idx, tuple) and len(idx) == 2:
+            r0, r1 = idx
+            if isinstance(r0, int) and isinstance(r1, slice):
+                raw[r0][r1] = value
+                return
+            if isinstance(r0, slice) and isinstance(r1, int):
+                for row, v in zip(raw[r0], value, strict=False):
+                    row[r1] = v
+                return
+            if isinstance(r0, slice) and isinstance(r1, slice):
+                for row, val_row in zip(raw[r0], value, strict=False):
+                    row[r1] = val_row
+                return
+        raise NotImplementedError(f"PythonBackend.slice_set: unsupported idx {idx!r}")
+
     def svd(self, raw: list[Any], shape: tuple[int, ...]) -> tuple[Any, Any, Any]:
         m, n = shape
         B = [[raw[i][j] for i in range(m)] for j in range(n)]
