@@ -7,34 +7,11 @@ from typing import ClassVar, cast
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
+from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
-
-
-class _FaceMeshFunction(MeshFunction[sympy.Expr]):
-    """Lazy face-flux MeshFunction returned by DiffusiveFlux.__call__.
-
-    Callable as face_mf((axis, idx_low)) where idx_low is the cell index
-    on the low side of the face along axis.
-    """
-
-    def __init__(
-        self,
-        mesh: CartesianMesh,
-        compute: object,
-    ) -> None:
-        self._mesh = mesh
-        self._compute = compute
-
-    @property
-    def mesh(self) -> CartesianMesh:
-        return self._mesh
-
-    def __call__(  # type: ignore[override]
-        self, face: tuple[int, tuple[int, ...]]
-    ) -> sympy.Expr:
-        axis, idx_low = face
-        return self._compute(axis, idx_low)  # type: ignore[operator]
 
 
 class DiffusiveFlux(NumericalFlux[sympy.Expr]):
@@ -44,10 +21,10 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
     at the interface between two adjacent cells along axis a, where |Aₐ| is
     the face area perpendicular to axis a.
 
-    One class, many instances: DiffusiveFlux(order) for any valid order.
-    DiffusiveFlux(2) and DiffusiveFlux(4) are parameterized instances, not
-    subclasses.  Both satisfy the same Lane C contract at their respective
-    orders (see tests/test_convergence_order.py).
+    One class, many instances: DiffusiveFlux(order, continuous_operator) for
+    any valid order.  DiffusiveFlux(2, ...) and DiffusiveFlux(4, ...) are
+    parameterized instances, not subclasses.  Both satisfy the same Lane C
+    contract at their respective orders (see tests/test_convergence_order.py).
 
     Validity:
         min_order  = 2   — smallest supported order
@@ -79,6 +56,9 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
         (order - min_order) % order_step == 0.  Stencil coefficients are
         derived via SymPy at construction time (~10–40 ms); __call__ uses
         only arithmetic.
+    continuous_operator:
+        The DiffusionOperator (-∇: Ω⁰ → Ω¹) that this instance approximates.
+        Must be a DiffusionOperator; the constructor guard enforces this.
 
     __call__ signature:
         (U: MeshFunction) -> MeshFunction
@@ -94,13 +74,19 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
     min_order: ClassVar[int] = 2
     order_step: ClassVar[int] = 2
 
-    def __init__(self, order: int) -> None:
+    def __init__(self, order: int, continuous_operator: DifferentialOperator) -> None:
         if order < self.min_order or (order - self.min_order) % self.order_step != 0:
             raise ValueError(
                 f"DiffusiveFlux order must be >= {self.min_order} and satisfy "
                 f"(order - {self.min_order}) % {self.order_step} == 0; got {order}"
             )
+        if not isinstance(continuous_operator, DiffusionOperator):
+            raise TypeError(
+                f"DiffusiveFlux continuous_operator must be a DiffusionOperator; "
+                f"got {type(continuous_operator).__name__}"
+            )
         self._order = order
+        self._continuous_operator = continuous_operator
 
         # Derive stencil coefficients from first principles.
         #
@@ -163,10 +149,14 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
     def order(self) -> int:
         return self._order
 
+    @property
+    def continuous_operator(self) -> DifferentialOperator:
+        return self._continuous_operator
+
     def __call__(
         self,
         U: MeshFunction[sympy.Expr],
-    ) -> _FaceMeshFunction:
+    ) -> LazyMeshFunction[sympy.Expr]:
         """Return a face-flux MeshFunction over all faces.
 
         The returned MeshFunction is callable as result((axis, idx_low))
@@ -175,7 +165,8 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
         """
         mesh = cast(CartesianMesh, U.mesh)
 
-        def compute(axis: int, idx_low: tuple[int, ...]) -> sympy.Expr:
+        def compute(face: tuple[int, tuple[int, ...]]) -> sympy.Expr:
+            axis, idx_low = face
             h: sympy.Expr = mesh._spacing[axis]
             face_area: sympy.Expr = mesh.face_area(axis)
 
@@ -191,7 +182,7 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
             )
             return sympy.Rational(-1) * gradient * face_area
 
-        return _FaceMeshFunction(mesh, compute)
+        return LazyMeshFunction(mesh, compute)
 
 
 __all__ = ["DiffusiveFlux"]

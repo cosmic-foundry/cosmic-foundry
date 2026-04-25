@@ -9,6 +9,7 @@ from __future__ import annotations
 from cosmic_foundry.theory.discrete.cell_complex import CellComplex
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
+from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
@@ -19,6 +20,7 @@ __all__ = [
     "CellComplex",
     "DiscreteOperator",
     "Discretization",
+    "LazyMeshFunction",
     "Mesh",
     "MeshFunction",
     "NumericalFlux",

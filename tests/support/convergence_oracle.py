@@ -6,7 +6,7 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 
 import sympy
 
-T = TypeVar("T")
+T = TypeVar("T", covariant=True)
 
 
 @runtime_checkable

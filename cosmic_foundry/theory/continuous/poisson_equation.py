@@ -12,46 +12,13 @@ from cosmic_foundry.theory.continuous.differential_form import (
     OneForm,
     ZeroForm,
 )
+from cosmic_foundry.theory.continuous.diffusion_operator import _NegatedGradientField
 from cosmic_foundry.theory.continuous.divergence_form_equation import (
     DivergenceFormEquation,
 )
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.function import Function
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
-
-
-class _NegatedGradientField(OneForm[Any]):
-    """The covector field -∇f for a scalar field f.
-
-    Stores the negated gradient components as SymPy expressions derived
-    by differentiating f.expr with respect to each symbol in f.symbols.
-    component(i) returns the i-th component -∂f/∂xᵢ.
-
-    Degree and tensor_type are derived from OneForm: degree = 1,
-    tensor_type = (0, 1).
-    """
-
-    def __init__(self, field: DifferentialForm[Any, Any]) -> None:
-        self._source = field
-        self._components = tuple(-sympy.diff(field.expr, s) for s in field.symbols)
-
-    @property
-    def manifold(self) -> Any:
-        return self._source.manifold
-
-    @property
-    def expr(self) -> sympy.Expr:
-        # No canonical single scalar expression for a covector field; return
-        # the first component to satisfy the SymbolicFunction protocol.
-        return self._components[0]
-
-    @property
-    def symbols(self) -> tuple[sympy.Symbol, ...]:
-        return self._source.symbols
-
-    def component(self, i: int) -> sympy.Expr:
-        """Return the i-th component -∂f/∂xᵢ as a SymPy expression."""
-        return self._components[i]
 
 
 class _NegatedGradientFlux(NumericFunction[DifferentialForm, OneForm]):

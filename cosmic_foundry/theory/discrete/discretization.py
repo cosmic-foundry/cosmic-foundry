@@ -25,11 +25,10 @@ class Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator]):
     hold, where p is the approximation order.  Different scheme choices
     are different ways of constructing Lₕ to satisfy this diagram at order p.
 
-    For Lanes B and C, the commutation diagram must be verified algebraically
-    via SymPy as an assert_* function in tests/, following the standard test
-    authorship convention.  The approximation order is a property of the
-    concrete scheme — proved by the convergence test — not a parameter of
-    the abstract interface.
+    For Lanes B and C, the commutation diagram must be verified via the
+    convergence oracle framework in tests/support/.  The approximation order
+    is a property of the concrete scheme — proved by the convergence test —
+    not a parameter of the abstract interface.
 
     Required:
         mesh     — the mesh on which the scheme is defined
