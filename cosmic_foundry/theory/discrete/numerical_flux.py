@@ -19,7 +19,7 @@ class NumericalFlux(ABC):
     Each component must independently achieve order p; the class is
     responsible for ensuring they do.  For Lanes B and C, the composite
     order is verified algebraically via SymPy Taylor expansion in
-    tests/test_diffusive_flux.py.
+    tests/test_convergence_order.py.
 
     Earns its class by: order is a verifiable integer claim — the Lane C
     Taylor expansion of the composite face flux against the exact

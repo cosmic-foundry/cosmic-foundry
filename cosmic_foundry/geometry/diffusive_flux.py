@@ -19,7 +19,7 @@ class DiffusiveFlux(NumericalFlux):
     One class, many instances: DiffusiveFlux(order) for any even order ≥ 2.
     DiffusiveFlux(2) and DiffusiveFlux(4) are parameterized instances, not
     subclasses.  Both satisfy the same Lane C contract at their respective
-    orders (see tests/test_diffusive_flux.py).
+    orders (see tests/test_convergence_order.py).
 
     Stencil derivation (Lane C):
 
