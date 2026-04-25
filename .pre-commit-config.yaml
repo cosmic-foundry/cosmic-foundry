@@ -66,3 +66,9 @@ repos:
         language: system
         pass_filenames: false
         files: ^cosmic_foundry/
+      - id: computation-layer-imports
+        name: computation/ must not import from other cosmic_foundry packages
+        entry: python scripts/ci/check_computation_imports.py
+        language: system
+        pass_filenames: false
+        files: ^cosmic_foundry/computation/
