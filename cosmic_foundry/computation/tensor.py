@@ -58,11 +58,9 @@ class Tensor:
         a * scalar, scalar * a, a / scalar
         float(t)  — extract value from rank-0 Tensor
 
-    Matrix operations:
-        a @ b  — dot      (rank-1 @ rank-1 → rank-0 Tensor),
-                  vecmat   (rank-1 @ rank-2 → rank-1),
-                  matvec   (rank-n @ rank-1 → rank-(n-1)),
-                  matmul   (rank-n @ rank-2 → rank-n)
+    Tensor contraction:
+        einsum(spec, a, b, ...)  — general Einstein summation
+        a @ b  — einsum delegate: dot / vecmat / matvec / matmul
 
     Linear algebra (rank-2 only):
         t.diag()   — main diagonal → rank-1
@@ -142,27 +140,9 @@ class Tensor:
 
     def __matmul__(self, other: Tensor) -> Tensor:
         r1, r2 = len(self._shape), len(other._shape)
-        if r1 == 1 and r2 == 1:
-            # dot product → rank-0
-            return Tensor(
-                sum(self._data[i] * other._data[i] for i in range(self._shape[0]))
-            )
-        if r1 == 1 and r2 == 2:
-            # vecmat: (k,) @ (k, n) → (n,)
-            k, n = other._shape
-            return Tensor(
-                [
-                    sum(self._data[p] * other._data[p][j] for p in range(k))
-                    for j in range(n)
-                ]
-            )
-        if r2 == 1:
-            # batched matvec: (..., m, k) @ (k,) → (..., m)
-            return Tensor(_matvec(self._data, other._data))
-        if r2 == 2:
-            # batched matmul: (..., m, k) @ (k, n) → (..., m, n)
-            return Tensor(_matmul(self._data, other._data))
-        raise ValueError(f"unsupported matmul: {self._shape} @ {other._shape}")
+        if r1 == 0 or r2 == 0:
+            raise ValueError(f"unsupported matmul: {self._shape} @ {other._shape}")
+        return einsum(_matmul_spec(r1, r2), self, other)
 
     def diag(self) -> Tensor:
         """Main diagonal of a rank-2 Tensor → rank-1."""
@@ -326,24 +306,84 @@ def _deep_copy(data: Any) -> Any:
     return [_deep_copy(row) for row in data]
 
 
-def _matvec(a: list[Any], x: list[Any]) -> list[Any]:
-    """Batched matvec: a has shape (..., m, k), x has shape (k,) → (..., m)."""
-    if not isinstance(a[0][0], list):
-        # a is rank-2
-        return [sum(row[j] * x[j] for j in range(len(x))) for row in a]
-    return [_matvec(sub, x) for sub in a]
+def _matmul_spec(r1: int, r2: int) -> str:
+    """Build an einsum spec that contracts the last axis of a rank-r1 tensor
+    with the first axis of a rank-r2 tensor."""
+    self_idx = "".join(chr(ord("a") + i) for i in range(r1))
+    contract = self_idx[-1]
+    other_free = "".join(chr(ord("a") + r1 + i) for i in range(r2 - 1))
+    return f"{self_idx},{contract}{other_free}->{self_idx[:-1]}{other_free}"
 
 
-def _matmul(a: list[Any], b: list[Any]) -> list[Any]:
-    """Batched matmul: a has shape (..., m, k), b has shape (k, n) → (..., m, n)."""
-    if not isinstance(a[0][0], list):
-        # a is rank-2
-        k, n = len(b), len(b[0])
-        return [
-            [sum(a[i][p] * b[p][j] for p in range(k)) for j in range(n)]
-            for i in range(len(a))
-        ]
-    return [_matmul(sub, b) for sub in a]
+def einsum(spec: str, *tensors: Tensor) -> Tensor:
+    """General Einstein summation over one or more Tensors.
+
+    Parameters
+    ----------
+    spec:
+        Subscript string in the form ``'ij,jk->ik'``.  Each comma-separated
+        group of letters names the axes of the corresponding tensor; the
+        right-hand side lists the axes of the output.  Letters absent from
+        the output are contracted (summed) over.
+    *tensors:
+        One or more Tensor operands whose ranks match the subscript groups.
+
+    Returns
+    -------
+    Tensor
+        Rank equals the number of letters in the output spec (rank-0 when the
+        output is empty, e.g. ``'ij,ij->'``).
+
+    Examples
+    --------
+    Dot product:          ``einsum('i,i->', a, b)``
+    Matrix–vector:        ``einsum('ij,j->i', A, x)``
+    Matrix multiply:      ``einsum('ij,jk->ik', A, B)``
+    Trace:                ``einsum('ii->', A)``
+    Outer product:        ``einsum('i,j->ij', a, b)``
+    """
+    spec = spec.replace(" ", "")
+    lhs, out_spec = spec.split("->")
+    in_specs = lhs.split(",")
+
+    sizes: dict[str, int] = {}
+    for t, s in zip(tensors, in_specs, strict=False):
+        for pos, ch in enumerate(s):
+            sizes[ch] = t.shape[pos]
+
+    out_chars = list(out_spec)
+    contracted = [ch for ch in sizes if ch not in set(out_spec)]
+    idx: dict[str, int] = {}
+
+    def _get(t: Tensor, s: str) -> float:
+        val: Any = t._data
+        for ch in s:
+            val = val[idx[ch]]
+        return float(val)
+
+    def _sum_contracted(depth: int) -> float:
+        if depth == len(contracted):
+            return math.prod(
+                _get(t, s) for t, s in zip(tensors, in_specs, strict=False)
+            )
+        ch = contracted[depth]
+        total = 0.0
+        for i in range(sizes[ch]):
+            idx[ch] = i
+            total += _sum_contracted(depth + 1)
+        return total
+
+    def _build(depth: int) -> Any:
+        if depth == len(out_chars):
+            return _sum_contracted(0)
+        ch = out_chars[depth]
+        result = []
+        for i in range(sizes[ch]):
+            idx[ch] = i
+            result.append(_build(depth + 1))
+        return result
+
+    return Tensor(_build(0))
 
 
-__all__ = ["Real", "Tensor"]
+__all__ = ["Real", "Tensor", "einsum"]
