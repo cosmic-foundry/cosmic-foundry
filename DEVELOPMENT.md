@@ -318,14 +318,12 @@ require machine-checkable derivations that Lane A defers to the reference).
   A derivation document is required; principled disagreements with the
   literature are recorded inside it.
 
-Lanes B and C require machine-checkable derivations. There are two
-complementary forms:
-
-**Algebraic step verification.** Executable SymPy checks on the
-load-bearing algebraic steps of the numerical scheme, expressed as
-regular `test_*` functions in `tests/`.  This keeps derivations
-automatically discoverable by CI as a separate concern from production
-code.
+Lanes B and C require machine-checkable derivations.  The default is
+always to generalize verification into an auto-discoverable framework
+rather than write a one-off test function.  Writing a `test_*` function
+is a signal that generalization has not been done yet; when that happens,
+the right response is to extend the framework so the check applies to the
+whole class of objects, not just the instance in front of you.
 
 **Convergence order verification.** Every concrete `DiscreteOperator`
 subclass (e.g. `DiffusiveFlux`) that claims a convergence order must be
@@ -347,16 +345,12 @@ class is silently untested. The structure:
 - `tests/test_convergence_order.py` is the single parametric test: it
   verifies the error polynomial has zeros at `h⁰…h^{p-1}` and a nonzero
   `h^p` leading term, where `p = instance.order`.  One test function covers
-  all convergent classes.
+  all convergent classes.  No additional `test_*` functions are written for
+  convergence — new discretizations extend the oracle registry, not the
+  test file.
 - From C5 onward, oracle files are replaced by the `continuous_operator`
   annotation + `RestrictionOperator(mesh, degree=n−1)`.  The oracle file
   is a temporary shim until the full DEC restriction machinery exists.
-
-The two forms are complementary: algebraic checks verify individual
-derivation steps (e.g. that the moment system has a unique solution);
-convergence order checks verify that the derived stencil, assembled and
-applied, achieves the claimed O(h^p) error against the exact continuous
-result.
 
 Infrastructure capabilities (mesh topology, I/O, field placement) are
 out of scope for lane classification.
