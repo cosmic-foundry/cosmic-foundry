@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -240,6 +241,12 @@ class _ConvergenceRateClaim(_Claim):
     so no per-flux RHS formula is required.  bc_type selects φ:
       DirichletBC — φ = sin(πx)+sin(3πx), satisfies φ(0)=φ(1)=0
       PeriodicBC  — φ = sin(2πx), zero-mean and periodic on [0,1]
+
+    null_projector, when supplied, is applied to the raw solver output before
+    measuring the error.  It should project u_h onto the orthogonal complement
+    of the operator's null space so that truncation error is isolated from the
+    arbitrary null-space component the solver may introduce.  Pass None (default)
+    when the operator is non-singular under the given BC.
     """
 
     def __init__(
@@ -248,11 +255,13 @@ class _ConvergenceRateClaim(_Claim):
         flux: Any,
         meshes: list[CartesianMesh],
         bc_type: type = DirichletBC,
+        null_projector: Callable[[list[float]], list[float]] | None = None,
     ) -> None:
         self._solver = solver
         self._flux = flux
         self._meshes = meshes
         self._bc_type = bc_type
+        self._null_projector = null_projector
 
     @property
     def description(self) -> str:
@@ -302,25 +311,10 @@ class _ConvergenceRateClaim(_Claim):
             rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
             u_h = self._solver.solve(disc, rhs)
 
-            if self._bc_type is PeriodicBC:
-                # The advection matrix has a null space (DC mode for all N; Nyquist
-                # mode additionally for even N).  φ_exact has zero projection onto
-                # both modes, so project them out of u_h before measuring the error —
-                # this isolates the truncation error from the arbitrary null-space
-                # component introduced by the direct solver.
-                u_vals = [float(u_h((i,))) for i in range(n_cells)]
-                dc = sum(u_vals) / n_cells
-                u_vals = [u - dc for u in u_vals]
-                if n_cells % 2 == 0:
-                    nyq = sum((-1) ** i * u_vals[i] for i in range(n_cells)) / n_cells
-                    u_vals = [u - (-1) ** i * nyq for i, u in enumerate(u_vals)]
-                err_sq = sum(
-                    vol * (u_vals[i] - _phi_avg(i)) ** 2 for i in range(n_cells)
-                )
-            else:
-                err_sq = sum(
-                    vol * (float(u_h((i,))) - _phi_avg(i)) ** 2 for i in range(n_cells)
-                )
+            u_vals = [float(u_h((i,))) for i in range(n_cells)]
+            if self._null_projector is not None:
+                u_vals = self._null_projector(u_vals)
+            err_sq = sum(vol * (u_vals[i] - _phi_avg(i)) ** 2 for i in range(n_cells))
             errors.append(math.sqrt(err_sq))
 
         hs = [float(m.cell_volume) for m in self._meshes]
@@ -380,6 +374,25 @@ _CONVERGENCE_MESHES = [
     for n in [16, 24, 32, 48, 64]
 ]
 
+
+def _circulant_null_projector(u: list[float]) -> list[float]:
+    """Project out the null modes of a periodic skew-symmetric circulant operator.
+
+    Skew-symmetric circulant matrices (e.g. the discrete advection operator
+    under PeriodicBC) have a DC null mode for all N and an additional Nyquist
+    null mode when N is even.  Subtracting both from u_h isolates the
+    truncation error from the arbitrary particular solution the direct solver
+    selects.
+    """
+    n = len(u)
+    dc = sum(u) / n
+    u = [v - dc for v in u]
+    if n % 2 == 0:
+        nyq = sum((-1) ** i * u[i] for i in range(n)) / n
+        u = [v - (-1) ** i * nyq for i, v in enumerate(u)]
+    return u
+
+
 _CLAIMS: list[_Claim] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
@@ -402,7 +415,9 @@ _CLAIMS: list[_Claim] = [
         for f in _ADVECTIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES, PeriodicBC)
+        _ConvergenceRateClaim(
+            s, f, _CONVERGENCE_MESHES, PeriodicBC, _circulant_null_projector
+        )
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
