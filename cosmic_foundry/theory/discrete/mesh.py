@@ -40,5 +40,13 @@ class Mesh(CellComplex):
     def shape(self) -> tuple[int, ...]:
         """Number of top-level cells along each axis."""
 
+    @property
+    def n_cells(self) -> int:
+        """Total number of cells: product of shape along all axes."""
+        n = 1
+        for s in self.shape:
+            n *= s
+        return n
+
 
 __all__ = ["Mesh"]
