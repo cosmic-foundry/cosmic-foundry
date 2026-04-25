@@ -176,6 +176,24 @@ class Tensor:
         r1, r2 = len(self._shape), len(other._shape)
         if r1 == 0 or r2 == 0:
             raise ValueError(f"unsupported matmul: {self._shape} @ {other._shape}")
+        # Fast paths for the four shapes that appear in practice.
+        # Each avoids the per-element dict-lookup overhead of einsum.
+        if r1 == 1 and r2 == 1:
+            return Tensor(
+                sum(self._data[i] * other._data[i] for i in range(self._shape[0]))
+            )
+        if r1 == 1 and r2 == 2:
+            k, n = other._shape
+            return Tensor(
+                [
+                    sum(self._data[p] * other._data[p][j] for p in range(k))
+                    for j in range(n)
+                ]
+            )
+        if r2 == 1:
+            return Tensor(_matvec(self._data, other._data))
+        if r2 == 2:
+            return Tensor(_matmul(self._data, other._data))
         return einsum(_matmul_spec(r1, r2), self, other)
 
     def diag(self) -> Tensor:
@@ -338,6 +356,26 @@ def _deep_copy(data: Any) -> Any:
     if not data or not isinstance(data[0], list):
         return list(data)
     return [_deep_copy(row) for row in data]
+
+
+def _matvec(a: list[Any], x: list[Any]) -> list[Any]:
+    """Batched matvec: a has shape (..., m, k), x has shape (k,) → (..., m)."""
+    if not isinstance(a[0], list):
+        return [sum(a[i] * x[i] for i in range(len(x)))]
+    if not isinstance(a[0][0], list):
+        return [sum(row[j] * x[j] for j in range(len(x))) for row in a]
+    return [_matvec(sub, x) for sub in a]
+
+
+def _matmul(a: list[Any], b: list[Any]) -> list[Any]:
+    """Batched matmul: a has shape (..., m, k), b has shape (k, n) → (..., m, n)."""
+    if not isinstance(a[0][0], list):
+        k, n = len(b), len(b[0])
+        return [
+            [sum(a[i][p] * b[p][j] for p in range(k)) for j in range(n)]
+            for i in range(len(a))
+        ]
+    return [_matmul(sub, b) for sub in a]
 
 
 def _matmul_spec(r1: int, r2: int) -> str:
