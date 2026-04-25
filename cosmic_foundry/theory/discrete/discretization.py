@@ -91,7 +91,7 @@ class Discretization(ABC):
             lh_ej = op(e_j)
 
             for i in range(n_total):
-                rows[i][j] = sympy.Integer(lh_ej(to_multi(i)))  # type: ignore[arg-type]
+                rows[i][j] = lh_ej(to_multi(i))  # type: ignore[arg-type]
 
         return sympy.Matrix(rows)
 
