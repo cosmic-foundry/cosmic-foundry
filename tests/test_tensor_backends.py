@@ -157,6 +157,31 @@ class _FactoryClaim(_TensorClaim):
 
 
 # ---------------------------------------------------------------------------
+# Slice read/write: PythonBackend and NumpyBackend must agree
+# ---------------------------------------------------------------------------
+
+
+class _SliceClaim(_TensorClaim):
+    """Claim: a slice read or write gives the same result on both backends."""
+
+    def __init__(self, label: str, fn: Any) -> None:
+        self._label = label
+        self._fn = fn
+
+    @property
+    def description(self) -> str:
+        return f"slice/{self._label}"
+
+    def check(self) -> None:
+        py_result = self._fn(_PY)
+        np_result = self._fn(_NP)
+        assert _approx_equal(py_result.to_list(), np_result.to_list()), (
+            f"{self.description}: PythonBackend={py_result.to_list()!r} "
+            f"!= NumpyBackend={np_result.to_list()!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -175,6 +200,28 @@ def _mk_vec(b: Any) -> Tensor:
 
 def _mk_mat(b: Any) -> Tensor:
     return Tensor([[1.0, 2.0], [3.0, 4.0]], backend=b)
+
+
+def _mk_mat3(b: Any) -> Tensor:
+    return Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], backend=b)
+
+
+def _rank1_slice_write(b: Any) -> Tensor:
+    t = Tensor([1.0, 2.0, 3.0, 4.0], backend=b)
+    t[1:3] = Tensor([9.0, 9.0], backend=b)
+    return t
+
+
+def _rank2_col_slice_write(b: Any) -> Tensor:
+    t = _mk_mat3(b).copy()
+    t[1:3, 0] = Tensor([9.0, 9.0], backend=b)
+    return t
+
+
+def _rank2_submatrix_write(b: Any) -> Tensor:
+    t = _mk_mat3(b).copy()
+    t[0:2, 0:2] = Tensor([[9.0, 8.0], [7.0, 6.0]], backend=b)
+    return t
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +325,21 @@ _CLAIMS: list[_TensorClaim] = [
             ("rank2", [[1.0, 2.0], [3.0, 4.0]]),
         ]
     ],
+    # Slice reads: each result must match between PythonBackend and NumpyBackend
+    _SliceClaim("rank1_read", lambda b: Tensor([1.0, 2.0, 3.0, 4.0], backend=b)[1:3]),
+    _SliceClaim(
+        "rank1_read_from_start", lambda b: Tensor([1.0, 2.0, 3.0], backend=b)[:2]
+    ),
+    _SliceClaim("rank1_read_to_end", lambda b: Tensor([1.0, 2.0, 3.0], backend=b)[1:]),
+    _SliceClaim("rank2_row_read", lambda b: _mk_mat3(b)[1, :]),
+    _SliceClaim("rank2_row_partial", lambda b: _mk_mat3(b)[0, 1:]),
+    _SliceClaim("rank2_col_read", lambda b: _mk_mat3(b)[:, 1]),
+    _SliceClaim("rank2_col_partial", lambda b: _mk_mat3(b)[1:, 0]),
+    _SliceClaim("rank2_submatrix", lambda b: _mk_mat3(b)[1:, 1:]),
+    # Slice writes: modify a copy and return it; must match between backends
+    _SliceClaim("rank1_write", _rank1_slice_write),
+    _SliceClaim("rank2_col_write", _rank2_col_slice_write),
+    _SliceClaim("rank2_submatrix_write", _rank2_submatrix_write),
     # Mixed-backend must raise
     _MixedBackendClaim("add", lambda a, b: a + b),
     _MixedBackendClaim("sub", lambda a, b: a - b),
