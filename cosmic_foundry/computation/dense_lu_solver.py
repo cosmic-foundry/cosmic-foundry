@@ -15,7 +15,7 @@ from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 class DenseLUSolver(LinearSolver):
     """Direct solver for Lₕ u = f via LU factorization of the N^d × N^d matrix.
 
-    Given the stiffness matrix A assembled via Discretization.assemble_matrix,
+    Given the stiffness matrix A assembled via Discretization.assemble,
     the system is solved exactly (up to floating-point rounding) in one pass:
 
         PA = LU   (Gaussian elimination with partial pivoting)
@@ -88,10 +88,8 @@ class DenseLUSolver(LinearSolver):
                 stride *= shape[axis]
             return flat
 
-        a_sym = discretization.assemble_matrix()
-        a: list[list[float]] = [
-            [float(a_sym[i, j]) for j in range(n)] for i in range(n)
-        ]
+        a_orig: list[list[float]] = discretization.assemble()
+        a: list[list[float]] = [row[:] for row in a_orig]
         f: list[float] = [float(rhs(_to_multi(i))) for i in range(n)]  # type: ignore[arg-type]
         vol: float = float(cast(CartesianMesh, mesh).cell_volume)
 
@@ -146,9 +144,6 @@ class DenseLUSolver(LinearSolver):
             x[k] /= a[k][k]
 
         # Recompute residual from original matrix (a is now LU, not A).
-        a_orig: list[list[float]] = [
-            [float(a_sym[i, j]) for j in range(n)] for i in range(n)
-        ]
         r: list[float] = [
             f[i] - sum(a_orig[i][j] * x[j] for j in range(n)) for i in range(n)
         ]
