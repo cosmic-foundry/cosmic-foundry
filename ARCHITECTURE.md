@@ -706,133 +706,60 @@ Jacobi, unchanged). For `DiffusiveFlux(4)`, `G = 32/15`, giving `ω = 15/16`.
 Lane C verifies on an N = 8 1-D system that the solver reaches the prescribed
 tolerance with monotonically decreasing residuals and an iteration count ≤ the
 upper bound implied by the asymptotic convergence rate (tail geometric mean of
-residual ratios), confirmed in `tests/test_solver_convergence.py`.
+residual ratios), confirmed in `tests/test_convergence_order.py`.
 
-**C9 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
-(C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux(2)`
-and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + SPD analysis (C6) +
-Dirichlet `BoundaryCondition` + `DenseJacobiSolver` (C7, C8) to solve
-`-∇²φ = ρ` against the analytic solution `φ = sin(πx)sin(πy)` on the
-unit square. Convergence tests: N ∈ {8, 12, 16, 24, 32} (five points) for
-p = 2; N ∈ {4, 6, 8, 12, 16} (five points) for p = 4 — capped to stay
-above the h⁴ floating-point floor. The reported error is the cell-volume-
-weighted discrete L² norm `‖φ_h − Rₕ φ_exact‖_{L²_h} = (Σᵢ |Ωᵢ|·(φ_h,ᵢ − (Rₕ φ)ᵢ)²)^{1/2}` —
-the natural norm for the FVM formulation and the one in which the SPD
-argument of C6 lives. A parallel max-norm `‖φ_h − Rₕ φ_exact‖_{∞,h}`
-is also reported to detect pointwise failure modes (boundary-adjacent rows,
-corners). The Lane C checks in C1–C6 are the derivation; C9 is the proof
-that the derivation was implemented. C9 lives as a narrative application
-in `validation/poisson/` with a mirror documentation page at `docs/poisson/`;
-see the layout below.
+**C9 — End-to-end convergence sweep.** Add `_ConvergenceRateClaim` to
+`tests/test_convergence_order.py` to verify that the full solve pipeline
+(FVMDiscretization + LinearSolver) recovers the correct convergence order
+against a manufactured solution. The Lane C claim: the discrete solution
+error `‖φ_h − Rₕ φ_exact‖_{L²_h}` converges at O(hᵖ) as h → 0, for every
+`(solver, flux)` pair in the registries.
 
-**`validation/poisson/` and the Sphinx page.** C9 is a narrative
-application, not only a test. It walks the pipeline from manufactured
-solution to converged numerical result with every intermediate object
-visible — mirroring the `validation/schwarzschild/` pattern (`# %%`
-cells in a runnable Python file, plus a MyST page that re-executes in
-the Sphinx build via `myst_nb`).
+**Manufactured solution (1-D).** `φ(x) = sin(πx) + sin(3πx)` on [0, 1]
+with homogeneous Dirichlet BC. Source: `ρ(x) = π² sin(πx) + 9π² sin(3πx)`.
+Both modes have nonzero derivatives of all orders, so the leading
+truncation-error term is excited for every `DiffusiveFlux(order)`. The
+two-mode sum prevents the test field from being an eigenfunction of the
+discrete operator. Note: 1-D suffices to verify convergence order at the
+stencil level. Extension to a multi-dimensional sweep is deferred; see
+open questions below.
 
+**Registries.** Two new module-level registries alongside `_FLUXES`:
+
+- `_SOLVERS`: all concrete `LinearSolver` instances in scope. Initially
+  `[DenseJacobiSolver(tol=1e-8, max_iter=10_000)]`. Adding a new solver
+  here automatically generates order-claims and solver-claims for every
+  existing flux.
+- `_CONVERGENCE_MESHES`: shared 1-D mesh sequence. N ∈ {8, 12, 16, 24, 32}
+  — floor at N = 8 (below which the asymptotic regime is unreliable), five
+  points for a robust log-log slope fit, tractable for both p = 2 and p = 4.
+
+**`_ConvergenceRateClaim(solver, flux, meshes)`.** For each mesh in the
+sequence, builds `FVMDiscretization(mesh, flux, DirichletBC(manifold))`,
+sets `rhs = Rₕ ρ` via `CartesianRestrictionOperator`, solves with
+`solver.solve(disc, rhs)`, and measures `‖φ_h − Rₕ φ_exact‖_{L²_h}`.
+Fits a log-log slope over all five points and asserts slope ≥
+`flux.order − 0.1`. Description:
+`{SolverType}/{FluxType}(order={p})/convergence_rate`.
+
+**`_CLAIMS` generation.** All four claim types are driven from the
+registries; no individual claims are hand-listed:
+
+```python
+_CLAIMS = [
+    *[_OrderClaim(f) for f in _FLUXES],
+    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
+    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _FLUXES],
+    *[_ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES) for s in _SOLVERS for f in _FLUXES],
+]
 ```
-validation/poisson/
-├── __init__.py
-├── manufactured.py         — φ, ρ as SymbolicFunctions on EuclideanManifold(2):
-│                               φ(x, y) = sin(πx) sin(πy)
-│                               ρ(x, y) = -∇²φ = 2π² sin(πx) sin(πy)
-│                             the identity -∇²φ − ρ = 0 is NOT checked at
-│                             module load (import side-effects are avoided);
-│                             it is verified in test_poisson_square.py.
-├── poisson_square.py       — narrative script with `# %%` cells: compose
-│                             PoissonEquation + CartesianMesh +
-│                             DiffusiveFlux(order) + Dirichlet BC +
-│                             FVMDiscretization + DenseJacobiSolver, solve,
-│                             emit solution and convergence figures.
-├── figures.py              — matplotlib figure functions (pure; returning Figure).
-└── test_poisson_square.py  — machine-checked claims (pytest).
-```
 
-**Tests (`test_poisson_square.py`).** Seven claims, each independently
-falsifiable:
+Adding a new `NumericalFlux` to `_FLUXES` or a new `LinearSolver` to
+`_SOLVERS` automatically produces all four claim types for the new entry.
 
-1. *Manufactured pair identity.* Verify symbolically that `-∇²φ − ρ = 0`
-   for the `manufactured` pair — not at module load, but here as a test.
-2. *Commutation symbolic check on the test problem.* Using the
-   `manufactured` pair, verify via SymPy that `Lₕ Rₕ φ − Rₕ Lφ` expanded
-   at an interior cell has leading term `O(hᵖ)` for each `DiffusiveFlux(order)` instance.
-   The derivation performed abstractly in C4 is re-executed on a concrete
-   problem, catching any specialization bug.
-3. *Numerical convergence, p = 2.* `assert_convergence_order(err_p2,
-   [8, 12, 16, 24, 32], expected=2.0)` using the existing helper in
-   `tests/utils/convergence.py`; the error is the cell-volume-weighted
-   `L²_h` norm against `Rₕ manufactured.phi`.
-4. *Numerical convergence, p = 4.* Same with `expected=4.0`; resolutions
-   `[4, 6, 8, 12, 16]` — five points, capped below the h⁴ FP floor.
-5. *Symmetry preservation.* `sin(πx)sin(πy)` is symmetric under `x ↔ y`;
-   the numerical solution must respect this to floating-point precision
-   for any N. A break signals a stencil-assembly bug.
-6. *Operator symmetry and positive-definiteness.* For the assembled `Lₕ`
-   matrix from C6, verify `⟨u, Lₕ v⟩_h = ⟨Lₕ u, v⟩_h` (symmetry) and
-   `⟨u, Lₕ u⟩_h > 0` for `u ≠ 0` (positive-definiteness) on several
-   random unit MeshFunctions `u, v`. Hand-rolled — no `np.linalg.cholesky`.
-7. *Restriction commutes with boundary condition (nonzero data).* Using
-   a separate test field `φ_bc(x, y) = x + y` (nonzero on all four sides),
-   verify that `Rₕ φ_bc` on each boundary face matches the Dirichlet data
-   analytically. The `sin(πx)sin(πy)` manufactured pair vanishes on `∂Ω`
-   and cannot test this claim.
-
-**Figures (`figures.py`).** Four pure functions, each returning a
-`matplotlib.figure.Figure`:
-
-- `solution_heatmap(N, p)` — `φ_numerical` as `imshow`, viridis, colorbar.
-- `error_heatmap(N, p)` — signed `φ_numerical − φ_exact`, diverging
-  colormap symmetric about 0; reveals whether the error is
-  boundary-dominated or interior-dominated.
-- `matrix_structure(N, p)` — `plt.spy(Lₕ)` at small N = 8, revealing the
-  stencil pattern. Exact stencil width is determined in C3; do not
-  presuppose it here.
-- `convergence_figure()` — the headline figure: log-log max-norm error
-  vs. `h` for both reconstructions, with reference lines at slopes 2 and
-  4 and the measured slopes annotated.
-
-**Documentation page (`docs/poisson/poisson_square.md`).** MyST notebook
-re-executed at Sphinx build time. Structure chosen so the derivation is
-visible in the rendered page, not only in test output:
-
-1. *Problem statement.* `-∇²φ = ρ` on the unit square with Dirichlet BC;
-   one code cell renders `sympy.Eq(lhs, rhs)` for the manufactured pair,
-   so the symbolic identity is visible on the page.
-2. *Continuous objects.* Instantiate `PoissonEquation(flux, source)`;
-   display `flux.expr` and `source.expr` to anchor the page in the C1
-   progenitors.
-3. *Mesh and chain complex.* Instantiate `CartesianMesh`; render the
-   face-incidence list from `mesh.boundary(n)` as a small table at
-   N = 4 — direct reuse of C2.
-4. *NumericalFlux family.* Side-by-side table of stencil coefficients for
-   `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, derived symbolically. The page
-   is about one class parameterized by `order`, not two separate classes.
-5. *Discretization assembly.* `FVMDiscretization(mesh, numerical_flux, bc)`
-   produces `Lₕ`; `matrix_structure` at N = 8 shown side-by-side for both
-   instances.
-6. *Solve.* `DenseJacobiSolver` applied; `solution_heatmap` and
-   `error_heatmap` at N = 16 for each flux class (capped for build time).
-7. *Convergence.* `convergence_figure()` inline; measured slopes
-   annotated and compared to the expected 2 and 4.
-8. *Derivation re-execution.* The symbolic `Lₕ Rₕ φ − Rₕ Lφ` expansion
-   displayed as SymPy output — the truncation-error claim proved *in the
-   rendered page*, not only in a test file.
-
-The page is wired into `docs/index.md` under the "Validation" toctree as
-`poisson/index`, next to `schwarzschild/index`. A one-line
-`docs/poisson/index.md` with a toctree entry for `poisson_square`
-matches the Schwarzschild pattern and keeps room for future
-Poisson-family pages (Neumann, variable coefficient, 3-D).
-
-****Docs/test code parity.** The documentation page runs the exact same code
-as `test_poisson_square.py` — no specialized paths, no mocked data. The
-Sphinx build may be slow as a result; static figure embedding is a deferred
-optimization. A general mechanism for running only a cheaper subset in the
-docs build (e.g. an environment variable honored by every validation
-module's `resolutions` default) is worth considering as a shared pattern
-across all validation pages, but not introduced as one-off code here.
+**Validation narrative (deferred).** A `validation/poisson/` narrative
+application (manufactured-solution script, figures, Sphinx page) is deferred
+pending a decision on the validation pattern for multi-dimensional problems.
 
 **Open questions — Cross-epoch design points (Epoch 1 expected adaptation).** The Epoch 1 Poisson machinery lays the foundation for later physics epochs. Two adaptation points are expected to be designed in their respective epochs:
 
@@ -851,6 +778,15 @@ across all validation pages, but not introduced as one-off code here.
    normals depend on the solution. The adaptation — passing metric-field
    state or chart information to the flux evaluator — is deferred to Epoch 11
    when `DynamicManifold` and time-evolved metrics are introduced.
+
+3. **Multi-dimensional convergence sweep.** `_ConvergenceRateClaim` (C9)
+   verifies convergence order in 1-D. A future item should extend the
+   sweep to 2-D and 3-D `CartesianMesh` instances using the same registry
+   pattern (`_FLUXES × _SOLVERS × _CONVERGENCE_MESHES`), once the compute
+   budget and mesh-sequence floors for higher dimensions are established.
+   The 2-D manufactured solution `φ(x, y) = sin(πx) + sin(3πx) +
+   sin(πy) + sin(3πy)` (separable, homogeneous Dirichlet BC on the unit
+   square) is the natural extension.
 
 ---
 

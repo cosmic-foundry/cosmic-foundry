@@ -4,17 +4,18 @@ Each convergence claim is a _Claim subclass that encodes both what is being
 verified and how to verify it.  Adding a new claim requires only appending to
 _CLAIMS; the single parametric test covers all entries.
 
-  _OrderClaim(instance)        — instance converges at its declared order p
-  _SolverClaim(solver, flux, mesh)
-                               — solver reaches tol on FVMDiscretization(mesh,
-                                 flux, DirichletBC) with monotonically
-                                 decreasing residuals and a tractable count
+  _OrderClaim(instance)               — instance achieves O(h^p) at declared p
+  _SolverClaim(solver, flux, mesh)    — solver reaches tol with monotonically
+                                        decreasing residuals and bounded count
+  _ConvergenceRateClaim(solver, flux, meshes)
+                                      — L²_h error converges at >= O(h^{p-0.5})
+                                        over a mesh refinement sequence using a
+                                        manufactured solution with exact cell
+                                        averages for source and reference field
 
-Both claim types are generated from _FLUXES, the single source of truth for
-which NumericalFlux instances are in scope.  When adding a new concrete
-NumericalFlux, add an instance to _FLUXES; order and solver claims follow
-automatically.  When adding a new concrete LinearSolver, add _SolverClaim
-entries to _CLAIMS directly.
+_FLUXES, _SOLVERS, and _CONVERGENCE_MESHES are registries.  Adding a new
+NumericalFlux to _FLUXES or a new LinearSolver to _SOLVERS automatically
+generates all four claim types for that entry.
 """
 
 from __future__ import annotations
@@ -165,6 +166,81 @@ class _SolverClaim(_Claim):
         ), f"Iteration count {len(r)} exceeds spectral-radius bound {k_bound}"
 
 
+class _ConvergenceRateClaim(_Claim):
+    """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence."""
+
+    def __init__(
+        self,
+        solver: DenseJacobiSolver,
+        flux: Any,
+        meshes: list[CartesianMesh],
+    ) -> None:
+        self._solver = solver
+        self._flux = flux
+        self._meshes = meshes
+
+    @property
+    def description(self) -> str:
+        return (
+            f"{type(self._solver).__name__}/"
+            f"{type(self._flux).__name__}(order={self._flux.order})/"
+            "convergence_rate"
+        )
+
+    def check(self) -> None:
+        manifold = self._flux.continuous_operator.manifold
+        errors: list[float] = []
+        for mesh in self._meshes:
+            h = float(mesh.cell_volume)  # 1-D: cell_volume == spacing
+            orig = float(mesh.coordinate((0,))[0]) - 0.5 * h
+
+            def _phi_avg(i: int, _h: float = h, _o: float = orig) -> float:
+                xl, xr = _o + i * _h, _o + (i + 1) * _h
+                return (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / (
+                    math.pi * _h
+                ) + (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr)) / (
+                    3 * math.pi * _h
+                )
+
+            def _rho_avg(i: int, _h: float = h, _o: float = orig) -> float:
+                xl, xr = _o + i * _h, _o + (i + 1) * _h
+                return (
+                    math.pi * (math.cos(math.pi * xl) - math.cos(math.pi * xr)) / _h
+                    + 3
+                    * math.pi
+                    * (math.cos(3 * math.pi * xl) - math.cos(3 * math.pi * xr))
+                    / _h
+                )
+
+            disc = FVMDiscretization(mesh, self._flux, DirichletBC(manifold))
+            rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
+            u_h = self._solver.solve(disc, rhs)
+            vol = float(mesh.cell_volume)
+            # All cells included: for homogeneous Dirichlet BC, odd-reflection ghost
+            # values equal the exact odd-extension cell averages of any solution
+            # satisfying φ(0)=φ(1)=0, so boundary cells converge at full order p.
+            err_sq: float = sum(
+                vol * (float(u_h((i,))) - _phi_avg(i)) ** 2
+                for i in range(mesh.shape[0])
+            )
+            errors.append(math.sqrt(err_sq))
+
+        hs = [float(m.cell_volume) for m in self._meshes]
+        log_h = [math.log(hv) for hv in hs]
+        log_e = [math.log(ev) for ev in errors]
+        n_pts = len(log_h)
+        sx = sum(log_h)
+        sy = sum(log_e)
+        sxy = sum(x * y for x, y in zip(log_h, log_e, strict=False))
+        sxx = sum(x * x for x in log_h)
+        slope = (n_pts * sxy - sx * sy) / (n_pts * sxx - sx**2)
+        assert slope >= self._flux.order - 0.1, (
+            f"Convergence rate {slope:.3f} < expected "
+            f"{self._flux.order - 0.1:.1f} for "
+            f"{type(self._flux).__name__}(order={self._flux.order})"
+        )
+
+
 _manifold = EuclideanManifold(1)
 _dummy_mesh = CartesianMesh(
     origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
@@ -179,12 +255,23 @@ _FLUXES = [
     DiffusiveFlux(DiffusiveFlux.min_order, _manifold),
     DiffusiveFlux(DiffusiveFlux.min_order + DiffusiveFlux.order_step, _manifold),
 ]
+_SOLVERS = [DenseJacobiSolver(tol=1e-8)]
+_CONVERGENCE_MESHES = [
+    CartesianMesh(
+        origin=(sympy.Rational(0),),
+        spacing=(sympy.Rational(1, n),),
+        shape=(n,),
+    )
+    for n in [16, 24, 32, 48, 64]
+]
 
 _CLAIMS: list[_Claim] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
+    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _FLUXES],
     *[
-        _SolverClaim(DenseJacobiSolver(tol=1e-8, max_iter=10_000), f, _mesh_n8)
+        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES)
+        for s in _SOLVERS
         for f in _FLUXES
     ],
 ]
