@@ -27,10 +27,9 @@ class RestrictionOperator(NumericFunction[Function[M, V], MeshFunction[V]]):
     no other mesh.
 
     When f is a Field (SymbolicFunction), the integral is computed
-    analytically via SymPy.  Rₕ is what defines the relationship between
-    Field and MeshFunction; this is why the earlier DiscreteField ABC was
-    wrong — the restriction depends on both the field and the mesh, not
-    either alone.
+    analytically via SymPy.  The restriction depends on both the field
+    and the mesh, not either alone — neither a field nor a mesh in isolation
+    carries the cell-average values.
 
     Required:
         mesh    — the mesh defining the cell decomposition for restriction

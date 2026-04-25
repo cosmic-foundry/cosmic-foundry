@@ -114,7 +114,7 @@ DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifo
                                                derived: order = 1
     └── PoissonEquation                      — -∇²φ = ρ; earned by: derived flux = -∇(·).
                                                The sign convention (flux = -∇φ, not +∇φ) ensures
-                                               the discrete operator is positive definite (see C4, C5).
+                                               the discrete operator is positive definite (see C4, C6).
                                                free: manifold, source; derived: flux = -∇(·), order = 1.
                                                There is no LaplaceOperator class: -∇²φ = -∇·∇φ is
                                                the divergence of the flux field -∇φ; fully
@@ -285,51 +285,35 @@ Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
 DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
                             — the output of Discretization; the Lₕ that makes
                               Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the chosen order.
-                              Earns its class via .mesh: Mesh — constrains input and
-                              output to the same mesh (operator.mesh == input.mesh ==
-                              output.mesh), by analogy with DifferentialOperator.manifold.
-                              Not independently constructed from stencil coefficients.
+                              Earns its class via two falsifiable claims:
+                                order: int — composite convergence order
+                                continuous_operator: DifferentialOperator —
+                                  the continuous operator this approximates
+                                  (added in C4; threaded automatically by
+                                  Discretization from its input L)
+                              Not independently constructed from stencil
+                              coefficients; produced by a Discretization.
 
-NumericalFlux               — free: order: int
-                              given cell averages U and a face, returns
-                              F·n̂·|face_area|. order is the COMPOSITE
-                              convergence order of the scheme:
-                                order = min(reconstruction_order,
-                                            face_quadrature_order,
-                                            deconvolution_order)
-                              Each of the three components is a distinct
-                              operator with its own Lane C expansion:
-                                • Reconstruction R_p: cell averages → polynomial
-                                  representation; Taylor expansion in h shows
-                                  leading error O(h^{p_R}) against the exact
-                                  pointwise value.
-                                • Face quadrature Q_p: integrates the polynomial
-                                  flux over the face; midpoint (O(h²)) or
-                                  Simpson (O(h⁴)) rule; Lane C: quadrature error
-                                  against the exact face average of a smooth
-                                  test function.
-                                • Deconvolution D_p: corrects between cell-average
-                                  and point-value representations,
-                                    Uᵢ = Ū_i - (h²/24)(∇²U)ᵢ + O(h⁴)  (p=4)
-                                    Uᵢ = Ū_i + O(h²)                  (p=2, identity)
-                                  Lane C: Taylor expansion of the finite-average
-                                  operator confirms the stated residual.
-                              All three must be ≥ order; the class is
-                              responsible for ensuring they are.
-                              Earned by: order is a verifiable claim —
-                              the Lane C Taylor expansion of the composite
-                              face flux F_face = Q_p ∘ F ∘ D_p ∘ R_p against
-                              the exact face-averaged flux of a smooth test
-                              function yields leading error O(hᵖ),
-                              where p = order.
-├── DiffusiveFlux(order)    — free: order: int. F(U) = ∇U; constructs the
-│                             appropriate stencil, face-quadrature rule,
-│                             and cell-average/point-value deconvolution for
-│                             that order. One class, not one class per order:
+NumericalFlux(DiscreteOperator)
+                            — a DiscreteOperator with the cell-average →
+                              face-flux calling convention:
+                                __call__(U: MeshFunction) → MeshFunction
+                              where the returned MeshFunction is callable as
+                              result((axis, idx_low)) and returns the flux
+                              F·n̂·|face_area| at that face.  Inherits order
+                              and (in C4) continuous_operator from
+                              DiscreteOperator.  Full-field evaluation: all
+                              face fluxes are available from one call; values
+                              computed lazily on demand.
+├── DiffusiveFlux(order)    — free: order: int. F(U) = -∇U; derives stencil
+│                             coefficients symbolically in __init__ from the
+│                             antisymmetric cell-average moment system.
+│                             Validity: min_order=2, order_step=2 (even orders
+│                             only; antisymmetric design kills odd error terms,
+│                             constraining achievable orders to even integers).
+│                             One class, not one class per order:
 │                             DiffusiveFlux(2) and DiffusiveFlux(4) are
-│                             *instances*, not subclasses. The test that forces
-│                             generalization is that both instances pass the
-│                             same Lane C contract.
+│                             *instances*, not subclasses.
 └── HyperbolicFlux(order, riemann_solver)
                             — free: order: int, riemann_solver: RiemannSolver.
                               F(U) nonlinear; reconstruction at the given order
@@ -353,7 +337,7 @@ LinearSolver                — solves Lₕ u = f for a *linear* DiscreteOperato
                               All linear algebra hand-rolled — no LAPACK, no
                               external solvers. Jacobi convergence rate is
                               O(1/h²) iterations for the DiffusiveFlux(2)
-                              Poisson operator; C6 convergence tests cap at
+                              Poisson operator; C9 convergence tests cap at
                               N ≤ 32 in 2-D (≤ 1024 unknowns) accordingly.
                               Performance optimization deferred.
 ```
@@ -424,7 +408,7 @@ ingestion discipline for PDF-sourced defined constants is a separate decision.
 
 **Epoch 1 Poisson sprint.** The target is a working FVM Poisson solver on
 `CartesianMesh` with Dirichlet boundary conditions, verified against an
-analytic solution. The sprint is structured as eight PRs (C1–C8); each earns
+analytic solution. The sprint is structured as nine PRs (C1–C9); each earns
 its scope by a Lane C symbolic derivation and each introduces only objects
 justified by a falsifiable constraint. The ambition is not "a working
 Poisson solver" — it is the reusable FVM machinery the rest of the engine
@@ -525,39 +509,80 @@ well-founded:
    The `_D` domain sub-question (scalar vs. multi-component) is deferred to C3
    (Euler equations).
 
-**C3 — `NumericalFlux` family (order = 2 and order = 4 together).**
-Introduce the `NumericalFlux` ABC and the `DiffusiveFlux(order)` concrete
-class. Construct `DiffusiveFlux(2)` *and* `DiffusiveFlux(4)` — two
-instances of the same class — and verify both in the same PR. The test that
-forces generalization is not "two subclasses pass the same test" but "one
-class parameterized by `order` satisfies the same Lane C contract at both
-orders." Shipping an `order` parameter that only changes the stencil width
-would fail: the ORDER of a FVM scheme is
-`min(reconstruction_order, face_quadrature_order, deconvolution_order)`.
-`DiffusiveFlux(order)` must independently configure all three components
-for each `order`. Lane C per instance requires eight separate symbolic
-checks: Taylor expansion of reconstruction, face-quadrature, deconvolution,
-and composite face flux — each against the exact face-averaged flux — for
-both p=2 and p=4. Each component must independently achieve the stated order,
-and the composite (their composition) must yield leading error O(hᵖ) where
-p = order. The `NumericalFlux` ABC defines `free: order: int`; concrete
-subclasses may introduce additional constructor parameters specific to the
-flux family (e.g. `HyperbolicFlux(order, riemann_solver)` adds a Riemann
-solver, while `DiffusiveFlux(order)` does not).
+**C3 — `NumericalFlux` family (order = 2 and order = 4 together). ✓**
+Introduced `NumericalFlux(DiscreteOperator)` ABC and `DiffusiveFlux(order)`
+concrete class.  Key design decisions:
 
-**C4 — Generic `FVMDiscretization` with commutation Lane C.** Introduce
-`FVMDiscretization(mesh, numerical_flux, boundary_condition)`; it is
-generic over `DivergenceFormEquation` — not Poisson-specific. The produced
-`DiscreteOperator` computes `(Lₕ U)ᵢ = |Ωᵢ|⁻¹ Σ_f NF(U, f)` where `NF`
-is the `NumericalFlux` evaluated at each face of Ωᵢ, with the conservation
-law's flux function baked into `NF`. BC enters via the constructor parameter
-(see "Boundary condition application" in `discrete/`). Lane C: verify the
-commutation diagram `‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)` at order p for
-`PoissonEquation` paired with `DiffusiveFlux(2)` and `DiffusiveFlux(4)`,
-symbolically on test fields in `C^{p+2}(Ω)`. The SPD derivation is deferred
-to C5.
+- `DiscreteOperator` gains abstract `order: int`; `NumericalFlux` inherits
+  from it, narrowing the calling convention to cell-average → face-flux.
+- `NumericalFlux.__call__(U: MeshFunction) → MeshFunction` (full-field):
+  the returned MeshFunction is callable as `result((axis, idx_low))`.
+  Full-field evaluation is JAX-friendly (one JIT-compiled array operation)
+  and makes `NumericalFlux` a first-class `DiscreteOperator`.
+- `DiffusiveFlux` derives stencil coefficients symbolically in `__init__`
+  from the antisymmetric cell-average moment system — no hardcoded stencils.
+  Validity declared as class attributes: `min_order=2`, `order_step=2`.
+  The `__init__` guard is derived from these, making the constraint explicit.
+- Convergence testing infrastructure: `tests/support/` provides a
+  `ConvergenceOracle` protocol, `CONVERGENCE_ORACLES` registry, and
+  `CONVERGENT_ABCS` list.  `conftest.py` enforces at collection time that
+  every concrete `DiscreteOperator` subclass has a registered oracle.
+  `test_convergence_order.py` is the single parametric test for all of them.
+  Oracle files stay until C5 automates them away.
 
-**C5 — SPD analysis of the discrete Poisson operator.** For
+**C4 — `DiffusionOperator`, `continuous_operator`, `Discretization`.**
+Three tightly coupled additions delivered in one PR (mirrors C1 pattern):
+
+1. `DiffusionOperator` in `theory/continuous/` — concrete
+   `DifferentialOperator[ZeroForm, OneForm]` representing `-d: Ω⁰ → Ω¹`.
+   The continuous operator that `DiffusiveFlux` approximates.
+2. `DiscreteOperator` gains abstract `continuous_operator: DifferentialOperator`
+   — the second falsifiable claim every discrete operator makes.
+   `DiffusiveFlux.__init__` takes `continuous_operator` as a required
+   constructor argument; the `__init__` guard ensures it matches the
+   expected type.
+3. `Discretization` ABC + `FVMDiscretization(mesh, numerical_flux,
+   boundary_condition)` — threads `continuous_operator` automatically
+   (it is the input `L` to `Discretization.__call__`).  The produced
+   `DiscreteOperator` carries the annotation from birth.
+
+Lane C: verify the commutation diagram `‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)`
+at order p for `PoissonEquation` paired with `DiffusiveFlux(2)` and
+`DiffusiveFlux(4)`, symbolically on test fields in `C^{p+2}(Ω)`.  The SPD
+derivation is deferred to C6.
+
+**C5 — Automated convergence framework via `RestrictionOperator.degree`.**
+Complete the oracle-free convergence testing infrastructure:
+
+1. `RestrictionOperator` gains abstract `degree: int` — the dimension of
+   mesh elements being restricted to (n = cells, n−1 = faces, ...).
+   This is the DEC cochain map parameter; `CartesianRestrictionOperator`
+   gains a `degree` constructor argument, with existing cell-average
+   behavior at `degree=n`.
+2. `CartesianRestrictionOperator(mesh, degree=n−1)` — integrates a
+   `OneForm`'s normal component over faces, producing a face-valued
+   `MeshFunction`.  Uses the same SymPy integration machinery as the
+   cell-average restriction.
+3. `OneForm.component(axis)` — extract the a-th component as a `Field`,
+   needed by the face restriction to compute the normal flux.
+4. Oracle files deleted.  The convergence framework calls
+   `RestrictionOperator(mesh, degree=n−1)(instance.continuous_operator(phi))`
+   directly for the exact face flux.  `DiffusiveFluxOracle` and
+   `CONVERGENCE_ORACLES` disappear; `CONVERGENT_ABCS = [DiscreteOperator]`
+   is the single discovery root.
+
+The commutation diagram for `NumericalFlux` is then closed formally:
+
+```
+φ ─────────(continuous_operator)──────▶ L(φ)
+│                                           │
+(CartesianRestrictionOperator, degree=n) (CartesianRestrictionOperator, degree=n−1)
+│                                           │
+▼                                           ▼
+U_h ────────(NumericalFlux)─────────▶ F_h
+```
+
+**C6 — SPD analysis of the discrete Poisson operator.** For
 `FVMDiscretization(PoissonEquation, DiffusiveFlux(order), DirichletBC)`
 on `CartesianMesh`, the assembled operator is symmetric positive definite
 with respect to the discrete inner product `⟨u, v⟩_h`. The chain:
@@ -574,7 +599,7 @@ with respect to the discrete inner product `⟨u, v⟩_h`. The chain:
    `u_boundary = 0` from Dirichlet BC, this forces `u ≡ 0`. Hence
    `⟨u, Lₕ u⟩_h > 0` for all `u ≠ 0`.
 3. *Spectral inheritance.* Step 2 is the discrete analog of L² positive-
-   definiteness of `-∇²`. The explicit eigenvalues quoted in C6 are a
+   definiteness of `-∇²`. The explicit eigenvalues quoted in C7 are a
    consequence of SPD + translation invariance on `CartesianMesh`, not
    additional hypotheses.
 
@@ -584,18 +609,18 @@ column per cell. Lane C verifies SPD symbolically at N = 4 in 1-D and
 2-D for both `DiffusiveFlux(2)` and `DiffusiveFlux(4)`, so the assertion
 does not depend on a numerical eigenvalue computation.
 
-**C6 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
+**C7 — `LinearSolver` hierarchy with `DenseJacobiSolver`.** Introduce the
 abstract `LinearSolver` interface, scoped explicitly to *linear* operators
 (nonlinear problems need a separate `NonlinearSolver`). This PR develops
 the interface, the `DenseJacobiSolver` implementation with matrix assembly
 via unit basis, and the Jacobi spectral-radius derivation for `DiffusiveFlux(2)`.
-The convergence-count Lane B check for order=4 is deferred to C7. The
+The convergence-count Lane B check for order=4 is deferred to C8. The
 derivation works simultaneously in two directions. Both directions are stated
 for `FVMDiscretization(PoissonEquation, DiffusiveFlux(2), DirichletBC)` on
 `CartesianMesh`; the same construction applies to `DiffusiveFlux(4)` but
 the explicit spectral rate is different — see the "Order ≥ 4" remark below.
 
-*Forward from the formal ingredients already in the code.* At the point C6
+*Forward from the formal ingredients already in the code.* At the point C7
 runs, three objects are in hand:
 1. The `DiscreteOperator` Lₕ. *Linearity of Lₕ is specific to this
    specialization*: `DiffusiveFlux` produces a centered-difference stencil
@@ -606,7 +631,7 @@ runs, three objects are in hand:
 2. The assembled dense `(N^d × N^d)` matrix `A`, obtained by applying Lₕ
    to each unit-basis `MeshFunction` in lexicographic order (one column
    per cell).
-3. The SPD property of A, proved in C5's Lane C derivation (not asserted
+3. The SPD property of A, proved in C6's Lane C derivation (not asserted
    here) from summation-by-parts plus the sign convention `flux = -∇φ`.
 
 From SPD alone, the equation `Lₕ u = f` is equivalent to
@@ -652,41 +677,41 @@ diagram verifies.
 
 *Order ≥ 4 remark.* For `DiffusiveFlux(4)` the closed-form eigenvalues
 above do not apply; the wider stencil introduces different Fourier
-symbols. SPD (from C5) still guarantees convergence qualitatively for
+symbols. SPD (from C6) still guarantees convergence qualitatively for
 any α small enough, but the iteration-count bound must be re-derived
 numerically by a one-off dense eigenvalue scan on a representative
-grid. The empirical rate for `DiffusiveFlux(4)` is deferred to C7; the
+grid. The empirical rate for `DiffusiveFlux(4)` is deferred to C8; the
 closed-form spectral derivation is deferred and re-opened when multigrid
 (Epoch 6) requires spectral bounds on wide-stencil operators.
 
 All linear algebra is hand-rolled — no NumPy `linalg`, no LAPACK.
 
-**C7 — DenseJacobiSolver convergence check (order=4 Lane B).** Verify that
+**C8 — DenseJacobiSolver convergence check (order=4 Lane B).** Verify that
 `DenseJacobiSolver` reaches the prescribed tolerance within tractable
 iteration counts on representative grids for `DiffusiveFlux(4)`. The O(1/h²)
-iteration count bounds C8 to N ≤ 32 in 2-D. Lane B: on an N = 8 system,
+iteration count bounds C9 to N ≤ 32 in 2-D. Lane B: on an N = 8 system,
 verify that the solver reaches the prescribed tolerance within the
 iteration count implied by the SPD property and empirical spectral radius,
 and that the residual `‖f − Lₕ u^k‖_{L²_h}` decreases monotonically.
 
-**C8 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
+**C9 — End-to-end Poisson convergence test.** Compose `PoissonEquation`
 (C1) + `CartesianMesh` with full chain complex (C2) + `DiffusiveFlux(2)`
-and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + SPD analysis (C5) +
-Dirichlet `BoundaryCondition` + `DenseJacobiSolver` (C6, C7) to solve
+and `DiffusiveFlux(4)` (C3) + `FVMDiscretization` (C4) + SPD analysis (C6) +
+Dirichlet `BoundaryCondition` + `DenseJacobiSolver` (C7, C8) to solve
 `-∇²φ = ρ` against the analytic solution `φ = sin(πx)sin(πy)` on the
 unit square. Convergence tests: N ∈ {8, 12, 16, 24, 32} (five points) for
 p = 2; N ∈ {4, 6, 8, 12, 16} (five points) for p = 4 — capped to stay
 above the h⁴ floating-point floor. The reported error is the cell-volume-
 weighted discrete L² norm `‖φ_h − Rₕ φ_exact‖_{L²_h} = (Σᵢ |Ωᵢ|·(φ_h,ᵢ − (Rₕ φ)ᵢ)²)^{1/2}` —
 the natural norm for the FVM formulation and the one in which the SPD
-argument of C5 lives. A parallel max-norm `‖φ_h − Rₕ φ_exact‖_{∞,h}`
+argument of C6 lives. A parallel max-norm `‖φ_h − Rₕ φ_exact‖_{∞,h}`
 is also reported to detect pointwise failure modes (boundary-adjacent rows,
-corners). The Lane C checks in C1–C5 are the derivation; C8 is the proof
-that the derivation was implemented. C8 lives as a narrative application
+corners). The Lane C checks in C1–C6 are the derivation; C9 is the proof
+that the derivation was implemented. C9 lives as a narrative application
 in `validation/poisson/` with a mirror documentation page at `docs/poisson/`;
 see the layout below.
 
-**`validation/poisson/` and the Sphinx page.** C6 is a narrative
+**`validation/poisson/` and the Sphinx page.** C9 is a narrative
 application, not only a test. It walks the pipeline from manufactured
 solution to converged numerical result with every intermediate object
 visible — mirroring the `validation/schwarzschild/` pattern (`# %%`
@@ -731,7 +756,7 @@ falsifiable:
    the numerical solution must respect this to floating-point precision
    for any N. A break signals a stencil-assembly bug.
 6. *Operator symmetry and positive-definiteness.* For the assembled `Lₕ`
-   matrix from C5, verify `⟨u, Lₕ v⟩_h = ⟨Lₕ u, v⟩_h` (symmetry) and
+   matrix from C6, verify `⟨u, Lₕ v⟩_h = ⟨Lₕ u, v⟩_h` (symmetry) and
    `⟨u, Lₕ u⟩_h > 0` for `u ≠ 0` (positive-definiteness) on several
    random unit MeshFunctions `u, v`. Hand-rolled — no `np.linalg.cholesky`.
 7. *Restriction commutes with boundary condition (nonzero data).* Using

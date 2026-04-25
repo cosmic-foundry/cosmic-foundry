@@ -108,25 +108,6 @@ Before opening or pushing to a PR:
   pytest marker descriptions, API notes, or overview copy as a
   statement of current project state.
 
-### Test authorship
-
-Tests are the primary link between the code and the mathematical
-narrative notebooks. Structure them so notebooks can import and
-display them exactly:
-
-- **Assertion logic lives in a named `assert_*` function.** The
-  `test_*` function is a thin wrapper that calls it and nothing else.
-  Notebooks import `assert_*` functions and display their source via
-  `inspect.getsource` — what the reader sees is exactly what CI runs.
-- **Parametrized test parameter sets are named module-level
-  constants.** No anonymous inline literals in
-  `@pytest.mark.parametrize`. Notebooks import these constants to
-  display the coverage explicitly.
-- **Refactor existing tests to follow this convention as you write
-  the corresponding notebook for each concept.** Tests in files that
-  have no notebook yet may remain in the old style until their
-  notebook is written.
-
 ---
 
 ## Environment
@@ -337,13 +318,42 @@ require machine-checkable derivations that Lane A defers to the reference).
   A derivation document is required; principled disagreements with the
   literature are recorded inside it.
 
-Lanes B and C require a machine-checkable derivation: executable SymPy
-checks on the load-bearing algebraic steps of the numerical scheme,
-expressed as `assert_*` functions in `tests/` following the standard test
-authorship convention. This keeps derivations automatically discoverable
-by CI and displayable in notebooks, as a separate concern from production
-code. Infrastructure capabilities (mesh topology, I/O, field placement)
-are out of scope for lane classification.
+Lanes B and C require machine-checkable derivations.  The default is
+always to generalize verification into an auto-discoverable framework
+rather than write a one-off test function.  Writing a `test_*` function
+is a signal that generalization has not been done yet; when that happens,
+the right response is to extend the framework so the check applies to the
+whole class of objects, not just the instance in front of you.
+
+**Convergence order verification.** Every concrete `DiscreteOperator`
+subclass (e.g. `DiffusiveFlux`) that claims a convergence order must be
+registered in the convergence oracle framework in `tests/support/`. The
+framework enforces at pytest collection time that no concrete convergent
+class is silently untested. The structure:
+
+- The class declares `order: int` (inherited from `DiscreteOperator`) and
+  `min_order: ClassVar[int]` + `order_step: ClassVar[int]` at the class
+  level — the validity range of the `order` parameter.
+- The class carries `continuous_operator: DifferentialOperator` (from C4)
+  — the continuous operator it approximates.  This is the mathematical
+  specification; the convergence test verifies the implementation converges
+  to it at the claimed order.
+- A `ConvergenceOracle` subclass in `tests/support/oracles/` provides a
+  manufactured-solution error expression as a SymPy polynomial in `h`.
+  The oracle is the only test-side object needed; it is registered in
+  `tests/support/oracles/__init__.py`.
+- `tests/test_convergence_order.py` is the single parametric test: it
+  verifies the error polynomial has zeros at `h⁰…h^{p-1}` and a nonzero
+  `h^p` leading term, where `p = instance.order`.  One test function covers
+  all convergent classes.  No additional `test_*` functions are written for
+  convergence — new discretizations extend the oracle registry, not the
+  test file.
+- From C5 onward, oracle files are replaced by the `continuous_operator`
+  annotation + `RestrictionOperator(mesh, degree=n−1)`.  The oracle file
+  is a temporary shim until the full DEC restriction machinery exists.
+
+Infrastructure capabilities (mesh topology, I/O, field placement) are
+out of scope for lane classification.
 
 The lane must be stated in the PR description, e.g. `Lane C (origination).
 Reference papers: [...]`. For Lane B, explicitly record that the reference
