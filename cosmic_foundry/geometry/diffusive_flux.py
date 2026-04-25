@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar, cast
+
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
@@ -9,17 +11,50 @@ from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
-class DiffusiveFlux(NumericalFlux):
+class _FaceMeshFunction(MeshFunction[sympy.Expr]):
+    """Lazy face-flux MeshFunction returned by DiffusiveFlux.__call__.
+
+    Callable as face_mf((axis, idx_low)) where idx_low is the cell index
+    on the low side of the face along axis.
+    """
+
+    def __init__(
+        self,
+        mesh: CartesianMesh,
+        compute: object,
+    ) -> None:
+        self._mesh = mesh
+        self._compute = compute
+
+    @property
+    def mesh(self) -> CartesianMesh:
+        return self._mesh
+
+    def __call__(  # type: ignore[override]
+        self, face: tuple[int, tuple[int, ...]]
+    ) -> sympy.Expr:
+        axis, idx_low = face
+        return self._compute(axis, idx_low)  # type: ignore[operator]
+
+
+class DiffusiveFlux(NumericalFlux[sympy.Expr]):
     """Numerical flux for the diffusive flux F(φ) = -∇φ.
 
     DiffusiveFlux approximates the face-averaged normal flux -∂φ/∂xₐ·|Aₐ|
     at the interface between two adjacent cells along axis a, where |Aₐ| is
     the face area perpendicular to axis a.
 
-    One class, many instances: DiffusiveFlux(order) for any even order ≥ 2.
+    One class, many instances: DiffusiveFlux(order) for any valid order.
     DiffusiveFlux(2) and DiffusiveFlux(4) are parameterized instances, not
     subclasses.  Both satisfy the same Lane C contract at their respective
     orders (see tests/test_convergence_order.py).
+
+    Validity:
+        min_order  = 2   — smallest supported order
+        order_step = 2   — valid orders are min_order, min_order+step, ...
+                           (antisymmetric stencil design constrains order
+                           to even integers: odd error terms vanish by
+                           antisymmetry; only even orders are achievable)
 
     Stencil derivation (Lane C):
 
@@ -40,24 +75,31 @@ class DiffusiveFlux(NumericalFlux):
     Parameters
     ----------
     order:
-        Even integer ≥ 2.  The stencil coefficients are computed via SymPy
-        at construction time (~10–40 ms); __call__ uses only arithmetic.
+        Integer satisfying order >= min_order and
+        (order - min_order) % order_step == 0.  Stencil coefficients are
+        derived via SymPy at construction time (~10–40 ms); __call__ uses
+        only arithmetic.
 
     __call__ signature:
-        (U, mesh, axis, idx_low) -> F·n̂·|face_area|
+        (U: MeshFunction) -> MeshFunction
 
         U        — cell averages (MeshFunction callable with cell index)
-        mesh     — CartesianMesh providing spacing and face_area
-        axis     — normal axis a ∈ [0, ndim)
-        idx_low  — index of the cell on the low side of the face;
-                   the high cell is at idx_low with idx_low[axis] + 1.
+        returns  — face-flux MeshFunction callable as result((axis, idx_low))
+                   where idx_low is the low-side cell index of the face;
+                   the high cell is idx_low with idx_low[axis] + 1.
                    Caller must ensure cells idx_low[axis] − (n−1) through
                    idx_low[axis] + n exist (n = order // 2).
     """
 
+    min_order: ClassVar[int] = 2
+    order_step: ClassVar[int] = 2
+
     def __init__(self, order: int) -> None:
-        if order < 2 or order % 2 != 0:
-            raise ValueError(f"DiffusiveFlux order must be even and ≥ 2; got {order}")
+        if order < self.min_order or (order - self.min_order) % self.order_step != 0:
+            raise ValueError(
+                f"DiffusiveFlux order must be >= {self.min_order} and satisfy "
+                f"(order - {self.min_order}) % {self.order_step} == 0; got {order}"
+            )
         self._order = order
 
         # Derive stencil coefficients from first principles.
@@ -123,31 +165,33 @@ class DiffusiveFlux(NumericalFlux):
 
     def __call__(
         self,
-        U: MeshFunction,
-        mesh: CartesianMesh,
-        axis: int,
-        idx_low: tuple[int, ...],
-    ) -> sympy.Expr:
-        """Return -∂φ/∂x_axis · |face_area| at the face adjacent to idx_low.
+        U: MeshFunction[sympy.Expr],
+    ) -> _FaceMeshFunction:
+        """Return a face-flux MeshFunction over all faces.
 
-        The high-side neighbor is idx_low with idx_low[axis] incremented by 1.
-        The stencil width is order // 2 cells on each side of the face.
+        The returned MeshFunction is callable as result((axis, idx_low))
+        where idx_low is the low-side cell index tuple.  Values are computed
+        lazily on demand.  The mesh is inferred from U.mesh.
         """
-        h: sympy.Expr = mesh._spacing[axis]
-        face_area: sympy.Expr = mesh.face_area(axis)
+        mesh = cast(CartesianMesh, U.mesh)
 
-        def shift(idx: tuple[int, ...], delta: int) -> tuple[int, ...]:
-            return idx[:axis] + (idx[axis] + delta,) + idx[axis + 1 :]
+        def compute(axis: int, idx_low: tuple[int, ...]) -> sympy.Expr:
+            h: sympy.Expr = mesh._spacing[axis]
+            face_area: sympy.Expr = mesh.face_area(axis)
 
-        gradient = (
-            sum(
-                c_k * (U(shift(idx_low, k + 1)) - U(shift(idx_low, -k)))  # type: ignore[arg-type]
-                for k, c_k in enumerate(self._coeffs)
+            def shift(idx: tuple[int, ...], delta: int) -> tuple[int, ...]:
+                return idx[:axis] + (idx[axis] + delta,) + idx[axis + 1 :]
+
+            gradient = (
+                sum(
+                    c_k * (U(shift(idx_low, k + 1)) - U(shift(idx_low, -k)))  # type: ignore[arg-type]
+                    for k, c_k in enumerate(self._coeffs)
+                )
+                / h
             )
-            / h
-        )
+            return sympy.Rational(-1) * gradient * face_area
 
-        return sympy.Rational(-1) * gradient * face_area
+        return _FaceMeshFunction(mesh, compute)
 
 
 __all__ = ["DiffusiveFlux"]

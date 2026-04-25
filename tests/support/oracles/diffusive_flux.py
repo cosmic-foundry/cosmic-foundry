@@ -53,7 +53,9 @@ class _Field(Field[Any, sympy.Expr]):
 
 class DiffusiveFluxOracle:
     def instances(self) -> list[DiffusiveFlux]:
-        return [DiffusiveFlux(2), DiffusiveFlux(4)]
+        lo = DiffusiveFlux.min_order
+        step = DiffusiveFlux.order_step
+        return [DiffusiveFlux(lo), DiffusiveFlux(lo + step)]
 
     def error(self, instance: DiffusiveFlux, h: sympy.Symbol) -> sympy.Expr:
         order = instance.order
@@ -71,7 +73,8 @@ class DiffusiveFluxOracle:
         phi = sum(c * x**k for k, c in enumerate(coeffs))
         U = CartesianRestrictionOperator(mesh)(_Field(space, phi, (x,)))
         idx_low = (n,)
-        numerical = instance(U, mesh, 0, idx_low)
+        face_fluxes = instance(U)
+        numerical = face_fluxes((0, idx_low))
         x_face = (n + 1) * h
         exact = -sympy.diff(phi, x).subs(x, x_face) * mesh.face_area(0)
         return sympy.expand(sympy.simplify(numerical - exact))
