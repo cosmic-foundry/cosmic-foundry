@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 import sympy
 
@@ -34,8 +33,6 @@ class Discretization(ABC):
         mesh               — the mesh on which the scheme is defined
         boundary_condition — the BoundaryCondition on ∂Ω (None if not yet set)
         assemble           — stiffness matrix as a Tensor
-        diagonal           — diagonal of the stiffness matrix as a Tensor
-        apply              — apply Lₕ to a discrete field; returns a Tensor
     """
 
     def __init__(
@@ -95,23 +92,6 @@ class Discretization(ABC):
                 rows[i][j] = float(lh_ej(to_multi(i)))  # type: ignore[arg-type]
 
         return Tensor(rows)
-
-    def diagonal(self) -> Tensor:
-        """Diagonal of the assembled stiffness matrix as a rank-1 Tensor."""
-        return self.assemble().diag()
-
-    def apply(self, u: Any) -> Tensor:
-        """Apply Lₕ to discrete field u; return the result as a rank-1 Tensor.
-
-        u must be indexable with N^d float values in lexicographic
-        (axis-0-fastest) order.  The default materialises the full stiffness
-        matrix and performs a dense matrix-vector product — O(N^{2d}) memory.
-        Override this method for matrix-free implementations.
-        """
-        a = self.assemble()
-        n = a.shape[0]
-        u_vec = Tensor([float(u[j]) for j in range(n)])
-        return a @ u_vec
 
 
 __all__ = ["Discretization"]
