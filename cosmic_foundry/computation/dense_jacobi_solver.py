@@ -6,6 +6,7 @@ import math
 from typing import cast
 
 from cosmic_foundry.computation.linear_solver import LinearSolver
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -72,14 +73,14 @@ class DenseJacobiSolver(LinearSolver):
         self._residuals: list[float] = []
 
     @property
-    def residuals(self) -> list[float]:
+    def residuals(self) -> Tensor:
         """Residual history ‖f − Au^k‖_{L²_h} from the most recent solve.
 
         residuals[k] is the discrete L²_h residual norm at the start of
         iteration k, before the k-th damped-Jacobi update is applied.
-        The list is populated by solve() and replaced on each call.
+        The Tensor is populated by solve() and replaced on each call.
         """
-        return list(self._residuals)
+        return Tensor(list(self._residuals))
 
     def solve(
         self,

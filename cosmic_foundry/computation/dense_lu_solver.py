@@ -6,6 +6,7 @@ import math
 from typing import cast
 
 from cosmic_foundry.computation.linear_solver import LinearSolver
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
@@ -53,13 +54,13 @@ class DenseLUSolver(LinearSolver):
         self._residuals: list[float] = []
 
     @property
-    def residuals(self) -> list[float]:
-        """Residual history from the most recent solve: [‖f − Au‖_{L²_h}].
+    def residuals(self) -> Tensor:
+        """Residual history from the most recent solve as a rank-1 Tensor.
 
-        For a direct solver the list has exactly one entry — the final
+        For a direct solver the Tensor has exactly one entry — the final
         residual after back-substitution — rather than an iteration trace.
         """
-        return list(self._residuals)
+        return Tensor(list(self._residuals))
 
     def solve(
         self,
