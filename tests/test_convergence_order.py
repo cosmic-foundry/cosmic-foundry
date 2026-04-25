@@ -29,9 +29,9 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import pytest
 import sympy
 
@@ -242,11 +242,12 @@ class _ConvergenceRateClaim(_Claim):
       DirichletBC — φ = sin(πx)+sin(3πx), satisfies φ(0)=φ(1)=0
       PeriodicBC  — φ = sin(2πx), zero-mean and periodic on [0,1]
 
-    null_projector, when supplied, is applied to the raw solver output before
-    measuring the error.  It should project u_h onto the orthogonal complement
-    of the operator's null space so that truncation error is isolated from the
-    arbitrary null-space component the solver may introduce.  Pass None (default)
-    when the operator is non-singular under the given BC.
+    Before measuring the L²_h error the assembled stiffness matrix is
+    decomposed via SVD; any null-space components of u_h (singular values
+    below a relative threshold) are projected out.  This isolates truncation
+    error from the arbitrary null-space component a direct solver may introduce
+    for singular systems (e.g. advection under PeriodicBC), without requiring
+    any operator-specific knowledge from the caller.
     """
 
     def __init__(
@@ -255,13 +256,11 @@ class _ConvergenceRateClaim(_Claim):
         flux: Any,
         meshes: list[CartesianMesh],
         bc_type: type = DirichletBC,
-        null_projector: Callable[[list[float]], list[float]] | None = None,
     ) -> None:
         self._solver = solver
         self._flux = flux
         self._meshes = meshes
         self._bc_type = bc_type
-        self._null_projector = null_projector
 
     @property
     def description(self) -> str:
@@ -308,13 +307,27 @@ class _ConvergenceRateClaim(_Claim):
 
             bc = self._bc_type(manifold)
             disc = FVMDiscretization(mesh, self._flux, bc)
+
+            # Project u_h onto the orthogonal complement of the assembled
+            # matrix's null space before measuring truncation error.  The SVD
+            # threshold is relative to the largest singular value; for full-rank
+            # systems no null vectors are found and the projection is a no-op.
+            a_sym = disc.assemble_matrix()
+            a_np = np.array(
+                [[float(a_sym[i, j]) for j in range(n_cells)] for i in range(n_cells)]
+            )
+            _, s_vals, vt = np.linalg.svd(a_np)
+            null_tol = s_vals[0] * n_cells * float(np.finfo(float).eps) ** 0.5
+            null_vecs = vt[s_vals < null_tol]
+
             rhs = LazyMeshFunction(mesh, lambda idx, _r=_rho_avg: _r(idx[0]))
             u_h = self._solver.solve(disc, rhs)
 
-            u_vals = [float(u_h((i,))) for i in range(n_cells)]
-            if self._null_projector is not None:
-                u_vals = self._null_projector(u_vals)
-            err_sq = sum(vol * (u_vals[i] - _phi_avg(i)) ** 2 for i in range(n_cells))
+            u_arr = np.array([float(u_h((i,))) for i in range(n_cells)])
+            for v in null_vecs:
+                u_arr -= float(np.dot(u_arr, v)) * v
+            phi_arr = np.array([_phi_avg(i) for i in range(n_cells)])
+            err_sq = float(vol * np.dot(u_arr - phi_arr, u_arr - phi_arr))
             errors.append(math.sqrt(err_sq))
 
         hs = [float(m.cell_volume) for m in self._meshes]
@@ -375,24 +388,6 @@ _CONVERGENCE_MESHES = [
 ]
 
 
-def _circulant_null_projector(u: list[float]) -> list[float]:
-    """Project out the null modes of a periodic skew-symmetric circulant operator.
-
-    Skew-symmetric circulant matrices (e.g. the discrete advection operator
-    under PeriodicBC) have a DC null mode for all N and an additional Nyquist
-    null mode when N is even.  Subtracting both from u_h isolates the
-    truncation error from the arbitrary particular solution the direct solver
-    selects.
-    """
-    n = len(u)
-    dc = sum(u) / n
-    u = [v - dc for v in u]
-    if n % 2 == 0:
-        nyq = sum((-1) ** i * u[i] for i in range(n)) / n
-        u = [v - (-1) ** i * nyq for i, v in enumerate(u)]
-    return u
-
-
 _CLAIMS: list[_Claim] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
@@ -415,9 +410,7 @@ _CLAIMS: list[_Claim] = [
         for f in _ADVECTIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(
-            s, f, _CONVERGENCE_MESHES, PeriodicBC, _circulant_null_projector
-        )
+        _ConvergenceRateClaim(s, f, _CONVERGENCE_MESHES, PeriodicBC)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
