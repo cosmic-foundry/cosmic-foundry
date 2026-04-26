@@ -13,12 +13,12 @@ class NumericalFlux(DiscreteOperator[_V]):
     """Approximates the face-averaged flux F·n̂·|face_area| from cell averages.
 
     A NumericalFlux is a DiscreteOperator with a specific calling convention:
-    given a cell-average MeshFunction U, it returns a face-valued MeshFunction
+    given a cell-average DiscreteField U, it returns a face-valued DiscreteField
     whose value at face (axis, idx_low) is the approximate flux F·n̂·|face_area|
     at the interface between cells idx_low and idx_low+1 along axis.
 
     NumericalFlux earns its place in the hierarchy by narrowing the calling
-    convention: DiscreteOperator maps any MeshFunction to any MeshFunction;
+    convention: DiscreteOperator maps any DiscreteField to any DiscreteField;
     NumericalFlux commits to the cell-average → face-flux direction, which
     is the FVM face-flux assembly pattern.
 
@@ -35,7 +35,7 @@ class NumericalFlux(DiscreteOperator[_V]):
     Required (inherited from DiscreteOperator):
         order               — composite convergence order
         continuous_operator — the continuous flux operator approximated
-        __call__            — apply the operator: MeshFunction → MeshFunction
+        __call__            — apply the operator: DiscreteField → DiscreteField
     """
 
 

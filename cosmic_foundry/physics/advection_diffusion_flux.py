@@ -6,16 +6,16 @@ from typing import ClassVar, cast
 
 import sympy
 
-from cosmic_foundry.geometry.advective_flux import AdvectiveFlux
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.geometry.diffusive_flux import DiffusiveFlux
+from cosmic_foundry.physics.advective_flux import AdvectiveFlux
+from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.continuous.advection_diffusion_operator import (
     AdvectionDiffusionOperator,
 )
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
+from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -79,11 +79,11 @@ class AdvectionDiffusionFlux(NumericalFlux[sympy.Expr]):
 
     def __call__(
         self,
-        U: MeshFunction[sympy.Expr],
-    ) -> LazyMeshFunction[sympy.Expr]:
-        """Return a face-flux MeshFunction over all faces.
+        U: DiscreteField[sympy.Expr],
+    ) -> LazyDiscreteField[sympy.Expr]:
+        """Return a face-flux DiscreteField over all faces.
 
-        The returned MeshFunction is callable as result((axis, idx_low))
+        The returned DiscreteField is callable as result((axis, idx_low))
         where idx_low is the low-side cell index tuple.  The face flux is the
         sum of the advective face reconstruction and κ times the diffusive
         face derivative.
@@ -96,7 +96,7 @@ class AdvectionDiffusionFlux(NumericalFlux[sympy.Expr]):
         def compute(face: tuple[int, tuple[int, ...]]) -> sympy.Expr:
             return adv(face) + kappa * diff(face)
 
-        return LazyMeshFunction(mesh, compute)
+        return LazyDiscreteField(mesh, compute)
 
 
 __all__ = ["AdvectionDiffusionFlux"]

@@ -5,8 +5,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TypeVar
 
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.foundation.function import Function
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
@@ -14,15 +14,15 @@ M = TypeVar("M")
 V = TypeVar("V")
 
 
-class RestrictionOperator(NumericFunction[Function[M, V], MeshFunction[V]]):
+class RestrictionOperator(NumericFunction[Function[M, V], DiscreteField[V]]):
     """The restriction operator Rₕ: the formal bridge from continuous to discrete.
 
-    A RestrictionOperator maps a continuous Function to a MeshFunction via
+    A RestrictionOperator maps a continuous Function to a DiscreteField via
     cell-averaged integration:
 
         (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV
 
-    The output MeshFunction has .mesh == Rₕ.mesh by construction — the
+    The output DiscreteField has .mesh == Rₕ.mesh by construction — the
     cell averages are indexed by the cells of Rₕ.mesh and can live on
     no other mesh.
 

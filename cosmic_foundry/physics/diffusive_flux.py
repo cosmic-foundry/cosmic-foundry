@@ -10,8 +10,8 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
+from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -62,10 +62,10 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
         DiffusionOperator (-∇: Ω⁰ → Ω¹) that this instance approximates.
 
     __call__ signature:
-        (U: MeshFunction) -> MeshFunction
+        (U: DiscreteField) -> DiscreteField
 
-        U        — cell averages (MeshFunction callable with cell index)
-        returns  — face-flux MeshFunction callable as result((axis, idx_low))
+        U        — cell averages (DiscreteField callable with cell index)
+        returns  — face-flux DiscreteField callable as result((axis, idx_low))
                    where idx_low is the low-side cell index of the face;
                    the high cell is idx_low with idx_low[axis] + 1.
                    Caller must ensure cells idx_low[axis] − (n−1) through
@@ -151,11 +151,11 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
 
     def __call__(
         self,
-        U: MeshFunction[sympy.Expr],
-    ) -> LazyMeshFunction[sympy.Expr]:
-        """Return a face-flux MeshFunction over all faces.
+        U: DiscreteField[sympy.Expr],
+    ) -> LazyDiscreteField[sympy.Expr]:
+        """Return a face-flux DiscreteField over all faces.
 
-        The returned MeshFunction is callable as result((axis, idx_low))
+        The returned DiscreteField is callable as result((axis, idx_low))
         where idx_low is the low-side cell index tuple.  Values are computed
         lazily on demand.  The mesh is inferred from U.mesh.
         """
@@ -178,7 +178,7 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
             )
             return sympy.Rational(-1) * gradient * face_area
 
-        return LazyMeshFunction(mesh, compute)
+        return LazyDiscreteField(mesh, compute)
 
 
 __all__ = ["DiffusiveFlux"]

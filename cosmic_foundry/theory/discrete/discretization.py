@@ -8,10 +8,10 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
-from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
+from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 
 
 class Discretization(ABC):
@@ -85,7 +85,7 @@ class Discretization(ABC):
             def unit(idx: tuple[int, ...], t: tuple[int, ...] = target) -> sympy.Expr:
                 return sympy.Integer(1) if idx == t else sympy.Integer(0)
 
-            e_j: MeshFunction[sympy.Expr] = LazyMeshFunction(self.mesh, unit)
+            e_j: DiscreteField[sympy.Expr] = LazyDiscreteField(self.mesh, unit)
             lh_ej = op(e_j)
 
             for i in range(n_total):
