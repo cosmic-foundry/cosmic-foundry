@@ -218,20 +218,19 @@ def _mk_mat3(b: Any) -> Tensor:
 
 def _rank1_slice_write(b: Any) -> Tensor:
     t = Tensor([1.0, 2.0, 3.0, 4.0], backend=b)
-    t[1:3] = Tensor([9.0, 9.0], backend=b)
-    return t
+    return t.set(slice(1, 3), Tensor([9.0, 9.0], backend=b))
 
 
 def _rank2_col_slice_write(b: Any) -> Tensor:
     t = _mk_mat3(b).copy()
-    t[1:3, 0] = Tensor([9.0, 9.0], backend=b)
-    return t
+    return t.set((slice(1, 3), 0), Tensor([9.0, 9.0], backend=b))
 
 
 def _rank2_submatrix_write(b: Any) -> Tensor:
     t = _mk_mat3(b).copy()
-    t[0:2, 0:2] = Tensor([[9.0, 8.0], [7.0, 6.0]], backend=b)
-    return t
+    return t.set(
+        (slice(0, 2), slice(0, 2)), Tensor([[9.0, 8.0], [7.0, 6.0]], backend=b)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +259,7 @@ _ARITHMETIC_CASES = [
     ("vecmat", lambda b: Tensor([1.0, 2.0], backend=b) @ _mk_mat(b)),
     ("einsum_ij_jk", lambda b: einsum("ij,jk->ik", _mk_mat(b), _mk_mat(b))),
     ("einsum_trace", lambda b: einsum("ii->", _mk_mat(b))),
-    ("norm_vec", lambda b: Tensor([_mk_vec(b).norm()], backend=b)),
+    ("norm_vec", lambda b: Tensor([_mk_vec(b).norm().get()], backend=b)),
     ("diag", lambda b: _mk_mat(b).diag()),
     ("zeros_factory", lambda b: Tensor.zeros(2, 3, backend=b)),
     ("eye_factory", lambda b: Tensor.eye(3, backend=b)),
@@ -301,6 +300,13 @@ _ARITHMETIC_CASES = [
         lambda b: where(Tensor(True, backend=b), Tensor([1.0, 2.0], backend=b), 0.0),
     ),
     ("arange_4", lambda b: arange(4, backend=b)),
+    ("argmax_val", lambda b: Tensor([1.0, 3.0, 2.0], backend=b).argmax()),
+    (
+        "dynamic_index",
+        lambda b: Tensor([10.0, 20.0, 30.0], backend=b)[
+            Tensor([1.0, 3.0, 2.0], backend=b).argmax()
+        ],
+    ),
 ]
 
 _SLICE_READ_CASES = [
@@ -312,6 +318,7 @@ _SLICE_READ_CASES = [
     ("rank2_col_read", lambda b: _mk_mat3(b)[:, 1]),
     ("rank2_col_partial", lambda b: _mk_mat3(b)[1:, 0]),
     ("rank2_submatrix", lambda b: _mk_mat3(b)[1:, 1:]),
+    ("rank1_int_index", lambda b: Tensor([1.0, 2.0, 3.0, 4.0], backend=b)[2]),
 ]
 
 _SLICE_WRITE_CASES = [

@@ -69,8 +69,8 @@ class JaxBackend:
     def flatten(self, raw: Any) -> list[float]:
         return [float(x) for x in raw.ravel()]
 
-    def norm(self, raw: Any) -> float:
-        return float(jnp.linalg.norm(raw))
+    def norm(self, raw: Any) -> Any:
+        return jnp.linalg.norm(raw)
 
     # ------------------------------------------------------------------
     # Element-wise arithmetic
@@ -176,6 +176,9 @@ class JaxBackend:
 
     def take(self, raw: Any, indices: Any) -> Any:
         return raw[indices]
+
+    def get(self, raw: Any) -> Any:
+        return raw.item()
 
 
 __all__ = ["JaxBackend"]

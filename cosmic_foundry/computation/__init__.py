@@ -14,6 +14,7 @@ from cosmic_foundry.computation.backends import (  # noqa: E402
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import (  # noqa: E402
+    MaterializationError,
     Real,
     Tensor,
     arange,
@@ -33,6 +34,7 @@ __all__ = [
     "LUFactorization",
     "LUFactoredMatrix",
     "LinearSolver",
+    "MaterializationError",
     "NumpyBackend",
     "PythonBackend",
     "Real",

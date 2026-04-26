@@ -48,7 +48,7 @@ class State(DiscreteField[float]):
         for a, i in enumerate(idx):
             flat += i * stride
             stride *= shape[a]
-        return self._data[flat]  # type: ignore[no-any-return]  # PythonBackend may hold sympy.Expr
+        return self._data[flat].get()  # type: ignore[no-any-return]
 
 
 __all__ = ["State"]

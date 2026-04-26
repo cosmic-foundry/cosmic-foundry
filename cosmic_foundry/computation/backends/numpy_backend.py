@@ -67,8 +67,8 @@ class NumpyBackend:
     def flatten(self, raw: np.ndarray) -> list[float]:
         return raw.ravel().tolist()
 
-    def norm(self, raw: np.ndarray) -> float:
-        return float(np.linalg.norm(raw))
+    def norm(self, raw: np.ndarray) -> Any:
+        return np.linalg.norm(raw)
 
     # ------------------------------------------------------------------
     # Element-wise arithmetic
@@ -153,7 +153,7 @@ class NumpyBackend:
         return np.max(raw)
 
     def argmax(self, raw: np.ndarray) -> Any:
-        return int(np.argmax(raw))
+        return np.argmax(raw)
 
     def where(self, cond: Any, x: Any, y: Any) -> Any:
         return np.where(cond, x, y)
@@ -178,3 +178,6 @@ class NumpyBackend:
 
     def take(self, raw: np.ndarray, indices: Any) -> Any:
         return raw[indices]
+
+    def get(self, raw: np.ndarray) -> Any:
+        return raw.item()
