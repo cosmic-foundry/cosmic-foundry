@@ -7,7 +7,11 @@ from itertools import product
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.theory.continuous.differential_form import OneForm, ZeroForm
+from cosmic_foundry.theory.continuous.differential_form import (
+    DifferentialForm,
+    OneForm,
+    ZeroForm,
+)
 from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.edge_field import EdgeField, _CallableEdgeField
@@ -44,11 +48,11 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
     The degree parameter selects which restriction is applied.
 
     degree == ndim (default): cell volume-integral restriction (Rₕⁿ)
-        Input: ZeroForm f (scalar density; Cartesian dV supplied by integration)
-        (Rₕⁿ f)ᵢ = ∫_Ωᵢ f dV   → VolumeField
-        In the de Rham hierarchy Rₕⁿ maps an n-Form to VolumeField; passing a
-        ZeroForm f is equivalent because in Cartesian coordinates n-Form = f·dV
-        and the integration against dx₁∧⋯∧dxₙ is performed by the implementation.
+        Input: n-Form f  (OneForm in 1-D, TwoForm in 2-D, ThreeForm in 3-D)
+        (Rₕⁿ f)ᵢ = ∫_Ωᵢ f   → VolumeField
+        The scalar density f.expr is integrated against dx₁∧⋯∧dxₙ; valid in
+        Cartesian coordinates where the Jacobian is 1.  Non-Cartesian metrics
+        must fold √|g| into f before calling this restriction.
 
     degree == ndim - 1: face-normal flux restriction (Rₕⁿ⁻¹)
         Input: OneForm F
@@ -84,6 +88,10 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
     def __call__(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:
         ndim = len(self._mesh._shape)
         if self._degree == ndim:
+            assert isinstance(f, DifferentialForm) and f.degree == ndim, (
+                f"degree={ndim} restriction requires an n-Form of degree {ndim} "
+                f"(e.g. ThreeForm in 3-D, OneForm in 1-D), got {type(f).__name__}"
+            )
             return self._cell_restrict(f)
         if self._degree == 0 and isinstance(f, ZeroForm):
             return self._point_restrict(f)
@@ -95,7 +103,7 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
             return self._edge_restrict(f)
         return self._face_restrict(f)
 
-    def _cell_restrict(self, f: SymbolicFunction) -> VolumeField[sympy.Expr]:
+    def _cell_restrict(self, f: DifferentialForm) -> VolumeField[sympy.Expr]:
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):
