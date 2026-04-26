@@ -18,9 +18,9 @@ class DiscreteExteriorDerivative(ABC):
     operator to finite order.
 
     In the discrete de Rham complex on a Cartesian mesh:
-        d₀: PointField → EdgeField   (discrete gradient)
-        d₁: EdgeField  → FaceField   (discrete curl; 3-D only)
-        d₂: FaceField  → CellField   (discrete divergence)
+        d₀: PointField → EdgeField    (discrete gradient)
+        d₁: EdgeField  → FaceField    (discrete curl; 3-D only)
+        d₂: FaceField  → VolumeField  (discrete divergence)
 
     Required:
         mesh   — the mesh on which the chain complex is defined

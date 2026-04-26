@@ -3,24 +3,23 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import Any
 
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_form import OneForm, ZeroForm
 from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
-from cosmic_foundry.theory.discrete.cell_field import CellField
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.edge_field import EdgeField, _CallableEdgeField
 from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.point_field import PointField, _CallablePointField
 from cosmic_foundry.theory.discrete.restriction_operator import RestrictionOperator
+from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 
-class _CartesianCellAverage(CellField[sympy.Expr]):
-    """Cell-averaged values on a CartesianMesh."""
+class _CartesianVolumeIntegral(VolumeField[sympy.Expr]):
+    """Cell volume integrals on a CartesianMesh."""
 
     def __init__(
         self,
@@ -38,15 +37,18 @@ class _CartesianCellAverage(CellField[sympy.Expr]):
         return self._values[idx]
 
 
-class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
+class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.Expr]):
     """Restriction operator Rₕ for CartesianMesh via analytic SymPy integration.
 
     Implements Rₕᵏ: Ωᵏ → k-cochains for all k ∈ {0, 1, ndim−1, ndim}.
     The degree parameter selects which restriction is applied.
 
-    degree == ndim (default): cell-average restriction (Rₕⁿ)
-        Input: ZeroForm f
-        (Rₕⁿ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV   → CellField
+    degree == ndim (default): cell volume-integral restriction (Rₕⁿ)
+        Input: ZeroForm f (scalar density; Cartesian dV supplied by integration)
+        (Rₕⁿ f)ᵢ = ∫_Ωᵢ f dV   → VolumeField
+        In the de Rham hierarchy Rₕⁿ maps an n-Form to VolumeField; passing a
+        ZeroForm f is equivalent because in Cartesian coordinates n-Form = f·dV
+        and the integration against dx₁∧⋯∧dxₙ is performed by the implementation.
 
     degree == ndim - 1: face-normal flux restriction (Rₕⁿ⁻¹)
         Input: OneForm F
@@ -79,7 +81,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
     def degree(self) -> int:
         return self._degree
 
-    def __call__(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:  # type: ignore[override]  # LSP: RestrictionOperator.__call__ takes (M, V) not SymbolicFunction; deferred to a later PR
+    def __call__(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:
         ndim = len(self._mesh._shape)
         if self._degree == ndim:
             return self._cell_restrict(f)
@@ -93,7 +95,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
             return self._edge_restrict(f)
         return self._face_restrict(f)
 
-    def _cell_restrict(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:
+    def _cell_restrict(self, f: SymbolicFunction) -> VolumeField[sympy.Expr]:
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):
@@ -102,8 +104,8 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
                 lo = mesh._origin[i] + sympy.Integer(idx[i]) * mesh._spacing[i]
                 hi = lo + mesh._spacing[i]
                 expr = sympy.integrate(expr, (sym, lo, hi))
-            values[idx] = sympy.simplify(expr / mesh.cell_volume)
-        return _CartesianCellAverage(mesh, values)
+            values[idx] = sympy.simplify(expr)
+        return _CartesianVolumeIntegral(mesh, values)
 
     def _point_restrict(self, f: ZeroForm) -> PointField[sympy.Expr]:
         """Vertex evaluation: (Rₕ⁰ f)(v) = f(x_v)."""

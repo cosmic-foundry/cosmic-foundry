@@ -15,15 +15,15 @@ from cosmic_foundry.theory.continuous.boundary_condition import BoundaryConditio
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
-from cosmic_foundry.theory.discrete.cell_field import CellField
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
+from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 
-class _GhostedField(CellField[sympy.Expr]):
+class _GhostedField(VolumeField[sympy.Expr]):
     """Cell field extended beyond mesh bounds by a ghost-cell rule."""
 
     def __init__(
@@ -137,12 +137,14 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
 
-    Maps cell-average DiscreteFields to a State holding discrete divergence values:
+    Maps VolumeField (total integrals) to a State holding discrete divergence totals:
 
-        (Lₕ U)(i) = (1/|Ωᵢ|) · ∮_∂Ωᵢ F·n̂ dA
-                  = (1/|Ωᵢ|) · Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
+        (Lₕ U)(i) = ∮_∂Ωᵢ F·n̂ dA
+                  = Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
 
-    approximating Lφ = ∇·F(φ) at convergence order p = numerical_flux.order.
+    approximating ∫_Ωᵢ L φ dV at convergence order p = numerical_flux.order.
+    NumericalFlux implementations normalize U by cell volume internally before
+    computing face fluxes, since flux stencils operate on intensive (average) values.
     The mesh is read from U.mesh at call time, making this operator applicable
     to symbolic meshes (for convergence testing) and concrete meshes alike.
 
@@ -202,7 +204,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
                     + face_fluxes((axis, idx))  # type: ignore[arg-type]
                     - face_fluxes((axis, idx_low))  # type: ignore[arg-type]
                 )
-            residuals.append(total / mesh.cell_volume)
+            residuals.append(total)
 
         return State(mesh, Tensor(residuals, backend=PythonBackend()))
 

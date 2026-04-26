@@ -7,7 +7,6 @@ from typing import Any
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.theory.discrete.cell_field import CellField, _CallableCellField
 from cosmic_foundry.theory.discrete.discrete_exterior_derivative import (
     DiscreteExteriorDerivative,
 )
@@ -16,6 +15,10 @@ from cosmic_foundry.theory.discrete.edge_field import EdgeField, _CallableEdgeFi
 from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.point_field import PointField
+from cosmic_foundry.theory.discrete.volume_field import (
+    VolumeField,
+    _CallableVolumeField,
+)
 
 
 class CartesianExteriorDerivative(DiscreteExteriorDerivative):
@@ -33,7 +36,7 @@ class CartesianExteriorDerivative(DiscreteExteriorDerivative):
             where v_base = c with v_base[a] += 1, b=(a+1)%3, c̃=(a+2)%3.
             This is the standard Yee-grid discrete curl.
 
-        d₂ (degree=2): FaceField → CellField
+        d₂ (degree=2): FaceField → VolumeField
             (d₂F)(c) = Σₐ [F(a, c) − F(a, c − eₐ)]
             Raw combinatorial divergence (no volume normalization).
 
@@ -102,7 +105,7 @@ class CartesianExteriorDerivative(DiscreteExteriorDerivative):
 
         return _CallableFaceField(mesh, compute)
 
-    def _d2(self, F: FaceField[sympy.Expr]) -> CellField[sympy.Expr]:
+    def _d2(self, F: FaceField[sympy.Expr]) -> VolumeField[sympy.Expr]:
         """Divergence: (d₂F)(c) = Σₐ [F(a, c) − F(a, c − eₐ)]."""
         mesh = self._mesh
         ndim = len(mesh._shape)
@@ -113,7 +116,7 @@ class CartesianExteriorDerivative(DiscreteExteriorDerivative):
                 for a in range(ndim)
             )
 
-        return _CallableCellField(mesh, compute)
+        return _CallableVolumeField(mesh, compute)
 
 
 __all__ = ["CartesianExteriorDerivative"]

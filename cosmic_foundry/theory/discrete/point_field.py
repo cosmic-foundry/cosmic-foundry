@@ -21,8 +21,8 @@ class PointField(DiscreteField[_V]):
 
     PointField is the discrete counterpart of ZeroForm: a 0-form assigns a
     value to each point (vertex) in the domain.  It is the natural DOF
-    location for finite-difference schemes, in contrast to CellField which
-    stores cell averages (Ω³ / volume-form DOFs used in FVM).
+    location for finite-difference schemes, in contrast to VolumeField which
+    stores total volume integrals (Ωⁿ / volume-form DOFs used in FVM).
 
     Required (in addition to DiscreteField.mesh):
         __call__ — evaluate the field at a vertex multi-index idx

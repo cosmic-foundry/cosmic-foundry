@@ -163,9 +163,9 @@ class ThreeForm(DifferentialForm[D, sympy.Expr]):
     volume-form field directly.  Subclass when the density is computed or
     derived rather than stored as an expression.
 
-    ThreeForm is the continuous counterpart of CellField in the discrete
-    layer: both represent Ω³ (volume-form) quantities, with CellField
-    storing the cell average (1/|Ω|) ∫_Ω f dV.
+    ThreeForm is the continuous counterpart of VolumeField in the discrete
+    layer: both represent Ωⁿ (volume-form) quantities, with VolumeField
+    storing the cell total ∫_Ω f dV.
     """
 
     def __init__(

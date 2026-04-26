@@ -196,14 +196,17 @@ class _OrderClaim(_Claim):
         error = sympy.expand(
             sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
         )
+        # VolumeField outputs store total integrals (O(h) in 1-D), so the
+        # leading error term shifts by one power of h relative to face outputs.
+        expected_leading = order + (1 if restriction_degree == ndim else 0)
         poly = sympy.Poly(error, h)
-        for k in range(order):
+        for k in range(expected_leading):
             assert poly.nth(k) == 0, (
                 f"Unexpected O(h^{k}) term in {type(instance).__name__}"
                 f"(order={order}): {poly.nth(k)}"
             )
-        assert poly.nth(order) != 0, (
-            f"Missing O(h^{order}) leading term in "
+        assert poly.nth(expected_leading) != 0, (
+            f"Missing O(h^{expected_leading}) leading term in "
             f"{type(instance).__name__}(order={order})"
         )
 
@@ -308,11 +311,8 @@ class _DirectSolverClaim(_Claim):
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
             b = Tensor(
                 [
-                    (
-                        math.sin(2 * math.pi * (orig + (i + 1) * h))
-                        - math.sin(2 * math.pi * (orig + i * h))
-                    )
-                    / h
+                    math.sin(2 * math.pi * (orig + (i + 1) * h))
+                    - math.sin(2 * math.pi * (orig + i * h))
                     for i in range(n)
                 ]
             )
@@ -402,13 +402,13 @@ class _ConvergenceRateClaim(_Claim):
             F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
             v_n = Tensor(
                 [
-                    (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
+                    F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)
                     for i in range(n_c)
                 ]
             )
             r_n = Tensor(
                 [
-                    (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
+                    F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)
                     for i in range(n_c)
                 ]
             )
@@ -437,11 +437,11 @@ class _ConvergenceRateClaim(_Claim):
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
 
-            def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
-                return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
+            def _phi_total(i: int, _v: float = vol, _o: float = orig) -> float:
+                return F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)
 
-            def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
-                return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
+            def _rho_total(i: int, _v: float = vol, _o: float = orig) -> float:
+                return F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)
 
             disc = FVMDiscretization(mesh, self._flux, bc)
 
@@ -454,13 +454,13 @@ class _ConvergenceRateClaim(_Claim):
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
 
-            b_m = Tensor([_rho_avg(i) for i in range(n_cells)])
+            b_m = Tensor([_rho_total(i) for i in range(n_cells)])
             u_arr = self._solver.solve(a_m, b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
-            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
+            phi_arr = Tensor([_phi_total(i) for i in range(n_cells)])
             diff = u_arr - phi_arr
-            errors.append(math.sqrt(vol * (diff @ diff)))
+            errors.append(math.sqrt((diff @ diff) / vol))
 
         hs = [float(m.cell_volume) for m in meshes]
         log_h = [math.log(hv) for hv in hs]
