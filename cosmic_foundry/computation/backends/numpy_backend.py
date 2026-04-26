@@ -153,7 +153,7 @@ class NumpyBackend:
         return np.max(raw)
 
     def argmax(self, raw: np.ndarray) -> Any:
-        return int(np.argmax(raw))
+        return np.argmax(raw)
 
     def where(self, cond: Any, x: Any, y: Any) -> Any:
         return np.where(cond, x, y)

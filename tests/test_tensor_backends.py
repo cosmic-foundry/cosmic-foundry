@@ -300,6 +300,13 @@ _ARITHMETIC_CASES = [
         lambda b: where(Tensor(True, backend=b), Tensor([1.0, 2.0], backend=b), 0.0),
     ),
     ("arange_4", lambda b: arange(4, backend=b)),
+    ("argmax_val", lambda b: Tensor([1.0, 3.0, 2.0], backend=b).argmax()),
+    (
+        "dynamic_index",
+        lambda b: Tensor([10.0, 20.0, 30.0], backend=b)[
+            Tensor([1.0, 3.0, 2.0], backend=b).argmax()
+        ],
+    ),
 ]
 
 _SLICE_READ_CASES = [
@@ -311,6 +318,7 @@ _SLICE_READ_CASES = [
     ("rank2_col_read", lambda b: _mk_mat3(b)[:, 1]),
     ("rank2_col_partial", lambda b: _mk_mat3(b)[1:, 0]),
     ("rank2_submatrix", lambda b: _mk_mat3(b)[1:, 1:]),
+    ("rank1_int_index", lambda b: Tensor([1.0, 2.0, 3.0, 4.0], backend=b)[2]),
 ]
 
 _SLICE_WRITE_CASES = [

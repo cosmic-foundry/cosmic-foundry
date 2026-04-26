@@ -53,7 +53,7 @@ Any rank:
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from cosmic_foundry.computation.backends import (
     Backend,
@@ -232,8 +232,8 @@ class _DeclaredBackend:
     def reduce_max(self, raw: Any) -> tuple[int, ...]:
         return ()
 
-    def argmax(self, raw: Any) -> int:
-        return 0
+    def argmax(self, raw: Any) -> tuple[int, ...]:
+        return ()
 
     def matmul(
         self,
@@ -279,6 +279,8 @@ class _DeclaredBackend:
 
 _DECLARED: _DeclaredBackend = _DeclaredBackend()
 
+T = TypeVar("T")
+
 
 # ---------------------------------------------------------------------------
 # Real protocol check
@@ -305,7 +307,7 @@ class Real(Protocol):
 # ---------------------------------------------------------------------------
 
 
-class Tensor:
+class Tensor(Generic[T]):
     """A numeric array of arbitrary rank backed by a pluggable backend.
 
     A Tensor is either *allocated* (has a shape and values) or *declared*
@@ -373,7 +375,7 @@ class Tensor:
     # Scalar extraction (materialization boundary)
     # ------------------------------------------------------------------
 
-    def get(self) -> float | bool:
+    def get(self) -> T:
         """Extract the Python value from a rank-0 Tensor.
 
         This is the only sanctioned exit from tensor land into Python land.
@@ -391,7 +393,7 @@ class Tensor:
         return self._backend.item(self._value)  # type: ignore[no-any-return]
 
     def __float__(self) -> float:
-        return float(self.get())
+        return float(self.get())  # type: ignore[arg-type]
 
     def __bool__(self) -> bool:
         return bool(self.get())
@@ -405,9 +407,13 @@ class Tensor:
             raise TypeError("rank-0 Tensor has no length")
         return self.shape[0]
 
-    def __getitem__(self, idx: int | slice | tuple[int | slice, ...]) -> Any:
+    def __getitem__(self, idx: Any) -> Tensor:
         if not self.shape:
             raise TypeError("rank-0 Tensor is not subscriptable")
+        if isinstance(idx, Tensor):
+            if not self.is_allocated or not idx.is_allocated:
+                return Tensor._wrap(self.shape[1:], self._backend)
+            return Tensor._wrap(self._value[idx._value], self._backend)
         if not self.is_allocated:
             if _has_slice(idx):
                 out = self._backend.slice_get(self._value, idx, self.shape)
@@ -432,11 +438,8 @@ class Tensor:
                 if not isinstance(result, Tensor):
                     raise IndexError("too many indices for Tensor")
                 result = result[i]
-            return result
-        item = self._value[idx]
-        if len(self.shape) == 1:
-            return item  # raw scalar for rank-1 (backwards-compatible contract)
-        return Tensor._wrap(item, self._backend)
+            return result  # type: ignore[no-any-return]
+        return Tensor._wrap(self._value[idx], self._backend)
 
     def set(self, idx: Any, value: Any) -> Tensor:
         """Return a new Tensor with position idx set to value (functional write).
@@ -447,7 +450,8 @@ class Tensor:
         if not self.is_allocated:
             return Tensor._wrap(self.shape, self._backend)
         v = value._value if isinstance(value, Tensor) else value
-        new_raw = self._backend.slice_set(self._value, idx, v, self.shape)
+        raw_idx = idx._value if isinstance(idx, Tensor) else idx
+        new_raw = self._backend.slice_set(self._value, raw_idx, v, self.shape)
         return Tensor._wrap(new_raw, self._backend)
 
     def __iter__(self) -> Iterator[Any]:
@@ -573,9 +577,9 @@ class Tensor:
         """Maximum of all elements; returns a 0-d scalar Tensor."""
         return Tensor._wrap(self._backend.reduce_max(self._value), self._backend)
 
-    def argmax(self) -> Any:
-        """Index of the maximum element in a 1-d Tensor."""
-        return self._backend.argmax(self._value)
+    def argmax(self) -> Tensor[int]:
+        """Index of the maximum element in a 1-d Tensor; returns rank-0 Tensor[int]."""
+        return Tensor._wrap(self._backend.argmax(self._value), self._backend)
 
     def element(self, *indices: int) -> Tensor:
         """Return the scalar at the given static integer indices as a 0-d Tensor."""
@@ -662,7 +666,7 @@ def where(cond: Tensor, x: Any, y: Any) -> Tensor:
     return Tensor._wrap(backend.where(cond._value, x_raw, y_raw), backend)
 
 
-def arange(n: int, *, backend: Backend | None = None) -> Tensor:
+def arange(n: int, *, backend: Backend | None = None) -> Tensor[int]:
     """Return a 1-d integer Tensor [0, 1, ..., n-1]."""
     b: Any = backend if backend is not None else get_default_backend()
     return Tensor._wrap(b.arange(n), b)
