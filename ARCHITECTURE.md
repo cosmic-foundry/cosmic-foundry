@@ -117,7 +117,8 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
         ├── ZeroForm                 — scalar field; degree = 0; codomain sympy.Expr
         ├── OneForm                  — covector field; degree = 1; codomain tuple[sympy.Expr, ...]
-        └── TwoForm                  — 2-form; degree = 2; codomain sympy.Matrix
+        ├── TwoForm                  — 2-form; degree = 2; codomain sympy.Matrix
+        └── ThreeForm                — volume form; degree = 3; codomain sympy.Expr
 
 DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifold, order
 └── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
@@ -154,7 +155,7 @@ Constraint(ABC)                       — interface: support → Manifold
 | `ZeroForm` | `PointField[V]` | Ω⁰; point-valued field at mesh vertices (FD-style DOFs) |
 | `OneForm` | `EdgeField[V]` | Ω¹; edge-integrated field (e.g. EMF in MHD constrained transport) |
 | `TwoForm` | `FaceField[V]` | Ω²; face-integrated field; scalar flux F·n̂·|A| or matrix-valued |
-| *(none)* | `CellField[V]` / `State` | Ωⁿ (volume form); cell-averaged field (FVM-style DOFs); continuous analog not yet in `continuous/` |
+| `ThreeForm` | `CellField[V]` / `State` | Ωⁿ (volume form); cell-averaged field (FVM-style DOFs) |
 | `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
 | `DifferentialOperator` | `DiscreteOperator` | map between fields |
 | `DivergenceFormEquation` | — | bridge: `Discretization` maps a `DivergenceFormEquation` to a `DiscreteOperator` |
@@ -206,7 +207,7 @@ DiscreteField(NumericFunction[Mesh, V])
 ├── CellField(DiscreteField[V])
 │                              — abstract; Ωⁿ DOF location: cell-averaged
 │                                 values (volume-form DOFs). Discrete
-│                                 counterpart of the volume form, not ZeroForm.
+│                                 counterpart of ThreeForm, not ZeroForm.
 │                                 Natural DOF for FVM schemes.
 │                                 Concrete subclasses:
 │                                   State (physics/) — Tensor-backed, float
