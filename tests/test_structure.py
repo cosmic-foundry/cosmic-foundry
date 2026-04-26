@@ -359,6 +359,112 @@ class _ImportBoundaryClaim(Claim):
             )
 
 
+class _ParametrizeEnforcementClaim(Claim):
+    """Claim: every top-level test_* function carries @pytest.mark.parametrize."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"test_pattern/parametrize/{self._path.name}"
+
+    def check(self) -> None:
+        tree = ast.parse(self._path.read_text())
+        violations = []
+        for node in tree.body:
+            if not (
+                isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+            ):
+                continue
+            has_parametrize = any(
+                isinstance(d, ast.Call)
+                and isinstance(d.func, ast.Attribute)
+                and d.func.attr == "parametrize"
+                for d in node.decorator_list
+            )
+            if not has_parametrize:
+                violations.append(node.name)
+        if violations:
+            raise AssertionError(
+                f"{self._path.name}: test functions missing @pytest.mark.parametrize: "
+                + ", ".join(violations)
+            )
+
+
+class _BodyDispatchClaim(Claim):
+    """Claim: every top-level test_* body is a single claim.check(...) dispatch."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"test_pattern/body_dispatch/{self._path.name}"
+
+    def check(self) -> None:
+        tree = ast.parse(self._path.read_text())
+        violations = []
+        for node in tree.body:
+            if not (
+                isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+            ):
+                continue
+            body = node.body
+            if len(body) != 1:
+                violations.append(f"{node.name}: {len(body)} statements in body")
+                continue
+            stmt = body[0]
+            if not isinstance(stmt, ast.Expr):
+                violations.append(f"{node.name}: body is not an expression statement")
+                continue
+            call = stmt.value
+            if not (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "check"
+            ):
+                violations.append(f"{node.name}: body does not call .check()")
+        if violations:
+            raise AssertionError(
+                f"{self._path.name}: test functions with non-dispatch bodies: "
+                + "; ".join(violations)
+            )
+
+
+class _AutoDiscoveryImportClaim(Claim):
+    """Claim: test_structure.py imports no class that _discover_* would return.
+
+    Any concrete IterativeSolver or Factorization subclass hardcoded here is a
+    sign that auto-discovery was bypassed — those classes should enter the suite
+    via _discover_concrete_iterative_solvers / _discover_concrete_factorizations.
+    """
+
+    @property
+    def description(self) -> str:
+        return "test_pattern/auto_discovery_imports"
+
+    def check(self) -> None:
+        discovered = {cls.__name__ for cls in _ITERATIVE_SOLVERS + _FACTORIZATIONS}
+        tree = ast.parse(Path(__file__).read_text())
+        violations = []
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.startswith("cosmic_foundry")
+            ):
+                continue
+            for alias in node.names:
+                if alias.name in discovered:
+                    violations.append(f"{node.module}.{alias.name}")
+        if violations:
+            raise AssertionError(
+                "test_structure.py imports auto-discovered classes directly "
+                "(use _discover_concrete_* instead): " + ", ".join(violations)
+            )
+
+
 # ---------------------------------------------------------------------------
 # Auto-discovery and registry
 # ---------------------------------------------------------------------------
@@ -368,6 +474,7 @@ _ABCS = _discover_abcs(_MODULES)
 _HIERARCHY_PAIRS = _discover_hierarchy_pairs(_ABCS)
 _ITERATIVE_SOLVERS = _discover_concrete_iterative_solvers(_MODULES)
 _FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
+_TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
 _CLAIMS: list[Claim] = [
     *[_AbcInstantiationClaim(cls) for cls in _ABCS],
@@ -383,6 +490,9 @@ _CLAIMS: list[Claim] = [
         for pkg_dir in _PURE_PACKAGES
         for path in sorted(pkg_dir.rglob("*.py"))
     ],
+    *[_ParametrizeEnforcementClaim(p) for p in _TEST_FILES],
+    *[_BodyDispatchClaim(p) for p in _TEST_FILES],
+    _AutoDiscoveryImportClaim(),
 ]
 
 
