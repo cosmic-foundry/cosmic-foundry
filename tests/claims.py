@@ -14,9 +14,15 @@ C = TypeVar("C")
 # layers — _convergence_n_max sizing, the per-claim end-of-check() assertion,
 # and the pytest session_timeout backstop — so changing them here updates every
 # layer consistently.
-# Fast mode (enabled via COSMIC_FOUNDRY_TEST_FAST=1) reduces this to 5 seconds
-# for smoke testing.
-MAX_WALLTIME_S = 5.0 if os.environ.get("COSMIC_FOUNDRY_TEST_FAST") == "1" else 60.0
+# Budget can be set via COSMIC_FOUNDRY_TEST_BUDGET_S (float, seconds),
+# COSMIC_FOUNDRY_TEST_FAST=1 (shorthand for 5s), or defaults to 60s.
+_BUDGET_ENV = os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S")
+if os.environ.get("COSMIC_FOUNDRY_TEST_FAST") == "1":
+    MAX_WALLTIME_S = 5.0
+elif _BUDGET_ENV is not None:
+    MAX_WALLTIME_S = float(_BUDGET_ENV)
+else:
+    MAX_WALLTIME_S = 60.0
 BUDGET_TOLERANCE = 1.1
 
 

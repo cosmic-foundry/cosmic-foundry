@@ -20,17 +20,13 @@ from tests.claims import (
 def pytest_configure(config: pytest.Config) -> None:
     """Set the pytest-timeout session backstop from the shared budget constants.
 
-    pytest-timeout's own pytest_configure runs before this one and stores the
-    session timeout deadline in two StashKey slots on the config.  We overwrite
-    those stash entries here so MAX_WALLTIME_S and BUDGET_TOLERANCE in
-    tests/claims.py remain the single source of truth for the in-test
-    per-claim assertion and the session-level runaway guard.
+    Sets the session timeout from MAX_WALLTIME_S × BUDGET_TOLERANCE so that
+    changes to tests/claims.py update the timeout automatically without
+    requiring command-line flags.
     """
-    from pytest_timeout import SESSION_EXPIRE_KEY, SESSION_TIMEOUT_KEY
-
     timeout = MAX_WALLTIME_S * BUDGET_TOLERANCE
-    config.stash[SESSION_TIMEOUT_KEY] = timeout
-    config.stash[SESSION_EXPIRE_KEY] = time.time() + timeout
+    # Set the option so pytest-timeout reads it
+    config.option.session_timeout = timeout
 
 
 _CALIB_N = 100
