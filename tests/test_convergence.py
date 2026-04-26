@@ -1,32 +1,32 @@
 """Convergence verification for all concrete DiscreteOperator subclasses and solvers.
 
 Each convergence claim is a CalibratedClaim subclass that encodes both what is
-being verified and how to verify it.  Adding a new claim requires only appending
-to _CLAIMS; the single parametric test covers all entries.
+being verified and how to verify it.
 
   _OrderClaim(instance)               — instance achieves O(h^p) at declared p
-  _SolverClaim(solver, flux, mesh)    — iterative solver residual < tol
+  _SolverClaim(solver, flux, mesh)    — iterative solver residual < tol (CPU)
   _DirectSolverClaim(solver, flux, mesh)
                                       — direct solver residual < tol after one
-                                        factorization pass
-  _ConvergenceRateClaim(solver, flux)
+                                        factorization pass (CPU)
+  _ConvergenceRateClaim(solver, flux, device="cpu"|"gpu")
                                       — L²_h error converges at >= O(h^{p-0.1})
-                                        over a mesh refinement sequence using a
-                                        manufactured solution with exact cell
-                                        averages for source and reference field
+                                        over an adaptive mesh sequence; device
+                                        selects which backend and time budget
+                                        to use
+
+Two registries drive two parametrised test functions:
+  _STATIC_CLAIMS  — order, solver, and direct-solver claims (_CLAIMS fixture)
+  _RATE_CLAIMS    — convergence-rate claims for each device (convergence_calibration)
 
 _FLUXES contains all NumericalFlux instances; adding a new flux automatically
-generates _OrderClaim entries for it.  _ELLIPTIC_FLUXES is the SPD subset
-that also gets solver/convergence claims — fluxes whose assembled stiffness
-matrix is not SPD (e.g. AdvectiveFlux) belong only in _FLUXES.  _SOLVERS
-(iterative) and _DIRECT_SOLVERS (direct) are registries for the elliptic
-claims.  The convergence mesh sequence is computed adaptively at runtime from
-the machine's FMA rate; see _convergence_n_max.
+generates _OrderClaim entries for it.  _SOLVERS (iterative) and _DIRECT_SOLVERS
+(direct) are registries for the elliptic claims.  The convergence mesh sequence
+length is computed adaptively from Jacobi cost coefficients calibrated per
+device; see _convergence_n_max.
 """
 
 from __future__ import annotations
 
-import functools
 import math
 import sys
 import time
@@ -58,81 +58,43 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.claims import CalibratedClaim
+from tests.claims import (
+    BUDGET_TOLERANCE,
+    MAX_WALLTIME_S,
+    CalibratedClaim,
+    ConvergenceCalibration,
+)
 
 # ---------------------------------------------------------------------------
 # Adaptive mesh-size selection
 # ---------------------------------------------------------------------------
 
-# The only hardcoded time constant: total allowed test-suite walltime.
-_MAX_WALLTIME_S = 60.0
+# MAX_WALLTIME_S (defined in tests/claims.py) is split across all convergence-
+# rate claims.  When both CPU and GPU are present each device gets half the
+# budget, so each device's N_max is computed from MAX_WALLTIME_S / 2 /
+# n_claims_per_device.  When only CPU is available it receives the full budget.
+# BUDGET_TOLERANCE is the over-budget factor enforced at the end of each
+# claim's check() — the same factor pytest's session_timeout uses as backstop.
 
 # Mesh fractions: each convergence-rate claim sweeps N_max × f for f in this
 # tuple.  The fractions are exact rationals over multiples of 8, so every
 # mesh size is an integer whenever N_max is a multiple of 8.
 _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 
-_JACOBI_CALIB_N = 32  # mesh size used to calibrate the Jacobi cost coefficient
 
+def _convergence_n_max(alpha: float, exponent: int, budget_s: float) -> int:
+    """N_max for the convergence mesh sequence for one (device, solver) pair.
 
-@functools.cache
-def _calibrate_jacobi_alpha(fma_rate: float) -> float:
-    """Calibrate the Jacobi cost coefficient from a small timed solve.
+    Solves T ≈ alpha × N_max^p × Σ(f^p) = budget_s for N_max, where p is the
+    solver's cost_exponent and alpha was calibrated on the target device.
+    Rounding to the nearest multiple of 8 keeps all mesh sizes exact integers.
 
-    The Jacobi cost model is T ≈ ALPHA × N^4 × Σ(f^4) / fma_rate.  ALPHA
-    encodes the constant factor: O(N²/π²) iterations (spectral radius
-    1 − π²/N²), each costing O(N²) FMAs for a dense matvec, plus Python-loop
-    overhead on top of the bare FMA count.
-
-    Rather than hardcoding ALPHA, this function times DenseJacobiSolver at a
-    fixed calibration size and derives ALPHA = T × fma_rate / N_calib^4.  The
-    result is memoised on fma_rate so the solve runs once per session (the
-    session-scoped fma_rate fixture guarantees a single value per run).
-
-    Calibrating at _JACOBI_CALIB_N = 32 runs in ~0.15 s and gives ALPHA ≈ 7,
-    close enough to the asymptotic value that rounding N_max to the nearest
-    multiple of 8 eliminates any residual error.  If the Jacobi implementation
-    changes speed by a factor k, ALPHA changes by k and N_max adjusts by k^0.25
-    automatically.
+    Solvers with smaller p (LU, p=3) get larger N_max for the same budget than
+    solvers with larger p (Jacobi, p=4) — exactly the behavior we want for
+    stress-testing convergence at the high-N end.
     """
-    n = _JACOBI_CALIB_N
-    mesh = CartesianMesh(
-        origin=(sympy.Rational(0),),
-        spacing=(sympy.Rational(1, n),),
-        shape=(n,),
-    )
-    flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
-    disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
-    a_cal = disc.assemble()
-    b_cal = Tensor([1.0] * n)
-    solver = DenseJacobiSolver(tol=1e-8)
-    solver.solve(a_cal, b_cal)  # warm-up: ensure any lazy initialization is done
-    best = float("inf")
-    for _ in range(3):
-        t0 = time.perf_counter()
-        solver.solve(a_cal, b_cal)
-        best = min(best, time.perf_counter() - t0)
-    return best * fma_rate / n**4
-
-
-def _convergence_n_max(fma_rate: float, n_convergence_claims: int) -> int:
-    """N_max for the convergence mesh sequence given the machine's FMA rate.
-
-    Allocates _MAX_WALLTIME_S equally across all convergence-rate claims using
-    the Jacobi cost model T ≈ alpha × N_max^4 × Σ(f^4) / fma_rate — where
-    alpha is calibrated at session start by _calibrate_jacobi_alpha — and
-    solves for N_max.  Rounding to the nearest multiple of 8 keeps all mesh
-    sizes exact integers (since every fraction in _MESH_FRACTIONS is an exact
-    rational over multiples of 8).
-
-    The result is a conservative bound: LU claims are O(N³) so they run faster
-    than the budget at the same N_max, keeping the actual total below
-    _MAX_WALLTIME_S on all hardware.
-    """
-    alpha = _calibrate_jacobi_alpha(fma_rate)
-    sum_f4 = sum(f**4 for f in _MESH_FRACTIONS)
-    budget_per_claim = _MAX_WALLTIME_S / n_convergence_claims
-    n_raw = (budget_per_claim * fma_rate / (alpha * sum_f4)) ** 0.25
+    sum_fp = sum(f**exponent for f in _MESH_FRACTIONS)
+    n_raw = (budget_s / (alpha * sum_fp)) ** (1.0 / exponent)
     return max(16, round(n_raw / 8) * 8)
 
 
@@ -314,7 +276,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
-class _ConvergenceRateClaim(CalibratedClaim[float]):
+class _ConvergenceRateClaim(CalibratedClaim[ConvergenceCalibration]):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
     The manufactured solution φ is selected automatically from candidates
@@ -331,6 +293,15 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
     isolating truncation error from the arbitrary null-space component a
     direct solver may introduce for singular systems (e.g. advection under
     PeriodicBC).
+
+    device selects the compute target and time budget:
+      "cpu" — runs on calibration.cpu_backend; gets half the total budget
+              when GPU is also available, else the full budget.
+      "gpu" — runs on calibration.gpu_backend; always gets half the total
+              budget; auto-skipped when no GPU is available.
+
+    Running small-N claims on CPU and large-N claims on GPU exercises both
+    the coarse-grid and fine-grid convergence regimes within the same session.
     """
 
     def __init__(
@@ -338,10 +309,12 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         solver: Any,
         flux: Any,
         bc_type: type = DirichletGhostCells,
+        device: str = "cpu",
     ) -> None:
         self._solver = solver
         self._flux = flux
         self._bc_type = bc_type
+        self._device = device
 
     @property
     def description(self) -> str:
@@ -349,11 +322,25 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         return (
             f"{type(self._solver).__name__}/"
             f"{type(self._flux).__name__}(order={self._flux.order})/"
-            f"convergence_rate{suffix}"
+            f"convergence_rate{suffix}/{self._device}"
         )
 
-    def check(self, fma_rate: float) -> None:
-        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS)
+    def check(self, calibration: ConvergenceCalibration) -> None:
+        t_start = time.perf_counter()
+        if self._device == "gpu":
+            if calibration.gpu_backend is None:
+                pytest.skip("no GPU device available")
+            backend = calibration.gpu_backend
+            alpha = calibration.gpu_alphas[type(self._solver)]
+            budget_s = MAX_WALLTIME_S / 2 / _N_CONVERGENCE_CLAIMS
+        else:
+            backend = calibration.cpu_backend
+            alpha = calibration.cpu_alphas[type(self._solver)]
+            has_gpu = calibration.gpu_backend is not None
+            pool = MAX_WALLTIME_S / 2 if has_gpu else MAX_WALLTIME_S
+            budget_s = pool / _N_CONVERGENCE_CLAIMS
+
+        n_max = _convergence_n_max(alpha, self._solver.cost_exponent, budget_s)
         meshes = [
             CartesianMesh(
                 origin=(sympy.Rational(0),),
@@ -377,7 +364,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         n_c = coarse.shape[0]
         vol_c = float(coarse.cell_volume)
         orig_c = float(coarse.coordinate((0,))[0]) - 0.5 * vol_c
-        a_c = FVMDiscretization(coarse, self._flux, bc).assemble()
+        a_c = FVMDiscretization(coarse, self._flux, bc).assemble(backend=backend)
         k_max = max(1, n_c // p)
         phi_terms: list[sympy.Expr] = []
         for n in range(1, k_max + 1):
@@ -395,13 +382,15 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
                 [
                     (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
-                ]
+                ],
+                backend=backend,
             )
             r_n = Tensor(
                 [
                     (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
-                ]
+                ],
+                backend=backend,
             )
             rel_err = (a_c @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
             if rel_err < 0.1:
@@ -440,18 +429,18 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             # matrix's null space before measuring truncation error.  The SVD
             # threshold is relative to the largest singular value; for full-rank
             # systems no null vectors are found and the projection is a no-op.
-            a_m = disc.assemble()
+            a_m = disc.assemble(backend=backend)
             _, s_vec, vt = a_m.svd()
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
 
-            b_m = Tensor([_rho_avg(i) for i in range(n_cells)])
+            b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=backend)
             u_arr = self._solver.solve(a_m, b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
-            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
+            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)], backend=backend)
             diff = u_arr - phi_arr
-            errors.append(math.sqrt(vol * (diff @ diff)))
+            errors.append(math.sqrt(vol * float((diff @ diff).get())))
 
         hs = [float(m.cell_volume) for m in meshes]
         log_h = [math.log(hv) for hv in hs]
@@ -474,6 +463,12 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             f"Convergence not clean power-law: R²={r2:.4f} for "
             f"{type(self._flux).__name__}(order={self._flux.order}) — "
             f"errors do not lie on h^p even though the slope is correct"
+        )
+        elapsed = time.perf_counter() - t_start
+        assert elapsed <= budget_s * BUDGET_TOLERANCE, (
+            f"{self.description}: took {elapsed:.2f}s, "
+            f"budget {budget_s:.2f}s × {BUDGET_TOLERANCE} tolerance "
+            f"({elapsed / budget_s:.2f}× budget)"
         )
 
 
@@ -523,33 +518,46 @@ _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver()]
 
 
-_CLAIMS: list[CalibratedClaim[float]] = [
+def _make_rate_claims(device: str) -> list[_ConvergenceRateClaim]:
+    return [
+        # Diffusive (SPD, DirichletBC): all solvers
+        *[
+            _ConvergenceRateClaim(s, f, device=device)
+            for s in [*_SOLVERS, *_DIRECT_SOLVERS]
+            for f in _DIFFUSIVE_FLUXES
+        ],
+        # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
+        *[
+            _ConvergenceRateClaim(s, f, PeriodicGhostCells, device=device)
+            for s in _DIRECT_SOLVERS
+            for f in _ADVECTIVE_FLUXES
+        ],
+        # Advection-diffusion (non-singular under DirichletBC for κ>0): all solvers
+        *[
+            _ConvergenceRateClaim(s, f, device=device)
+            for s in [*_SOLVERS, *_DIRECT_SOLVERS]
+            for f in _ADVECTION_DIFFUSION_FLUXES
+        ],
+    ]
+
+
+_STATIC_CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
-    # Diffusive (SPD, DirichletBC): all solvers
+    # Diffusive (SPD, DirichletBC): all solvers — CPU only, fixed N=8
     *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _DIFFUSIVE_FLUXES],
     *[
         _DirectSolverClaim(s, f, _mesh_n8)
         for s in _DIRECT_SOLVERS
         for f in _DIFFUSIVE_FLUXES
     ],
-    *[
-        _ConvergenceRateClaim(s, f)
-        for s in [*_SOLVERS, *_DIRECT_SOLVERS]
-        for f in _DIFFUSIVE_FLUXES
-    ],
-    # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
+    # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only — CPU, N=8
     *[
         _DirectSolverClaim(s, f, _mesh_n8, PeriodicGhostCells)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
-    *[
-        _ConvergenceRateClaim(s, f, PeriodicGhostCells)
-        for s in _DIRECT_SOLVERS
-        for f in _ADVECTIVE_FLUXES
-    ],
-    # Advection-diffusion (non-singular under DirichletBC for κ>0): all solvers
+    # Advection-diffusion (κ>0): all solvers, DirichletBC, N=8
     *[
         _SolverClaim(s, f, _mesh_n8)
         for s in _SOLVERS
@@ -560,20 +568,32 @@ _CLAIMS: list[CalibratedClaim[float]] = [
         for s in _DIRECT_SOLVERS
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
-    *[
-        _ConvergenceRateClaim(s, f)
-        for s in [*_SOLVERS, *_DIRECT_SOLVERS]
-        for f in _ADVECTION_DIFFUSION_FLUXES
-    ],
 ]
 
-# Count convergence-rate claims after the list is built so that adding or
-# removing claims automatically updates the per-claim time budget.
-_N_CONVERGENCE_CLAIMS: int = sum(
-    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim)
+_cpu_rate_claims = _make_rate_claims("cpu")
+_gpu_rate_claims = _make_rate_claims("gpu")
+_RATE_CLAIMS: list[CalibratedClaim[ConvergenceCalibration]] = [
+    *_cpu_rate_claims,
+    *_gpu_rate_claims,
+]
+
+# Number of rate claims per device — used inside check() to divide the pool
+# budget equally across all claims on that device.
+_N_CONVERGENCE_CLAIMS: int = len(_cpu_rate_claims)
+
+
+@pytest.mark.parametrize(
+    "claim", _STATIC_CLAIMS, ids=[c.description for c in _STATIC_CLAIMS]
 )
-
-
-@pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
 def test_convergence(claim: CalibratedClaim[float], fma_rate: float) -> None:
     claim.check(fma_rate)
+
+
+@pytest.mark.parametrize(
+    "claim", _RATE_CLAIMS, ids=[c.description for c in _RATE_CLAIMS]
+)
+def test_convergence_rate(
+    claim: CalibratedClaim[ConvergenceCalibration],
+    convergence_calibration: ConvergenceCalibration,
+) -> None:
+    claim.check(convergence_calibration)
