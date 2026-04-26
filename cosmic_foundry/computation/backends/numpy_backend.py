@@ -179,5 +179,5 @@ class NumpyBackend:
     def take(self, raw: np.ndarray, indices: Any) -> Any:
         return raw[indices]
 
-    def item(self, raw: np.ndarray) -> Any:
+    def get(self, raw: np.ndarray) -> Any:
         return raw.item()

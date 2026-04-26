@@ -170,7 +170,7 @@ class _DeclaredBackend:
     def eye(self, n: int) -> tuple[int, ...]:
         return (n, n)
 
-    def item(self, raw: Any) -> Any:
+    def get(self, raw: Any) -> Any:
         raise MaterializationError(
             "get() called on an unallocated Tensor: "
             "allocate the Tensor before extracting its value."
@@ -390,7 +390,7 @@ class Tensor(Generic[T]):
             )
         if self.shape:
             raise TypeError(f"get() requires rank-0 Tensor; got shape {self.shape}")
-        return self._backend.item(self._value)  # type: ignore[no-any-return]
+        return self._backend.get(self._value)  # type: ignore[no-any-return]
 
     def __float__(self) -> float:
         return float(self.get())  # type: ignore[arg-type]
