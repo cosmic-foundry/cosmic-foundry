@@ -258,7 +258,7 @@ class _SolverClaim(_Claim):
         a = disc.assemble()
         b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
-        residual = (b - a @ u).norm()
+        residual = (b - a @ u).norm().get()
         assert (
             residual < self._solver._tol
         ), f"Did not converge: residual {residual:.3e}"
@@ -319,7 +319,7 @@ class _DirectSolverClaim(_Claim):
         else:
             b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
-        residual = (b - a @ u).norm()
+        residual = (b - a @ u).norm().get()
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
@@ -412,7 +412,7 @@ class _ConvergenceRateClaim(_Claim):
                     for i in range(n_c)
                 ]
             )
-            rel_err = (a_c @ v_n - r_n).norm() / (r_n.norm() + 1e-30)
+            rel_err = (a_c @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
             if rel_err < 0.1:
                 phi_terms.append(phi_n)
         assert phi_terms, "No admissible manufactured-solution modes found"

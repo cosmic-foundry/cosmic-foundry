@@ -39,13 +39,11 @@ class LUFactoredMatrix(FactoredMatrix):
         a = self._a_lu
 
         # Forward substitution: Ly = Pb  (L has unit diagonal).
-        # b.take(pivot) gathers b reordered by the row permutation.
         y: Tensor = b.take(self._pivot)
         for k in range(1, n):
-            y[k] = y.element(k) - a[k, :k] @ y[:k]
+            y = y.set(k, y.element(k) - a[k, :k] @ y[:k])
 
         # Back substitution: Ux = y.
-        # Singular columns are pinned to zero (minimum-norm convention).
         x: Tensor = Tensor.zeros(n, backend=b.backend)
         for k in range(n - 1, -1, -1):
             rhs_k: Tensor = y.element(k)
@@ -53,7 +51,7 @@ class LUFactoredMatrix(FactoredMatrix):
                 rhs_k = rhs_k - a[k, k + 1 : n] @ x[k + 1 : n]
             diag_k: Tensor = a.element(k, k)
             sing_k: Tensor = self._is_singular.element(k)
-            x[k] = where(sing_k, 0.0, rhs_k / diag_k)
+            x = x.set(k, where(sing_k, 0.0, rhs_k / diag_k))
 
         return x
 
@@ -66,13 +64,12 @@ class LUFactorization(Factorization):
     numerically stable for any non-singular A, including indefinite and
     skew-symmetric matrices where Jacobi iteration diverges.
 
-    The factorization is performed in-place on a copy of A; the original
-    matrix is not modified.  The elimination step is vectorized: each
-    outer-product rank-1 update uses Tensor slice operations so that
-    NumpyBackend delegates to BLAS.  Forward and back substitution are
-    sequential by necessity but use Tensor dot products for each row.
-    Memory and time scale as O(N²) and O(N³) respectively; this solver is
-    intended for small-to-moderate N.
+    The factorization is performed on a copy of A; the original matrix is
+    not modified.  The elimination step is vectorized: each outer-product
+    rank-1 update uses Tensor slice operations so that NumpyBackend delegates
+    to BLAS.  Forward and back substitution are sequential by necessity but
+    use Tensor dot products for each row.  Memory and time scale as O(N²)
+    and O(N³) respectively; this solver is intended for small-to-moderate N.
 
     The pivot search uses a masked argmax over each column rather than a
     Python data-dependent branch, so the factorize loop body is compatible
@@ -86,48 +83,41 @@ class LUFactorization(Factorization):
         n = a.shape[0]
         a = a.copy()
 
-        # a[i,j] holds U for j >= i and L for j < i (L has implicit unit diagonal).
         pivot: Tensor = arange(n, backend=a.backend)
         is_singular: Tensor = Tensor([False] * n, backend=a.backend)
 
-        # Precompute a row-index tensor for masked argmax pivot search.
         indices: Tensor = arange(n, backend=a.backend)
         neg_inf: Tensor = Tensor(-1e300, backend=a.backend)
 
         for k in range(n):
-            # Pivot search: mask entries above row k with -∞, find argmax of |col k|.
             col_k: Tensor = a[:, k]
             masked: Tensor = where(indices >= k, col_k.abs(), neg_inf)
             max_row = masked.argmax()
 
-            # Unconditional row swap (identity when max_row == k).
             row_k_copy: Tensor = a[k].copy()
-            a[k] = a[max_row]
-            a[max_row] = row_k_copy
+            a = a.set(k, a[max_row])
+            a = a.set(max_row, row_k_copy)
             old_pivot_k = pivot[k]
             old_pivot_mr = pivot[max_row]
-            pivot[k] = old_pivot_mr
-            pivot[max_row] = old_pivot_k
+            pivot = pivot.set(k, old_pivot_mr)
+            pivot = pivot.set(max_row, old_pivot_k)
 
-            # Singular detection: stabilize the diagonal to avoid division by zero.
             diag_k: Tensor = a.element(k, k)
             sing_k: Tensor = diag_k.abs() < self._SINGULAR_TOL
-            is_singular[k] = sing_k
+            is_singular = is_singular.set(k, sing_k)
             safe_diag: Tensor = where(sing_k, 1.0, diag_k)
-            a[k, k] = safe_diag
+            a = a.set((k, k), safe_diag)
 
             if k + 1 < n:
-                # Vectorized rank-1 update: eliminates column k below the pivot.
-                # factor_col = a[k+1:n, k] / safe_diag  (L factor column)
-                # If singular, zero out factor_col so the update is a no-op.
                 zero_col: Tensor = Tensor.zeros(n - k - 1, backend=a.backend)
                 factor_col: Tensor = where(
                     sing_k, zero_col, a[k + 1 : n, k] / safe_diag
                 )
-                a[k + 1 : n, k] = factor_col
+                a = a.set((slice(k + 1, n), k), factor_col)
                 row_pivot: Tensor = a[k, k + 1 : n]
-                a[k + 1 : n, k + 1 : n] = a[k + 1 : n, k + 1 : n] - einsum(
-                    "i,j->ij", factor_col, row_pivot
+                a = a.set(
+                    (slice(k + 1, n), slice(k + 1, n)),
+                    a[k + 1 : n, k + 1 : n] - einsum("i,j->ij", factor_col, row_pivot),
                 )
 
         return LUFactoredMatrix(a, pivot, is_singular)

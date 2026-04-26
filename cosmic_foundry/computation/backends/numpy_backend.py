@@ -67,8 +67,8 @@ class NumpyBackend:
     def flatten(self, raw: np.ndarray) -> list[float]:
         return raw.ravel().tolist()
 
-    def norm(self, raw: np.ndarray) -> float:
-        return float(np.linalg.norm(raw))
+    def norm(self, raw: np.ndarray) -> Any:
+        return np.linalg.norm(raw)
 
     # ------------------------------------------------------------------
     # Element-wise arithmetic
