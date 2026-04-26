@@ -6,7 +6,10 @@ from typing import Any, cast
 
 import sympy
 
+from cosmic_foundry.computation.backends.python_backend import PythonBackend
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.physics.state import State
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
@@ -40,6 +43,27 @@ def _apply_dirichlet_ghosts(
             if i >= N:
                 reflected = idx[:a] + (2 * N - 1 - i,) + idx[a + 1 :]
                 return -extended(reflected)
+        return U(idx)  # type: ignore[arg-type]
+
+    return LazyDiscreteField(mesh, extended)
+
+
+def _apply_zero_ghosts(
+    U: DiscreteField[sympy.Expr],
+    mesh: CartesianMesh,
+) -> LazyDiscreteField[sympy.Expr]:
+    """Extend U with zero-valued ghost cells for no-BC operator evaluation.
+
+    Semantically identical to evaluating a field that returns 0 for all
+    out-of-bounds indices — which is what unit basis vectors in
+    Discretization.assemble already do naturally.
+    """
+    shape = mesh._shape
+
+    def extended(idx: tuple[int, ...]) -> sympy.Expr:
+        for _a, (i, N) in enumerate(zip(idx, shape, strict=True)):
+            if i < 0 or i >= N:
+                return sympy.Integer(0)
         return U(idx)  # type: ignore[arg-type]
 
     return LazyDiscreteField(mesh, extended)
@@ -93,7 +117,7 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
 
-    Maps cell-average DiscreteFields to discrete divergence DiscreteFields:
+    Maps cell-average DiscreteFields to a State holding discrete divergence values:
 
         (Lₕ U)(i) = (1/|Ωᵢ|) · ∮_∂Ωᵢ F·n̂ dA
                   = (1/|Ωᵢ|) · Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
@@ -125,17 +149,29 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     def continuous_operator(self) -> DifferentialOperator:
         return _DivergenceComposition(self._numerical_flux.continuous_operator)
 
-    def __call__(self, U: DiscreteField[sympy.Expr]) -> LazyDiscreteField[sympy.Expr]:
-        """Apply the assembled operator; returns a lazy cell-residual DiscreteField."""
+    def __call__(self, U: DiscreteField[sympy.Expr]) -> State:
+        """Apply the assembled operator; returns an eager cell-residual State."""
         mesh = cast(CartesianMesh, U.mesh)
         if isinstance(self._bc, PeriodicBC):
             U = _apply_periodic_ghosts(U, mesh)
         elif self._bc is not None:
             U = _apply_dirichlet_ghosts(U, mesh)
+        else:
+            U = _apply_zero_ghosts(U, mesh)
         face_fluxes = self._numerical_flux(U)
         ndim = len(mesh._shape)
+        shape = mesh.shape
 
-        def cell_residual(idx: Any) -> sympy.Expr:
+        def _to_multi(flat: int) -> tuple[int, ...]:
+            idx = []
+            for a in range(ndim):
+                idx.append(flat % shape[a])
+                flat //= shape[a]
+            return tuple(idx)
+
+        residuals = []
+        for flat_i in range(mesh.n_cells):
+            idx = _to_multi(flat_i)
             total: sympy.Expr = sympy.Integer(0)
             for axis in range(ndim):
                 idx_low: tuple[int, ...] = (
@@ -146,9 +182,9 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
                     + face_fluxes((axis, idx))  # type: ignore[arg-type]
                     - face_fluxes((axis, idx_low))  # type: ignore[arg-type]
                 )
-            return total / mesh.cell_volume
+            residuals.append(total / mesh.cell_volume)
 
-        return LazyDiscreteField(mesh, cell_residual)
+        return State(mesh, Tensor(residuals, backend=PythonBackend()))
 
 
 class FVMDiscretization(Discretization):

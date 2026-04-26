@@ -15,6 +15,10 @@ class State(DiscreteField[float]):
     follows axis-0-fastest ordering: flat = Σ_a idx[a] · stride[a], where
     stride[0] = 1 and stride[a] = Π_{k<a} shape[k].
 
+    When backed by PythonBackend, the Tensor leaves may hold any Python
+    object (e.g. sympy.Expr for symbolic computation); __call__ returns
+    the raw leaf value without casting.
+
     Parameters
     ----------
     mesh:
@@ -43,12 +47,7 @@ class State(DiscreteField[float]):
         for a, i in enumerate(idx):
             flat += i * stride
             stride *= shape[a]
-        return float(self._data[flat])
-
-    @classmethod
-    def from_tensor(cls, mesh: Mesh, data: Tensor) -> State:
-        """Construct a State directly from a flat Tensor."""
-        return cls(mesh, data)
+        return self._data[flat]  # type: ignore[no-any-return]  # PythonBackend may hold sympy.Expr
 
 
 __all__ = ["State"]
