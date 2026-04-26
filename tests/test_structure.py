@@ -433,11 +433,11 @@ class _BodyDispatchClaim(Claim):
 
 
 class _AutoDiscoveryImportClaim(Claim):
-    """Claim: test_structure.py imports no class that _discover_* would return.
+    """Claim: test_structure.py imports no class that any _discover_concrete_* returns.
 
-    Any concrete IterativeSolver or Factorization subclass hardcoded here is a
-    sign that auto-discovery was bypassed — those classes should enter the suite
-    via _discover_concrete_iterative_solvers / _discover_concrete_factorizations.
+    Finds every function in this module whose name starts with _discover_concrete_,
+    calls it, and takes the union of results.  Adding a new _discover_concrete_*
+    function automatically extends the coverage without touching this claim.
     """
 
     @property
@@ -445,7 +445,14 @@ class _AutoDiscoveryImportClaim(Claim):
         return "test_pattern/auto_discovery_imports"
 
     def check(self) -> None:
-        discovered = {cls.__name__ for cls in _ITERATIVE_SOLVERS + _FACTORIZATIONS}
+        import tests.test_structure as _self
+
+        discovered = {
+            cls.__name__
+            for name, fn in inspect.getmembers(_self, inspect.isfunction)
+            if name.startswith("_discover_concrete_")
+            for cls in fn(_MODULES)
+        }
         tree = ast.parse(Path(__file__).read_text())
         violations = []
         for node in ast.walk(tree):
