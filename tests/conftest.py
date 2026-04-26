@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import threading
 import time
 
 import numpy as np
@@ -29,26 +27,6 @@ def pytest_configure(config: pytest.Config) -> None:
     timeout = MAX_WALLTIME_S * BUDGET_TOLERANCE
     # Set the option so pytest-timeout reads it
     config.option.session_timeout = timeout
-    # Store for use in pytest_sessionstart
-    config._cosmic_foundry_session_timeout_seconds = timeout
-
-
-def pytest_sessionstart(session: pytest.Session) -> None:
-    """Start a background thread that enforces the session timeout.
-
-    This ensures the process exits hard if the session exceeds
-    MAX_WALLTIME_S × BUDGET_TOLERANCE, even if a test is running.
-    """
-    timeout_seconds = session.config._cosmic_foundry_session_timeout_seconds
-
-    def _timeout_monitor() -> None:
-        """Background thread that kills the process on timeout."""
-        time.sleep(timeout_seconds)
-        # Session timeout exceeded; exit hard
-        os._exit(1)
-
-    thread = threading.Thread(target=_timeout_monitor, daemon=True)
-    thread.start()
 
 
 _CALIB_N = 100
