@@ -72,6 +72,9 @@ class Backend(Protocol):
     # Synchronization (no-op for synchronous backends)
     def sync(self, raw: Any) -> None: ...
 
+    # Control flow — device-side for JaxBackend, Python loop elsewhere
+    def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any: ...
+
 
 _default_backend: Backend = PythonBackend()
 

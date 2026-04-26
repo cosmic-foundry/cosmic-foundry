@@ -200,5 +200,8 @@ class JaxBackend:
     def sync(self, raw: Any) -> None:
         jax.block_until_ready(raw)
 
+    def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any:
+        return jax.lax.fori_loop(0, n, body_fn, init_state)
+
 
 __all__ = ["JaxBackend"]

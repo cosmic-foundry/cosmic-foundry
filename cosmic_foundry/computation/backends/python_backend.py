@@ -136,6 +136,17 @@ class PythonBackend:
     def sync(self, raw: Any) -> None:
         pass
 
+    def fori_loop(
+        self,
+        n: int,
+        body_fn: Callable[[Any, Any], Any],
+        init_state: Any,
+    ) -> Any:
+        state = init_state
+        for k in range(n):
+            state = body_fn(k, state)
+        return state
+
     # ------------------------------------------------------------------
     # Contraction
     # ------------------------------------------------------------------

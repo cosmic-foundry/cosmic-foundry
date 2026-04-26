@@ -2,8 +2,94 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from cosmic_foundry.computation.factorization import FactoredMatrix, Factorization
 from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
+
+# Diagonal magnitude below which a pivot is treated as singular.
+_SINGULAR_TOL: float = 1e-10
+
+
+# ---------------------------------------------------------------------------
+# Module-level loop bodies — stable Python objects so JAX can cache the
+# traced XLA computation across calls.  All per-call constants (indices,
+# neg_inf, zeros_n) travel through the state tuple rather than being closed
+# over, keeping the function identity fixed regardless of matrix size.
+# ---------------------------------------------------------------------------
+
+
+def _factorize_body(k: Any, state: tuple) -> tuple:
+    a, pivot, is_singular, indices, neg_inf, zeros_n = state
+
+    # Find pivot: argmax of |col_k| for rows >= k.
+    col_k = a[(slice(None), k)]
+    masked_col = where(indices >= k, col_k.abs(), neg_inf)
+    max_row = masked_col.argmax()
+
+    # Swap rows k and max_row.
+    row_k = a[k].copy()
+    a = a.set(k, a[max_row])
+    a = a.set(max_row, row_k)
+
+    # Swap pivot entries.
+    piv_k = pivot[k]
+    piv_mr = pivot[max_row]
+    pivot = pivot.set(k, piv_mr)
+    pivot = pivot.set(max_row, piv_k)
+
+    # Singularity check; replace near-zero diagonal with 1 to avoid
+    # divide-by-zero in the factor computation (singular flag records it).
+    row_k_new = a[k]
+    diag_k = row_k_new[k]
+    sing_k = diag_k.abs() < _SINGULAR_TOL
+    is_singular = is_singular.set(k, sing_k)
+    safe_diag = where(sing_k, Tensor(1.0, backend=a.backend), diag_k)
+    a = a.set((k, k), safe_diag)
+
+    # Multipliers for rows > k (zero elsewhere so shapes stay fixed).
+    col_k_new = a[(slice(None), k)]
+    factors = where(indices > k, col_k_new / safe_diag, zeros_n)
+
+    # Rank-1 update: zero out columns <= k to avoid corrupting stored
+    # L factors from prior steps; column k is also zeroed (mask is
+    # indices > k, so col k maps to 0) leaving a[j,k] unchanged for
+    # the subsequent store step.
+    pivot_row = a[k]
+    pivot_row_masked = where(indices > k, pivot_row, zeros_n)
+    a = a - einsum("i,j->ij", factors, pivot_row_masked)
+
+    # Store multipliers in the lower triangle of column k.  After the
+    # rank-1 update, a[j,k] for j > k still holds the original value
+    # (the update zeroed column k via the mask); overwrite with factors.
+    col_k_post = a[(slice(None), k)]
+    a = a.set((slice(None), k), where(indices > k, factors, col_k_post))
+
+    return (a, pivot, is_singular, indices, neg_inf, zeros_n)
+
+
+def _fwd_body(k: Any, state: tuple) -> tuple:
+    y, a_lu, indices, zeros_n = state
+    row_k = a_lu[k]
+    masked_row = where(indices < k, row_k, zeros_n)
+    corr = masked_row @ y
+    y = y.set(k, y[k] - corr)
+    return (y, a_lu, indices, zeros_n)
+
+
+def _back_body(k_fwd: Any, state: tuple) -> tuple:
+    # n_minus_1 is a 0-d int Tensor so k stays a Tensor for all downstream ops.
+    x, y, a_lu, is_singular, indices, zeros_n, n_minus_1 = state
+    k = n_minus_1 - k_fwd
+    row_k = a_lu[k]
+    masked_row = where(indices > k, row_k, zeros_n)
+    corr = masked_row @ x
+    diag_k = row_k[k]
+    sing_k = is_singular[k]
+    rhs = y[k] - corr
+    new_xk = where(sing_k, Tensor(0.0, backend=x.backend), rhs / diag_k)
+    x = x.set(k, new_xk)
+    return (x, y, a_lu, is_singular, indices, zeros_n, n_minus_1)
 
 
 class LUFactoredMatrix(FactoredMatrix):
@@ -21,6 +107,11 @@ class LUFactoredMatrix(FactoredMatrix):
     zero-mean convention).  The caller must ensure the RHS has zero
     projection onto the null space; if it does not, the residual
     ‖b − Au‖₂ after the solve will be large.
+
+    Both substitution passes use backend.fori_loop with module-level body
+    functions so JAX can cache the traced XLA computation across solves.
+    Each loop body operates on full-N vectors with masks rather than
+    varying-length slices, keeping every shape static across iterations.
     """
 
     def __init__(
@@ -36,23 +127,22 @@ class LUFactoredMatrix(FactoredMatrix):
     def solve(self, b: Tensor) -> Tensor:
         """Solve the factored system for rhs b; return u."""
         n = self._a_lu.shape[0]
-        a = self._a_lu
+        backend = self._a_lu.backend
+        indices = arange(n, backend=backend)
+        zeros_n = Tensor.zeros(n, backend=backend)
+        n_minus_1: Tensor = Tensor(n - 1, backend=backend)
 
         # Forward substitution: Ly = Pb  (L has unit diagonal).
         y: Tensor = b.take(self._pivot)
-        for k in range(1, n):
-            y = y.set(k, y.element(k) - a[k, :k] @ y[:k])
+        y, *_ = backend.fori_loop(n, _fwd_body, (y, self._a_lu, indices, zeros_n))
 
         # Back substitution: Ux = y.
-        x: Tensor = Tensor.zeros(n, backend=b.backend)
-        for k in range(n - 1, -1, -1):
-            rhs_k: Tensor = y.element(k)
-            if k < n - 1:
-                rhs_k = rhs_k - a[k, k + 1 : n] @ x[k + 1 : n]
-            diag_k: Tensor = a.element(k, k)
-            sing_k: Tensor = self._is_singular.element(k)
-            x = x.set(k, where(sing_k, 0.0, rhs_k / diag_k))
-
+        x: Tensor = Tensor.zeros(n, backend=backend)
+        x, *_ = backend.fori_loop(
+            n,
+            _back_body,
+            (x, y, self._a_lu, self._is_singular, indices, zeros_n, n_minus_1),
+        )
         return x
 
 
@@ -65,62 +155,39 @@ class LUFactorization(Factorization):
     skew-symmetric matrices where Jacobi iteration diverges.
 
     The factorization is performed on a copy of A; the original matrix is
-    not modified.  The elimination step is vectorized: each outer-product
-    rank-1 update uses Tensor slice operations so that NumpyBackend delegates
-    to BLAS.  Forward and back substitution are sequential by necessity but
-    use Tensor dot products for each row.  Memory and time scale as O(N²)
-    and O(N³) respectively; this solver is intended for small-to-moderate N.
+    not modified.  All loop bodies use backend.fori_loop so the entire
+    factorization compiles to a single XLA kernel on JaxBackend.
 
+    Each iteration of the elimination loop operates on full-N vectors and
+    an N×N outer-product update rather than varying-length submatrix
+    slices.  Columns and rows outside the active (k+1:n, k+1:n) block are
+    zeroed by masks, keeping every shape static so JAX traces the body
+    once regardless of N.  Memory and time scale as O(N²) and O(N³)
+    respectively.
+
+    The loop body is a module-level function (_factorize_body) so JAX can
+    cache the traced XLA computation across calls with the same matrix size.
     The pivot search uses a masked argmax over each column rather than a
     Python data-dependent branch, so the factorize loop body is compatible
     with JAX tracing (no Python bool over traced values).
     """
 
-    _SINGULAR_TOL: float = 1e-10
-
     def factorize(self, a: Tensor) -> LUFactoredMatrix:
         """Factor A with partial pivoting; return a LUFactoredMatrix."""
         n = a.shape[0]
+        backend = a.backend
         a = a.copy()
 
-        pivot: Tensor = arange(n, backend=a.backend)
-        is_singular: Tensor = Tensor([False] * n, backend=a.backend)
+        pivot: Tensor = arange(n, backend=backend)
+        is_singular: Tensor = Tensor([False] * n, backend=backend)
+        indices: Tensor = arange(n, backend=backend)
+        neg_inf: Tensor = Tensor(-1e300, backend=backend)
+        zeros_n: Tensor = Tensor.zeros(n, backend=backend)
 
-        indices: Tensor = arange(n, backend=a.backend)
-        neg_inf: Tensor = Tensor(-1e300, backend=a.backend)
-
-        for k in range(n):
-            col_k: Tensor = a[:, k]
-            masked: Tensor = where(indices >= k, col_k.abs(), neg_inf)
-            max_row = masked.argmax()
-
-            row_k_copy: Tensor = a[k].copy()
-            a = a.set(k, a[max_row])
-            a = a.set(max_row, row_k_copy)
-            old_pivot_k = pivot[k]
-            old_pivot_mr = pivot[max_row]
-            pivot = pivot.set(k, old_pivot_mr)
-            pivot = pivot.set(max_row, old_pivot_k)
-
-            diag_k: Tensor = a.element(k, k)
-            sing_k: Tensor = diag_k.abs() < self._SINGULAR_TOL
-            is_singular = is_singular.set(k, sing_k)
-            safe_diag: Tensor = where(sing_k, 1.0, diag_k)
-            a = a.set((k, k), safe_diag)
-
-            if k + 1 < n:
-                zero_col: Tensor = Tensor.zeros(n - k - 1, backend=a.backend)
-                factor_col: Tensor = where(
-                    sing_k, zero_col, a[k + 1 : n, k] / safe_diag
-                )
-                a = a.set((slice(k + 1, n), k), factor_col)
-                row_pivot: Tensor = a[k, k + 1 : n]
-                a = a.set(
-                    (slice(k + 1, n), slice(k + 1, n)),
-                    a[k + 1 : n, k + 1 : n] - einsum("i,j->ij", factor_col, row_pivot),
-                )
-
-        return LUFactoredMatrix(a, pivot, is_singular)
+        a_f, pivot_f, is_singular_f, *_ = backend.fori_loop(
+            n, _factorize_body, (a, pivot, is_singular, indices, neg_inf, zeros_n)
+        )
+        return LUFactoredMatrix(a_f, pivot_f, is_singular_f)
 
 
 __all__ = ["LUFactorization", "LUFactoredMatrix"]

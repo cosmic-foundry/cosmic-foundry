@@ -276,6 +276,9 @@ class _DeclaredBackend:
     def arange(self, n: int) -> tuple[int, ...]:
         return (n,)
 
+    def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any:
+        return init_state
+
 
 _DECLARED: _DeclaredBackend = _DeclaredBackend()
 
@@ -507,9 +510,17 @@ class Tensor(Generic[T]):
         self._check_backend(other)
         return Tensor._wrap(self._backend.add(self._value, other._value), self._backend)
 
-    def __sub__(self, other: Tensor) -> Tensor:
-        self._check_backend(other)
-        return Tensor._wrap(self._backend.sub(self._value, other._value), self._backend)
+    def __sub__(self, other: Any) -> Tensor:
+        if isinstance(other, Tensor):
+            self._check_backend(other)
+            other_raw = other._value
+        else:
+            other_raw = self._backend.to_native(other)
+        return Tensor._wrap(self._backend.sub(self._value, other_raw), self._backend)
+
+    def __rsub__(self, other: Any) -> Tensor:
+        other_raw = self._backend.to_native(other)
+        return Tensor._wrap(self._backend.sub(other_raw, self._value), self._backend)
 
     def __mul__(self, other: Any) -> Tensor:
         if isinstance(other, Tensor):
