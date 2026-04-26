@@ -78,7 +78,9 @@ intersphinx_mapping = {
 # does not yet contain the file at the time the PR runs). Keep this list
 # for true external URLs only.
 linkcheck_ignore = [
-    r"^https://github\.com/cosmic-foundry/cosmic-foundry/(?:blob|tree|raw)/main/",
+    # github.com is unreliable from CI (intermittent 502s); own-repo links are
+    # validated against the working tree by scripts/ci/check_markdown_links.py.
+    r"^https://github\.com/",
     # Publisher sites that block bots with 403s
     r"^https://arc\.aiaa\.org/",
     r"^https://doi\.org/10\.1002/",  # Wiley
@@ -98,11 +100,7 @@ linkcheck_ignore = [
     r"^https://www\.osti\.gov/",
     # Confirmed-dead links in research/ — to be cleaned up separately
     r"^https://doi\.org/10\.1016/S0898122100003175$",  # dead DOI
-    r"^https://github\.com/Flash-X/Flash-X$",  # repo moved/deleted
-    r"^https://github\.com/applied-numerical-algorithms-group-lbnl/Chombo$",
     r"^https://www\.asme\.org/codes-standards/find-codes-standards/v-v-20",
-    # GitHub repos that intermittently return 502 in CI
-    r"^https://github\.com/parthenon-hpc-lab/parthenon$",
 ]
 
 # doi.org 301/302 redirects to publisher landing pages are expected.

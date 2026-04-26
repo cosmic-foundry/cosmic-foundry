@@ -33,23 +33,23 @@ data is explicitly quantified and propagated.**
 
 ## Layer architecture
 
-The codebase is organized into four packages with a strict dependency order:
+The codebase is organized into five packages with a strict dependency order:
 
 ```
 theory/
-  foundation/   ←  continuous/
-       ↑                ↑
-       └──────── discrete/
-                     ↑
-geometry/   ← concrete instantiable objects (meshes, spacetimes)
-    ↑
-computation/
+  foundation/ ←── continuous/ ←── discrete/
+                                        ↑         ↑
+                                   geometry/   computation/
+                                        ↑         ↑
+                                        └─physics/─┘
 ```
 
+`A ←── B` means B imports from A (B sits above A in the stack).
+`computation/` has no imports from `theory/` or `geometry/`; the two
+paths into `physics/` are independent.
+
 `foundation/`, `continuous/`, and `discrete/` are nested under `theory/`,
-making the symbolic-reasoning boundary a directory boundary. Everything
-outside `theory/` (`geometry/`, `computation/`, `validation/`) is the
-application/concreteness layer.
+making the symbolic-reasoning boundary a directory boundary.
 
 **`theory/` and `geometry/` are the symbolic-reasoning layer.**
 `foundation/`, `continuous/`, `discrete/`, and `geometry/` all share the same
@@ -62,6 +62,17 @@ packages on the approved symbolic-reasoning list. The approved list is
 `{sympy}`. Additions require justification against the symbolic-reasoning
 identity; numerical computation packages (JAX, NumPy, SciPy) are excluded by
 definition. Enforced by `tests/test_theory_no_third_party_imports.py`.
+
+**`physics/` is the application/concreteness layer.** It implements specific
+physical models (PDE operators, discretization schemes) and houses `State`,
+the concrete simulation-state type that couples mesh geometry with numeric
+storage via `computation/`. `physics/` may import from all other packages.
+
+**`computation/` is the numeric machinery layer.** It must not import from
+`theory/` or `geometry/` or `physics/`; enforced by
+`scripts/ci/check_computation_imports.py`. All numeric library imports
+(`math`, `numpy`, `jax`, etc.) are confined here; enforced by
+`scripts/ci/check_numeric_imports.py`.
 
 ### foundation/
 
@@ -104,6 +115,9 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     ├── SymmetricTensorField          — derived: tensor_type = (0, 2); interface: component(i,j) → Field
     │   └── MetricTensor             — see above
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
+        ├── ZeroForm                 — scalar field; degree = 0; codomain sympy.Expr
+        ├── OneForm                  — covector field; degree = 1; codomain tuple[sympy.Expr, ...]
+        └── TwoForm                  — 2-form; degree = 2; codomain sympy.Matrix
 
 DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifold, order
 └── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
@@ -114,7 +128,7 @@ DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifo
                                                derived: order = 1
     └── PoissonEquation                      — -∇²φ = ρ; earned by: derived flux = -∇(·).
                                                The sign convention (flux = -∇φ, not +∇φ) ensures
-                                               the discrete operator is positive definite (see C4, C6).
+                                               the discrete operator is positive definite.
                                                free: manifold, source; derived: flux = -∇(·), order = 1.
                                                There is no LaplaceOperator class: -∇²φ = -∇·∇φ is
                                                the divergence of the flux field -∇φ; fully
@@ -128,6 +142,22 @@ Constraint(ABC)                       — interface: support → Manifold
 ```
 
 ### discrete/
+
+**Horizontal mapping — every type in `continuous/` has an intended counterpart:**
+
+| `continuous/` | `discrete/` | Notes |
+|---|---|---|
+| `TopologicalManifold` | `CellComplex` | topological space of cells |
+| `Manifold` | `Mesh` | adds chart / coordinate geometry |
+| *(none)* | `StructuredMesh` | regularity qualifier; no smooth analog |
+| `Field[V]` | `DiscreteField[V]` | map from space to value |
+| `ZeroForm` | `LazyDiscreteField[V]` | concrete, callable-backed; planned for collapse — see below |
+| *(none — dense float field)* | `State` (in `physics/`) | concrete, Tensor-backed simulation state |
+| `TensorField`, `OneForm`, `TwoForm` | **missing** | rank > 0 discrete fields; needed Epoch 5+ (hydro velocity, B-field, GR metric); discrete 1-forms live on faces, 2-forms on edges |
+| `DifferentialOperator` | `DiscreteOperator` | map between fields |
+| `DivergenceFormEquation` | — | bridge: `Discretization` maps a `DivergenceFormEquation` to a `DiscreteOperator` |
+| `BoundaryCondition` | *(none)* | BC is a continuous concept; enters the discrete layer only through `Discretization` |
+| *(none)* | `RestrictionOperator` | bridge concept: maps continuous `Field` → `DiscreteField`; no pure continuous analog |
 
 ```
 CellComplex(IndexedFamily)     — chain (C_*, ∂): complex[k] → Set of k-cells;
@@ -148,20 +178,36 @@ CellComplex(IndexedFamily)     — chain (C_*, ∂): complex[k] → Set of k-cel
                                   implies top-dimensional cells biject with a rectangular
                                   region of ℤⁿ
 
-MeshFunction(NumericFunction[Mesh, V])
-                               — value assignment to mesh elements (cells, faces, vertices);
-                                  earned by .mesh: Mesh typed accessor,
-                                  by analogy with Field.manifold
+DiscreteField(NumericFunction[Mesh, V])
+                               — map from mesh elements to value type V;
+                                  the discrete counterpart of Field.
+                                  Earned by .mesh: Mesh typed accessor,
+                                  parallel to Field.manifold.
+                                  V is unconstrained: sympy.Expr for symbolic
+                                  evaluation (order proofs), float for numeric
+                                  paths, or any PythonBackend-compatible type.
 
-RestrictionOperator(NumericFunction[Function[M,V], MeshFunction[V]])
+LazyDiscreteField(DiscreteField[V])
+                               — concrete DiscreteField backed by a callable
+                                  fn: idx → V; evaluation is deferred per cell.
+                                  Currently used by Discretization.assemble()
+                                  and CartesianRestrictionOperator for symbolic
+                                  evaluation (sympy.Expr flows through unchanged).
+                                  Planned for collapse once DiscreteOperator.__call__
+                                  is made eager (State → State): a sympy-valued
+                                  State (PythonBackend with sympy.Expr leaves)
+                                  replaces the lazy-callable path, and
+                                  LazyDiscreteField is deleted. This preserves
+                                  exact symbolic order proofs while eliminating
+                                  the callable indirection.
+
+RestrictionOperator(NumericFunction[Function[M,V], DiscreteField[V]])
                                — free: mesh: Mesh;
                                   (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV;
                                   formal bridge from continuous/ to discrete/:
-                                  a Function plus a Mesh yields a MeshFunction;
+                                  a Function plus a Mesh yields a DiscreteField;
                                   the restriction depends on both — neither alone suffices
-```
 
-```
 Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
                             — free: mesh: Mesh
                               maps a DivergenceFormEquation to a DiscreteOperator;
@@ -180,81 +226,37 @@ Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
                               SymPy is the machine-checkable derivation required
                               by Lanes B and C.
                               Formally separate from Rₕ: Rₕ projects field values
-                              (Function → MeshFunction); Discretization projects
+                              (Function → DiscreteField); Discretization projects
                               operators (DivergenceFormEquation → DiscreteOperator).
-└── FVMDiscretization       — free: mesh, numerical_flux, boundary_condition
-                              concrete FVM scheme; generic over DivergenceFormEquation.
-                              For each cell Ωᵢ, evaluates ∮_∂Ωᵢ F·n̂ dA by
-                              delegating to the NumericalFlux at each face; BC
-                              enters through boundary_condition (see below).
-                              Not specialized to any particular conservation law:
-                              Epoch 2 supplies a DiffusiveFlux for Poisson;
-                              Epoch 5 supplies a HyperbolicFlux for Euler.
-                              Specializations belong in the NumericalFlux —
-                              not in a new Discretization subclass per equation.
-                              Note: LinearSolver is NOT part of the Epoch 5
-                              reuse; the Euler equations are nonlinear and need
-                              a separate NonlinearSolver / Newton iteration.
 
-DiscreteOperator(NumericFunction[MeshFunction, MeshFunction])
+DiscreteOperator(NumericFunction[DiscreteField, DiscreteField])
                             — the output of Discretization; the Lₕ that makes
                               Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the chosen order.
                               Earns its class via two falsifiable claims:
                                 order: int — composite convergence order
                                 continuous_operator: DifferentialOperator —
                                   the continuous operator this approximates
-                                  (added in C4; threaded automatically by
-                                  Discretization from its input L)
+                                  (threaded automatically by Discretization
+                                  from its input L)
                               Not independently constructed from stencil
                               coefficients; produced by a Discretization.
 
 NumericalFlux(DiscreteOperator)
                             — a DiscreteOperator with the cell-average →
                               face-flux calling convention:
-                                __call__(U: MeshFunction) → MeshFunction
-                              where the returned MeshFunction is callable as
+                                __call__(U: DiscreteField) → DiscreteField
+                              where the returned DiscreteField is indexed as
                               result((axis, idx_low)) and returns the flux
                               F·n̂·|face_area| at that face.  Inherits order
-                              and (in C4) continuous_operator from
-                              DiscreteOperator.  Full-field evaluation: all
-                              face fluxes are available from one call; values
-                              computed lazily on demand.
-├── DiffusiveFlux(order)    — free: order: int. F(U) = -∇U; derives stencil
-│                             coefficients symbolically in __init__ from the
-│                             antisymmetric cell-average moment system.
-│                             Validity: min_order=2, order_step=2 (even orders
-│                             only; antisymmetric design kills odd error terms,
-│                             constraining achievable orders to even integers).
-│                             One class, not one class per order:
-│                             DiffusiveFlux(2) and DiffusiveFlux(4) are
-│                             *instances*, not subclasses.
-└── HyperbolicFlux(order, riemann_solver)
-                            — free: order: int, riemann_solver: RiemannSolver.
-                              F(U) nonlinear; reconstruction at the given order
-                              produces a two-sided state (U_L, U_R) that the
-                              Riemann solver consumes. Epoch 5 ships
-                              HyperbolicFlux(2, HLLC) and HyperbolicFlux(4, HLLC)
-                              as instances — not subclasses.
-
-LinearSolver                — mesh-agnostic interface: solve(a: Tensor, b: Tensor) → Tensor.
-                              Accepts an assembled N×N stiffness matrix and an N-vector
-                              RHS; returns the solution vector. Assembly and index mapping
-                              are the caller's responsibility, keeping computation/ free
-                              of geometry/ and theory/discrete/ dependencies.
-                              SCOPE: linear operators only. Epoch 5 hydro (nonlinear
-                              flux) requires a separate NonlinearSolver / Newton
-                              iteration. LinearSolver is not the shared machinery
-                              for Epoch 5; only FVMDiscretization and NumericalFlux
-                              are reused across epochs.
-                              Ships DenseJacobiSolver (weighted Jacobi, ω derived
-                              from Gershgorin bound; works for both order=2 and
-                              order=4 stencils) and DenseLUSolver (direct, in-place
-                              LU with partial pivoting). Both operate on Tensor;
-                              linear algebra hand-rolled, no LAPACK. Convergence
-                              tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
+                              and continuous_operator from DiscreteOperator.
+                              Once LazyDiscreteField is collapsed, this call
+                              will be eager: State → State.
 ```
 
 ### geometry/
+
+Pure geometric objects and geometric operations on them.
+Symbolic-reasoning layer: no numeric library imports.
 
 ```
 EuclideanManifold(RiemannianManifold)  — flat ℝⁿ; metric g = δᵢⱼ; free: ndim, symbol_names
@@ -268,6 +270,60 @@ CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
                                                   cell volume = ∏ Δxₖ
                                                   face area = ∏_{k≠j} Δxₖ  (face ⊥ axis j)
                                                   face normal = ê_j
+
+CartesianRestrictionOperator(RestrictionOperator)
+                                       — (Rₕ f)ᵢ via exact SymPy antiderivative
+                                         integration over each cell; degree selects
+                                         cell-average (degree = ndim) or face-average
+                                         (degree = ndim − 1)
+```
+
+### physics/
+
+Concrete PDE model implementations and simulation state.
+Application/concreteness layer: may import from all other packages.
+
+```
+State(DiscreteField[float])    — concrete simulation-state field; stores a dense
+                                  Tensor of float values indexed by mesh cell.
+                                  Backed by any Backend; multi-index access via
+                                  mesh shape. The canonical type for time
+                                  integrators, checkpoint/restart, and I/O.
+                                  PythonBackend with sympy.Expr leaves also works,
+                                  enabling symbolic evaluation without
+                                  LazyDiscreteField (see collapse plan above).
+
+NumericalFlux implementations:
+├── DiffusiveFlux(order)       — F(U) = −∇U; stencil coefficients derived
+│                                 symbolically in __init__ from the antisymmetric
+│                                 cell-average moment system.
+│                                 Validity: min_order=2, order_step=2 (even orders
+│                                 only; antisymmetric design kills odd error terms).
+│                                 One class, not one per order: DiffusiveFlux(2)
+│                                 and DiffusiveFlux(4) are instances, not subclasses.
+├── AdvectiveFlux(order)       — F(U) = v·U; symmetric centered reconstruction.
+├── AdvectionDiffusionFlux(order)
+│                              — F(U) = U − κ∇U; combines advective and diffusive
+│                                 parts at unit Péclet number.
+└── HyperbolicFlux(order, riemann_solver)
+                               — F(U) nonlinear; reconstruction at the given order
+                                 produces a two-sided state (U_L, U_R) that the
+                                 Riemann solver consumes. Epoch 5 ships
+                                 HyperbolicFlux(2, HLLC) and HyperbolicFlux(4, HLLC)
+                                 as instances — not subclasses.
+
+FVMDiscretization(Discretization)
+                               — free: mesh, numerical_flux, boundary_condition
+                                 Concrete FVM scheme; generic over
+                                 DivergenceFormEquation. For each cell Ωᵢ,
+                                 evaluates ∮_∂Ωᵢ F·n̂ dA by delegating to the
+                                 NumericalFlux at each face; BC enters through
+                                 boundary_condition.
+                                 Not specialized to any particular conservation law:
+                                 Epoch 2 supplies DiffusiveFlux for Poisson;
+                                 Epoch 5 supplies HyperbolicFlux for Euler.
+                                 Specializations belong in the NumericalFlux —
+                                 not in a new Discretization subclass per equation.
 ```
 
 ### computation/
@@ -275,6 +331,8 @@ CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
 The only layer that may import numeric libraries (`math`, `numpy`, `jax`,
 etc.); all other layers are restricted to the Python standard library and
 approved symbolic packages. Enforced by `scripts/ci/check_numeric_imports.py`.
+Must not import from `theory/`, `geometry/`, or `physics/`; enforced by
+`scripts/ci/check_computation_imports.py`.
 
 ```
 Real(Protocol)      — scalar numeric protocol; satisfied by float, int,
@@ -292,16 +350,35 @@ Backend(Protocol)   — per-instance dispatch strategy. Mixed-backend
                       arithmetic raises ValueError. Backends:
 
     PythonBackend   — nested Python lists; reference implementation;
-                      no external dependencies.
+                      no external dependencies. Leaf values are unconstrained
+                      Python objects, so sympy.Expr leaves work transparently
+                      (used by the symbolic order-proof path in physics/).
     NumpyBackend(dtype=None)
                     — NumPy ndarray; dtype inferred from input by default
                       or fixed to an explicit numpy dtype; vectorized via
                       BLAS/LAPACK.
     JaxBackend      — JAX array; planned (Epoch 3, C5).
+
+LinearSolver        — mesh-agnostic interface: solve(a: Tensor, b: Tensor) → Tensor.
+                      Accepts an assembled N×N stiffness matrix and an N-vector
+                      RHS; returns the solution vector. Assembly and index mapping
+                      are the caller's responsibility, keeping computation/ free
+                      of theory/discrete/ and physics/ dependencies.
+                      SCOPE: linear operators only. Epoch 5 hydro (nonlinear
+                      flux) requires a separate NonlinearSolver / Newton
+                      iteration. LinearSolver is not the shared machinery
+                      for Epoch 5; only FVMDiscretization and NumericalFlux
+                      are reused across epochs.
+                      Ships DenseJacobiSolver (weighted Jacobi, ω derived
+                      from Gershgorin bound; works for both order=2 and
+                      order=4 stencils) and DenseLUSolver (direct, in-place
+                      LU with partial pivoting). Both operate on Tensor;
+                      linear algebra hand-rolled, no LAPACK. Convergence
+                      tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
 ```
 
-**Planned additions (Epoch 3):** `JaxBackend`; field storage (`MeshFunction`
-backed by `Tensor`); explicit time integrators (`RungeKutta2`,
+**Planned additions (Epoch 3):** `JaxBackend`; `State` in `physics/` (concrete
+`DiscreteField` backed by `Tensor`); explicit time integrators (`RungeKutta2`,
 `RungeKutta4`); HDF5 checkpoint/restart with provenance sidecars.
 
 ### Cross-cutting
@@ -341,7 +418,7 @@ only under `computation/`. Wired into `.pre-commit-config.yaml`.
 pure-Python FMA rate at startup; 8 claims assert each operation completes
 within `EFFICIENCY_FACTOR = 8` of the roofline prediction. Self-calibrating.
 
-**C4 — Backend protocol: PythonBackend + NumpyBackend.** `Backend` protocol
+**C4 — Backend protocol: PythonBackend + NumpyBackend. ✓** `Backend` protocol
 in `computation/backends/`; `Tensor` accepts `backend=` at construction;
 `Tensor.to(backend)` converts; `PythonBackend` wraps existing pure-Python
 logic; `NumpyBackend(dtype=None)` uses NumPy with dtype inferred from input
@@ -358,15 +435,20 @@ representative solver workloads. Establish that `NumpyBackend` is within 2×
 of NumPy raw throughput; `JaxBackend` GPU ≤ `NumpyBackend` CPU at N ≥ 32
 2-D. Add backend-parametric performance claims.
 
-**C7 — Field storage: MeshFunction backed by Tensor.** Replace closure-backed
-`LazyMeshFunction` hot paths with `Tensor`-backed storage. Verify correctness
-against existing convergence claims.
+**C7 — State: concrete DiscreteField backed by Tensor.** Implement `State`
+in `physics/` as a `DiscreteField[float]` carrying a `Tensor` and a mesh.
+Rename `MeshFunction` → `DiscreteField` and `LazyMeshFunction` →
+`LazyDiscreteField` throughout `theory/discrete/`. Make `DiscreteOperator.__call__`
+eager (`State → State`); update `CartesianRestrictionOperator` to return a
+`State` with sympy-valued `PythonBackend` Tensor for the symbolic order-proof
+path. Delete `LazyDiscreteField` once it has no remaining callers. Verify
+all convergence claims pass with the new interface.
 
 **C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
-`RungeKutta4`. Backend-agnostic; operates on `Tensor`-valued state. Lane B
+`RungeKutta4`. Backend-agnostic; operates on `State`-valued fields. Lane B
 derivation: truncation error O(hᵖ), p = 2, 4, confirmed symbolically.
 
-**C9 — HDF5 checkpoint/restart.** Write/read `Tensor`-valued fields with
+**C9 — HDF5 checkpoint/restart.** Write/read `State`-valued fields with
 provenance sidecars (git hash, timestamp, parameter record). GPU-written
 checkpoints readable on CPU-only machines.
 
@@ -396,10 +478,10 @@ checkpoints readable on CPU-only machines.
 
 | Epoch | Layer | Capability |
 |-------|-------|------------|
-| 0 | Theory / Geometry | **Mathematical foundations. ✓** Layer architecture and symbolic-reasoning import boundary; `foundation/`, `continuous/`, `discrete/`, `geometry/` type hierarchies; `CellComplex`, `Mesh`, `StructuredMesh`, `MeshFunction`, `RestrictionOperator`; process discipline M0–M2. |
+| 0 | Theory / Geometry | **Mathematical foundations. ✓** Layer architecture and symbolic-reasoning import boundary; `foundation/`, `continuous/`, `discrete/`, `geometry/` type hierarchies; `CellComplex`, `Mesh`, `StructuredMesh`, `DiscreteField`, `RestrictionOperator`; process discipline M0–M2. |
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
 | 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `FVMDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 5 onward. |
-| 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `TimeIntegrator` (RK2/RK4); field storage; HDF5 checkpoint/restart. In progress. |
+| 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `State` (concrete `DiscreteField`); `TimeIntegrator` (RK2/RK4); HDF5 checkpoint/restart. In progress. |
 
 ### Physics epochs
 
