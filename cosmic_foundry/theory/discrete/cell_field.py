@@ -17,8 +17,10 @@ class CellField(DiscreteField[_V]):
     associated with a cell identified by a multi-index tuple (i₀, i₁, …, iₙ₋₁)
     drawn from the rectangular index set of the mesh.
 
-    CellField is the discrete counterpart of ZeroForm: a scalar-valued 0-form
-    assigns a value to each point (cell center) in the domain.
+    CellField is the discrete counterpart of the volume form (Ω³ in 3D,
+    Ωⁿ in n dimensions): each value is the average of a quantity over the
+    cell volume.  This is the natural DOF location for FVM schemes.  The
+    discrete counterpart of ZeroForm (Ω⁰, point values) is PointField.
 
     Required (in addition to DiscreteField.mesh):
         __call__(idx: tuple[int, ...]) → V  — evaluate at a cell multi-index
