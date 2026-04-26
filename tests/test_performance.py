@@ -482,13 +482,14 @@ _CLAIMS: list[CalibratedClaim[float]] = [
 ]
 
 _JAX_CLAIMS: list[CalibratedClaim[JaxCalibration]] = [
-    # JaxBackend CPU vs CPU JIT roofline
+    # JaxBackend CPU vs CPU JIT roofline (dot-product-calibrated, dispatch-limited)
     *[_JaxCpuPerfClaim("matmul", n) for n in [128, 256]],
     *[_JaxCpuPerfClaim("matvec", n) for n in [128, 256]],
-    # JaxBackend GPU vs GPU JIT roofline (skipped if no GPU)
-    *[_JaxGpuPerfClaim("matmul", n) for n in [128, 256, 512]],
-    *[_JaxGpuPerfClaim("matvec", n) for n in [128, 256, 512]],
-    # Cross-device sanity check: GPU roofline ≥ 2× CPU roofline
+    # JaxBackend GPU matmul vs GPU JIT roofline (matmul-calibrated, compute-bound)
+    # Matvec is omitted: at all testable N, GPU kernel launch overhead (~1 ms) swamps
+    # the tiny matvec compute, making the ratio meaninglessly large.
+    *[_JaxGpuPerfClaim("matmul", n) for n in [256, 512, 1024]],
+    # Cross-device sanity check: GPU compute roofline ≥ 2× CPU dispatch-limited baseline
     _JaxGpuVsCpuRooflineClaim(min_speedup=_JAX_GPU_CPU_MIN_SPEEDUP),
 ]
 

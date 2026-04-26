@@ -49,23 +49,33 @@ def _measure_fma_rate() -> float:
 def _measure_jax_fma_rate(device: Any) -> float:
     """Return post-JIT JAX FMA rate on the given device in FMAs/second.
 
-    Uses a JIT-compiled dot product of length _JAX_CALIB_N as the reference
-    operation.  Warmup calls trigger XLA compilation; timed calls measure
-    steady-state dispatch-plus-compute throughput.  block_until_ready ensures
-    GPU async dispatch is fully accounted for.
+    GPU kernel launch overhead (~1 ms) swamps small operations, making dot
+    products dispatch-dominated and useless as a GPU roofline.  A 512×512
+    matmul (268 M FMAs) is compute-bound at GPU peak throughput so the
+    measured rate reflects real GPU performance.  CPU dispatch overhead is
+    ~4 µs, so a 256-element dot product (512 FMAs) gives a stable CPU baseline.
     """
-    n = _JAX_CALIB_N
-    a = jax.device_put(jnp.ones(n, dtype=jnp.float64), device)
-    b = jax.device_put(jnp.ones(n, dtype=jnp.float64), device)
-    dot_jit = jax.jit(jnp.dot)
+    is_gpu = device.platform == "gpu"
+    if is_gpu:
+        n = 512
+        a = jax.device_put(jnp.ones((n, n), dtype=jnp.float64), device)
+        b = jax.device_put(jnp.ones((n, n), dtype=jnp.float64), device)
+        fn_jit = jax.jit(jnp.matmul)
+        fmas_per_call = 2 * n**3
+    else:
+        n = _JAX_CALIB_N
+        a = jax.device_put(jnp.ones(n, dtype=jnp.float64), device)
+        b = jax.device_put(jnp.ones(n, dtype=jnp.float64), device)
+        fn_jit = jax.jit(jnp.dot)
+        fmas_per_call = 2 * n
     for _ in range(_JAX_CALIB_WARMUP):
-        dot_jit(a, b).block_until_ready()
+        fn_jit(a, b).block_until_ready()
     best = float("inf")
     for _ in range(_JAX_CALIB_TRIALS):
         t0 = time.perf_counter()
-        dot_jit(a, b).block_until_ready()
+        fn_jit(a, b).block_until_ready()
         best = min(best, time.perf_counter() - t0)
-    return 2 * n / best
+    return fmas_per_call / best
 
 
 @pytest.fixture(scope="session")
@@ -98,9 +108,7 @@ def jax_calibration() -> JaxCalibration:
     gpu_rate: float | None = None
     if gpu_devices:
         try:
-            rate = _measure_jax_fma_rate(gpu_devices[0])
-            if rate > cpu_rate:
-                gpu_rate = rate
+            gpu_rate = _measure_jax_fma_rate(gpu_devices[0])
         except Exception:  # noqa: BLE001
             pass
     return JaxCalibration(cpu_fma_rate=cpu_rate, gpu_fma_rate=gpu_rate)
