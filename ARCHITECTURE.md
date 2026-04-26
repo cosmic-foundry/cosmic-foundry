@@ -199,14 +199,6 @@ FaceField(DiscreteField[V])    — concrete DiscreteField on mesh faces, indexed
                                   The canonical return type of NumericalFlux.__call__
                                   and CartesianRestrictionOperator (degree = ndim−1).
 
-LazyDiscreteField(DiscreteField[V])
-                               — concrete DiscreteField backed by a callable
-                                  fn: idx → V; evaluation is deferred per cell.
-                                  Used for cell-indexed deferred fields:
-                                  Discretization.assemble() unit basis fields
-                                  and FVMDiscretization ghost-cell extensions.
-                                  Face-indexed fields use FaceField instead.
-
 RestrictionOperator(NumericFunction[Function[M,V], DiscreteField[V]])
                                — free: mesh: Mesh;
                                   (Rₕ f)ᵢ = |Ωᵢ|⁻¹ ∫_Ωᵢ f dV;
@@ -430,12 +422,11 @@ representative solver workloads. Establish that `NumpyBackend` is within 2×
 of NumPy raw throughput; `JaxBackend` GPU ≤ `NumpyBackend` CPU at N ≥ 32
 2-D. Add backend-parametric performance claims.
 
-**C7 — Collapse remaining LazyDiscreteField uses.** `State`, `FaceField`, and
-the rename (`MeshFunction` → `DiscreteField`, `LazyMeshFunction` →
-`LazyDiscreteField`) are done. Remaining: replace the cell-indexed
-`LazyDiscreteField` uses in `Discretization.assemble()` and the ghost-cell
-functions in `FVMDiscretization` with eager `State`-based paths; then delete
-`LazyDiscreteField`. All convergence claims must pass with the new interface.
+**C7 — Collapse LazyDiscreteField. ✓** `LazyDiscreteField` deleted.
+`FaceField` covers all face-indexed fields; `_BasisField` (private to
+`Discretization`) covers unit basis vectors in `assemble()`; `_GhostedField`
+(private to `FVMDiscretization`) covers ghost-cell extensions. All convergence
+claims pass.
 
 **C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
 `RungeKutta4`. Backend-agnostic; operates on `State`-valued fields. Lane B

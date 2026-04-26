@@ -10,8 +10,22 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
-from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
+
+
+class _BasisField(DiscreteField[sympy.Expr]):
+    """Unit basis vector eⱼ: returns 1 at target cell, 0 everywhere else."""
+
+    def __init__(self, mesh: Mesh, target: tuple[int, ...]) -> None:
+        self._mesh = mesh
+        self._target = target
+
+    @property
+    def mesh(self) -> Mesh:
+        return self._mesh
+
+    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
+        return sympy.Integer(1) if idx == self._target else sympy.Integer(0)
 
 
 class Discretization(ABC):
@@ -82,10 +96,7 @@ class Discretization(ABC):
         for j in range(n_total):
             target = to_multi(j)
 
-            def unit(idx: tuple[int, ...], t: tuple[int, ...] = target) -> sympy.Expr:
-                return sympy.Integer(1) if idx == t else sympy.Integer(0)
-
-            e_j: DiscreteField[sympy.Expr] = LazyDiscreteField(self.mesh, unit)
+            e_j: DiscreteField[sympy.Expr] = _BasisField(self.mesh, target)
             lh_ej = op(e_j)
 
             for i in range(n_total):

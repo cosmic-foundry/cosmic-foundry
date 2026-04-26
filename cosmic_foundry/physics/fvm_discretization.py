@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, cast
 
 import sympy
@@ -17,15 +18,33 @@ from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
-from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
+
+
+class _GhostedField(DiscreteField[sympy.Expr]):
+    """Cell field extended beyond mesh bounds by a ghost-cell rule."""
+
+    def __init__(
+        self,
+        mesh: CartesianMesh,
+        fn: Callable[[tuple[int, ...]], sympy.Expr],
+    ) -> None:
+        self._mesh = mesh
+        self._fn = fn
+
+    @property
+    def mesh(self) -> CartesianMesh:
+        return self._mesh
+
+    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
+        return self._fn(idx)
 
 
 def _apply_dirichlet_ghosts(
     U: DiscreteField[sympy.Expr],
     mesh: CartesianMesh,
-) -> LazyDiscreteField[sympy.Expr]:
+) -> _GhostedField:
     """Extend U with homogeneous Dirichlet ghost cells via odd reflection.
 
     For each axis a and mesh size N = shape[a]:
@@ -45,13 +64,13 @@ def _apply_dirichlet_ghosts(
                 return -extended(reflected)
         return U(idx)  # type: ignore[arg-type]
 
-    return LazyDiscreteField(mesh, extended)
+    return _GhostedField(mesh, extended)
 
 
 def _apply_zero_ghosts(
     U: DiscreteField[sympy.Expr],
     mesh: CartesianMesh,
-) -> LazyDiscreteField[sympy.Expr]:
+) -> _GhostedField:
     """Extend U with zero-valued ghost cells for no-BC operator evaluation.
 
     Semantically identical to evaluating a field that returns 0 for all
@@ -66,13 +85,13 @@ def _apply_zero_ghosts(
                 return sympy.Integer(0)
         return U(idx)  # type: ignore[arg-type]
 
-    return LazyDiscreteField(mesh, extended)
+    return _GhostedField(mesh, extended)
 
 
 def _apply_periodic_ghosts(
     U: DiscreteField[sympy.Expr],
     mesh: CartesianMesh,
-) -> LazyDiscreteField[sympy.Expr]:
+) -> _GhostedField:
     """Extend U with periodic ghost cells via wrap-around.
 
     For each axis a and mesh size N = shape[a]:
@@ -85,7 +104,7 @@ def _apply_periodic_ghosts(
         wrapped = tuple(i % N for i, N in zip(idx, shape, strict=True))
         return U(wrapped)  # type: ignore[arg-type]
 
-    return LazyDiscreteField(mesh, extended)
+    return _GhostedField(mesh, extended)
 
 
 class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
