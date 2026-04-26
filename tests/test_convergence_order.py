@@ -58,6 +58,7 @@ from cosmic_foundry.theory.continuous.differential_form import (
 )
 from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
+from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 
 # ---------------------------------------------------------------------------
 # Adaptive mesh-size selection
@@ -184,8 +185,12 @@ class _OrderClaim(_Claim):
         phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
         phi = ZeroForm(space, phi_expr, (x,))
 
-        U = CartesianRestrictionOperator(mesh, degree=ndim)(_as_n_form(phi, ndim))
-        numerical_mf = instance(U)
+        vol = mesh.cell_volume
+        U_totals = CartesianRestrictionOperator(mesh, degree=ndim)(
+            _as_n_form(phi, ndim)
+        )
+        U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
+        numerical_mf = instance(U_avg)
 
         cont_result = instance.continuous_operator(phi)
         assert isinstance(cont_result, DifferentialForm)
@@ -200,12 +205,17 @@ class _OrderClaim(_Claim):
         )
 
         test_idx: Any = (0, (n,)) if restriction_degree < ndim else (n,)
-        error = sympy.expand(
-            sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
-        )
-        # VolumeField outputs store total integrals (O(h) in 1-D), so the
-        # leading error term shifts by one power of h relative to face outputs.
-        expected_leading = order + (1 if restriction_degree == ndim else 0)
+        # When restriction_degree==ndim, exact_mf is a VolumeField (totals);
+        # numerical_mf is a State (averages).  Normalize exact by vol to compare.
+        if restriction_degree == ndim:
+            error = sympy.expand(
+                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
+            )
+        else:
+            error = sympy.expand(
+                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
+            )
+        expected_leading = order
         poly = sympy.Poly(error, h)
         for k in range(expected_leading):
             assert poly.nth(k) == 0, (
@@ -318,8 +328,11 @@ class _DirectSolverClaim(_Claim):
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
             b = Tensor(
                 [
-                    math.sin(2 * math.pi * (orig + (i + 1) * h))
-                    - math.sin(2 * math.pi * (orig + i * h))
+                    (
+                        math.sin(2 * math.pi * (orig + (i + 1) * h))
+                        - math.sin(2 * math.pi * (orig + i * h))
+                    )
+                    / h
                     for i in range(n)
                 ]
             )
@@ -409,13 +422,13 @@ class _ConvergenceRateClaim(_Claim):
             F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
             v_n = Tensor(
                 [
-                    F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)
+                    (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
                 ]
             )
             r_n = Tensor(
                 [
-                    F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)
+                    (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
                 ]
             )
@@ -444,11 +457,11 @@ class _ConvergenceRateClaim(_Claim):
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
 
-            def _phi_total(i: int, _v: float = vol, _o: float = orig) -> float:
-                return F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)
+            def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
 
-            def _rho_total(i: int, _v: float = vol, _o: float = orig) -> float:
-                return F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)
+            def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
 
             disc = FVMDiscretization(mesh, self._flux, bc)
 
@@ -461,13 +474,13 @@ class _ConvergenceRateClaim(_Claim):
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
 
-            b_m = Tensor([_rho_total(i) for i in range(n_cells)])
+            b_m = Tensor([_rho_avg(i) for i in range(n_cells)])
             u_arr = self._solver.solve(a_m, b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
-            phi_arr = Tensor([_phi_total(i) for i in range(n_cells)])
+            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
             diff = u_arr - phi_arr
-            errors.append(math.sqrt((diff @ diff) / vol))
+            errors.append(math.sqrt(vol * (diff @ diff)))
 
         hs = [float(m.cell_volume) for m in meshes]
         log_h = [math.log(hv) for hv in hs]
