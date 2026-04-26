@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.computation.linear_solver import LinearSolver
+from typing import Any, NamedTuple
+
+from cosmic_foundry.computation.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import Tensor
 
 
-class DenseJacobiSolver(LinearSolver):
+class _JacobiState(NamedTuple):
+    u: Tensor
+    r: Tensor  # cached residual b - a @ u
+    a: Tensor
+    b: Tensor
+    diag: Tensor
+    omega: float
+    iteration: int
+
+
+class DenseJacobiSolver(IterativeSolver):
     """Jacobi iterative solver for A u = b on an N × N dense matrix.
 
     The damped fixed-point iteration u^{k+1} = u^k + ω D⁻¹(b − Au^k) is a
@@ -41,8 +53,7 @@ class DenseJacobiSolver(LinearSolver):
         self._tol = tol
         self._max_iter = max_iter
 
-    def solve(self, a: Tensor, b: Tensor) -> Tensor:
-        """Solve A u = b via damped Jacobi; return the solution Tensor."""
+    def init_state(self, a: Tensor, b: Tensor) -> _JacobiState:
         n = a.shape[0]
         diag: Tensor = a.diag()
 
@@ -52,15 +63,23 @@ class DenseJacobiSolver(LinearSolver):
         )
         omega: float = min(2.0 / lambda_max_bound, 1.0)
 
-        # Damped Jacobi: u^{k+1} = u^k + ω D⁻¹(b − Au^k)
         u: Tensor = Tensor.zeros(n, backend=a.backend)
-        for _ in range(self._max_iter):
-            r: Tensor = b - a @ u
-            if r.norm() < self._tol:
-                break
-            u = u + omega * (r / diag)
+        r: Tensor = b - a @ u
+        return _JacobiState(u, r, a, b, diag, omega, 0)
 
-        return u
+    def step(self, state: Any) -> _JacobiState:
+        s: _JacobiState = state
+        u = s.u + s.omega * (s.r / s.diag)
+        r = s.b - s.a @ u
+        return _JacobiState(u, r, s.a, s.b, s.diag, s.omega, s.iteration + 1)
+
+    def converged(self, state: Any) -> bool:
+        s: _JacobiState = state
+        return bool(s.r.norm() < self._tol) or s.iteration >= self._max_iter
+
+    def extract(self, state: Any) -> Tensor:
+        s: _JacobiState = state
+        return s.u
 
 
 __all__ = ["DenseJacobiSolver"]

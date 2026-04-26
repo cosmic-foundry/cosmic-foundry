@@ -5,9 +5,7 @@ verified and how to verify it.  Adding a new claim requires only appending to
 _CLAIMS; the single parametric test covers all entries.
 
   _OrderClaim(instance)               — instance achieves O(h^p) at declared p
-  _SolverClaim(solver, flux, mesh)    — iterative solver reaches tol with
-                                        monotonically decreasing residuals and
-                                        analytically bounded iteration count
+  _SolverClaim(solver, flux, mesh)    — iterative solver residual < tol
   _DirectSolverClaim(solver, flux, mesh)
                                       — direct solver residual < tol after one
                                         factorization pass
