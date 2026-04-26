@@ -319,7 +319,9 @@ CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.Expr])
                                        — Rₕᵏ: Ωᵏ → k-cochains via exact SymPy integration.
                                          degree=ndim:   Rₕⁿ(n-Form)   → VolumeField (∫_Ωᵢ f dV, total)
                                                         (ThreeForm in 3-D, OneForm in 1-D)
-                                         degree=ndim-1: Rₕⁿ⁻¹(OneForm) → FaceField   (face-normal flux)
+                                         degree=ndim-1: Rₕⁿ⁻¹(OneForm) → FaceField   (face-normal flux ∫ F_a dA_⊥)
+                                                        OneForm used as Cartesian (n-1)-Form proxy:
+                                                        F.component(a) stands for *(F)_a dA_⊥
                                          degree=1:      Rₕ¹(OneForm)   → EdgeField   (edge line integral)
                                          degree=0:      Rₕ⁰(ZeroForm)  → PointField  (vertex evaluation)
                                          Commutation: Dₖ ∘ Rₕᵏ = Rₕᵏ⁺¹ ∘ dₖ holds exactly
