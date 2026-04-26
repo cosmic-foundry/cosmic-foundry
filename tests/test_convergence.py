@@ -1,8 +1,8 @@
 """Convergence verification for all concrete DiscreteOperator subclasses and solvers.
 
-Each convergence claim is a _Claim subclass that encodes both what is being
-verified and how to verify it.  Adding a new claim requires only appending to
-_CLAIMS; the single parametric test covers all entries.
+Each convergence claim is a CalibratedClaim subclass that encodes both what is
+being verified and how to verify it.  Adding a new claim requires only appending
+to _CLAIMS; the single parametric test covers all entries.
 
   _OrderClaim(instance)               — instance achieves O(h^p) at declared p
   _SolverClaim(solver, flux, mesh)    — iterative solver residual < tol
@@ -30,7 +30,6 @@ import functools
 import math
 import sys
 import time
-from abc import ABC, abstractmethod
 from typing import Any
 
 import pytest
@@ -59,6 +58,7 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
+from tests.claims import CalibratedClaim
 
 # ---------------------------------------------------------------------------
 # Adaptive mesh-size selection
@@ -137,20 +137,11 @@ def _convergence_n_max(fma_rate: float, n_convergence_claims: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Claim base class and concrete types
+# Claim classes
 # ---------------------------------------------------------------------------
 
 
-class _Claim(ABC):
-    @property
-    @abstractmethod
-    def description(self) -> str: ...
-
-    @abstractmethod
-    def check(self, fma_rate: float) -> None: ...
-
-
-class _OrderClaim(_Claim):
+class _OrderClaim(CalibratedClaim[float]):
     """Claim: discrete operator achieves O(h^p) convergence at order p.
 
     Verifies that the error polynomial has zeros at h⁰…h^{p-1} and a
@@ -228,7 +219,7 @@ class _OrderClaim(_Claim):
         )
 
 
-class _SolverClaim(_Claim):
+class _SolverClaim(CalibratedClaim[float]):
     """Claim: solver converges on FVMDiscretization(mesh, flux, DirichletGhostCells).
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.
@@ -264,7 +255,7 @@ class _SolverClaim(_Claim):
         ), f"Did not converge: residual {residual:.3e}"
 
 
-class _DirectSolverClaim(_Claim):
+class _DirectSolverClaim(CalibratedClaim[float]):
     """Claim: direct solver residual < tol after one factorization pass.
 
     Builds the discretization from flux, mesh, and bc_type, then verifies:
@@ -323,7 +314,7 @@ class _DirectSolverClaim(_Claim):
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
-class _ConvergenceRateClaim(_Claim):
+class _ConvergenceRateClaim(CalibratedClaim[float]):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
     The manufactured solution φ is selected automatically from candidates
@@ -532,7 +523,7 @@ _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver()]
 
 
-_CLAIMS: list[_Claim] = [
+_CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers
@@ -584,5 +575,5 @@ _N_CONVERGENCE_CLAIMS: int = sum(
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_convergence(claim: _Claim, fma_rate: float) -> None:
+def test_convergence(claim: CalibratedClaim[float], fma_rate: float) -> None:
     claim.check(fma_rate)

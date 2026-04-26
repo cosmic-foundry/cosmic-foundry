@@ -1,0 +1,508 @@
+"""Structural invariant claims for the cosmic_foundry codebase.
+
+Each claim encodes one structural property of the codebase. Adding a new
+claim requires only appending to _CLAIMS; the single parametric test covers
+all entries.
+
+Claim types:
+  _AbcInstantiationClaim    — ABCs cannot be directly instantiated
+  _HierarchyClaim           — cosmic_foundry subclass relations are correct
+  _ModuleAllClaim           — every public class in a module appears in __all__
+  _IterativeSolverJitClaim  — iterative solver runs on declared Tensors
+  _MaterializationGateClaim — converged() raises MaterializationError on .get()
+  _FactorizationJitClaim    — Factorization.factorize/solve run on declared Tensors
+  _GenericBasesClaim        — no subclass leaves a generic base's TypeVars unbound
+  _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
+  _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
+"""
+
+from __future__ import annotations
+
+import ast
+import importlib
+import inspect
+import pkgutil
+import sys
+import types
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from cosmic_foundry.computation.factorization import Factorization
+from cosmic_foundry.computation.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.tensor import MaterializationError, Tensor
+from cosmic_foundry.theory.continuous.manifold import Manifold
+from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
+from tests.claims import Claim
+
+_PROJECT_ROOT = Path(__file__).parent.parent
+_PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
+_PACKAGES = [
+    "cosmic_foundry.theory.foundation",
+    "cosmic_foundry.theory.continuous",
+    "cosmic_foundry.theory.discrete",
+    "cosmic_foundry.geometry",
+    "cosmic_foundry.physics",
+    "cosmic_foundry.computation",
+]
+_PURE_PACKAGES = [
+    _PACKAGE_ROOT / "theory" / "foundation",
+    _PACKAGE_ROOT / "theory" / "continuous",
+    _PACKAGE_ROOT / "theory" / "discrete",
+    _PACKAGE_ROOT / "geometry",
+]
+_STDLIB = sys.stdlib_module_names
+_SYMBOLIC_PACKAGES = {"sympy"}
+_JIT_N = 4
+
+
+# ---------------------------------------------------------------------------
+# Discovery helpers
+# ---------------------------------------------------------------------------
+
+
+def _discover_modules() -> list[tuple[str, types.ModuleType]]:
+    result = []
+    for pkg in _PACKAGES:
+        pkg_path = _PROJECT_ROOT / pkg.replace(".", "/")
+        for path in sorted(pkg_path.glob("*.py")):
+            if path.stem == "__init__":
+                continue
+            mod_path = f"{pkg}.{path.stem}"
+            try:
+                mod = importlib.import_module(mod_path)
+            except ImportError:
+                continue
+            result.append((mod_path, mod))
+    return result
+
+
+def _discover_abcs(
+    modules: list[tuple[str, types.ModuleType]],
+) -> list[type]:
+    seen: set[type] = set()
+    abcs: list[type] = []
+    for mod_path, mod in modules:
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (
+                obj.__module__ == mod_path
+                and getattr(obj, "__abstractmethods__", None)
+                and obj not in seen
+            ):
+                seen.add(obj)
+                abcs.append(obj)
+    return abcs
+
+
+def _discover_hierarchy_pairs(
+    abcs: list[type],
+) -> list[tuple[type, type]]:
+    seen: set[tuple[type, type]] = set()
+    pairs: list[tuple[type, type]] = []
+    for cls in abcs:
+        for base in inspect.getmro(cls)[1:]:
+            if base is object:
+                continue
+            if not getattr(base, "__module__", "").startswith("cosmic_foundry"):
+                continue
+            pair = (cls, base)
+            if pair not in seen:
+                seen.add(pair)
+                pairs.append(pair)
+    return pairs
+
+
+def _discover_concrete_iterative_solvers(
+    modules: list[tuple[str, types.ModuleType]],
+) -> list[type]:
+    seen: set[type] = set()
+    result: list[type] = []
+    for _, mod in modules:
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (
+                obj not in seen
+                and issubclass(obj, IterativeSolver)
+                and not getattr(obj, "__abstractmethods__", None)
+                and obj is not IterativeSolver
+            ):
+                seen.add(obj)
+                result.append(obj)
+    return result
+
+
+def _discover_concrete_factorizations(
+    modules: list[tuple[str, types.ModuleType]],
+) -> list[type]:
+    seen: set[type] = set()
+    result: list[type] = []
+    for _, mod in modules:
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (
+                obj not in seen
+                and issubclass(obj, Factorization)
+                and not getattr(obj, "__abstractmethods__", None)
+                and obj is not Factorization
+            ):
+                seen.add(obj)
+                result.append(obj)
+    return result
+
+
+def _all_local_classes() -> list[tuple[str, str, type]]:
+    import cosmic_foundry
+
+    results = []
+    for _, modname, _ in pkgutil.walk_packages(
+        cosmic_foundry.__path__, prefix="cosmic_foundry."
+    ):
+        try:
+            module = importlib.import_module(modname)
+        except ImportError:
+            continue
+        for clsname, cls in inspect.getmembers(module, inspect.isclass):
+            if cls.__module__ == modname:
+                results.append((modname, clsname, cls))
+    return results
+
+
+def _top_level(module: str) -> str:
+    return module.split(".")[0]
+
+
+def _third_party_imports(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text())
+    violations = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = _top_level(alias.name)
+                if (
+                    top not in _STDLIB
+                    and top != "cosmic_foundry"
+                    and top not in _SYMBOLIC_PACKAGES
+                ):
+                    violations.append(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module is None:
+                continue
+            top = _top_level(node.module)
+            if (
+                top not in _STDLIB
+                and top != "cosmic_foundry"
+                and top not in _SYMBOLIC_PACKAGES
+            ):
+                violations.append(node.module)
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Claim classes
+# ---------------------------------------------------------------------------
+
+
+class _AbcInstantiationClaim(Claim):
+    def __init__(self, cls: type) -> None:
+        self._cls = cls
+
+    @property
+    def description(self) -> str:
+        return f"abc_not_instantiable/{self._cls.__qualname__}"
+
+    def check(self) -> None:
+        with pytest.raises(TypeError):
+            self._cls()
+
+
+class _HierarchyClaim(Claim):
+    def __init__(self, child: type, parent: type) -> None:
+        self._child = child
+        self._parent = parent
+
+    @property
+    def description(self) -> str:
+        return f"hierarchy/{self._child.__qualname__}->{self._parent.__qualname__}"
+
+    def check(self) -> None:
+        assert issubclass(self._child, self._parent)
+
+
+class _ModuleAllClaim(Claim):
+    def __init__(self, mod_path: str, mod: types.ModuleType) -> None:
+        self._mod_path = mod_path
+        self._mod = mod
+
+    @property
+    def description(self) -> str:
+        return f"module_all/{self._mod_path}"
+
+    def check(self) -> None:
+        exported = set(getattr(self._mod, "__all__", []))
+        defined = {
+            name
+            for name, obj in inspect.getmembers(self._mod, inspect.isclass)
+            if obj.__module__ == self._mod_path and not name.startswith("_")
+        }
+        missing = defined - exported
+        assert not missing, f"defined but not in __all__: {missing}"
+
+
+class _IterativeSolverJitClaim(Claim):
+    def __init__(self, cls: type) -> None:
+        self._cls = cls
+
+    @property
+    def description(self) -> str:
+        return f"iterative_jit/{self._cls.__qualname__}"
+
+    def check(self) -> None:
+        n = _JIT_N
+        a = Tensor.declare(n, n)
+        b = Tensor.declare(n)
+        solver: Any = self._cls()
+        state = solver.init_state(a, b)
+        new_state = solver.step(state)
+        assert type(new_state) is type(state)
+        converged = solver.converged(state)
+        assert isinstance(converged, Tensor)
+        assert converged.shape == ()
+
+
+class _MaterializationGateClaim(Claim):
+    def __init__(self, cls: type) -> None:
+        self._cls = cls
+
+    @property
+    def description(self) -> str:
+        return f"materialization_gate/{self._cls.__qualname__}"
+
+    def check(self) -> None:
+        n = _JIT_N
+        a = Tensor.declare(n, n)
+        b = Tensor.declare(n)
+        solver: Any = self._cls()
+        state = solver.init_state(a, b)
+        converged = solver.converged(state)
+        with pytest.raises(MaterializationError):
+            converged.get()
+
+
+class _FactorizationJitClaim(Claim):
+    def __init__(self, cls: type) -> None:
+        self._cls = cls
+
+    @property
+    def description(self) -> str:
+        return f"factorization_jit/{self._cls.__qualname__}"
+
+    def check(self) -> None:
+        n = _JIT_N
+        a = Tensor.declare(n, n)
+        rhs = Tensor.declare(n)
+        factored = self._cls().factorize(a)
+        factored.solve(rhs)
+
+
+class _GenericBasesClaim(Claim):
+    """Claim: every subclass of a generic class fully binds the TypeVar parameters."""
+
+    @property
+    def description(self) -> str:
+        return "generic_bases/all_parameterized"
+
+    def check(self) -> None:
+        violations: list[str] = []
+        for modname, clsname, cls in _all_local_classes():
+            if getattr(cls, "__parameters__", ()):
+                continue  # cls itself is generic — TypeVars intentionally free
+            for base in getattr(cls, "__orig_bases__", ()):
+                if getattr(base, "__parameters__", ()):
+                    violations.append(
+                        f"{modname}.{clsname}: base '{base}' has unbound TypeVars"
+                    )
+                    break
+        if violations:
+            raise AssertionError(
+                "Classes with unbound TypeVars in generic bases:\n"
+                + "\n".join(f"  {v}" for v in violations)
+            )
+
+
+class _ManifoldIsolationClaim(Claim):
+    """Claim: the Manifold and IndexedSet hierarchies are disjoint."""
+
+    @property
+    def description(self) -> str:
+        return "manifold/disjoint_from_indexed_set"
+
+    def check(self) -> None:
+        assert not issubclass(Manifold, IndexedSet)
+        assert not issubclass(IndexedSet, Manifold)
+
+
+class _ImportBoundaryClaim(Claim):
+    """Claim: a theory/ or geometry/ source file imports no numerical packages."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"import_boundary/{self._path.relative_to(_PACKAGE_ROOT.parent)}"
+
+    def check(self) -> None:
+        violations = _third_party_imports(self._path)
+        if violations:
+            rel = self._path.relative_to(_PACKAGE_ROOT.parent)
+            raise AssertionError(
+                f"{rel} imports non-symbolic packages: {', '.join(violations)}"
+            )
+
+
+class _ParametrizeEnforcementClaim(Claim):
+    """Claim: every top-level test_* function carries @pytest.mark.parametrize."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"test_pattern/parametrize/{self._path.name}"
+
+    def check(self) -> None:
+        tree = ast.parse(self._path.read_text())
+        violations = []
+        for node in tree.body:
+            if not (
+                isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+            ):
+                continue
+            has_parametrize = any(
+                isinstance(d, ast.Call)
+                and isinstance(d.func, ast.Attribute)
+                and d.func.attr == "parametrize"
+                for d in node.decorator_list
+            )
+            if not has_parametrize:
+                violations.append(node.name)
+        if violations:
+            raise AssertionError(
+                f"{self._path.name}: test functions missing @pytest.mark.parametrize: "
+                + ", ".join(violations)
+            )
+
+
+class _BodyDispatchClaim(Claim):
+    """Claim: every top-level test_* body is a single claim.check(...) dispatch."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"test_pattern/body_dispatch/{self._path.name}"
+
+    def check(self) -> None:
+        tree = ast.parse(self._path.read_text())
+        violations = []
+        for node in tree.body:
+            if not (
+                isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+            ):
+                continue
+            body = node.body
+            if len(body) != 1:
+                violations.append(f"{node.name}: {len(body)} statements in body")
+                continue
+            stmt = body[0]
+            if not isinstance(stmt, ast.Expr):
+                violations.append(f"{node.name}: body is not an expression statement")
+                continue
+            call = stmt.value
+            if not (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "check"
+            ):
+                violations.append(f"{node.name}: body does not call .check()")
+        if violations:
+            raise AssertionError(
+                f"{self._path.name}: test functions with non-dispatch bodies: "
+                + "; ".join(violations)
+            )
+
+
+class _AutoDiscoveryImportClaim(Claim):
+    """Claim: test_structure.py imports no class that any _discover_concrete_* returns.
+
+    Finds every function in this module whose name starts with _discover_concrete_,
+    calls it, and takes the union of results.  Adding a new _discover_concrete_*
+    function automatically extends the coverage without touching this claim.
+    """
+
+    @property
+    def description(self) -> str:
+        return "test_pattern/auto_discovery_imports"
+
+    def check(self) -> None:
+        import tests.test_structure as _self
+
+        discovered = {
+            cls.__name__
+            for name, fn in inspect.getmembers(_self, inspect.isfunction)
+            if name.startswith("_discover_concrete_")
+            for cls in fn(_MODULES)
+        }
+        tree = ast.parse(Path(__file__).read_text())
+        violations = []
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.startswith("cosmic_foundry")
+            ):
+                continue
+            for alias in node.names:
+                if alias.name in discovered:
+                    violations.append(f"{node.module}.{alias.name}")
+        if violations:
+            raise AssertionError(
+                "test_structure.py imports auto-discovered classes directly "
+                "(use _discover_concrete_* instead): " + ", ".join(violations)
+            )
+
+
+# ---------------------------------------------------------------------------
+# Auto-discovery and registry
+# ---------------------------------------------------------------------------
+
+_MODULES = _discover_modules()
+_ABCS = _discover_abcs(_MODULES)
+_HIERARCHY_PAIRS = _discover_hierarchy_pairs(_ABCS)
+_ITERATIVE_SOLVERS = _discover_concrete_iterative_solvers(_MODULES)
+_FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
+_TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
+
+_CLAIMS: list[Claim] = [
+    *[_AbcInstantiationClaim(cls) for cls in _ABCS],
+    *[_HierarchyClaim(child, parent) for child, parent in _HIERARCHY_PAIRS],
+    *[_ModuleAllClaim(mod_path, mod) for mod_path, mod in _MODULES],
+    *[_IterativeSolverJitClaim(cls) for cls in _ITERATIVE_SOLVERS],
+    *[_MaterializationGateClaim(cls) for cls in _ITERATIVE_SOLVERS],
+    *[_FactorizationJitClaim(cls) for cls in _FACTORIZATIONS],
+    _GenericBasesClaim(),
+    _ManifoldIsolationClaim(),
+    *[
+        _ImportBoundaryClaim(path)
+        for pkg_dir in _PURE_PACKAGES
+        for path in sorted(pkg_dir.rglob("*.py"))
+    ],
+    *[_ParametrizeEnforcementClaim(p) for p in _TEST_FILES],
+    *[_BodyDispatchClaim(p) for p in _TEST_FILES],
+    _AutoDiscoveryImportClaim(),
+]
+
+
+@pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
+def test_structure(claim: Claim) -> None:
+    claim.check()

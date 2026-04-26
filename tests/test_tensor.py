@@ -1,4 +1,4 @@
-"""Correctness tests for Tensor backends and the pluggable backend system.
+"""Tensor correctness claims for all backends.
 
 Each claim encodes one correctness property of the Tensor / Backend interface.
 Adding a new claim requires only appending to _CLAIMS; the single parametric
@@ -10,17 +10,18 @@ Claim types:
   _ConversionClaim(src, dst)     — .to() preserves shape and element values
   _MixedBackendClaim(op)         — mixing backends raises ValueError
   _FactoryClaim(backend, name)   — Tensor.zeros / Tensor.eye use the given backend
+  _SliceClaim(backend, op)       — slice read/write matches PythonBackend reference
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Any
 
 import pytest
 
 from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
+from tests.claims import Claim
 
 _PY = PythonBackend()
 _NP = NumpyBackend()
@@ -29,21 +30,12 @@ _JAX = JaxBackend()
 _NON_PY_BACKENDS = (_NP, _JAX)
 
 
-class _TensorClaim(ABC):
-    @property
-    @abstractmethod
-    def description(self) -> str: ...
-
-    @abstractmethod
-    def check(self) -> None: ...
-
-
 # ---------------------------------------------------------------------------
 # Round-trip: to_native → from_native leaves values unchanged
 # ---------------------------------------------------------------------------
 
 
-class _RoundtripClaim(_TensorClaim):
+class _RoundtripClaim(Claim):
     def __init__(self, backend: Any, label: str, data: Any) -> None:
         self._backend = backend
         self._label = label
@@ -67,7 +59,7 @@ class _RoundtripClaim(_TensorClaim):
 # ---------------------------------------------------------------------------
 
 
-class _ArithmeticClaim(_TensorClaim):
+class _ArithmeticClaim(Claim):
     def __init__(self, label: str, fn: Any, backend: Any = None) -> None:
         self._label = label
         self._fn = fn
@@ -91,7 +83,7 @@ class _ArithmeticClaim(_TensorClaim):
 # ---------------------------------------------------------------------------
 
 
-class _ConversionClaim(_TensorClaim):
+class _ConversionClaim(Claim):
     def __init__(self, src: Any, dst: Any, label: str, data: Any) -> None:
         self._src = src
         self._dst = dst
@@ -121,7 +113,7 @@ class _ConversionClaim(_TensorClaim):
 # ---------------------------------------------------------------------------
 
 
-class _MixedBackendClaim(_TensorClaim):
+class _MixedBackendClaim(Claim):
     def __init__(self, label: str, fn: Any, a_backend: Any, b_backend: Any) -> None:
         self._label = label
         self._fn = fn
@@ -147,7 +139,7 @@ class _MixedBackendClaim(_TensorClaim):
 # ---------------------------------------------------------------------------
 
 
-class _FactoryClaim(_TensorClaim):
+class _FactoryClaim(Claim):
     def __init__(self, backend: Any, name: str, fn: Any) -> None:
         self._backend = backend
         self._name = name
@@ -170,7 +162,7 @@ class _FactoryClaim(_TensorClaim):
 # ---------------------------------------------------------------------------
 
 
-class _SliceClaim(_TensorClaim):
+class _SliceClaim(Claim):
     """Claim: a slice read or write gives the same result as PythonBackend."""
 
     def __init__(self, label: str, fn: Any, backend: Any = None) -> None:
@@ -263,7 +255,6 @@ _ARITHMETIC_CASES = [
     ("diag", lambda b: _mk_mat(b).diag()),
     ("zeros_factory", lambda b: Tensor.zeros(2, 3, backend=b)),
     ("eye_factory", lambda b: Tensor.eye(3, backend=b)),
-    # Element-wise reductions and new ops
     ("abs_vec", lambda b: Tensor([-1.0, 2.0, -3.0], backend=b).abs()),
     ("abs_mat", lambda b: Tensor([[-1.0, 2.0], [3.0, -4.0]], backend=b).abs()),
     ("max_vec", lambda b: Tensor([1.0, 5.0, 3.0], backend=b).max()),
@@ -352,8 +343,8 @@ _MIXED_OPS = [
 # Registry
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[_TensorClaim] = [
-    # Round-trips for all backends (PythonBackend is its own reference)
+_CLAIMS: list[Claim] = [
+    # Round-trips for all backends
     *[
         _RoundtripClaim(b, label, data)
         for b in (_PY, _NP, _JAX)
@@ -402,5 +393,5 @@ _CLAIMS: list[_TensorClaim] = [
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_tensor_backend(claim: _TensorClaim) -> None:
+def test_tensor(claim: Claim) -> None:
     claim.check()

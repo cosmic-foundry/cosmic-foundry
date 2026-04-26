@@ -26,13 +26,13 @@ bypassed or replaced by pure-Python fallback code.
 from __future__ import annotations
 
 import time
-from abc import ABC, abstractmethod
 
 import numpy as np
 import pytest
 
 from cosmic_foundry.computation.backends import NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor
+from tests.claims import CalibratedClaim
 
 # Regressions larger than this multiple of the roofline prediction fail.
 EFFICIENCY_FACTOR = 8
@@ -53,13 +53,8 @@ _NP = NumpyBackend()
 # ---------------------------------------------------------------------------
 
 
-class _PerfClaim(ABC):
-    @property
-    @abstractmethod
-    def description(self) -> str: ...
-
-    @abstractmethod
-    def check(self, fma_rate: float) -> None: ...
+class _PerfClaim(CalibratedClaim[float]):
+    pass
 
 
 class _MatvecPerfClaim(_PerfClaim):
@@ -298,7 +293,7 @@ class _BackendSpeedupClaim(_PerfClaim):
 # Registry
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[_PerfClaim] = [
+_CLAIMS: list[CalibratedClaim[float]] = [
     # PythonBackend vs FMA roofline
     *[_DotPerfClaim(n) for n in [8, 32, 128]],
     *[_MatvecPerfClaim(n) for n in [8, 16, 32]],
@@ -313,5 +308,5 @@ _CLAIMS: list[_PerfClaim] = [
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_performance(claim: _PerfClaim, fma_rate: float) -> None:
+def test_performance(claim: CalibratedClaim[float], fma_rate: float) -> None:
     claim.check(fma_rate)
