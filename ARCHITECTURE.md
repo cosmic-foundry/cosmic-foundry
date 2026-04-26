@@ -121,6 +121,11 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
         └── ThreeForm                — volume form; degree = 3; codomain sympy.Expr
 
 DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifold, order
+├── ExteriorDerivative                       — d: Ω^k → Ω^{k+1}; exact chain map on M.
+│                                              degree=0: gradient  (ZeroForm  → OneForm)
+│                                              degree=1: curl      (OneForm   → TwoForm,  3D only)
+│                                              degree=2: divergence(TwoForm   → ThreeForm, n=3)
+│                                              d∘d = 0 identically (exact sequence, no truncation error)
 └── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
                                                earned by: integral form ∮_∂Ωᵢ F·n dA = ∫_Ωᵢ S dV
                                                is fully determined by flux + divergence theorem,
@@ -157,7 +162,8 @@ Constraint(ABC)                       — interface: support → Manifold
 | `TwoForm` | `FaceField[V]` | Ω²; face-integrated field; scalar flux F·n̂·|A| or matrix-valued |
 | `ThreeForm` | `CellField[V]` / `State` | Ωⁿ (volume form); cell-averaged field (FVM-style DOFs) |
 | `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
-| `DifferentialOperator` | `DiscreteOperator` | map between fields |
+| `ExteriorDerivative` | `DiscreteExteriorDerivative` | exact chain map; d∘d=0; no truncation error |
+| `DifferentialOperator` | `DiscreteOperator` | map between fields (approximation, O(hᵖ) error) |
 | `DivergenceFormEquation` | — | bridge: `Discretization` maps a `DivergenceFormEquation` to a `DiscreteOperator` |
 | `BoundaryCondition` | *(none)* | BC is a continuous concept; enters the discrete layer only through `Discretization` |
 | *(none)* | `RestrictionOperator` | bridge concept: maps continuous `Field` → `DiscreteField`; no pure continuous analog |
@@ -195,7 +201,8 @@ DiscreteField(NumericFunction[Mesh, V])
 │                                 Indexed by vertex multi-index (i₀,…,iₙ₋₁);
 │                                 vertex shape = cell shape + 1 per axis.
 │                                 Natural DOF for finite-difference schemes.
-│                                 No concrete subclasses yet.
+│                                 Concrete subclass:
+│                                   _CallablePointField — callable-backed (CartesianExteriorDerivative)
 ├── EdgeField(DiscreteField[V])
 │                              — abstract; Ω¹ DOF location: values at mesh
 │                                 edges. Discrete counterpart of OneForm.
@@ -203,7 +210,8 @@ DiscreteField(NumericFunction[Mesh, V])
 │                                 FaceField's (normal_axis, idx_low).
 │                                 Natural DOF for the electric field E in MHD
 │                                 constrained transport (Faraday: d: Ω¹ → Ω²).
-│                                 No concrete subclasses yet.
+│                                 Concrete subclass:
+│                                   _CallableEdgeField — callable-backed (CartesianExteriorDerivative)
 ├── CellField(DiscreteField[V])
 │                              — abstract; Ωⁿ DOF location: cell-averaged
 │                                 values (volume-form DOFs). Discrete
@@ -275,6 +283,14 @@ NumericalFlux(DiscreteOperator)
                               result((axis, idx_low)) and returns the flux
                               F·n̂·|face_area| at that face.  Inherits order
                               and continuous_operator from DiscreteOperator.
+
+DiscreteExteriorDerivative(ABC)
+                            — NOT a DiscreteOperator; exact chain map, no truncation
+                              error. Interface: mesh: Mesh, degree: int,
+                              __call__(field: DiscreteField) → DiscreteField.
+                              d∘d = 0 exactly (algebraic identity).
+                              Does not carry order or continuous_operator because
+                              it is not an approximation — it is exact by construction.
 ```
 
 ### geometry/
@@ -300,6 +316,15 @@ CartesianRestrictionOperator(RestrictionOperator)
                                          integration over each cell; degree selects
                                          cell-average (degree = ndim) or face-average
                                          (degree = ndim − 1)
+
+CartesianExteriorDerivative(DiscreteExteriorDerivative)
+                                       — exact discrete exterior derivative on CartesianMesh.
+                                         degree=0: (d₀φ)(a,v) = φ(v+eₐ) − φ(v)   (gradient)
+                                         degree=1: Yee-grid curl (3D only)
+                                           (d₁A)(a,c): boundary circulation of A
+                                           around the face with normal axis a
+                                         degree=2: (d₂F)(c) = Σₐ[F(a,c)−F(a,c−eₐ)] (divergence)
+                                         d_{k+1}∘d_k = 0 exactly for all k.
 ```
 
 ### physics/

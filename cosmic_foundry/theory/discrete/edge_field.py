@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections.abc import Callable
 from typing import TypeVar
 
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
+from cosmic_foundry.theory.discrete.mesh import Mesh
 
 _V = TypeVar("_V")
 
@@ -29,6 +31,25 @@ class EdgeField(DiscreteField[_V]):
     @abstractmethod
     def __call__(self, edge: tuple[int, tuple[int, ...]]) -> _V:  # type: ignore[override]
         """Evaluate the field at edge (tangent_axis, idx_low)."""
+
+
+class _CallableEdgeField(EdgeField[_V]):
+    """Callable-backed concrete EdgeField."""
+
+    def __init__(
+        self,
+        mesh: Mesh,
+        fn: Callable[[tuple[int, tuple[int, ...]]], _V],
+    ) -> None:
+        self._mesh = mesh
+        self._fn = fn
+
+    @property
+    def mesh(self) -> Mesh:
+        return self._mesh
+
+    def __call__(self, edge: tuple[int, tuple[int, ...]]) -> _V:  # type: ignore[override]
+        return self._fn(edge)
 
 
 __all__ = ["EdgeField"]
