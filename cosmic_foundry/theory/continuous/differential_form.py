@@ -149,6 +149,10 @@ class TwoForm(DifferentialForm[D, sympy.Matrix]):
     def symbols(self) -> tuple[sympy.Symbol, ...]:
         return self._symbols
 
+    def component(self, i: int, j: int) -> sympy.Expr:
+        """The (i, j) component of this two-form (antisymmetric matrix entry)."""
+        return self._matrix[i, j]
+
 
 class ThreeForm(DifferentialForm[D, sympy.Expr]):
     """A differential 3-form: a volume form (scalar density).

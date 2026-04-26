@@ -25,6 +25,7 @@ from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
 from cosmic_foundry.theory.continuous.divergence_form_equation import (
     DivergenceFormEquation,
 )
+from cosmic_foundry.theory.continuous.exterior_derivative import ExteriorDerivative
 from cosmic_foundry.theory.continuous.field import (
     Field,
     SymmetricTensorField,
@@ -66,6 +67,7 @@ __all__ = [
     "DifferentialForm",
     "DifferentialOperator",
     "DivergenceFormEquation",
+    "ExteriorDerivative",
     "Field",
     "LocalBoundaryCondition",
     "Manifold",
