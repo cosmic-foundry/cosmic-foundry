@@ -171,7 +171,11 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
 
             gradient = (
                 sum(
-                    c_k * (U(shift(idx_low, k + 1)) - U(shift(idx_low, -k)))  # type: ignore[arg-type]
+                    c_k
+                    * (
+                        U(shift(idx_low, k + 1))  # type: ignore[arg-type]
+                        - U(shift(idx_low, -k))  # type: ignore[arg-type]
+                    )
                     for k, c_k in enumerate(self._coeffs)
                 )
                 / h

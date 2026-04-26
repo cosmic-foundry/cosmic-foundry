@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections.abc import Callable
 from typing import TypeVar
 
 from cosmic_foundry.theory.discrete.mesh import Mesh
@@ -28,6 +29,21 @@ class DiscreteField(NumericFunction[Mesh, V]):
     @abstractmethod
     def mesh(self) -> Mesh:
         """The mesh on which this field's values are defined."""
+
+
+class _CallableDiscreteField(DiscreteField[V]):
+    """Callable-backed concrete DiscreteField with no implied storage convention."""
+
+    def __init__(self, mesh: Mesh, fn: Callable[..., V]) -> None:
+        self._mesh = mesh
+        self._fn = fn
+
+    @property
+    def mesh(self) -> Mesh:
+        return self._mesh
+
+    def __call__(self, *args: object) -> V:
+        return self._fn(*args)
 
 
 __all__ = ["DiscreteField"]

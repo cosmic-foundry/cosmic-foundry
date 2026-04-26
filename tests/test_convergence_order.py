@@ -52,10 +52,13 @@ from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.physics.fvm_discretization import FVMDiscretization
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
+    OneForm,
+    ThreeForm,
     ZeroForm,
 )
 from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
+from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 
 # ---------------------------------------------------------------------------
 # Adaptive mesh-size selection
@@ -182,28 +185,45 @@ class _OrderClaim(_Claim):
         phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
         phi = ZeroForm(space, phi_expr, (x,))
 
-        U = CartesianRestrictionOperator(mesh, degree=ndim)(phi)
-        numerical_mf = instance(U)
+        vol = mesh.cell_volume
+        U_totals = CartesianRestrictionOperator(mesh, degree=ndim)(
+            _as_n_form(phi, ndim)
+        )
+        U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
+        numerical_mf = instance(U_avg)
 
         cont_result = instance.continuous_operator(phi)
         assert isinstance(cont_result, DifferentialForm)
         restriction_degree = ndim - cont_result.degree
+        if restriction_degree == ndim:
+            # cont_result is ZeroForm; wrap as n-form for de Rham-correct restriction
+            cont_form: DifferentialForm = _as_n_form(cont_result, ndim)
+        else:
+            cont_form = cont_result
         exact_mf = CartesianRestrictionOperator(mesh, degree=restriction_degree)(
-            cont_result
+            cont_form
         )
 
         test_idx: Any = (0, (n,)) if restriction_degree < ndim else (n,)
-        error = sympy.expand(
-            sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
-        )
+        # When restriction_degree==ndim, exact_mf is a VolumeField (totals);
+        # numerical_mf is a State (averages).  Normalize exact by vol to compare.
+        if restriction_degree == ndim:
+            error = sympy.expand(
+                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
+            )
+        else:
+            error = sympy.expand(
+                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
+            )
+        expected_leading = order
         poly = sympy.Poly(error, h)
-        for k in range(order):
+        for k in range(expected_leading):
             assert poly.nth(k) == 0, (
                 f"Unexpected O(h^{k}) term in {type(instance).__name__}"
                 f"(order={order}): {poly.nth(k)}"
             )
-        assert poly.nth(order) != 0, (
-            f"Missing O(h^{order}) leading term in "
+        assert poly.nth(expected_leading) != 0, (
+            f"Missing O(h^{expected_leading}) leading term in "
             f"{type(instance).__name__}(order={order})"
         )
 
@@ -484,6 +504,15 @@ class _ConvergenceRateClaim(_Claim):
             f"{type(self._flux).__name__}(order={self._flux.order}) — "
             f"errors do not lie on h^p even though the slope is correct"
         )
+
+
+def _as_n_form(f: ZeroForm, ndim: int) -> DifferentialForm:
+    """Wrap scalar density ZeroForm as the n-form f·dV (Cartesian coordinates)."""
+    if ndim == 1:
+        return OneForm(f.manifold, (f.expr,), f.symbols)
+    if ndim == 3:
+        return ThreeForm(f.manifold, f.expr, f.symbols)
+    raise NotImplementedError(f"_as_n_form not implemented for ndim={ndim}")
 
 
 _manifold = EuclideanManifold(1)

@@ -167,7 +167,11 @@ class AdvectiveFlux(NumericalFlux[sympy.Expr]):
                 return idx[:axis] + (idx[axis] + delta,) + idx[axis + 1 :]
 
             face_value = sum(
-                c_k * (U(shift(idx_low, k + 1)) + U(shift(idx_low, -k)))  # type: ignore[arg-type]
+                c_k
+                * (
+                    U(shift(idx_low, k + 1))  # type: ignore[arg-type]
+                    + U(shift(idx_low, -k))  # type: ignore[arg-type]
+                )
                 for k, c_k in enumerate(self._coeffs)
             )
             return face_value * face_area

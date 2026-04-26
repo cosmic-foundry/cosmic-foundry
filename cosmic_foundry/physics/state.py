@@ -1,4 +1,4 @@
-"""State: concrete Tensor-backed DiscreteField[float]."""
+"""State: concrete Tensor-backed DiscreteField[float] of cell averages."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ from cosmic_foundry.theory.discrete.mesh import Mesh
 
 
 class State(DiscreteField[float]):
-    """Concrete Tensor-backed discrete scalar field.
+    """Concrete Tensor-backed discrete scalar field of cell averages.
 
-    State is the simulation-state object: a DiscreteField[float] whose cell
-    values are stored in a flat Tensor of shape (n_cells,).  Index mapping
-    follows axis-0-fastest ordering: flat = Σ_a idx[a] · stride[a], where
-    stride[0] = 1 and stride[a] = Π_{k<a} shape[k].
+    State is the simulation-state object: a DiscreteField[float] whose values
+    are cell-average quantities φ̄ᵢ = (1/|Ωᵢ|) ∫_Ωᵢ f dV, stored in a flat
+    Tensor of shape (n_cells,).  Index mapping follows axis-0-fastest ordering:
+    flat = Σ_a idx[a] · stride[a], where stride[0] = 1 and
+    stride[a] = Π_{k<a} shape[k].
 
     When backed by PythonBackend, the Tensor leaves may hold any Python
     object (e.g. sympy.Expr for symbolic computation); __call__ returns
@@ -40,7 +41,7 @@ class State(DiscreteField[float]):
         """The underlying flat Tensor of cell values."""
         return self._data
 
-    def __call__(self, idx: tuple[int, ...]) -> float:  # type: ignore[override]  # LSP: DiscreteField inherits NumericFunction[Mesh, V] whose __call__ takes a Mesh, not a cell index; narrowing to CellIndex[M] is deferred
+    def __call__(self, idx: tuple[int, ...]) -> float:  # type: ignore[override]
         shape = self._mesh.shape
         flat = 0
         stride = 1
