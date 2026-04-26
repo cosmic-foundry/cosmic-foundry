@@ -11,7 +11,7 @@ from cosmic_foundry.theory.continuous.advection_operator import AdvectionOperato
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
-from cosmic_foundry.theory.discrete.face_field import FaceField
+from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -172,7 +172,7 @@ class AdvectiveFlux(NumericalFlux[sympy.Expr]):
             )
             return face_value * face_area
 
-        return FaceField(mesh, compute)
+        return _CallableFaceField(mesh, compute)
 
 
 __all__ = ["AdvectiveFlux"]

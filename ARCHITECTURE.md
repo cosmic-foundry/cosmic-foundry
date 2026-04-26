@@ -151,8 +151,8 @@ Constraint(ABC)                       — interface: support → Manifold
 | `Manifold` | `Mesh` | adds chart / coordinate geometry |
 | *(none)* | `StructuredMesh` | regularity qualifier; no smooth analog |
 | `Field[V]` | `DiscreteField[V]` | map from space to value |
-| `ZeroForm` | `State` (in `physics/`) | concrete scalar cell-average field; Tensor-backed |
-| `OneForm` | `FaceField[scalar]` | scalar flux F·n̂·|A| at each face |
+| `ZeroForm` | `CellField[V]` / `State` | abstract cell-indexed field; `State` is the concrete Tensor-backed instance |
+| `OneForm` | `FaceField[scalar]` | abstract face-indexed field; scalar flux F·n̂·|A| at each face |
 | `TwoForm` | `FaceField[sympy.Matrix]` | matrix-valued face flux (e.g. stress tensor); needed Epoch 5+ |
 | `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
 | `DifferentialOperator` | `DiscreteOperator` | map between fields |
@@ -187,17 +187,27 @@ DiscreteField(NumericFunction[Mesh, V])
                                   V is unconstrained: sympy.Expr for symbolic
                                   evaluation (order proofs), float for numeric
                                   paths, or any PythonBackend-compatible type.
-
-FaceField(DiscreteField[V])    — concrete DiscreteField on mesh faces, indexed
-                                  by (axis, idx_low): axis ∈ [0, ndim) is the
-                                  face normal direction; idx_low ∈ ℤⁿ is the
-                                  low-side cell.  Backed by a callable
-                                  fn: (axis, idx_low) → V.
+├── CellField(DiscreteField[V])
+│                              — abstract; narrows DiscreteField to cell-center
+│                                 domain. Discrete counterpart of ZeroForm.
+│                                 Concrete subclasses:
+│                                   State (physics/) — Tensor-backed, float
+│                                   _BasisField      — sympy unit basis (assemble)
+│                                   _GhostedField    — ghost-cell extension (FVM)
+│                                   _CartesianCellAverage — sympy cell averages (Rₕ)
+└── FaceField(DiscreteField[V])
+                               — abstract; narrows DiscreteField to face domain.
+                                  Indexed by (axis, idx_low): axis ∈ [0, ndim)
+                                  is the face normal; idx_low ∈ ℤⁿ is the
+                                  low-side cell index.
                                   Discrete counterpart of differential forms:
                                     FaceField[scalar] ↔ OneForm (1-form)
                                     FaceField[sympy.Matrix] ↔ TwoForm (2-form)
                                   The canonical return type of NumericalFlux.__call__
                                   and CartesianRestrictionOperator (degree = ndim−1).
+                                  Concrete subclass:
+                                    _CallableFaceField — callable-backed (NumericalFlux,
+                                                         CartesianRestrictionOperator)
 
 RestrictionOperator(NumericFunction[Function[M,V], DiscreteField[V]])
                                — free: mesh: Mesh;
@@ -279,11 +289,13 @@ Concrete PDE model implementations and simulation state.
 Application/concreteness layer: may import from all other packages.
 
 ```
-State(DiscreteField[float])    — concrete simulation-state field; stores a dense
-                                  Tensor of float values indexed by mesh cell.
-                                  Backed by any Backend; multi-index access via
-                                  mesh shape. The canonical type for time
-                                  integrators, checkpoint/restart, and I/O.
+State(DiscreteField[float])    — concrete Tensor-backed simulation-state field.
+                                  Subclasses DiscreteField directly (not CellField
+                                  or FaceField) so it can represent cell-centered
+                                  or face-centered quantities as the simulation
+                                  requires. Multi-index cell access via mesh shape.
+                                  Backed by any Backend. The canonical type for
+                                  time integrators, checkpoint/restart, and I/O.
                                   PythonBackend with sympy.Expr leaves also works,
                                   enabling symbolic evaluation for convergence proofs.
 

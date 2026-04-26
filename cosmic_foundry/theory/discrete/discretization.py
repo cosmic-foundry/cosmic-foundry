@@ -8,12 +8,13 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.theory.discrete.cell_field import CellField
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
 
 
-class _BasisField(DiscreteField[sympy.Expr]):
+class _BasisField(CellField[sympy.Expr]):
     """Unit basis vector eⱼ: returns 1 at target cell, 0 everywhere else."""
 
     def __init__(self, mesh: Mesh, target: tuple[int, ...]) -> None:
