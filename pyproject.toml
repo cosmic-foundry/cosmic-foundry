@@ -114,3 +114,8 @@ markers = [
     "multihost: requires jax.distributed multi-process setup",
     "visual: pytest-mpl image-comparison tests",
 ]
+filterwarnings = [
+    # sympy 1.14 calls mpmath.libmp.bitcount() which mpmath 1.4 deprecated;
+    # fixed upstream, filter until sympy cuts a release with the fix.
+    "ignore:bitcount function is deprecated:DeprecationWarning:mpmath",
+]
