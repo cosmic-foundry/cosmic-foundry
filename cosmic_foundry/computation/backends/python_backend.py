@@ -192,24 +192,34 @@ class PythonBackend:
                 return [row[r1] for row in raw[r0]]
         raise NotImplementedError(f"PythonBackend.slice_get: unsupported idx {idx!r}")
 
-    def slice_set(self, raw: Any, idx: Any, value: Any, shape: tuple[int, ...]) -> None:
-        """Assign raw[idx] = value in-place; idx contains at least one slice."""
-        if isinstance(idx, slice):
+    def slice_set(self, raw: Any, idx: Any, value: Any, shape: tuple[int, ...]) -> Any:
+        """Assign raw[idx] = value in-place; return raw."""
+        if isinstance(idx, int | slice):
             raw[idx] = value
-            return
-        if isinstance(idx, tuple) and len(idx) == 2:
-            r0, r1 = idx
-            if isinstance(r0, int) and isinstance(r1, slice):
-                raw[r0][r1] = value
-                return
-            if isinstance(r0, slice) and isinstance(r1, int):
-                for row, v in zip(raw[r0], value, strict=False):
-                    row[r1] = v
-                return
-            if isinstance(r0, slice) and isinstance(r1, slice):
-                for row, val_row in zip(raw[r0], value, strict=False):
-                    row[r1] = val_row
-                return
+            return raw
+        if isinstance(idx, tuple):
+            if len(idx) == 1:
+                raw[idx[0]] = value
+                return raw
+            if all(isinstance(i, int) for i in idx):
+                data = raw
+                for i in idx[:-1]:
+                    data = data[i]
+                data[idx[-1]] = value
+                return raw
+            if len(idx) == 2:
+                r0, r1 = idx
+                if isinstance(r0, int) and isinstance(r1, slice):
+                    raw[r0][r1] = value
+                    return raw
+                if isinstance(r0, slice) and isinstance(r1, int):
+                    for row, v in zip(raw[r0], value, strict=False):
+                        row[r1] = v
+                    return raw
+                if isinstance(r0, slice) and isinstance(r1, slice):
+                    for row, val_row in zip(raw[r0], value, strict=False):
+                        row[r1] = val_row
+                    return raw
         raise NotImplementedError(f"PythonBackend.slice_set: unsupported idx {idx!r}")
 
     def svd(self, raw: list[Any], shape: tuple[int, ...]) -> tuple[Any, Any, Any]:

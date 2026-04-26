@@ -19,11 +19,14 @@ from typing import Any
 
 import pytest
 
-from cosmic_foundry.computation.backends import NumpyBackend, PythonBackend
+from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor, einsum
 
 _PY = PythonBackend()
 _NP = NumpyBackend()
+_JAX = JaxBackend()
+
+_NON_PY_BACKENDS = (_NP, _JAX)
 
 
 class _TensorClaim(ABC):
@@ -60,25 +63,26 @@ class _RoundtripClaim(_TensorClaim):
 
 
 # ---------------------------------------------------------------------------
-# Arithmetic: NumpyBackend result matches PythonBackend reference
+# Arithmetic: backend result matches PythonBackend reference
 # ---------------------------------------------------------------------------
 
 
 class _ArithmeticClaim(_TensorClaim):
-    def __init__(self, label: str, fn: Any) -> None:
+    def __init__(self, label: str, fn: Any, backend: Any = None) -> None:
         self._label = label
         self._fn = fn
+        self._backend = _NP if backend is None else backend
 
     @property
     def description(self) -> str:
-        return f"arithmetic/{self._label}"
+        return f"arithmetic/{self._label}/{type(self._backend).__name__}"
 
     def check(self) -> None:
         py_result = self._fn(_PY)
-        np_result = self._fn(_NP)
-        assert _approx_equal(py_result.to_list(), np_result.to_list()), (
+        test_result = self._fn(self._backend)
+        assert _approx_equal(py_result.to_list(), test_result.to_list()), (
             f"{self.description}: PythonBackend={py_result.to_list()!r} "
-            f"NumpyBackend={np_result.to_list()!r}"
+            f"{type(self._backend).__name__}={test_result.to_list()!r}"
         )
 
 
@@ -118,19 +122,24 @@ class _ConversionClaim(_TensorClaim):
 
 
 class _MixedBackendClaim(_TensorClaim):
-    def __init__(self, label: str, fn: Any) -> None:
+    def __init__(self, label: str, fn: Any, a_backend: Any, b_backend: Any) -> None:
         self._label = label
         self._fn = fn
+        self._a_backend = a_backend
+        self._b_backend = b_backend
 
     @property
     def description(self) -> str:
-        return f"mixed_backend/{self._label}"
+        return (
+            f"mixed_backend/{self._label}/"
+            f"{type(self._a_backend).__name__}+{type(self._b_backend).__name__}"
+        )
 
     def check(self) -> None:
-        py_t = Tensor([1.0, 2.0, 3.0], backend=_PY)
-        np_t = Tensor([1.0, 2.0, 3.0], backend=_NP)
+        a = Tensor([1.0, 2.0, 3.0], backend=self._a_backend)
+        b = Tensor([1.0, 2.0, 3.0], backend=self._b_backend)
         with pytest.raises(ValueError, match="mix backends"):
-            self._fn(py_t, np_t)
+            self._fn(a, b)
 
 
 # ---------------------------------------------------------------------------
@@ -157,27 +166,28 @@ class _FactoryClaim(_TensorClaim):
 
 
 # ---------------------------------------------------------------------------
-# Slice read/write: PythonBackend and NumpyBackend must agree
+# Slice read/write: all non-Python backends must agree with PythonBackend
 # ---------------------------------------------------------------------------
 
 
 class _SliceClaim(_TensorClaim):
-    """Claim: a slice read or write gives the same result on both backends."""
+    """Claim: a slice read or write gives the same result as PythonBackend."""
 
-    def __init__(self, label: str, fn: Any) -> None:
+    def __init__(self, label: str, fn: Any, backend: Any = None) -> None:
         self._label = label
         self._fn = fn
+        self._backend = _NP if backend is None else backend
 
     @property
     def description(self) -> str:
-        return f"slice/{self._label}"
+        return f"slice/{self._label}/{type(self._backend).__name__}"
 
     def check(self) -> None:
         py_result = self._fn(_PY)
-        np_result = self._fn(_NP)
-        assert _approx_equal(py_result.to_list(), np_result.to_list()), (
+        test_result = self._fn(self._backend)
+        assert _approx_equal(py_result.to_list(), test_result.to_list()), (
             f"{self.description}: PythonBackend={py_result.to_list()!r} "
-            f"!= NumpyBackend={np_result.to_list()!r}"
+            f"!= {type(self._backend).__name__}={test_result.to_list()!r}"
         )
 
 
@@ -225,131 +235,125 @@ def _rank2_submatrix_write(b: Any) -> Tensor:
 
 
 # ---------------------------------------------------------------------------
+# Case tables (shared across backends)
+# ---------------------------------------------------------------------------
+
+_ROUNDTRIP_CASES = [
+    ("rank0", 3.14),
+    ("rank1", [1.0, 2.0, 3.0]),
+    ("rank2_2x2", [[1.0, 2.0], [3.0, 4.0]]),
+    ("rank2_3x2", [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+]
+
+_ARITHMETIC_CASES = [
+    ("add_vecs", lambda b: _mk_vec(b) + _mk_vec(b)),
+    ("sub_vecs", lambda b: _mk_vec(b) - Tensor([0.5, 1.0, 1.5], backend=b)),
+    ("neg_vec", lambda b: -_mk_vec(b)),
+    ("mul_scalar", lambda b: _mk_vec(b) * 2.5),
+    ("rmul_scalar", lambda b: 2.5 * _mk_vec(b)),
+    ("div_scalar", lambda b: _mk_vec(b) / 4.0),
+    ("mul_elem", lambda b: _mk_vec(b) * _mk_vec(b)),
+    ("div_elem", lambda b: _mk_vec(b) / Tensor([2.0, 4.0, 1.0], backend=b)),
+    ("dot", lambda b: _mk_vec(b) @ _mk_vec(b)),
+    ("matvec", lambda b: _mk_mat(b) @ Tensor([1.0, 2.0], backend=b)),
+    ("matmul", lambda b: _mk_mat(b) @ _mk_mat(b)),
+    ("vecmat", lambda b: Tensor([1.0, 2.0], backend=b) @ _mk_mat(b)),
+    ("einsum_ij_jk", lambda b: einsum("ij,jk->ik", _mk_mat(b), _mk_mat(b))),
+    ("einsum_trace", lambda b: einsum("ii->", _mk_mat(b))),
+    ("norm_vec", lambda b: Tensor([_mk_vec(b).norm()], backend=b)),
+    ("diag", lambda b: _mk_mat(b).diag()),
+    ("zeros_factory", lambda b: Tensor.zeros(2, 3, backend=b)),
+    ("eye_factory", lambda b: Tensor.eye(3, backend=b)),
+]
+
+_SLICE_READ_CASES = [
+    ("rank1_read", lambda b: Tensor([1.0, 2.0, 3.0, 4.0], backend=b)[1:3]),
+    ("rank1_read_from_start", lambda b: Tensor([1.0, 2.0, 3.0], backend=b)[:2]),
+    ("rank1_read_to_end", lambda b: Tensor([1.0, 2.0, 3.0], backend=b)[1:]),
+    ("rank2_row_read", lambda b: _mk_mat3(b)[1, :]),
+    ("rank2_row_partial", lambda b: _mk_mat3(b)[0, 1:]),
+    ("rank2_col_read", lambda b: _mk_mat3(b)[:, 1]),
+    ("rank2_col_partial", lambda b: _mk_mat3(b)[1:, 0]),
+    ("rank2_submatrix", lambda b: _mk_mat3(b)[1:, 1:]),
+]
+
+_SLICE_WRITE_CASES = [
+    ("rank1_write", _rank1_slice_write),
+    ("rank2_col_write", _rank2_col_slice_write),
+    ("rank2_submatrix_write", _rank2_submatrix_write),
+]
+
+_CONVERSION_PAIRS = [
+    (_PY, _NP),
+    (_NP, _PY),
+    (_PY, _JAX),
+    (_JAX, _PY),
+    (_NP, _JAX),
+    (_JAX, _NP),
+]
+
+_CONVERSION_DATA = [
+    ("rank1", [1.0, 2.0, 3.0]),
+    ("rank2", [[1.0, 2.0], [3.0, 4.0]]),
+]
+
+_MIXED_OPS = [
+    ("add", lambda a, b: a + b),
+    ("sub", lambda a, b: a - b),
+    ("mul_elem", lambda a, b: a * b),
+    ("matmul", lambda a, b: a @ b),
+]
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
 _CLAIMS: list[_TensorClaim] = [
-    # Round-trips
+    # Round-trips for all backends (PythonBackend is its own reference)
     *[
         _RoundtripClaim(b, label, data)
-        for b in (_PY, _NP)
-        for label, data in [
-            ("rank0", 3.14),
-            ("rank1", [1.0, 2.0, 3.0]),
-            ("rank2_2x2", [[1.0, 2.0], [3.0, 4.0]]),
-            ("rank2_3x2", [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
-        ]
+        for b in (_PY, _NP, _JAX)
+        for label, data in _ROUNDTRIP_CASES
     ],
-    # Arithmetic: result of each op matches between backends
-    _ArithmeticClaim(
-        "add_vecs",
-        lambda b: _mk_vec(b) + _mk_vec(b),
-    ),
-    _ArithmeticClaim(
-        "sub_vecs",
-        lambda b: _mk_vec(b) - Tensor([0.5, 1.0, 1.5], backend=b),
-    ),
-    _ArithmeticClaim(
-        "neg_vec",
-        lambda b: -_mk_vec(b),
-    ),
-    _ArithmeticClaim(
-        "mul_scalar",
-        lambda b: _mk_vec(b) * 2.5,
-    ),
-    _ArithmeticClaim(
-        "rmul_scalar",
-        lambda b: 2.5 * _mk_vec(b),
-    ),
-    _ArithmeticClaim(
-        "div_scalar",
-        lambda b: _mk_vec(b) / 4.0,
-    ),
-    _ArithmeticClaim(
-        "mul_elem",
-        lambda b: _mk_vec(b) * _mk_vec(b),
-    ),
-    _ArithmeticClaim(
-        "div_elem",
-        lambda b: _mk_vec(b) / Tensor([2.0, 4.0, 1.0], backend=b),
-    ),
-    _ArithmeticClaim(
-        "dot",
-        lambda b: _mk_vec(b) @ _mk_vec(b),
-    ),
-    _ArithmeticClaim(
-        "matvec",
-        lambda b: _mk_mat(b) @ Tensor([1.0, 2.0], backend=b),
-    ),
-    _ArithmeticClaim(
-        "matmul",
-        lambda b: _mk_mat(b) @ _mk_mat(b),
-    ),
-    _ArithmeticClaim(
-        "vecmat",
-        lambda b: Tensor([1.0, 2.0], backend=b) @ _mk_mat(b),
-    ),
-    _ArithmeticClaim(
-        "einsum_ij_jk",
-        lambda b: einsum("ij,jk->ik", _mk_mat(b), _mk_mat(b)),
-    ),
-    _ArithmeticClaim(
-        "einsum_trace",
-        lambda b: einsum("ii->", _mk_mat(b)),
-    ),
-    _ArithmeticClaim(
-        "norm_vec",
-        lambda b: Tensor(
-            [_mk_vec(b).norm()],
-            backend=b,
-        ),
-    ),
-    _ArithmeticClaim(
-        "diag",
-        lambda b: _mk_mat(b).diag(),
-    ),
-    _ArithmeticClaim(
-        "zeros_factory",
-        lambda b: Tensor.zeros(2, 3, backend=b),
-    ),
-    _ArithmeticClaim(
-        "eye_factory",
-        lambda b: Tensor.eye(3, backend=b),
-    ),
+    # Arithmetic: each fn tested against PY reference on NP and JAX
+    *[
+        _ArithmeticClaim(label, fn, b)
+        for b in _NON_PY_BACKENDS
+        for label, fn in _ARITHMETIC_CASES
+    ],
     # Conversion round-trips
     *[
         _ConversionClaim(src, dst, label, data)
-        for src, dst in [(_PY, _NP), (_NP, _PY)]
-        for label, data in [
-            ("rank1", [1.0, 2.0, 3.0]),
-            ("rank2", [[1.0, 2.0], [3.0, 4.0]]),
+        for src, dst in _CONVERSION_PAIRS
+        for label, data in _CONVERSION_DATA
+    ],
+    # Slice reads: each result must match PythonBackend
+    *[
+        _SliceClaim(label, fn, b)
+        for b in _NON_PY_BACKENDS
+        for label, fn in _SLICE_READ_CASES
+    ],
+    # Slice writes: modify a copy and return it; must match PythonBackend
+    *[
+        _SliceClaim(label, fn, b)
+        for b in _NON_PY_BACKENDS
+        for label, fn in _SLICE_WRITE_CASES
+    ],
+    # Mixed-backend must raise: all pairs of distinct backends
+    *[
+        _MixedBackendClaim(label, fn, a_b, b_b)
+        for label, fn in _MIXED_OPS
+        for a_b, b_b in [(_PY, _NP), (_PY, _JAX), (_NP, _JAX)]
+    ],
+    # Factories respect backend kwarg
+    *[
+        _FactoryClaim(b, name, fn)
+        for b in (_PY, _NP, _JAX)
+        for name, fn in [
+            ("zeros", lambda b: Tensor.zeros(3, backend=b)),
+            ("eye", lambda b: Tensor.eye(3, backend=b)),
         ]
     ],
-    # Slice reads: each result must match between PythonBackend and NumpyBackend
-    _SliceClaim("rank1_read", lambda b: Tensor([1.0, 2.0, 3.0, 4.0], backend=b)[1:3]),
-    _SliceClaim(
-        "rank1_read_from_start", lambda b: Tensor([1.0, 2.0, 3.0], backend=b)[:2]
-    ),
-    _SliceClaim("rank1_read_to_end", lambda b: Tensor([1.0, 2.0, 3.0], backend=b)[1:]),
-    _SliceClaim("rank2_row_read", lambda b: _mk_mat3(b)[1, :]),
-    _SliceClaim("rank2_row_partial", lambda b: _mk_mat3(b)[0, 1:]),
-    _SliceClaim("rank2_col_read", lambda b: _mk_mat3(b)[:, 1]),
-    _SliceClaim("rank2_col_partial", lambda b: _mk_mat3(b)[1:, 0]),
-    _SliceClaim("rank2_submatrix", lambda b: _mk_mat3(b)[1:, 1:]),
-    # Slice writes: modify a copy and return it; must match between backends
-    _SliceClaim("rank1_write", _rank1_slice_write),
-    _SliceClaim("rank2_col_write", _rank2_col_slice_write),
-    _SliceClaim("rank2_submatrix_write", _rank2_submatrix_write),
-    # Mixed-backend must raise
-    _MixedBackendClaim("add", lambda a, b: a + b),
-    _MixedBackendClaim("sub", lambda a, b: a - b),
-    _MixedBackendClaim("mul_elem", lambda a, b: a * b),
-    _MixedBackendClaim("matmul", lambda a, b: a @ b),
-    # Factories respect backend kwarg
-    _FactoryClaim(_PY, "zeros", lambda b: Tensor.zeros(3, backend=b)),
-    _FactoryClaim(_NP, "zeros", lambda b: Tensor.zeros(3, backend=b)),
-    _FactoryClaim(_PY, "eye", lambda b: Tensor.eye(3, backend=b)),
-    _FactoryClaim(_NP, "eye", lambda b: Tensor.eye(3, backend=b)),
 ]
 
 

@@ -7,6 +7,7 @@ jax.config.update("jax_enable_x64", True)
 
 from cosmic_foundry.computation.backends import (  # noqa: E402
     Backend,
+    JaxBackend,
     NumpyBackend,
     PythonBackend,
     get_default_backend,
@@ -18,6 +19,7 @@ __all__ = [
     "Backend",
     "DenseJacobiSolver",
     "DenseLUSolver",
+    "JaxBackend",
     "LinearSolver",
     "NumpyBackend",
     "PythonBackend",

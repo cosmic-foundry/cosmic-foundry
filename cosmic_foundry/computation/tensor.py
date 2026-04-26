@@ -167,18 +167,7 @@ class Tensor:
         if not self._shape:
             raise TypeError("rank-0 Tensor is not subscriptable")
         v = value._data if isinstance(value, Tensor) else value
-        if _has_slice(idx):
-            self._backend.slice_set(self._data, idx, v, self._shape)
-            return
-        if isinstance(idx, tuple):
-            if not idx:
-                raise IndexError("empty index tuple")
-            data = self._data
-            for i in idx[:-1]:
-                data = data[i]
-            data[idx[-1]] = v
-        else:
-            self._data[idx] = v
+        self._data = self._backend.slice_set(self._data, idx, v, self._shape)
 
     def __iter__(self) -> Iterator[Any]:
         if not self._shape:
