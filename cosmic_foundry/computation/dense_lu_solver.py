@@ -33,29 +33,12 @@ class DenseLUSolver(LinearSolver):
     transparently: when partial pivoting leaves a diagonal entry below 1e-10
     after column reduction, that component is pinned to zero (minimum-norm,
     zero-mean convention).  The caller must ensure the RHS has zero projection
-    onto the null space; if it does not, the residual after the solve will be
-    large and the tol assertion will fail.
-
-    Parameters
-    ----------
-    tol:
-        Acceptance threshold on the Euclidean residual ‖b − A u‖₂ after the solve.
-        The residual is computed once after back-substitution and stored in residuals.
+    onto the null space; if it does not, the residual ‖b − Au‖₂ after the
+    solve will be large.
     """
 
-    def __init__(self, tol: float = 1e-10) -> None:
-        self._tol = tol
-        self._residuals: list[float] = []
-
-    @property
-    def residuals(self) -> Tensor:
-        """Residual history from the most recent solve as a rank-1 Tensor.
-
-        For a direct solver the Tensor has exactly one entry — the final
-        Euclidean residual ‖b − Au‖₂ after back-substitution — rather than
-        an iteration trace.
-        """
-        return Tensor(list(self._residuals))
+    def __init__(self) -> None:
+        pass
 
     def solve(self, a: Tensor, b: Tensor) -> Tensor:
         """Solve A u = b via LU factorization; return the solution Tensor."""
@@ -122,10 +105,6 @@ class DenseLUSolver(LinearSolver):
             if k < n - 1:
                 rhs_k -= float(a[k, k + 1 : n] @ x[k + 1 : n])
             x[k] = rhs_k / a[k, k]
-
-        # Recompute residual from original matrix (a is now LU, not A).
-        r: Tensor = b - a_orig @ x
-        self._residuals = [r.norm()]
 
         return x
 

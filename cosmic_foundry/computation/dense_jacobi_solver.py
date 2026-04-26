@@ -40,17 +40,6 @@ class DenseJacobiSolver(LinearSolver):
     def __init__(self, tol: float = 1e-10, max_iter: int = 100_000) -> None:
         self._tol = tol
         self._max_iter = max_iter
-        self._residuals: list[float] = []
-
-    @property
-    def residuals(self) -> Tensor:
-        """Residual history ‖b − Au^k‖₂ from the most recent solve.
-
-        residuals[k] is the Euclidean residual norm at the start of iteration k,
-        before the k-th damped-Jacobi update is applied.
-        The Tensor is populated by solve() and replaced on each call.
-        """
-        return Tensor(list(self._residuals))
 
     def solve(self, a: Tensor, b: Tensor) -> Tensor:
         """Solve A u = b via damped Jacobi; return the solution Tensor."""
@@ -65,12 +54,9 @@ class DenseJacobiSolver(LinearSolver):
 
         # Damped Jacobi: u^{k+1} = u^k + ω D⁻¹(b − Au^k)
         u: Tensor = Tensor.zeros(n, backend=a.backend)
-        self._residuals = []
         for _ in range(self._max_iter):
             r: Tensor = b - a @ u
-            residual: float = r.norm()
-            self._residuals.append(residual)
-            if residual < self._tol:
+            if r.norm() < self._tol:
                 break
             u = u + omega * (r / diag)
 
