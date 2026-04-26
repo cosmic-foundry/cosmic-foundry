@@ -15,7 +15,7 @@ from cosmic_foundry.theory.continuous.advection_diffusion_operator import (
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
-from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
+from cosmic_foundry.theory.discrete.face_field import FaceField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -80,13 +80,13 @@ class AdvectionDiffusionFlux(NumericalFlux[sympy.Expr]):
     def __call__(
         self,
         U: DiscreteField[sympy.Expr],
-    ) -> LazyDiscreteField[sympy.Expr]:
-        """Return a face-flux DiscreteField over all faces.
+    ) -> FaceField[sympy.Expr]:
+        """Return a FaceField of face fluxes F·n̂·|A| over all faces.
 
-        The returned DiscreteField is callable as result((axis, idx_low))
-        where idx_low is the low-side cell index tuple.  The face flux is the
-        sum of the advective face reconstruction and κ times the diffusive
-        face derivative.
+        The returned FaceField is callable as result((axis, idx_low)) where
+        idx_low is the low-side cell index tuple.  The face flux is the sum of
+        the advective face reconstruction and κ times the diffusive face
+        derivative.
         """
         mesh = cast(CartesianMesh, U.mesh)
         kappa = self._kappa
@@ -96,7 +96,7 @@ class AdvectionDiffusionFlux(NumericalFlux[sympy.Expr]):
         def compute(face: tuple[int, tuple[int, ...]]) -> sympy.Expr:
             return adv(face) + kappa * diff(face)
 
-        return LazyDiscreteField(mesh, compute)
+        return FaceField(mesh, compute)
 
 
 __all__ = ["AdvectionDiffusionFlux"]

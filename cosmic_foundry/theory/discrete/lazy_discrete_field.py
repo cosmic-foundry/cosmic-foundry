@@ -15,19 +15,19 @@ class LazyDiscreteField(DiscreteField[_V]):
     """A DiscreteField whose values are computed on demand by a callable.
 
     LazyDiscreteField(mesh, fn) stores a callable fn; fn(idx) -> V is invoked
-    lazily when a specific index is queried.  This is the standard return type
-    for full-field NumericalFlux.__call__: the flux is evaluated only at the
-    face index the caller requests, making the return value JAX-friendly (one
-    JIT-compiled array operation when vectorized over all faces).
+    lazily when a specific index is queried.  Used for cell-indexed deferred
+    fields (e.g. the unit basis fields in Discretization.assemble() and the
+    ghost-cell-extended fields in FVMDiscretization).
+
+    For face-indexed fields (NumericalFlux return values, face-normal
+    restriction), use FaceField instead.
 
     Parameters
     ----------
     mesh:
         The mesh on which this field's values are defined.
     fn:
-        Callable mapping a mesh-element index to a value V.  For face-valued
-        DiscreteFields the index is a (axis, idx_low) pair; for cell-valued
-        DiscreteFields it is a cell-index tuple.
+        Callable mapping a cell-index tuple to a value V.
     """
 
     def __init__(self, mesh: Mesh, fn: Callable[[Any], _V]) -> None:
