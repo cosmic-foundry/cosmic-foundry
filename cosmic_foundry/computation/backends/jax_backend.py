@@ -140,5 +140,42 @@ class JaxBackend:
         """Return raw.at[idx].set(value); JAX arrays are immutable."""
         return raw.at[idx].set(value)
 
+    # ------------------------------------------------------------------
+    # Reductions and element-wise ops for JIT-clean algorithms
+    # ------------------------------------------------------------------
+
+    def abs(self, raw: Any) -> Any:
+        return jnp.abs(raw)
+
+    def reduce_max(self, raw: Any) -> Any:
+        return jnp.max(raw)
+
+    def argmax(self, raw: Any) -> Any:
+        return jnp.argmax(raw)
+
+    def where(self, cond: Any, x: Any, y: Any) -> Any:
+        return jnp.where(cond, x, y)
+
+    def lt(self, a: Any, b: Any) -> Any:
+        return jnp.less(a, b)
+
+    def le(self, a: Any, b: Any) -> Any:
+        return jnp.less_equal(a, b)
+
+    def gt(self, a: Any, b: Any) -> Any:
+        return jnp.greater(a, b)
+
+    def ge(self, a: Any, b: Any) -> Any:
+        return jnp.greater_equal(a, b)
+
+    def arange(self, n: int) -> Any:
+        return jnp.arange(n)
+
+    def rdiv_scalar(self, s: float, raw: Any) -> Any:
+        return jnp.divide(s, raw)
+
+    def take(self, raw: Any, indices: Any) -> Any:
+        return raw[indices]
+
 
 __all__ = ["JaxBackend"]

@@ -141,3 +141,40 @@ class NumpyBackend:
     ) -> Any:
         raw[idx] = value
         return raw
+
+    # ------------------------------------------------------------------
+    # Reductions and element-wise ops for JIT-clean algorithms
+    # ------------------------------------------------------------------
+
+    def abs(self, raw: np.ndarray) -> Any:
+        return np.abs(raw)
+
+    def reduce_max(self, raw: np.ndarray) -> Any:
+        return np.max(raw)
+
+    def argmax(self, raw: np.ndarray) -> Any:
+        return int(np.argmax(raw))
+
+    def where(self, cond: Any, x: Any, y: Any) -> Any:
+        return np.where(cond, x, y)
+
+    def lt(self, a: Any, b: Any) -> Any:
+        return np.less(a, b)
+
+    def le(self, a: Any, b: Any) -> Any:
+        return np.less_equal(a, b)
+
+    def gt(self, a: Any, b: Any) -> Any:
+        return np.greater(a, b)
+
+    def ge(self, a: Any, b: Any) -> Any:
+        return np.greater_equal(a, b)
+
+    def arange(self, n: int) -> Any:
+        return np.arange(n)
+
+    def rdiv_scalar(self, s: float, raw: np.ndarray) -> Any:
+        return np.divide(s, raw)
+
+    def take(self, raw: np.ndarray, indices: Any) -> Any:
+        return raw[indices]

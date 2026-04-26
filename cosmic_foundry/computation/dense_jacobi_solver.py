@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation.iterative_solver import IterativeSolver
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.tensor import Tensor, einsum, where
 
 
 class _JacobiState(NamedTuple):
@@ -14,7 +14,7 @@ class _JacobiState(NamedTuple):
     a: Tensor
     b: Tensor
     diag: Tensor
-    omega: float
+    omega: Tensor  # 0-d scalar Tensor
     iteration: int
 
 
@@ -44,7 +44,7 @@ class DenseJacobiSolver(IterativeSolver):
     Parameters
     ----------
     tol:
-        Convergence tolerance on the Euclidean residual ‖b − Au^k‖₂.
+        Convergence tolerance on the squared Euclidean residual ‖b − Au^k‖₂².
     max_iter:
         Hard cap on Jacobi iterations.
     """
@@ -58,10 +58,11 @@ class DenseJacobiSolver(IterativeSolver):
         diag: Tensor = a.diag()
 
         # Gershgorin bound on λ_max(D⁻¹A): ω = min(2/G, 1) guarantees contraction.
-        lambda_max_bound: float = max(
-            sum(abs(a[i, j] / diag[i]) for j in range(n)) for i in range(n)
-        )
-        omega: float = min(2.0 / lambda_max_bound, 1.0)
+        # G = max_i Σ_j |A_{ij} / A_{ii}|  (row sums of |D⁻¹A|, including diagonal)
+        row_sums: Tensor = einsum("ij->i", a.abs()) / diag.abs()
+        lambda_max: Tensor = row_sums.max()  # 0-d Tensor
+        two_over_lm: Tensor = 2.0 / lambda_max  # __rtruediv__, 0-d Tensor
+        omega: Tensor = where(two_over_lm > 1.0, 1.0, two_over_lm)
 
         u: Tensor = Tensor.zeros(n, backend=a.backend)
         r: Tensor = b - a @ u
@@ -73,9 +74,11 @@ class DenseJacobiSolver(IterativeSolver):
         r = s.b - s.a @ u
         return _JacobiState(u, r, s.a, s.b, s.diag, s.omega, s.iteration + 1)
 
-    def converged(self, state: Any) -> bool:
+    def converged(self, state: Any) -> Tensor:
         s: _JacobiState = state
-        return bool(s.r.norm() < self._tol) or s.iteration >= self._max_iter
+        if s.iteration >= self._max_iter:
+            return Tensor(True, backend=s.r.backend)
+        return (s.r @ s.r) < self._tol**2
 
     def extract(self, state: Any) -> Tensor:
         s: _JacobiState = state

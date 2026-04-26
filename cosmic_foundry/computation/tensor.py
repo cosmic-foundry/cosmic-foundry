@@ -134,6 +134,15 @@ class Tensor:
             )
         return float(self._data)
 
+    def __bool__(self) -> bool:
+        """Extract the boolean value from a rank-0 Tensor."""
+        if self._shape:
+            raise TypeError(
+                f"cannot convert rank-{len(self._shape)} Tensor to bool; "
+                "index to a scalar first"
+            )
+        return bool(self._data)
+
     # ------------------------------------------------------------------
     # Sequence interface
     # ------------------------------------------------------------------
@@ -235,6 +244,36 @@ class Tensor:
             self._backend.div_scalar(self._data, float(other)), self._backend
         )
 
+    def __rtruediv__(self, other: float) -> Tensor:
+        """Compute other / self element-wise (e.g. 2.0 / scalar_tensor)."""
+        return Tensor._wrap(
+            self._backend.rdiv_scalar(float(other), self._data), self._backend
+        )
+
+    def __lt__(self, other: Any) -> Tensor:
+        other_raw = (
+            other._data if isinstance(other, Tensor) else self._backend.to_native(other)
+        )
+        return Tensor._wrap(self._backend.lt(self._data, other_raw), self._backend)
+
+    def __le__(self, other: Any) -> Tensor:
+        other_raw = (
+            other._data if isinstance(other, Tensor) else self._backend.to_native(other)
+        )
+        return Tensor._wrap(self._backend.le(self._data, other_raw), self._backend)
+
+    def __gt__(self, other: Any) -> Tensor:
+        other_raw = (
+            other._data if isinstance(other, Tensor) else self._backend.to_native(other)
+        )
+        return Tensor._wrap(self._backend.gt(self._data, other_raw), self._backend)
+
+    def __ge__(self, other: Any) -> Tensor:
+        other_raw = (
+            other._data if isinstance(other, Tensor) else self._backend.to_native(other)
+        )
+        return Tensor._wrap(self._backend.ge(self._data, other_raw), self._backend)
+
     def __matmul__(self, other: Tensor) -> Tensor:
         self._check_backend(other)
         raw = self._backend.matmul(self._data, other._data, self._shape, other._shape)
@@ -243,6 +282,32 @@ class Tensor:
     # ------------------------------------------------------------------
     # Linear algebra
     # ------------------------------------------------------------------
+
+    def abs(self) -> Tensor:
+        """Element-wise absolute value."""
+        return Tensor._wrap(self._backend.abs(self._data), self._backend)
+
+    def max(self) -> Tensor:
+        """Maximum of all elements; returns a 0-d scalar Tensor."""
+        return Tensor._wrap(self._backend.reduce_max(self._data), self._backend)
+
+    def argmax(self) -> Any:
+        """Index of the maximum element in a 1-d Tensor."""
+        return self._backend.argmax(self._data)
+
+    def element(self, *indices: int) -> Tensor:
+        """Return the scalar at the given static integer indices as a 0-d Tensor."""
+        raw = self._data
+        for i in indices:
+            raw = raw[i]
+        return Tensor._wrap(raw, self._backend)
+
+    def take(self, indices: Tensor) -> Tensor:
+        """Gather elements at integer indices; return a new Tensor."""
+        self._check_backend(indices)
+        return Tensor._wrap(
+            self._backend.take(self._data, indices._data), self._backend
+        )
 
     def diag(self) -> Tensor:
         """Main diagonal of a rank-2 Tensor → rank-1."""
@@ -337,4 +402,39 @@ def einsum(spec: str, *tensors: Tensor) -> Tensor:
     return Tensor._wrap(backend.einsum(spec, raws, shapes), backend)
 
 
-__all__ = ["Real", "Tensor", "einsum"]
+def where(cond: Tensor, x: Any, y: Any) -> Tensor:
+    """Element-wise ternary: return x where cond is True, y elsewhere.
+
+    cond, x, and y are broadcast against each other following the same
+    rules as ``numpy.where``.  x and y may be Tensors or Python scalars.
+
+    Parameters
+    ----------
+    cond:
+        Boolean Tensor (from a comparison operator).
+    x:
+        Value(s) to use where cond is True.
+    y:
+        Value(s) to use where cond is False.
+    """
+    backend = cond._backend
+    x_raw = x._data if isinstance(x, Tensor) else backend.to_native(x)
+    y_raw = y._data if isinstance(y, Tensor) else backend.to_native(y)
+    return Tensor._wrap(backend.where(cond._data, x_raw, y_raw), backend)
+
+
+def arange(n: int, *, backend: Backend | None = None) -> Tensor:
+    """Return a 1-d integer Tensor [0, 1, ..., n-1].
+
+    Parameters
+    ----------
+    n:
+        Length of the output Tensor.
+    backend:
+        Backend to use; defaults to the process-wide default.
+    """
+    b = backend if backend is not None else get_default_backend()
+    return Tensor._wrap(b.arange(n), b)
+
+
+__all__ = ["Real", "Tensor", "arange", "einsum", "where"]
