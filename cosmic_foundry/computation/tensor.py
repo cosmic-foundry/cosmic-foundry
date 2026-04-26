@@ -125,23 +125,23 @@ class Tensor:
     # Scalar extraction
     # ------------------------------------------------------------------
 
-    def __float__(self) -> float:
-        """Extract the scalar value from a rank-0 Tensor."""
+    def item(self) -> float | bool:
+        """Explicitly materialise a rank-0 Tensor into a Python scalar.
+
+        This is the only sanctioned exit from tensor land into Python land.
+        TracingBackend raises JitIncompatibleError here, making every call
+        site auditable: grep for ``.item()`` to find all materialization
+        boundaries in algorithm code.
+        """
         if self._shape:
-            raise TypeError(
-                f"cannot convert rank-{len(self._shape)} Tensor to float; "
-                "index to a scalar or call .norm() first"
-            )
-        return float(self._data)
+            raise TypeError(f"item() requires rank-0 Tensor; got shape {self._shape}")
+        return self._backend.item(self._data)
+
+    def __float__(self) -> float:
+        return float(self.item())
 
     def __bool__(self) -> bool:
-        """Extract the boolean value from a rank-0 Tensor."""
-        if self._shape:
-            raise TypeError(
-                f"cannot convert rank-{len(self._shape)} Tensor to bool; "
-                "index to a scalar first"
-            )
-        return bool(self._data)
+        return bool(self.item())
 
     # ------------------------------------------------------------------
     # Sequence interface

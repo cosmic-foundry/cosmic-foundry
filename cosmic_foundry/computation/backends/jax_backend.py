@@ -177,5 +177,8 @@ class JaxBackend:
     def take(self, raw: Any, indices: Any) -> Any:
         return raw[indices]
 
+    def item(self, raw: Any) -> Any:
+        return raw.item()
+
 
 __all__ = ["JaxBackend"]

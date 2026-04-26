@@ -130,6 +130,9 @@ class PythonBackend:
     def take(self, raw: Any, indices: Any) -> Any:
         return [raw[int(i)] for i in _flatten(indices)]
 
+    def item(self, raw: Any) -> Any:
+        return raw
+
     # ------------------------------------------------------------------
     # Contraction
     # ------------------------------------------------------------------

@@ -66,6 +66,9 @@ class Backend(Protocol):
     def rdiv_scalar(self, s: float, raw: Any) -> Any: ...
     def take(self, raw: Any, indices: Any) -> Any: ...
 
+    # Explicit materialization boundary
+    def item(self, raw: Any) -> float | bool: ...
+
 
 _default_backend: Backend = PythonBackend()
 

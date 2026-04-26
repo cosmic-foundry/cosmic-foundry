@@ -46,7 +46,7 @@ class IterativeSolver(LinearSolver):
 
     def solve(self, a: Tensor, b: Tensor) -> Tensor:
         state = self.init_state(a, b)
-        while not bool(self.converged(state)):
+        while not self.converged(state).item():
             state = self.step(state)
         return self.extract(state)
 
