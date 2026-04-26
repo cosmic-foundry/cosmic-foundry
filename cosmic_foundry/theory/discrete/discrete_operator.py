@@ -6,14 +6,14 @@ from abc import abstractmethod
 from typing import TypeVar
 
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.foundation.numeric_function import NumericFunction
 
 _V = TypeVar("_V")
 
 
-class DiscreteOperator(NumericFunction[MeshFunction[_V], MeshFunction[_V]]):
-    """The discrete analog of DifferentialOperator: Lₕ: MeshFunction → MeshFunction.
+class DiscreteOperator(NumericFunction[DiscreteField[_V], DiscreteField[_V]]):
+    """The discrete analog of DifferentialOperator: Lₕ: DiscreteField → DiscreteField.
 
     A DiscreteOperator is the output of a Discretization — the Lₕ that makes
     the commutation diagram Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the chosen approximation
@@ -32,7 +32,7 @@ class DiscreteOperator(NumericFunction[MeshFunction[_V], MeshFunction[_V]]):
     Required:
         order               — composite convergence order
         continuous_operator — the continuous operator this approximates
-        __call__            — apply the operator (inherited from NumericFunction)
+        __call__            — apply the operator: DiscreteField → DiscreteField
     """
 
     @property

@@ -11,18 +11,18 @@ from cosmic_foundry.theory.continuous.boundary_condition import BoundaryConditio
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
-from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
+from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
 def _apply_dirichlet_ghosts(
-    U: MeshFunction[sympy.Expr],
+    U: DiscreteField[sympy.Expr],
     mesh: CartesianMesh,
-) -> LazyMeshFunction[sympy.Expr]:
+) -> LazyDiscreteField[sympy.Expr]:
     """Extend U with homogeneous Dirichlet ghost cells via odd reflection.
 
     For each axis a and mesh size N = shape[a]:
@@ -42,13 +42,13 @@ def _apply_dirichlet_ghosts(
                 return -extended(reflected)
         return U(idx)  # type: ignore[arg-type]
 
-    return LazyMeshFunction(mesh, extended)
+    return LazyDiscreteField(mesh, extended)
 
 
 def _apply_periodic_ghosts(
-    U: MeshFunction[sympy.Expr],
+    U: DiscreteField[sympy.Expr],
     mesh: CartesianMesh,
-) -> LazyMeshFunction[sympy.Expr]:
+) -> LazyDiscreteField[sympy.Expr]:
     """Extend U with periodic ghost cells via wrap-around.
 
     For each axis a and mesh size N = shape[a]:
@@ -61,7 +61,7 @@ def _apply_periodic_ghosts(
         wrapped = tuple(i % N for i, N in zip(idx, shape, strict=True))
         return U(wrapped)  # type: ignore[arg-type]
 
-    return LazyMeshFunction(mesh, extended)
+    return LazyDiscreteField(mesh, extended)
 
 
 class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
@@ -93,7 +93,7 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
 
-    Maps cell-average MeshFunctions to discrete divergence MeshFunctions:
+    Maps cell-average DiscreteFields to discrete divergence DiscreteFields:
 
         (Lₕ U)(i) = (1/|Ωᵢ|) · ∮_∂Ωᵢ F·n̂ dA
                   = (1/|Ωᵢ|) · Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
@@ -125,8 +125,8 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     def continuous_operator(self) -> DifferentialOperator:
         return _DivergenceComposition(self._numerical_flux.continuous_operator)
 
-    def __call__(self, U: MeshFunction[sympy.Expr]) -> LazyMeshFunction[sympy.Expr]:
-        """Apply the assembled operator; returns a lazy cell-residual MeshFunction."""
+    def __call__(self, U: DiscreteField[sympy.Expr]) -> LazyDiscreteField[sympy.Expr]:
+        """Apply the assembled operator; returns a lazy cell-residual DiscreteField."""
         mesh = cast(CartesianMesh, U.mesh)
         if isinstance(self._bc, PeriodicBC):
             U = _apply_periodic_ghosts(U, mesh)
@@ -148,7 +148,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
                 )
             return total / mesh.cell_volume
 
-        return LazyMeshFunction(mesh, cell_residual)
+        return LazyDiscreteField(mesh, cell_residual)
 
 
 class FVMDiscretization(Discretization):

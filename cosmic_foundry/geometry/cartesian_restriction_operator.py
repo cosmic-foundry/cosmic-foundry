@@ -10,13 +10,13 @@ import sympy
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_form import OneForm
 from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
-from cosmic_foundry.theory.discrete.lazy_mesh_function import LazyMeshFunction
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
+from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
-from cosmic_foundry.theory.discrete.mesh_function import MeshFunction
 from cosmic_foundry.theory.discrete.restriction_operator import RestrictionOperator
 
 
-class _CartesianCellAverage(MeshFunction[sympy.Expr]):
+class _CartesianCellAverage(DiscreteField[sympy.Expr]):
     """Cell-averaged values on a CartesianMesh."""
 
     def __init__(
@@ -32,7 +32,7 @@ class _CartesianCellAverage(MeshFunction[sympy.Expr]):
         return self._mesh
 
     def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
-        # LSP violation: MeshFunction inherits NumericFunction[Mesh, V] whose
+        # LSP violation: DiscreteField inherits NumericFunction[Mesh, V] whose
         # __call__ takes a Mesh, not a cell index.  Discrete evaluation should
         # take a typed CellIndex[M]; that narrowing is deferred to a later PR.
         # The override is intentional and documented here; suppressed via type: ignore.
@@ -65,7 +65,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
     def degree(self) -> int:
         return self._degree
 
-    def __call__(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:  # type: ignore[override]  # LSP: RestrictionOperator.__call__ takes (M, V) not SymbolicFunction; deferred to a later PR
+    def __call__(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:  # type: ignore[override]  # LSP: RestrictionOperator.__call__ takes (M, V) not SymbolicFunction; deferred to a later PR
         ndim = len(self._mesh._shape)
         if self._degree == ndim:
             return self._cell_restrict(f)
@@ -75,7 +75,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
         )
         return self._face_restrict(f)
 
-    def _cell_restrict(self, f: SymbolicFunction) -> MeshFunction[sympy.Expr]:
+    def _cell_restrict(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):
@@ -87,7 +87,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
             values[idx] = sympy.simplify(expr / mesh.cell_volume)
         return _CartesianCellAverage(mesh, values)
 
-    def _face_restrict(self, F: OneForm) -> MeshFunction[sympy.Expr]:
+    def _face_restrict(self, F: OneForm) -> DiscreteField[sympy.Expr]:
         mesh = self._mesh
         ndim = len(mesh._shape)
 
@@ -106,7 +106,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
                     expr = sympy.integrate(expr, (F.symbols[j], lo, hi))
             return sympy.simplify(expr)
 
-        return LazyMeshFunction(mesh, face_flux)
+        return LazyDiscreteField(mesh, face_flux)
 
 
 __all__ = ["CartesianRestrictionOperator"]
