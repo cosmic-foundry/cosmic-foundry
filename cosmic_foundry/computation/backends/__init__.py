@@ -69,6 +69,9 @@ class Backend(Protocol):
     # Scalar extraction (called only on allocated rank-0 data)
     def get(self, raw: Any) -> Any: ...
 
+    # Synchronization (no-op for synchronous backends)
+    def sync(self, raw: Any) -> None: ...
+
 
 _default_backend: Backend = PythonBackend()
 

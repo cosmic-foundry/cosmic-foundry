@@ -181,3 +181,6 @@ class NumpyBackend:
 
     def get(self, raw: np.ndarray) -> Any:
         return raw.item()
+
+    def sync(self, raw: Any) -> None:
+        pass

@@ -392,6 +392,16 @@ class Tensor(Generic[T]):
             raise TypeError(f"get() requires rank-0 Tensor; got shape {self.shape}")
         return self._backend.get(self._value)  # type: ignore[no-any-return]
 
+    def sync(self) -> None:
+        """Block until all pending computation producing this Tensor is complete.
+
+        No-op for synchronous backends (Python, NumPy).  For async backends
+        (JAX/XLA, CUDA) this ensures outstanding dispatches have completed
+        before the caller proceeds.  Unallocated Tensors are silently ignored.
+        """
+        if self.is_allocated:
+            self._backend.sync(self._value)
+
     def __float__(self) -> float:
         return float(self.get())  # type: ignore[arg-type]
 

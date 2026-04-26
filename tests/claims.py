@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 C = TypeVar("C")
 
@@ -36,13 +36,19 @@ class CalibratedClaim(ABC, Generic[C]):
 
 
 @dataclass(frozen=True)
-class JaxCalibration:
-    """Post-JIT JAX FMA throughput for CPU and (optionally) GPU.
+class DeviceCalibration:
+    """FMA throughput rooflines and backend instances for available compute devices.
 
-    Both rates are measured with jax.jit and block_until_ready so they
-    reflect steady-state XLA throughput rather than eager-dispatch latency.
-    gpu_fma_rate is None when no GPU device is available.
+    cpu_backend and cpu_fma_rate always refer to the CPU device.
+    gpu_backend and gpu_fma_rate are None when no functional GPU backend is
+    available (no device found, or XLA/driver error during measurement).
+
+    The backends stored here are the exact instances used during calibration;
+    performance claims should use them for benchmarking so that the measured
+    roofline and the claim workload run through the same code paths.
     """
 
+    cpu_backend: Any
+    gpu_backend: Any | None
     cpu_fma_rate: float
     gpu_fma_rate: float | None

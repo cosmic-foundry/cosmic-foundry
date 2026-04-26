@@ -197,5 +197,8 @@ class JaxBackend:
     def get(self, raw: Any) -> Any:
         return raw.item()
 
+    def sync(self, raw: Any) -> None:
+        jax.block_until_ready(raw)
+
 
 __all__ = ["JaxBackend"]

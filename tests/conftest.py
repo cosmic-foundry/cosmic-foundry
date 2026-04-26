@@ -3,23 +3,21 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
-import jax
-import jax.numpy as jnp
+import numpy as np
 import pytest
 
-from tests.claims import JaxCalibration
-
-# Ensure float64 is enabled before any JAX computation in fixtures.
-jax.config.update("jax_enable_x64", True)
+from cosmic_foundry.computation.backends import JaxBackend
+from cosmic_foundry.computation.tensor import Tensor
+from tests.claims import DeviceCalibration
 
 _CALIB_N = 100
 _CALIB_TRIALS = 20
 
-_JAX_CALIB_N = 256
-_JAX_CALIB_WARMUP = 5
-_JAX_CALIB_TRIALS = 20
+_DEVICE_CALIB_N_CPU = 256
+_DEVICE_CALIB_N_GPU = 512
+_DEVICE_CALIB_WARMUP = 5
+_DEVICE_CALIB_TRIALS = 20
 
 
 def _measure_fma_rate() -> float:
@@ -46,34 +44,36 @@ def _measure_fma_rate() -> float:
     return n / best_elapsed
 
 
-def _measure_jax_fma_rate(device: Any) -> float:
-    """Return post-JIT JAX FMA rate on the given device in FMAs/second.
+def _measure_backend_fma_rate(backend: JaxBackend, is_gpu: bool) -> float:
+    """Return FMA throughput for backend in FMAs/second, using Tensor ops.
 
-    GPU kernel launch overhead (~1 ms) swamps small operations, making dot
-    products dispatch-dominated and useless as a GPU roofline.  A 512×512
-    matmul (268 M FMAs) is compute-bound at GPU peak throughput so the
-    measured rate reflects real GPU performance.  CPU dispatch overhead is
-    ~4 µs, so a 256-element dot product (512 FMAs) gives a stable CPU baseline.
+    GPU kernel launch overhead (~1 ms) swamps small operations, so a 512×512
+    matmul (268 M FMAs) is used for GPU to ensure the measurement is
+    compute-bound.  CPU dispatch overhead is ~4 µs, so a 256-element dot
+    product (512 FMAs) is sufficient for the CPU baseline.
+
+    Warmup calls allow the backend's dispatch cache (e.g. XLA compilation) to
+    stabilise before timing begins.  Tensor.sync() blocks until async
+    dispatches complete so GPU timing is accurate.
     """
-    is_gpu = device.platform == "gpu"
     if is_gpu:
-        n = 512
-        a = jax.device_put(jnp.ones((n, n), dtype=jnp.float64), device)
-        b = jax.device_put(jnp.ones((n, n), dtype=jnp.float64), device)
-        fn_jit = jax.jit(jnp.matmul)
+        n = _DEVICE_CALIB_N_GPU
+        a = Tensor(np.ones((n, n)), backend=backend)
+        b = Tensor(np.ones((n, n)), backend=backend)
         fmas_per_call = 2 * n**3
     else:
-        n = _JAX_CALIB_N
-        a = jax.device_put(jnp.ones(n, dtype=jnp.float64), device)
-        b = jax.device_put(jnp.ones(n, dtype=jnp.float64), device)
-        fn_jit = jax.jit(jnp.dot)
+        n = _DEVICE_CALIB_N_CPU
+        a = Tensor(np.ones(n), backend=backend)
+        b = Tensor(np.ones(n), backend=backend)
         fmas_per_call = 2 * n
-    for _ in range(_JAX_CALIB_WARMUP):
-        fn_jit(a, b).block_until_ready()
+    for _ in range(_DEVICE_CALIB_WARMUP):
+        r = a @ b
+        r.sync()
     best = float("inf")
-    for _ in range(_JAX_CALIB_TRIALS):
+    for _ in range(_DEVICE_CALIB_TRIALS):
         t0 = time.perf_counter()
-        fn_jit(a, b).block_until_ready()
+        r = a @ b
+        r.sync()
         best = min(best, time.perf_counter() - t0)
     return fmas_per_call / best
 
@@ -90,25 +90,30 @@ def fma_rate() -> float:
 
 
 @pytest.fixture(scope="session")
-def jax_calibration() -> JaxCalibration:
-    """Session-scoped JAX post-JIT FMA rooflines for CPU and (optionally) GPU.
+def device_calibration() -> DeviceCalibration:
+    """Session-scoped FMA rooflines for CPU and (optionally) GPU.
 
-    cpu_fma_rate is always measured.  gpu_fma_rate is measured when at least
-    one GPU device is available AND the measured GPU rate exceeds the CPU rate
-    (a GPU slower than CPU indicates a broken driver, e.g. WSL2 without
-    proper kernel-mode driver support).  gpu_fma_rate is None otherwise and
-    GPU claims skip automatically.
+    cpu_fma_rate is measured using a CPU JaxBackend and a dot-product workload
+    (dispatch-limited baseline).  gpu_fma_rate is measured using a GPU
+    JaxBackend and a compute-bound matmul workload; it is None when no GPU
+    device is available or when the XLA driver raises during measurement.
+
+    The backend instances stored in the result are the same ones used during
+    calibration; performance claims use them so the benchmark runs through
+    identical code paths.
     """
-    cpu_device = jax.devices("cpu")[0]
-    cpu_rate = _measure_jax_fma_rate(cpu_device)
-    try:
-        gpu_devices = jax.devices("gpu")
-    except RuntimeError:
-        gpu_devices = []
+    cpu_backend = JaxBackend()
+    cpu_rate = _measure_backend_fma_rate(cpu_backend, is_gpu=False)
+    gpu_backend: JaxBackend | None = None
     gpu_rate: float | None = None
-    if gpu_devices:
-        try:
-            gpu_rate = _measure_jax_fma_rate(gpu_devices[0])
-        except Exception:  # noqa: BLE001
-            pass
-    return JaxCalibration(cpu_fma_rate=cpu_rate, gpu_fma_rate=gpu_rate)
+    try:
+        gpu_backend = JaxBackend(device="gpu")
+        gpu_rate = _measure_backend_fma_rate(gpu_backend, is_gpu=True)
+    except Exception:  # noqa: BLE001
+        gpu_backend = None
+    return DeviceCalibration(
+        cpu_backend=cpu_backend,
+        gpu_backend=gpu_backend,
+        cpu_fma_rate=cpu_rate,
+        gpu_fma_rate=gpu_rate,
+    )

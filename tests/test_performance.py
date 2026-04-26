@@ -41,15 +41,13 @@ GPU claims skip automatically when jax_calibration.gpu_fma_rate is None.
 from __future__ import annotations
 
 import time
-from typing import Any
 
-import jax
 import numpy as np
 import pytest
 
-from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
+from cosmic_foundry.computation.backends import NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor
-from tests.claims import CalibratedClaim, JaxCalibration
+from tests.claims import CalibratedClaim, DeviceCalibration
 
 # Regressions larger than this multiple of the roofline prediction fail.
 EFFICIENCY_FACTOR = 8
@@ -307,39 +305,32 @@ class _BackendSpeedupClaim(_PerfClaim):
 
 
 # ---------------------------------------------------------------------------
-# JAX performance model constants and helpers
+# Device performance model constants
 # ---------------------------------------------------------------------------
 
-# Post-warmup JaxBackend Tensor ops must stay within this multiple of the
+# Post-warmup backend Tensor ops must stay within this multiple of the
 # JIT-compiled roofline.  The gap reflects eager dispatch overhead; the bound
 # catches catastrophic regressions (e.g. accidental CPU fallback on GPU).
-_JAX_EFFICIENCY_FACTOR = 10
+_DEVICE_EFFICIENCY_FACTOR = 10
 
 # GPU JIT roofline must be at least this many times the CPU JIT roofline.
-_JAX_GPU_CPU_MIN_SPEEDUP = 2
+_DEVICE_GPU_CPU_MIN_SPEEDUP = 2
 
-# Warmup calls to issue before timed trials so the XLA dispatch cache is warm.
-_JAX_WARMUP = 3
-
-_JX_CPU = JaxBackend()
-
-
-def _jax_block(raw: Any) -> None:
-    """Block until XLA has finished computing raw."""
-    jax.block_until_ready(raw)
+# Warmup calls to issue before timed trials so the dispatch cache is warm.
+_DEVICE_WARMUP = 3
 
 
 # ---------------------------------------------------------------------------
-# JAX claim classes
+# Device claim classes
 # ---------------------------------------------------------------------------
 
 
-class _JaxPerfClaim(CalibratedClaim[JaxCalibration]):
+class _DevicePerfClaim(CalibratedClaim[DeviceCalibration]):
     pass
 
 
-class _JaxCpuPerfClaim(_JaxPerfClaim):
-    """JaxBackend CPU op ≤ _JAX_EFFICIENCY_FACTOR × CPU JIT roofline (post-warmup)."""
+class _DeviceCpuPerfClaim(_DevicePerfClaim):
+    """Backend CPU op ≤ _DEVICE_EFFICIENCY_FACTOR × CPU JIT roofline (post-warmup)."""
 
     def __init__(self, op: str, n: int) -> None:
         self._op = op
@@ -347,47 +338,48 @@ class _JaxCpuPerfClaim(_JaxPerfClaim):
 
     @property
     def description(self) -> str:
-        return f"jax_cpu/{self._op}/N={self._n}"
+        return f"device_cpu/{self._op}/N={self._n}"
 
-    def check(self, calibration: JaxCalibration) -> None:
+    def check(self, calibration: DeviceCalibration) -> None:
+        backend = calibration.cpu_backend
         n = self._n
         if self._op == "matmul":
             a = Tensor(
-                [[float(i + j) for j in range(n)] for i in range(n)], backend=_JX_CPU
+                [[float(i + j) for j in range(n)] for i in range(n)], backend=backend
             )
             b = Tensor(
                 [[float(i * j + 1) for j in range(n)] for i in range(n)],
-                backend=_JX_CPU,
+                backend=backend,
             )
             expected_fmas = 2 * n**3
         else:
             a = Tensor(
-                [[float(i + j) for j in range(n)] for i in range(n)], backend=_JX_CPU
+                [[float(i + j) for j in range(n)] for i in range(n)], backend=backend
             )
-            b = Tensor([float(i) for i in range(n)], backend=_JX_CPU)
+            b = Tensor([float(i) for i in range(n)], backend=backend)
             expected_fmas = 2 * n**2
-        for _ in range(_JAX_WARMUP):
+        for _ in range(_DEVICE_WARMUP):
             r = a @ b
-            _jax_block(r._value)  # noqa: SLF001
+            r.sync()
         best_elapsed = float("inf")
         for _ in range(_TRIALS):
             t0 = time.perf_counter()
             r = a @ b
-            _jax_block(r._value)  # noqa: SLF001
+            r.sync()
             best_elapsed = min(best_elapsed, time.perf_counter() - t0)
         expected = expected_fmas / calibration.cpu_fma_rate
-        assert best_elapsed <= _JAX_EFFICIENCY_FACTOR * expected, (
+        assert best_elapsed <= _DEVICE_EFFICIENCY_FACTOR * expected, (
             f"{self.description}: "
             f"{best_elapsed * 1e6:.1f}µs actual, "
             f"{expected * 1e6:.1f}µs roofline, "
-            f"{best_elapsed / expected:.1f}× > {_JAX_EFFICIENCY_FACTOR}× limit"
+            f"{best_elapsed / expected:.1f}× > {_DEVICE_EFFICIENCY_FACTOR}× limit"
         )
 
 
-class _JaxGpuPerfClaim(_JaxPerfClaim):
-    """Post-warmup JaxBackend GPU Tensor op ≤ _JAX_EFFICIENCY_FACTOR × GPU JIT roofline.
+class _DeviceGpuPerfClaim(_DevicePerfClaim):
+    """Backend GPU op ≤ _DEVICE_EFFICIENCY_FACTOR × GPU JIT roofline (post-warmup).
 
-    Skipped automatically when jax_calibration.gpu_fma_rate is None.
+    Skipped automatically when device_calibration.gpu_fma_rate is None.
     """
 
     def __init__(self, op: str, n: int) -> None:
@@ -396,53 +388,53 @@ class _JaxGpuPerfClaim(_JaxPerfClaim):
 
     @property
     def description(self) -> str:
-        return f"jax_gpu/{self._op}/N={self._n}"
+        return f"device_gpu/{self._op}/N={self._n}"
 
-    def check(self, calibration: JaxCalibration) -> None:
+    def check(self, calibration: DeviceCalibration) -> None:
         if calibration.gpu_fma_rate is None:
             pytest.skip("no GPU device available")
-        gpu_backend = JaxBackend(device="gpu")
+        backend = calibration.gpu_backend
         n = self._n
         if self._op == "matmul":
             a = Tensor(
                 [[float(i + j) for j in range(n)] for i in range(n)],
-                backend=gpu_backend,
+                backend=backend,
             )
             b = Tensor(
                 [[float(i * j + 1) for j in range(n)] for i in range(n)],
-                backend=gpu_backend,
+                backend=backend,
             )
             expected_fmas = 2 * n**3
         else:
             a = Tensor(
                 [[float(i + j) for j in range(n)] for i in range(n)],
-                backend=gpu_backend,
+                backend=backend,
             )
-            b = Tensor([float(i) for i in range(n)], backend=gpu_backend)
+            b = Tensor([float(i) for i in range(n)], backend=backend)
             expected_fmas = 2 * n**2
-        for _ in range(_JAX_WARMUP):
+        for _ in range(_DEVICE_WARMUP):
             r = a @ b
-            _jax_block(r._value)  # noqa: SLF001
+            r.sync()
         best_elapsed = float("inf")
         for _ in range(_TRIALS):
             t0 = time.perf_counter()
             r = a @ b
-            _jax_block(r._value)  # noqa: SLF001
+            r.sync()
             best_elapsed = min(best_elapsed, time.perf_counter() - t0)
         expected = expected_fmas / calibration.gpu_fma_rate
-        assert best_elapsed <= _JAX_EFFICIENCY_FACTOR * expected, (
+        assert best_elapsed <= _DEVICE_EFFICIENCY_FACTOR * expected, (
             f"{self.description}: "
             f"{best_elapsed * 1e6:.1f}µs actual, "
             f"{expected * 1e6:.1f}µs roofline, "
-            f"{best_elapsed / expected:.1f}× > {_JAX_EFFICIENCY_FACTOR}× limit"
+            f"{best_elapsed / expected:.1f}× > {_DEVICE_EFFICIENCY_FACTOR}× limit"
         )
 
 
-class _JaxGpuVsCpuRooflineClaim(_JaxPerfClaim):
+class _DeviceGpuVsCpuRooflineClaim(_DevicePerfClaim):
     """GPU JIT roofline ≥ min_speedup × CPU JIT roofline.
 
     Catches miscalibration (e.g. GPU measurement accidentally ran on CPU)
-    and GPU configurations where XLA falls back to a CPU-speed device.
+    and GPU configurations where the backend falls back to a CPU-speed device.
     Skipped when no GPU device is available.
     """
 
@@ -451,9 +443,9 @@ class _JaxGpuVsCpuRooflineClaim(_JaxPerfClaim):
 
     @property
     def description(self) -> str:
-        return f"jax_gpu_vs_cpu_roofline/{self._min_speedup}x"
+        return f"device_gpu_vs_cpu_roofline/{self._min_speedup}x"
 
-    def check(self, calibration: JaxCalibration) -> None:
+    def check(self, calibration: DeviceCalibration) -> None:
         if calibration.gpu_fma_rate is None:
             pytest.skip("no GPU device available")
         speedup = calibration.gpu_fma_rate / calibration.cpu_fma_rate
@@ -481,16 +473,16 @@ _CLAIMS: list[CalibratedClaim[float]] = [
     *[_BackendSpeedupClaim("matvec", n, 5) for n in [16, 32]],
 ]
 
-_JAX_CLAIMS: list[CalibratedClaim[JaxCalibration]] = [
-    # JaxBackend CPU vs CPU JIT roofline (dot-product-calibrated, dispatch-limited)
-    *[_JaxCpuPerfClaim("matmul", n) for n in [128, 256]],
-    *[_JaxCpuPerfClaim("matvec", n) for n in [128, 256]],
-    # JaxBackend GPU matmul vs GPU JIT roofline (matmul-calibrated, compute-bound)
+_DEVICE_CLAIMS: list[CalibratedClaim[DeviceCalibration]] = [
+    # Backend CPU vs CPU JIT roofline (dot-product-calibrated, dispatch-limited)
+    *[_DeviceCpuPerfClaim("matmul", n) for n in [128, 256]],
+    *[_DeviceCpuPerfClaim("matvec", n) for n in [128, 256]],
+    # Backend GPU matmul vs GPU JIT roofline (matmul-calibrated, compute-bound)
     # Matvec is omitted: at all testable N, GPU kernel launch overhead (~1 ms) swamps
     # the tiny matvec compute, making the ratio meaninglessly large.
-    *[_JaxGpuPerfClaim("matmul", n) for n in [256, 512, 1024]],
+    *[_DeviceGpuPerfClaim("matmul", n) for n in [256, 512, 1024]],
     # Cross-device sanity check: GPU compute roofline ≥ 2× CPU dispatch-limited baseline
-    _JaxGpuVsCpuRooflineClaim(min_speedup=_JAX_GPU_CPU_MIN_SPEEDUP),
+    _DeviceGpuVsCpuRooflineClaim(min_speedup=_DEVICE_GPU_CPU_MIN_SPEEDUP),
 ]
 
 
@@ -499,8 +491,10 @@ def test_performance(claim: CalibratedClaim[float], fma_rate: float) -> None:
     claim.check(fma_rate)
 
 
-@pytest.mark.parametrize("claim", _JAX_CLAIMS, ids=[c.description for c in _JAX_CLAIMS])
-def test_jax_performance(
-    claim: CalibratedClaim[JaxCalibration], jax_calibration: JaxCalibration
+@pytest.mark.parametrize(
+    "claim", _DEVICE_CLAIMS, ids=[c.description for c in _DEVICE_CLAIMS]
+)
+def test_device_performance(
+    claim: CalibratedClaim[DeviceCalibration], device_calibration: DeviceCalibration
 ) -> None:
-    claim.check(jax_calibration)
+    claim.check(device_calibration)
