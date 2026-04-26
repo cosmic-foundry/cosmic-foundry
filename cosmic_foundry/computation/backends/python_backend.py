@@ -133,6 +133,9 @@ class PythonBackend:
     def get(self, raw: Any) -> Any:
         return raw
 
+    def sync(self, raw: Any) -> None:
+        pass
+
     # ------------------------------------------------------------------
     # Contraction
     # ------------------------------------------------------------------
