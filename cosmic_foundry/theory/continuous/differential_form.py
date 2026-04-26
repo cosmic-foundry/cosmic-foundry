@@ -150,9 +150,51 @@ class TwoForm(DifferentialForm[D, sympy.Matrix]):
         return self._symbols
 
 
+class ThreeForm(DifferentialForm[D, sympy.Expr]):
+    """A differential 3-form: a volume form (scalar density).
+
+    Fixes degree = 3 and C = sympy.Expr.  In three spatial dimensions a
+    3-form has a single independent component f, representing the density
+    f dV.  Concrete: ThreeForm(manifold, expr, symbols) constructs a
+    volume-form field directly.  Subclass when the density is computed or
+    derived rather than stored as an expression.
+
+    ThreeForm is the continuous counterpart of CellField in the discrete
+    layer: both represent Ω³ (volume-form) quantities, with CellField
+    storing the cell average (1/|Ω|) ∫_Ω f dV.
+    """
+
+    def __init__(
+        self,
+        manifold: D,
+        expr: sympy.Expr,
+        symbols: tuple[sympy.Symbol, ...],
+    ) -> None:
+        self._manifold = manifold
+        self._expr = expr
+        self._symbols = symbols
+
+    @property
+    def degree(self) -> int:
+        return 3
+
+    @property
+    def manifold(self) -> D:
+        return self._manifold
+
+    @property
+    def expr(self) -> sympy.Expr:
+        return self._expr
+
+    @property
+    def symbols(self) -> tuple[sympy.Symbol, ...]:
+        return self._symbols
+
+
 __all__ = [
     "DifferentialForm",
     "OneForm",
+    "ThreeForm",
     "TwoForm",
     "ZeroForm",
 ]

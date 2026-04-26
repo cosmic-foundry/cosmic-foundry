@@ -117,7 +117,8 @@ Field(SymbolicFunction)               — f: M → V; interface: manifold → Ma
     └── DifferentialForm             — free: degree; derived: tensor_type = (0, degree)
         ├── ZeroForm                 — scalar field; degree = 0; codomain sympy.Expr
         ├── OneForm                  — covector field; degree = 1; codomain tuple[sympy.Expr, ...]
-        └── TwoForm                  — 2-form; degree = 2; codomain sympy.Matrix
+        ├── TwoForm                  — 2-form; degree = 2; codomain sympy.Matrix
+        └── ThreeForm                — volume form; degree = 3; codomain sympy.Expr
 
 DifferentialOperator(Function[Field, _C]) — L: Field → _C; interface: manifold, order
 └── DivergenceFormEquation                   — ∇·F(U) = S in spatial-operator form;
@@ -151,9 +152,10 @@ Constraint(ABC)                       — interface: support → Manifold
 | `Manifold` | `Mesh` | adds chart / coordinate geometry |
 | *(none)* | `StructuredMesh` | regularity qualifier; no smooth analog |
 | `Field[V]` | `DiscreteField[V]` | map from space to value |
-| `ZeroForm` | `CellField[V]` / `State` | abstract cell-indexed field; `State` is the concrete Tensor-backed instance |
-| `OneForm` | `FaceField[scalar]` | abstract face-indexed field; scalar flux F·n̂·|A| at each face |
-| `TwoForm` | `FaceField[sympy.Matrix]` | matrix-valued face flux (e.g. stress tensor); needed Epoch 5+ |
+| `ZeroForm` | `PointField[V]` | Ω⁰; point-valued field at mesh vertices (FD-style DOFs) |
+| `OneForm` | `EdgeField[V]` | Ω¹; edge-integrated field (e.g. EMF in MHD constrained transport) |
+| `TwoForm` | `FaceField[V]` | Ω²; face-integrated field; scalar flux F·n̂·|A| or matrix-valued |
+| `ThreeForm` | `CellField[V]` / `State` | Ωⁿ (volume form); cell-averaged field (FVM-style DOFs) |
 | `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
 | `DifferentialOperator` | `DiscreteOperator` | map between fields |
 | `DivergenceFormEquation` | — | bridge: `Discretization` maps a `DivergenceFormEquation` to a `DiscreteOperator` |
@@ -187,22 +189,39 @@ DiscreteField(NumericFunction[Mesh, V])
                                   V is unconstrained: sympy.Expr for symbolic
                                   evaluation (order proofs), float for numeric
                                   paths, or any PythonBackend-compatible type.
+├── PointField(DiscreteField[V])
+│                              — abstract; Ω⁰ DOF location: values at mesh
+│                                 vertices. Discrete counterpart of ZeroForm.
+│                                 Indexed by vertex multi-index (i₀,…,iₙ₋₁);
+│                                 vertex shape = cell shape + 1 per axis.
+│                                 Natural DOF for finite-difference schemes.
+│                                 No concrete subclasses yet.
+├── EdgeField(DiscreteField[V])
+│                              — abstract; Ω¹ DOF location: values at mesh
+│                                 edges. Discrete counterpart of OneForm.
+│                                 Indexed by (tangent_axis, idx_low) mirroring
+│                                 FaceField's (normal_axis, idx_low).
+│                                 Natural DOF for the electric field E in MHD
+│                                 constrained transport (Faraday: d: Ω¹ → Ω²).
+│                                 No concrete subclasses yet.
 ├── CellField(DiscreteField[V])
-│                              — abstract; narrows DiscreteField to cell-center
-│                                 domain. Discrete counterpart of ZeroForm.
+│                              — abstract; Ωⁿ DOF location: cell-averaged
+│                                 values (volume-form DOFs). Discrete
+│                                 counterpart of ThreeForm, not ZeroForm.
+│                                 Natural DOF for FVM schemes.
 │                                 Concrete subclasses:
 │                                   State (physics/) — Tensor-backed, float
 │                                   _BasisField      — sympy unit basis (assemble)
 │                                   _GhostedField    — ghost-cell extension (FVM)
 │                                   _CartesianCellAverage — sympy cell averages (Rₕ)
 └── FaceField(DiscreteField[V])
-                               — abstract; narrows DiscreteField to face domain.
-                                  Indexed by (axis, idx_low): axis ∈ [0, ndim)
+                               — abstract; Ω² DOF location: face-integrated
+                                  values. Discrete counterpart of TwoForm.
+                                  Indexed by (normal_axis, idx_low): axis ∈ [0, ndim)
                                   is the face normal; idx_low ∈ ℤⁿ is the
                                   low-side cell index.
-                                  Discrete counterpart of differential forms:
-                                    FaceField[scalar] ↔ OneForm (1-form)
-                                    FaceField[sympy.Matrix] ↔ TwoForm (2-form)
+                                    FaceField[scalar]        ↔ scalar flux F·n̂·|A|
+                                    FaceField[sympy.Matrix]  ↔ matrix-valued flux
                                   The canonical return type of NumericalFlux.__call__
                                   and CartesianRestrictionOperator (degree = ndim−1).
                                   Concrete subclass:

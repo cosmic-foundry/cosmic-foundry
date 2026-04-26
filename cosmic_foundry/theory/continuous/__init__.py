@@ -15,6 +15,7 @@ from cosmic_foundry.theory.continuous.constraint import Constraint
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     OneForm,
+    ThreeForm,
     TwoForm,
     ZeroForm,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "SymbolicFunction",
     "SymmetricTensorField",
     "TensorField",
+    "ThreeForm",
     "TopologicalManifold",
     "TwoForm",
     "ZeroForm",
