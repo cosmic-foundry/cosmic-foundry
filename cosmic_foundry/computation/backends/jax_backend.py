@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import jax
 import jax.numpy as jnp
 
 
@@ -23,10 +24,27 @@ class JaxBackend:
     dtype:
         Element dtype for ``zeros`` and ``eye``.  When ``None`` (the default)
         the dtype is inferred from the input data.
+    device:
+        JAX device kind to place tensors on, e.g. ``"cpu"`` or ``"gpu"``.
+        When ``None`` (the default) JAX's process-wide default device is used.
+        Raises ``ValueError`` at construction time if the requested device kind
+        is not available.
     """
 
-    def __init__(self, dtype: Any = None) -> None:
+    def __init__(self, dtype: Any = None, device: str | None = None) -> None:
         self._dtype = dtype
+        if device is not None:
+            devices = jax.devices(device)
+            if not devices:
+                raise ValueError(f"No JAX device of kind '{device}' is available")
+            self._device: Any = devices[0]
+        else:
+            self._device = None
+
+    def _maybe_place(self, arr: Any) -> Any:
+        if self._device is not None:
+            return jax.device_put(arr, self._device)
+        return arr
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -34,7 +52,7 @@ class JaxBackend:
 
     def to_native(self, data: Any) -> Any:
         """Convert Python scalar or nested sequence to a JAX array."""
-        return jnp.asarray(data, dtype=self._dtype)
+        return self._maybe_place(jnp.asarray(data, dtype=self._dtype))
 
     def from_native(self, raw: Any) -> Any:
         """Convert JAX array to a Python scalar or nested list."""
@@ -46,7 +64,7 @@ class JaxBackend:
         return tuple(raw.shape)
 
     def copy(self, raw: Any) -> Any:
-        return jnp.array(raw)
+        return self._maybe_place(jnp.array(raw))
 
     # ------------------------------------------------------------------
     # Construction
@@ -54,13 +72,12 @@ class JaxBackend:
 
     def zeros(self, shape: tuple[int, ...]) -> Any:
         dt = self._dtype if self._dtype is not None else jnp.float64
-        if not shape:
-            return jnp.array(0.0, dtype=dt)
-        return jnp.zeros(shape, dtype=dt)
+        arr = jnp.array(0.0, dtype=dt) if not shape else jnp.zeros(shape, dtype=dt)
+        return self._maybe_place(arr)
 
     def eye(self, n: int) -> Any:
         dt = self._dtype if self._dtype is not None else jnp.float64
-        return jnp.eye(n, dtype=dt)
+        return self._maybe_place(jnp.eye(n, dtype=dt))
 
     # ------------------------------------------------------------------
     # Utilities

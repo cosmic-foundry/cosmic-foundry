@@ -1,8 +1,9 @@
-"""Shared base classes for all test claims."""
+"""Shared base classes and calibration types for all test claims."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 C = TypeVar("C")
@@ -32,3 +33,16 @@ class CalibratedClaim(ABC, Generic[C]):
 
     @abstractmethod
     def check(self, calibration: C) -> None: ...
+
+
+@dataclass(frozen=True)
+class JaxCalibration:
+    """Post-JIT JAX FMA throughput for CPU and (optionally) GPU.
+
+    Both rates are measured with jax.jit and block_until_ready so they
+    reflect steady-state XLA throughput rather than eager-dispatch latency.
+    gpu_fma_rate is None when no GPU device is available.
+    """
+
+    cpu_fma_rate: float
+    gpu_fma_rate: float | None
