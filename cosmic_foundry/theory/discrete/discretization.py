@@ -7,7 +7,9 @@ from abc import ABC, abstractmethod
 import sympy
 
 from cosmic_foundry.computation.tensor import Tensor
-from cosmic_foundry.theory.continuous.boundary_condition import BoundaryCondition
+from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
+    DiscreteBoundaryCondition,
+)
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
@@ -45,14 +47,14 @@ class Discretization(ABC):
 
     Concrete:
         mesh               — the mesh on which the scheme is defined
-        boundary_condition — the BoundaryCondition on ∂Ω (None if not yet set)
+        boundary_condition — the DiscreteBoundaryCondition on ∂Ω (None if not yet set)
         assemble           — stiffness matrix as a Tensor
     """
 
     def __init__(
         self,
         mesh: Mesh,
-        boundary_condition: BoundaryCondition | None = None,
+        boundary_condition: DiscreteBoundaryCondition | None = None,
     ) -> None:
         self._mesh = mesh
         self._boundary_condition = boundary_condition
@@ -63,8 +65,8 @@ class Discretization(ABC):
         return self._mesh
 
     @property
-    def boundary_condition(self) -> BoundaryCondition | None:
-        """The boundary condition on ∂Ω."""
+    def boundary_condition(self) -> DiscreteBoundaryCondition | None:
+        """The discrete boundary condition on ∂Ω."""
         return self._boundary_condition
 
     @abstractmethod

@@ -56,8 +56,10 @@ from cosmic_foundry.theory.continuous.differential_form import (
     ThreeForm,
     ZeroForm,
 )
-from cosmic_foundry.theory.continuous.dirichlet_bc import DirichletBC
-from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
+from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
+    DirichletGhostCells,
+    PeriodicGhostCells,
+)
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 
 # ---------------------------------------------------------------------------
@@ -102,7 +104,7 @@ def _calibrate_jacobi_alpha(fma_rate: float) -> float:
         shape=(n,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
-    disc = FVMDiscretization(mesh, flux, DirichletBC(_manifold))
+    disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
     a_cal = disc.assemble()
     b_cal = Tensor([1.0] * n)
     solver = DenseJacobiSolver(tol=1e-8)
@@ -229,7 +231,7 @@ class _OrderClaim(_Claim):
 
 
 class _SolverClaim(_Claim):
-    """Claim: solver converges on FVMDiscretization(mesh, flux, DirichletBC).
+    """Claim: solver converges on FVMDiscretization(mesh, flux, DirichletGhostCells).
 
     Builds the discretization from flux and mesh, then verifies:
       1. Final residual < tol.
@@ -258,8 +260,7 @@ class _SolverClaim(_Claim):
         )
 
     def check(self, fma_rate: float) -> None:
-        manifold = self._flux.continuous_operator.manifold
-        disc = FVMDiscretization(self._mesh, self._flux, DirichletBC(manifold))
+        disc = FVMDiscretization(self._mesh, self._flux, DirichletGhostCells())
         n = math.prod(self._mesh.shape)
         a = disc.assemble()
         b = Tensor([1.0] * n)
@@ -291,8 +292,8 @@ class _DirectSolverClaim(_Claim):
     No monotonicity or iteration-count checks: a direct solver produces the
     exact solution (up to floating-point rounding) in a single pass.
 
-    For PeriodicBC the RHS is a zero-mean sinusoid so the system is consistent
-    (in the column space of the circulant advection matrix).
+    For PeriodicGhostCells the RHS is a zero-mean sinusoid so the system is
+    consistent (in the column space of the circulant advection matrix).
     """
 
     def __init__(
@@ -300,7 +301,7 @@ class _DirectSolverClaim(_Claim):
         solver: DenseLUSolver,
         flux: Any,
         mesh: CartesianMesh,
-        bc_type: type = DirichletBC,
+        bc_type: type = DirichletGhostCells,
     ) -> None:
         self._solver = solver
         self._flux = flux
@@ -310,7 +311,7 @@ class _DirectSolverClaim(_Claim):
     @property
     def description(self) -> str:
         n = math.prod(self._mesh.shape)
-        suffix = "/periodic" if self._bc_type is PeriodicBC else ""
+        suffix = "/periodic" if self._bc_type is PeriodicGhostCells else ""
         return (
             f"{type(self._solver).__name__}/"
             f"{type(self._flux).__name__}(order={self._flux.order})"
@@ -318,12 +319,11 @@ class _DirectSolverClaim(_Claim):
         )
 
     def check(self, fma_rate: float) -> None:
-        manifold = self._flux.continuous_operator.manifold
-        bc = self._bc_type(manifold)
+        bc = self._bc_type()
         disc = FVMDiscretization(self._mesh, self._flux, bc)
         n = math.prod(self._mesh.shape)
         a = disc.assemble()
-        if self._bc_type is PeriodicBC:
+        if self._bc_type is PeriodicGhostCells:
             h = float(self._mesh.cell_volume)
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
             b = Tensor(
@@ -351,7 +351,7 @@ class _ConvergenceRateClaim(_Claim):
     cells per wavelength on the coarsest mesh (sufficient for the asymptotic
     regime).  A candidate is admitted only when A·R_h(sin(nπx)) matches
     R_h(∇·F(sin(nπx))) to within 10% on the coarsest mesh; modes inconsistent
-    with the BC's ghost-cell convention (e.g. odd-n modes under PeriodicBC)
+    with the BC's ghost-cell convention (e.g. odd-n modes under PeriodicGhostCells)
     produce O(1) relative error and are excluded automatically.  The source
     ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator.
 
@@ -366,7 +366,7 @@ class _ConvergenceRateClaim(_Claim):
         self,
         solver: Any,
         flux: Any,
-        bc_type: type = DirichletBC,
+        bc_type: type = DirichletGhostCells,
     ) -> None:
         self._solver = solver
         self._flux = flux
@@ -374,7 +374,7 @@ class _ConvergenceRateClaim(_Claim):
 
     @property
     def description(self) -> str:
-        suffix = "/periodic" if self._bc_type is PeriodicBC else ""
+        suffix = "/periodic" if self._bc_type is PeriodicGhostCells else ""
         return (
             f"{type(self._solver).__name__}/"
             f"{type(self._flux).__name__}(order={self._flux.order})/"
@@ -395,7 +395,7 @@ class _ConvergenceRateClaim(_Claim):
         manifold = self._flux.continuous_operator.manifold
         _x = manifold.atlas[0].symbols[0]
         p = self._flux.order
-        bc = self._bc_type(manifold)
+        bc = self._bc_type()
 
         # Auto-select admissible manufactured-solution modes.
         # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
@@ -540,11 +540,14 @@ _ADVECTION_DIFFUSION_FLUXES = [
     ),
 ]
 _FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES, *_ADVECTION_DIFFUSION_FLUXES]
-# DiffusiveFlux assembles an SPD matrix (DirichletBC); compatible with all solvers.
-# AdvectiveFlux assembles a rank-(N-1) circulant matrix under PeriodicBC; compatible
-# with DenseLUSolver only (zero-mean null-space convention handles the singularity).
-# AdvectionDiffusionFlux assembles A_adv + κ·A_diff; non-singular under DirichletBC
-# for any κ > 0, compatible with all solvers at unit Péclet number (κ=1, h≈1/N).
+# DiffusiveFlux assembles an SPD matrix (DirichletGhostCells);
+# compatible with all solvers.
+# AdvectiveFlux assembles a rank-(N-1) circulant matrix under PeriodicGhostCells;
+# compatible with DenseLUSolver only (zero-mean null-space convention handles the
+# singularity).
+# AdvectionDiffusionFlux assembles A_adv + κ·A_diff; non-singular under
+# DirichletGhostCells for any κ > 0, compatible with all solvers at unit Péclet
+# number (κ=1, h≈1/N).
 _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver(tol=1e-10)]
 
@@ -566,12 +569,12 @@ _CLAIMS: list[_Claim] = [
     ],
     # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
     *[
-        _DirectSolverClaim(s, f, _mesh_n8, PeriodicBC)
+        _DirectSolverClaim(s, f, _mesh_n8, PeriodicGhostCells)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f, PeriodicBC)
+        _ConvergenceRateClaim(s, f, PeriodicGhostCells)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],

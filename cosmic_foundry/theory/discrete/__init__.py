@@ -7,6 +7,11 @@ cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 from __future__ import annotations
 
 from cosmic_foundry.theory.discrete.cell_complex import CellComplex
+from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
+    DirichletGhostCells,
+    DiscreteBoundaryCondition,
+    PeriodicGhostCells,
+)
 from cosmic_foundry.theory.discrete.discrete_exterior_derivative import (
     DiscreteExteriorDerivative,
 )
@@ -24,6 +29,8 @@ from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 __all__ = [
     "CellComplex",
+    "DirichletGhostCells",
+    "DiscreteBoundaryCondition",
     "DiscreteExteriorDerivative",
     "DiscreteField",
     "DiscreteOperator",
@@ -32,6 +39,7 @@ __all__ = [
     "FaceField",
     "Mesh",
     "NumericalFlux",
+    "PeriodicGhostCells",
     "PointField",
     "RestrictionOperator",
     "StructuredMesh",

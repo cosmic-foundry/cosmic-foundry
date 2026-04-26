@@ -246,7 +246,19 @@ RestrictionOperator(NumericFunction[F, DiscreteField[V]])
                                     degree=1:      ∫_eᵢ F·dl → EdgeField
                                     degree=0:      f(vᵢ) → PointField
 
-Discretization(ABC)           — free: mesh: Mesh, boundary_condition
+DiscreteBoundaryCondition(ABC)
+                            — discrete counterpart of BoundaryCondition.
+                              While BoundaryCondition describes the mathematical
+                              constraint (φ|_∂Ω = g), DiscreteBoundaryCondition
+                              describes how to extend a field beyond the mesh
+                              boundary via ghost cells so that NumericalFlux
+                              stencils can be evaluated at boundary-adjacent cells.
+                              Abstract: extend(field, mesh) → DiscreteField
+                              Concrete subclasses:
+                                DirichletGhostCells — odd reflection (φ = 0 at face)
+                                PeriodicGhostCells  — wrap-around (φ(x+L) = φ(x))
+
+Discretization(ABC)           — free: mesh: Mesh, boundary_condition: DiscreteBoundaryCondition
                               Encapsulates the scheme choice (reconstruction,
                               numerical flux, quadrature, boundary condition).
                               __call__(self) → DiscreteOperator produces the
@@ -488,9 +500,9 @@ of NumPy raw throughput; `JaxBackend` GPU ≤ `NumpyBackend` CPU at N ≥ 32
 
 **C7 — Collapse LazyDiscreteField. ✓** `LazyDiscreteField` deleted.
 `FaceField` covers all face-indexed fields; `_BasisField` (private to
-`Discretization`) is a `DiscreteField` unit basis for `assemble()`; `_GhostedField`
-(private to `FVMDiscretization`) is a `DiscreteField` ghost-cell extension.
-All convergence claims pass.
+`Discretization`) is a `DiscreteField` unit basis for `assemble()`.
+Ghost-cell extension is handled by `DirichletGhostCells` and `PeriodicGhostCells`
+(concrete `DiscreteBoundaryCondition` subclasses).  All convergence claims pass.
 
 **C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
 `RungeKutta4`. Backend-agnostic; operates on `State`-valued fields. Lane B
