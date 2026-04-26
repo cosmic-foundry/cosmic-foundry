@@ -53,7 +53,7 @@ _NP = NumpyBackend()
 # ---------------------------------------------------------------------------
 
 
-class _PerfClaim(CalibratedClaim):
+class _PerfClaim(CalibratedClaim[float]):
     pass
 
 
@@ -293,7 +293,7 @@ class _BackendSpeedupClaim(_PerfClaim):
 # Registry
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[CalibratedClaim] = [
+_CLAIMS: list[CalibratedClaim[float]] = [
     # PythonBackend vs FMA roofline
     *[_DotPerfClaim(n) for n in [8, 32, 128]],
     *[_MatvecPerfClaim(n) for n in [8, 16, 32]],
@@ -308,5 +308,5 @@ _CLAIMS: list[CalibratedClaim] = [
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_performance(claim: CalibratedClaim, fma_rate: float) -> None:
+def test_performance(claim: CalibratedClaim[float], fma_rate: float) -> None:
     claim.check(fma_rate)

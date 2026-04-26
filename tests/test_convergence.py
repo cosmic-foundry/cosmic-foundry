@@ -141,7 +141,7 @@ def _convergence_n_max(fma_rate: float, n_convergence_claims: int) -> int:
 # ---------------------------------------------------------------------------
 
 
-class _OrderClaim(CalibratedClaim):
+class _OrderClaim(CalibratedClaim[float]):
     """Claim: discrete operator achieves O(h^p) convergence at order p.
 
     Verifies that the error polynomial has zeros at h⁰…h^{p-1} and a
@@ -219,7 +219,7 @@ class _OrderClaim(CalibratedClaim):
         )
 
 
-class _SolverClaim(CalibratedClaim):
+class _SolverClaim(CalibratedClaim[float]):
     """Claim: solver converges on FVMDiscretization(mesh, flux, DirichletGhostCells).
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.
@@ -255,7 +255,7 @@ class _SolverClaim(CalibratedClaim):
         ), f"Did not converge: residual {residual:.3e}"
 
 
-class _DirectSolverClaim(CalibratedClaim):
+class _DirectSolverClaim(CalibratedClaim[float]):
     """Claim: direct solver residual < tol after one factorization pass.
 
     Builds the discretization from flux, mesh, and bc_type, then verifies:
@@ -314,7 +314,7 @@ class _DirectSolverClaim(CalibratedClaim):
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
-class _ConvergenceRateClaim(CalibratedClaim):
+class _ConvergenceRateClaim(CalibratedClaim[float]):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
     The manufactured solution φ is selected automatically from candidates
@@ -523,7 +523,7 @@ _SOLVERS = [DenseJacobiSolver(tol=1e-8)]
 _DIRECT_SOLVERS = [DenseLUSolver()]
 
 
-_CLAIMS: list[CalibratedClaim] = [
+_CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers
@@ -575,5 +575,5 @@ _N_CONVERGENCE_CLAIMS: int = sum(
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_convergence(claim: CalibratedClaim, fma_rate: float) -> None:
+def test_convergence(claim: CalibratedClaim[float], fma_rate: float) -> None:
     claim.check(fma_rate)

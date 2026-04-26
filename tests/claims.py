@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
+
+C = TypeVar("C")
 
 
 class Claim(ABC):
-    """Base for static correctness claims that do not depend on machine speed."""
+    """Base for static correctness claims that do not depend on calibration."""
 
     @property
     @abstractmethod
@@ -16,12 +19,16 @@ class Claim(ABC):
     def check(self) -> None: ...
 
 
-class CalibratedClaim(ABC):
-    """Base for claims whose verification depends on the machine's FMA rate."""
+class CalibratedClaim(ABC, Generic[C]):
+    """Base for claims whose verification requires runtime calibration data.
+
+    The type parameter C is the calibration type.  Bind it concretely in each
+    claim family, e.g. CalibratedClaim[float] for FMA-rate-calibrated claims.
+    """
 
     @property
     @abstractmethod
     def description(self) -> str: ...
 
     @abstractmethod
-    def check(self, fma_rate: float) -> None: ...
+    def check(self, calibration: C) -> None: ...
