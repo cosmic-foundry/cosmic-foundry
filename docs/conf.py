@@ -98,6 +98,8 @@ linkcheck_ignore = [
     r"^https://www\.nrc\.gov/",
     # OSTI — intermittently unreachable (connection timeouts in CI)
     r"^https://www\.osti\.gov/",
+    # MPC GitLab — intermittently unreachable from CI runners (connect timeout)
+    r"^https://gitlab\.mpcdf\.mpg\.de/",
     # Confirmed-dead links in research/ — to be cleaned up separately
     r"^https://doi\.org/10\.1016/S0898122100003175$",  # dead DOI
     r"^https://www\.asme\.org/codes-standards/find-codes-standards/v-v-20",
