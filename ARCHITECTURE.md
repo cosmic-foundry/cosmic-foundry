@@ -502,10 +502,15 @@ level.  Tracing a full solve loop requires all shape/rank branches to be
 static, which is a separate refactor deferred to C8 when the time integrator
 provides a natural JIT boundary.
 
-**C6 — Backend parity and performance.** Benchmark all three backends on
-representative solver workloads. Establish that `NumpyBackend` is within 2×
-of NumPy raw throughput; `JaxBackend` GPU ≤ `NumpyBackend` CPU at N ≥ 32
-2-D. Add backend-parametric performance claims.
+**C6 — Backend parity and performance. ✓ (NumpyBackend)** Added
+`_NumpyParityPerfClaim` and `_BackendSpeedupClaim` to `test_performance.py`.
+`_NumpyParityPerfClaim` asserts NumpyBackend Tensor overhead ≤
+`NUMPY_PARITY_FACTOR = 2` of raw `np.matmul`/`np.matvec` for N ∈ {8, 16, 32}.
+`_BackendSpeedupClaim` asserts NumpyBackend is at least 10× faster than
+PythonBackend for matmul (N ∈ {8, 16, 32}) and 5× for matvec (N ∈ {16, 32}),
+catching regressions where NumPy is accidentally bypassed.  JaxBackend
+performance claims (GPU vs CPU) deferred to C8, where `@jax.jit` provides
+the natural JIT boundary that makes JAX competitive.
 
 **C7 — Collapse LazyDiscreteField. ✓** `LazyDiscreteField` deleted.
 `FaceField` covers all face-indexed fields; `_BasisField` (private to
