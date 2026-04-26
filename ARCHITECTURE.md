@@ -151,9 +151,10 @@ Constraint(ABC)                       — interface: support → Manifold
 | `Manifold` | `Mesh` | adds chart / coordinate geometry |
 | *(none)* | `StructuredMesh` | regularity qualifier; no smooth analog |
 | `Field[V]` | `DiscreteField[V]` | map from space to value |
-| `ZeroForm` | `LazyDiscreteField[V]` | concrete, callable-backed; planned for collapse — see below |
-| *(none — dense float field)* | `State` (in `physics/`) | concrete, Tensor-backed simulation state |
-| `TensorField`, `OneForm`, `TwoForm` | **missing** | rank > 0 discrete fields; needed Epoch 5+ (hydro velocity, B-field, GR metric); discrete 1-forms live on faces, 2-forms on edges |
+| `ZeroForm` | `State` (in `physics/`) | concrete scalar cell-average field; Tensor-backed |
+| `OneForm` | `FaceField[scalar]` | scalar flux F·n̂·|A| at each face |
+| `TwoForm` | `FaceField[sympy.Matrix]` | matrix-valued face flux (e.g. stress tensor); needed Epoch 5+ |
+| `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
 | `DifferentialOperator` | `DiscreteOperator` | map between fields |
 | `DivergenceFormEquation` | — | bridge: `Discretization` maps a `DivergenceFormEquation` to a `DiscreteOperator` |
 | `BoundaryCondition` | *(none)* | BC is a continuous concept; enters the discrete layer only through `Discretization` |
@@ -187,19 +188,24 @@ DiscreteField(NumericFunction[Mesh, V])
                                   evaluation (order proofs), float for numeric
                                   paths, or any PythonBackend-compatible type.
 
+FaceField(DiscreteField[V])    — concrete DiscreteField on mesh faces, indexed
+                                  by (axis, idx_low): axis ∈ [0, ndim) is the
+                                  face normal direction; idx_low ∈ ℤⁿ is the
+                                  low-side cell.  Backed by a callable
+                                  fn: (axis, idx_low) → V.
+                                  Discrete counterpart of differential forms:
+                                    FaceField[scalar] ↔ OneForm (1-form)
+                                    FaceField[sympy.Matrix] ↔ TwoForm (2-form)
+                                  The canonical return type of NumericalFlux.__call__
+                                  and CartesianRestrictionOperator (degree = ndim−1).
+
 LazyDiscreteField(DiscreteField[V])
                                — concrete DiscreteField backed by a callable
                                   fn: idx → V; evaluation is deferred per cell.
-                                  Currently used by Discretization.assemble()
-                                  and CartesianRestrictionOperator for symbolic
-                                  evaluation (sympy.Expr flows through unchanged).
-                                  Planned for collapse once DiscreteOperator.__call__
-                                  is made eager (State → State): a sympy-valued
-                                  State (PythonBackend with sympy.Expr leaves)
-                                  replaces the lazy-callable path, and
-                                  LazyDiscreteField is deleted. This preserves
-                                  exact symbolic order proofs while eliminating
-                                  the callable indirection.
+                                  Used for cell-indexed deferred fields:
+                                  Discretization.assemble() unit basis fields
+                                  and FVMDiscretization ghost-cell extensions.
+                                  Face-indexed fields use FaceField instead.
 
 RestrictionOperator(NumericFunction[Function[M,V], DiscreteField[V]])
                                — free: mesh: Mesh;
@@ -208,18 +214,17 @@ RestrictionOperator(NumericFunction[Function[M,V], DiscreteField[V]])
                                   a Function plus a Mesh yields a DiscreteField;
                                   the restriction depends on both — neither alone suffices
 
-Discretization(NumericFunction[DivergenceFormEquation, DiscreteOperator])
-                            — free: mesh: Mesh
-                              maps a DivergenceFormEquation to a DiscreteOperator;
-                              encapsulates the scheme choice (reconstruction,
+Discretization(ABC)           — free: mesh: Mesh, boundary_condition
+                              Encapsulates the scheme choice (reconstruction,
                               numerical flux, quadrature, boundary condition).
-                              Defined by the commutation diagram:
+                              __call__(self) → DiscreteOperator produces the
+                              assembled Lₕ that makes the commutation diagram
                                 Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
-                              interpreted on test fields f ∈ C^{p+2}(Ω); "≈"
-                              means ‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ) as h → 0,
-                              measured in the local ℓ∞ norm over interior
-                              cells. The approximation order p is a property
-                              of the concrete scheme, proved by its
+                              hold, interpreted on test fields f ∈ C^{p+2}(Ω);
+                              "≈" means ‖Lₕ Rₕ f − Rₕ L f‖_{∞,h} = O(hᵖ)
+                              as h → 0, measured in the local ℓ∞ norm over
+                              interior cells.  The approximation order p is a
+                              property of the concrete scheme, proved by its
                               convergence test — not a parameter of the
                               abstract interface.
                               The commutation check verified algebraically via
@@ -244,13 +249,11 @@ DiscreteOperator(NumericFunction[DiscreteField, DiscreteField])
 NumericalFlux(DiscreteOperator)
                             — a DiscreteOperator with the cell-average →
                               face-flux calling convention:
-                                __call__(U: DiscreteField) → DiscreteField
-                              where the returned DiscreteField is indexed as
+                                __call__(U: DiscreteField) → FaceField
+                              where the returned FaceField is indexed as
                               result((axis, idx_low)) and returns the flux
                               F·n̂·|face_area| at that face.  Inherits order
                               and continuous_operator from DiscreteOperator.
-                              Once LazyDiscreteField is collapsed, this call
-                              will be eager: State → State.
 ```
 
 ### geometry/
@@ -290,8 +293,7 @@ State(DiscreteField[float])    — concrete simulation-state field; stores a den
                                   mesh shape. The canonical type for time
                                   integrators, checkpoint/restart, and I/O.
                                   PythonBackend with sympy.Expr leaves also works,
-                                  enabling symbolic evaluation without
-                                  LazyDiscreteField (see collapse plan above).
+                                  enabling symbolic evaluation for convergence proofs.
 
 NumericalFlux implementations:
 ├── DiffusiveFlux(order)       — F(U) = −∇U; stencil coefficients derived
@@ -302,15 +304,9 @@ NumericalFlux implementations:
 │                                 One class, not one per order: DiffusiveFlux(2)
 │                                 and DiffusiveFlux(4) are instances, not subclasses.
 ├── AdvectiveFlux(order)       — F(U) = v·U; symmetric centered reconstruction.
-├── AdvectionDiffusionFlux(order)
-│                              — F(U) = U − κ∇U; combines advective and diffusive
-│                                 parts at unit Péclet number.
-└── HyperbolicFlux(order, riemann_solver)
-                               — F(U) nonlinear; reconstruction at the given order
-                                 produces a two-sided state (U_L, U_R) that the
-                                 Riemann solver consumes. Epoch 5 ships
-                                 HyperbolicFlux(2, HLLC) and HyperbolicFlux(4, HLLC)
-                                 as instances — not subclasses.
+└── AdvectionDiffusionFlux(order)
+                               — F(U) = U − κ∇U; combines advective and diffusive
+                                 parts at unit Péclet number.
 
 FVMDiscretization(Discretization)
                                — free: mesh, numerical_flux, boundary_condition
@@ -377,9 +373,8 @@ LinearSolver        — mesh-agnostic interface: solve(a: Tensor, b: Tensor) →
                       tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
 ```
 
-**Planned additions (Epoch 3):** `JaxBackend`; `State` in `physics/` (concrete
-`DiscreteField` backed by `Tensor`); explicit time integrators (`RungeKutta2`,
-`RungeKutta4`); HDF5 checkpoint/restart with provenance sidecars.
+**Planned additions (Epoch 3):** `JaxBackend`; explicit time integrators
+(`RungeKutta2`, `RungeKutta4`); HDF5 checkpoint/restart with provenance sidecars.
 
 ### Cross-cutting
 
@@ -435,14 +430,12 @@ representative solver workloads. Establish that `NumpyBackend` is within 2×
 of NumPy raw throughput; `JaxBackend` GPU ≤ `NumpyBackend` CPU at N ≥ 32
 2-D. Add backend-parametric performance claims.
 
-**C7 — State: concrete DiscreteField backed by Tensor.** Implement `State`
-in `physics/` as a `DiscreteField[float]` carrying a `Tensor` and a mesh.
-Rename `MeshFunction` → `DiscreteField` and `LazyMeshFunction` →
-`LazyDiscreteField` throughout `theory/discrete/`. Make `DiscreteOperator.__call__`
-eager (`State → State`); update `CartesianRestrictionOperator` to return a
-`State` with sympy-valued `PythonBackend` Tensor for the symbolic order-proof
-path. Delete `LazyDiscreteField` once it has no remaining callers. Verify
-all convergence claims pass with the new interface.
+**C7 — Collapse remaining LazyDiscreteField uses.** `State`, `FaceField`, and
+the rename (`MeshFunction` → `DiscreteField`, `LazyMeshFunction` →
+`LazyDiscreteField`) are done. Remaining: replace the cell-indexed
+`LazyDiscreteField` uses in `Discretization.assemble()` and the ghost-cell
+functions in `FVMDiscretization` with eager `State`-based paths; then delete
+`LazyDiscreteField`. All convergence claims must pass with the new interface.
 
 **C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
 `RungeKutta4`. Backend-agnostic; operates on `State`-valued fields. Lane B

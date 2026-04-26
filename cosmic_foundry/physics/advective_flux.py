@@ -11,7 +11,7 @@ from cosmic_foundry.theory.continuous.advection_operator import AdvectionOperato
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
-from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
+from cosmic_foundry.theory.discrete.face_field import FaceField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -150,12 +150,12 @@ class AdvectiveFlux(NumericalFlux[sympy.Expr]):
     def __call__(
         self,
         U: DiscreteField[sympy.Expr],
-    ) -> LazyDiscreteField[sympy.Expr]:
-        """Return a face-flux DiscreteField over all faces.
+    ) -> FaceField[sympy.Expr]:
+        """Return a FaceField of face fluxes F·n̂·|A| over all faces.
 
-        The returned DiscreteField is callable as result((axis, idx_low))
-        where idx_low is the low-side cell index tuple.  Values are computed
-        lazily on demand.  The mesh is inferred from U.mesh.
+        The returned FaceField is callable as result((axis, idx_low)) where
+        idx_low is the low-side cell index tuple.  Values are computed on
+        demand.  The mesh is inferred from U.mesh.
         """
         mesh = cast(CartesianMesh, U.mesh)
 
@@ -172,7 +172,7 @@ class AdvectiveFlux(NumericalFlux[sympy.Expr]):
             )
             return face_value * face_area
 
-        return LazyDiscreteField(mesh, compute)
+        return FaceField(mesh, compute)
 
 
 __all__ = ["AdvectiveFlux"]

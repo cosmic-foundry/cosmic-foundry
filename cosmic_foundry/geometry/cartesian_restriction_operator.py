@@ -11,7 +11,7 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_form import OneForm
 from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
-from cosmic_foundry.theory.discrete.lazy_discrete_field import LazyDiscreteField
+from cosmic_foundry.theory.discrete.face_field import FaceField
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.restriction_operator import RestrictionOperator
 
@@ -87,7 +87,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
             values[idx] = sympy.simplify(expr / mesh.cell_volume)
         return _CartesianCellAverage(mesh, values)
 
-    def _face_restrict(self, F: OneForm) -> DiscreteField[sympy.Expr]:
+    def _face_restrict(self, F: OneForm) -> FaceField[sympy.Expr]:
         mesh = self._mesh
         ndim = len(mesh._shape)
 
@@ -106,7 +106,7 @@ class CartesianRestrictionOperator(RestrictionOperator[Any, sympy.Expr]):
                     expr = sympy.integrate(expr, (F.symbols[j], lo, hi))
             return sympy.simplify(expr)
 
-        return LazyDiscreteField(mesh, face_flux)
+        return FaceField(mesh, face_flux)
 
 
 __all__ = ["CartesianRestrictionOperator"]
