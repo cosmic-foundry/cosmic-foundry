@@ -488,10 +488,19 @@ logic; `NumpyBackend(dtype=None)` uses NumPy with dtype inferred from input
 by default. Mixed-backend arithmetic raises `ValueError`. 38 backend
 correctness claims in `tests/test_tensor_backends.py`.
 
-**C5 — JaxBackend.** Implement `JaxBackend` satisfying the `Backend`
-protocol using JAX arrays. Verify backend correctness claims pass. Settle
-the `@jax.jit` tracing policy: whether JIT is applied per Backend method call
-or at the solver level.
+**C5 — JaxBackend. ✓** `JaxBackend` in `computation/backends/jax_backend.py`
+satisfies the `Backend` protocol using JAX arrays.  JAX arrays are immutable;
+`slice_set` uses `.at[idx].set(value)` and returns the updated array.
+`Tensor.__setitem__` now routes all index types through `backend.slice_set`,
+reassigning `self._data` with the result — this is the only interface change
+needed to support both mutable (Python/NumPy) and immutable (JAX) backends.
+Backend correctness claims in `test_tensor_backends.py` extended to cover
+`JaxBackend` for all claim types (roundtrip, arithmetic, conversion, slice,
+factory, mixed-backend).  **JIT scope decision**: `@jax.jit` is not applied
+per `Backend` method call; the caller applies it at the solver or time-step
+level.  Tracing a full solve loop requires all shape/rank branches to be
+static, which is a separate refactor deferred to C8 when the time integrator
+provides a natural JIT boundary.
 
 **C6 — Backend parity and performance.** Benchmark all three backends on
 representative solver workloads. Establish that `NumpyBackend` is within 2×
@@ -514,12 +523,7 @@ checkpoints readable on CPU-only machines.
 
 **Open questions — Epoch 3 design points:**
 
-1. **`@jax.jit` scope.** The natural granularity for JIT in this architecture
-   is the full solve loop (assemble → iterate → residual), not individual
-   `Backend` method calls. But tracing the loop requires that all branches on
-   tensor shape/rank be static. Decision deferred to C5.
-
-2. **`set_default_backend` vs. solver-level override.** The current design
+1. **`set_default_backend` vs. solver-level override.** The current design
    sets a process-wide default. If two solvers in the same process need different
    backends (e.g., CPU for assembly, GPU for iteration), a per-solver backend
    argument to `LinearSolver.solve` may be needed. Deferred to C7.

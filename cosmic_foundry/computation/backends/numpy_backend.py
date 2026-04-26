@@ -138,5 +138,6 @@ class NumpyBackend:
 
     def slice_set(
         self, raw: np.ndarray, idx: Any, value: Any, shape: tuple[int, ...]
-    ) -> None:
+    ) -> Any:
         raw[idx] = value
+        return raw

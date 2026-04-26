@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+from cosmic_foundry.computation.backends.jax_backend import JaxBackend
 from cosmic_foundry.computation.backends.numpy_backend import NumpyBackend
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 
@@ -50,7 +51,7 @@ class Backend(Protocol):
     def slice_get(self, raw: Any, idx: Any, shape: tuple[int, ...]) -> Any: ...
     def slice_set(
         self, raw: Any, idx: Any, value: Any, shape: tuple[int, ...]
-    ) -> None: ...
+    ) -> Any: ...
 
 
 _default_backend: Backend = PythonBackend()
@@ -69,6 +70,7 @@ def set_default_backend(backend: Backend) -> None:
 
 __all__ = [
     "Backend",
+    "JaxBackend",
     "NumpyBackend",
     "PythonBackend",
     "get_default_backend",
