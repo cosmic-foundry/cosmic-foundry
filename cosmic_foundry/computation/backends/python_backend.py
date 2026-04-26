@@ -94,6 +94,43 @@ class PythonBackend:
         return _zip_map(a, b, lambda x, y: x / y)
 
     # ------------------------------------------------------------------
+    # Reductions and element-wise ops for JIT-clean algorithms
+    # ------------------------------------------------------------------
+
+    def abs(self, raw: Any) -> Any:
+        return _map(raw, lambda x: abs(x))
+
+    def reduce_max(self, raw: Any) -> Any:
+        return max(_flatten(raw))
+
+    def argmax(self, raw: Any) -> int:
+        return max(range(len(raw)), key=lambda i: raw[i])
+
+    def where(self, cond: Any, x: Any, y: Any) -> Any:
+        return _where(cond, x, y)
+
+    def lt(self, a: Any, b: Any) -> Any:
+        return _zip_map(a, b, lambda x, y: x < y)
+
+    def le(self, a: Any, b: Any) -> Any:
+        return _zip_map(a, b, lambda x, y: x <= y)
+
+    def gt(self, a: Any, b: Any) -> Any:
+        return _zip_map(a, b, lambda x, y: x > y)
+
+    def ge(self, a: Any, b: Any) -> Any:
+        return _zip_map(a, b, lambda x, y: x >= y)
+
+    def arange(self, n: int) -> Any:
+        return list(range(n))
+
+    def rdiv_scalar(self, s: float, raw: Any) -> Any:
+        return _map(raw, lambda x: s / x)
+
+    def take(self, raw: Any, indices: Any) -> Any:
+        return [raw[int(i)] for i in _flatten(indices)]
+
+    # ------------------------------------------------------------------
     # Contraction
     # ------------------------------------------------------------------
 
@@ -302,8 +339,12 @@ def _map(data: Any, fn: Callable[[Any], Any]) -> Any:
 
 
 def _zip_map(a: Any, b: Any, fn: Callable[[Any, Any], Any]) -> Any:
-    if not isinstance(a, list):
+    if not isinstance(a, list) and not isinstance(b, list):
         return fn(a, b)
+    if not isinstance(a, list):
+        return _map(b, lambda y: fn(a, y))
+    if not isinstance(b, list):
+        return _map(a, lambda x: fn(x, b))
     if not a or not isinstance(a[0], list):
         return [fn(x, y) for x, y in zip(a, b, strict=False)]
     return [_zip_map(ra, rb, fn) for ra, rb in zip(a, b, strict=False)]
@@ -320,6 +361,20 @@ def _flatten(data: Any) -> list[float]:
             result.extend(_flatten(row))
         return result
     return [float(x) for x in data]
+
+
+def _where(cond: Any, x: Any, y: Any) -> Any:
+    """Element-wise ternary; scalar cond broadcasts over array x/y."""
+    if not isinstance(cond, list):
+        return x if cond else y
+    x_is_list = isinstance(x, list)
+    y_is_list = isinstance(y, list)
+    result = []
+    for i, c in enumerate(cond):
+        xi = x[i] if x_is_list else x
+        yi = y[i] if y_is_list else y
+        result.append(_where(c, xi, yi))
+    return result
 
 
 def _deep_copy(data: Any) -> Any:

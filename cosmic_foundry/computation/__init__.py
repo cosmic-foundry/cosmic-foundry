@@ -13,7 +13,13 @@ from cosmic_foundry.computation.backends import (  # noqa: E402
     get_default_backend,
     set_default_backend,
 )
-from cosmic_foundry.computation.tensor import Real, Tensor, einsum  # noqa: E402
+from cosmic_foundry.computation.tensor import (  # noqa: E402
+    Real,
+    Tensor,
+    arange,
+    einsum,
+    where,
+)
 
 __all__ = [
     "Backend",
@@ -31,7 +37,9 @@ __all__ = [
     "PythonBackend",
     "Real",
     "Tensor",
+    "arange",
     "einsum",
     "get_default_backend",
     "set_default_backend",
+    "where",
 ]

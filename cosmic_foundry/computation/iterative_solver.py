@@ -37,8 +37,8 @@ class IterativeSolver(LinearSolver):
         """Advance the solver state by one iteration; return new state."""
 
     @abstractmethod
-    def converged(self, state: Any) -> bool:
-        """Return True when the iteration has converged or hit max_iter."""
+    def converged(self, state: Any) -> Tensor:
+        """Return a 0-d bool Tensor: True when converged or max_iter reached."""
 
     @abstractmethod
     def extract(self, state: Any) -> Tensor:
@@ -46,7 +46,7 @@ class IterativeSolver(LinearSolver):
 
     def solve(self, a: Tensor, b: Tensor) -> Tensor:
         state = self.init_state(a, b)
-        while not self.converged(state):
+        while not bool(self.converged(state)):
             state = self.step(state)
         return self.extract(state)
 

@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
-from cosmic_foundry.computation.tensor import Tensor, einsum
+from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
 
 _PY = PythonBackend()
 _NP = NumpyBackend()
@@ -264,6 +264,43 @@ _ARITHMETIC_CASES = [
     ("diag", lambda b: _mk_mat(b).diag()),
     ("zeros_factory", lambda b: Tensor.zeros(2, 3, backend=b)),
     ("eye_factory", lambda b: Tensor.eye(3, backend=b)),
+    # Element-wise reductions and new ops
+    ("abs_vec", lambda b: Tensor([-1.0, 2.0, -3.0], backend=b).abs()),
+    ("abs_mat", lambda b: Tensor([[-1.0, 2.0], [3.0, -4.0]], backend=b).abs()),
+    ("max_vec", lambda b: Tensor([1.0, 5.0, 3.0], backend=b).max()),
+    (
+        "element_rank2",
+        lambda b: Tensor([[1.0, 2.0], [3.0, 4.0]], backend=b).element(1, 0),
+    ),
+    (
+        "take_permute",
+        lambda b: Tensor([10.0, 20.0, 30.0], backend=b).take(
+            Tensor([2, 0, 1], backend=b)
+        ),
+    ),
+    ("rdiv_scalar", lambda b: 6.0 / Tensor([1.0, 2.0, 3.0], backend=b)),
+    (
+        "lt_vecs",
+        lambda b: Tensor([1.0, 3.0, 2.0], backend=b)
+        < Tensor([2.0, 2.0, 2.0], backend=b),
+    ),
+    (
+        "gt_scalar",
+        lambda b: Tensor([1.0, 3.0, 2.0], backend=b) > 2.0,
+    ),
+    (
+        "where_array_cond",
+        lambda b: where(
+            Tensor([True, False, True], backend=b),
+            Tensor([1.0, 2.0, 3.0], backend=b),
+            Tensor([4.0, 5.0, 6.0], backend=b),
+        ),
+    ),
+    (
+        "where_scalar_cond_true",
+        lambda b: where(Tensor(True, backend=b), Tensor([1.0, 2.0], backend=b), 0.0),
+    ),
+    ("arange_4", lambda b: arange(4, backend=b)),
 ]
 
 _SLICE_READ_CASES = [
