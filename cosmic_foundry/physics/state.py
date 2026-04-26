@@ -1,18 +1,18 @@
-"""State: concrete Tensor-backed VolumeField[float]."""
+"""State: concrete Tensor-backed DiscreteField[float] of cell averages."""
 
 from __future__ import annotations
 
 from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.mesh import Mesh
-from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 
-class State(VolumeField[float]):
-    """Concrete Tensor-backed discrete scalar field.
+class State(DiscreteField[float]):
+    """Concrete Tensor-backed discrete scalar field of cell averages.
 
-    State is the simulation-state object: a VolumeField[float] whose values
-    are total integrals over each cell, stored in a flat Tensor of shape
-    (n_cells,).  Index mapping follows axis-0-fastest ordering:
+    State is the simulation-state object: a DiscreteField[float] whose values
+    are cell-average quantities φ̄ᵢ = (1/|Ωᵢ|) ∫_Ωᵢ f dV, stored in a flat
+    Tensor of shape (n_cells,).  Index mapping follows axis-0-fastest ordering:
     flat = Σ_a idx[a] · stride[a], where stride[0] = 1 and
     stride[a] = Π_{k<a} shape[k].
 
@@ -25,7 +25,7 @@ class State(VolumeField[float]):
     mesh:
         The mesh on which the field is defined; determines shape and indexing.
     data:
-        Flat Tensor of length mesh.n_cells holding the cell total values.
+        Flat Tensor of length mesh.n_cells holding the cell-average values.
     """
 
     def __init__(self, mesh: Mesh, data: Tensor) -> None:

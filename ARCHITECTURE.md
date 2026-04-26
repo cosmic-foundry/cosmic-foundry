@@ -160,7 +160,7 @@ Constraint(ABC)                       — interface: support → Manifold
 | `ZeroForm` | `PointField[V]` | Ω⁰; point-valued field at mesh vertices (FD-style DOFs) |
 | `OneForm` | `EdgeField[V]` | Ω¹; edge-integrated field (e.g. EMF in MHD constrained transport) |
 | `TwoForm` | `FaceField[V]` | Ω²; face-integrated field; scalar flux F·n̂·|A| or matrix-valued |
-| `ThreeForm` | `VolumeField[V]` / `State` | Ωⁿ (volume form); cell total-integral field (n-cochain) |
+| `ThreeForm` | `VolumeField[V]` | Ωⁿ (volume form); cell total-integral field (n-cochain) |
 | `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
 | `ExteriorDerivative` | `DiscreteExteriorDerivative` | exact chain map; d∘d=0; no truncation error |
 | `DifferentialOperator` | `DiscreteOperator` | map between fields (approximation, O(hᵖ) error) |
@@ -216,14 +216,9 @@ DiscreteField(NumericFunction[Mesh, V])
 │                              — abstract; Ωⁿ DOF location: total integrals
 │                                 ∫_Ωᵢ f dV over each cell (n-cochain).
 │                                 Discrete counterpart of ThreeForm.
-│                                 The physics layer (FVMDiscretization,
-│                                 NumericalFlux) normalizes by |Ωᵢ| when
-│                                 intensive (cell-average) values are needed.
 │                                 Concrete subclasses:
-│                                   State (physics/) — Tensor-backed, float
-│                                   _BasisField      — sympy unit basis (assemble)
-│                                   _GhostedField    — ghost-cell extension (FVM)
 │                                   _CartesianVolumeIntegral — sympy totals (Rₕ)
+│                                   _CallableVolumeField — callable-backed
 └── FaceField(DiscreteField[V])
                                — abstract; Ω² DOF location: face-integrated
                                   values. Discrete counterpart of TwoForm.
@@ -284,13 +279,11 @@ DiscreteOperator(NumericFunction[DiscreteField, DiscreteField])
                               coefficients; produced by a Discretization.
 
 NumericalFlux(DiscreteOperator)
-                            — a DiscreteOperator with the VolumeField →
+                            — a DiscreteOperator with the cell-average →
                               face-flux calling convention:
-                                __call__(U: VolumeField) → FaceField
-                              where U stores total integrals and the
-                              implementation normalizes by cell volume
-                              internally before applying flux stencils.
-                              The returned FaceField is indexed as
+                                __call__(U: DiscreteField) → FaceField
+                              where U holds cell-average values.  The
+                              returned FaceField is indexed as
                               result((axis, idx_low)) and returns the flux
                               F·n̂·|face_area| at that face.  Inherits order
                               and continuous_operator from DiscreteOperator.
@@ -324,7 +317,8 @@ CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
 
 CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.Expr])
                                        — Rₕᵏ: Ωᵏ → k-cochains via exact SymPy integration.
-                                         degree=ndim:   Rₕⁿ(ZeroForm)  → VolumeField (∫_Ωᵢ f dV, total)
+                                         degree=ndim:   Rₕⁿ(n-Form)   → VolumeField (∫_Ωᵢ f dV, total)
+                                                        (ThreeForm in 3-D, OneForm in 1-D)
                                          degree=ndim-1: Rₕⁿ⁻¹(OneForm) → FaceField   (face-normal flux)
                                          degree=1:      Rₕ¹(OneForm)   → EdgeField   (edge line integral)
                                          degree=0:      Rₕ⁰(ZeroForm)  → PointField  (vertex evaluation)
@@ -347,8 +341,8 @@ Concrete PDE model implementations and simulation state.
 Application/concreteness layer: may import from all other packages.
 
 ```
-State(VolumeField[float])       — concrete Tensor-backed simulation-state field.
-                                  Stores total integrals ∫_Ωᵢ f dV per cell.
+State(DiscreteField[float])     — concrete Tensor-backed simulation-state field.
+                                  Stores cell-average values φ̄ᵢ = (1/|Ωᵢ|)∫_Ωᵢ f dV.
                                   Multi-index cell access via mesh shape.
                                   Backed by any Backend. The canonical type for
                                   time integrators, checkpoint/restart, and I/O.
@@ -492,9 +486,9 @@ of NumPy raw throughput; `JaxBackend` GPU ≤ `NumpyBackend` CPU at N ≥ 32
 
 **C7 — Collapse LazyDiscreteField. ✓** `LazyDiscreteField` deleted.
 `FaceField` covers all face-indexed fields; `_BasisField` (private to
-`Discretization`) covers unit basis vectors in `assemble()`; `_GhostedField`
-(private to `FVMDiscretization`) covers ghost-cell extensions. All convergence
-claims pass.
+`Discretization`) is a `DiscreteField` unit basis for `assemble()`; `_GhostedField`
+(private to `FVMDiscretization`) is a `DiscreteField` ghost-cell extension.
+All convergence claims pass.
 
 **C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
 `RungeKutta4`. Backend-agnostic; operates on `State`-valued fields. Lane B

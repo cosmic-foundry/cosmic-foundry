@@ -20,10 +20,9 @@ from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
-from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 
-class _GhostedField(VolumeField[sympy.Expr]):
+class _GhostedField(DiscreteField[sympy.Expr]):
     """Cell field extended beyond mesh bounds by a ghost-cell rule."""
 
     def __init__(
@@ -137,16 +136,16 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
 
-    Maps VolumeField (total integrals) to a State holding discrete divergence totals:
+    Maps a DiscreteField of cell averages to a State of average discrete divergences:
 
-        (Lₕ U)(i) = ∮_∂Ωᵢ F·n̂ dA
-                  = Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
+        (Lₕ U)(i) = (1/|Ωᵢ|) ∮_∂Ωᵢ F·n̂ dA
+                  = (1/|Ωᵢ|) Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
 
-    approximating ∫_Ωᵢ L φ dV at convergence order p = numerical_flux.order.
-    NumericalFlux implementations normalize U by cell volume internally before
-    computing face fluxes, since flux stencils operate on intensive (average) values.
-    The mesh is read from U.mesh at call time, making this operator applicable
-    to symbolic meshes (for convergence testing) and concrete meshes alike.
+    approximating (1/|Ωᵢ|) ∫_Ωᵢ L φ dV at convergence order p = numerical_flux.order.
+    U is assumed to hold cell-average values; NumericalFlux stencils operate on
+    averages directly.  The mesh is read from U.mesh at call time, making this
+    operator applicable to symbolic meshes (for convergence testing) and concrete
+    meshes alike.
 
     If a DirichletBC is supplied (via FVMDiscretization), homogeneous ghost
     cells are applied before computing face fluxes, making the operator
@@ -191,6 +190,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
                 flat //= shape[a]
             return tuple(idx)
 
+        vol = mesh.cell_volume
         residuals = []
         for flat_i in range(mesh.n_cells):
             idx = _to_multi(flat_i)
@@ -204,7 +204,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
                     + face_fluxes((axis, idx))  # type: ignore[arg-type]
                     - face_fluxes((axis, idx_low))  # type: ignore[arg-type]
                 )
-            residuals.append(total)
+            residuals.append(total / vol)
 
         return State(mesh, Tensor(residuals, backend=PythonBackend()))
 

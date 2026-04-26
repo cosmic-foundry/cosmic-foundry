@@ -27,17 +27,12 @@ class VolumeField(DiscreteField[_V]):
         PointField → EdgeField → FaceField → VolumeField
         (0-cochain)  (1-cochain)  (2-cochain)  (n-cochain)
 
-    The physics layer (FVMDiscretization) normalizes by cell volume internally
-    when it needs cell-average (intensive) quantities for flux computation.
-
     Required (in addition to DiscreteField.mesh):
         __call__(idx: tuple[int, ...]) → V  — evaluate at a cell multi-index
 
     Concrete subclasses:
-        State            (physics/)           — Tensor-backed, float-valued
-        _BasisField      (discretization.py)  — sympy unit basis for assemble()
-        _GhostedField    (fvm_discretization.py) — ghost-cell-extended volume field
         _CartesianVolumeIntegral (cartesian_restriction_operator.py)
+        _CallableVolumeField     — callable-backed (this module)
     """
 
     @abstractmethod

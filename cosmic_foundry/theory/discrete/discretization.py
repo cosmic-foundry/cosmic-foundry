@@ -11,10 +11,9 @@ from cosmic_foundry.theory.continuous.boundary_condition import BoundaryConditio
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
-from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 
-class _BasisField(VolumeField[sympy.Expr]):
+class _BasisField(DiscreteField[sympy.Expr]):
     """Unit basis vector eⱼ: returns 1 at target cell, 0 everywhere else."""
 
     def __init__(self, mesh: Mesh, target: tuple[int, ...]) -> None:
