@@ -11,7 +11,7 @@ from cosmic_foundry.theory.continuous.differential_operator import DifferentialO
 from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
-from cosmic_foundry.theory.discrete.face_field import FaceField
+from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -178,7 +178,7 @@ class DiffusiveFlux(NumericalFlux[sympy.Expr]):
             )
             return sympy.Rational(-1) * gradient * face_area
 
-        return FaceField(mesh, compute)
+        return _CallableFaceField(mesh, compute)
 
 
 __all__ = ["DiffusiveFlux"]

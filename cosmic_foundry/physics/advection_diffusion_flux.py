@@ -15,7 +15,7 @@ from cosmic_foundry.theory.continuous.advection_diffusion_operator import (
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
-from cosmic_foundry.theory.discrete.face_field import FaceField
+from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -96,7 +96,7 @@ class AdvectionDiffusionFlux(NumericalFlux[sympy.Expr]):
         def compute(face: tuple[int, tuple[int, ...]]) -> sympy.Expr:
             return adv(face) + kappa * diff(face)
 
-        return FaceField(mesh, compute)
+        return _CallableFaceField(mesh, compute)
 
 
 __all__ = ["AdvectionDiffusionFlux"]

@@ -1,7 +1,8 @@
-"""FaceField: DiscreteField on mesh faces, indexed by (axis, cell_idx)."""
+"""FaceField: abstract DiscreteField on mesh faces."""
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from collections.abc import Callable
 from typing import TypeVar
 
@@ -12,24 +13,40 @@ _V = TypeVar("_V")
 
 
 class FaceField(DiscreteField[_V]):
-    """A DiscreteField whose values are defined on mesh faces.
+    """Abstract face-indexed DiscreteField: values defined at cell faces.
 
     A face is identified by (axis, idx_low): axis ∈ [0, ndim) is the normal
     direction and idx_low ∈ ℤⁿ is the multi-index of the low-side cell.  The
     high-side cell is at idx_low with coordinate axis incremented by one.
 
-    FaceField is the discrete counterpart of a differential form:
+    FaceField is the discrete counterpart of differential forms:
         FaceField[scalar]        — 1-form; scalar flux F·n̂·|A| through each face;
                                    discrete analog of OneForm
         FaceField[sympy.Matrix]  — 2-form; matrix-valued face flux (e.g. stress
                                    tensor); discrete analog of TwoForm
 
-    The value type V is unconstrained: sympy.Expr for symbolic evaluation
-    (convergence proofs), float for numeric paths, sympy.Matrix for tensor flux.
+    FaceField is the canonical return type of NumericalFlux.__call__ and
+    CartesianRestrictionOperator (degree = ndim−1).
 
-    FaceField is the canonical return type of NumericalFlux.__call__: the flux
-    callable is stored and evaluated on demand, decoupling mesh traversal from
-    flux computation.
+    Required (in addition to DiscreteField.mesh):
+        __call__ — evaluate the field at a face index (axis, idx_low)
+
+    Concrete subclasses:
+        _CallableFaceField (this module) — callable-backed implementation
+    """
+
+    @abstractmethod
+    def __call__(self, face: tuple[int, tuple[int, ...]]) -> _V:  # type: ignore[override]
+        """Evaluate the field at face (axis, idx_low)."""
+
+
+class _CallableFaceField(FaceField[_V]):
+    """Callable-backed concrete FaceField.
+
+    Stores a callable fn: (axis, idx_low) → V and evaluates it on demand.
+    This is the standard concrete FaceField used by NumericalFlux implementations
+    and CartesianRestrictionOperator; the callable is evaluated only at the face
+    index the caller requests.
 
     Parameters
     ----------

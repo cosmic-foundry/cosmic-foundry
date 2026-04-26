@@ -15,6 +15,7 @@ from cosmic_foundry.theory.continuous.boundary_condition import BoundaryConditio
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.periodic_bc import PeriodicBC
+from cosmic_foundry.theory.discrete.cell_field import CellField
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
@@ -22,7 +23,7 @@ from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
-class _GhostedField(DiscreteField[sympy.Expr]):
+class _GhostedField(CellField[sympy.Expr]):
     """Cell field extended beyond mesh bounds by a ghost-cell rule."""
 
     def __init__(
