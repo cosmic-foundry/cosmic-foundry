@@ -98,17 +98,6 @@ class Backend(Protocol):
         init_state: S,
     ) -> S: ...
 
-    # Device-side iteration: cond_fn returns a 0-d bool Tensor; True = continue.
-    # Synchronous backends run a Python while loop; async backends (JaxBackend)
-    # ship the loop to the device via lax.while_loop so the convergence check
-    # never round-trips to the host.
-    def while_loop(
-        self,
-        cond_fn: Callable[[S], Any],
-        body_fn: Callable[[S], S],
-        init_state: S,
-    ) -> S: ...
-
 
 _default_backend: Backend = PythonBackend()
 

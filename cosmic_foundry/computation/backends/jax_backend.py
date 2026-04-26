@@ -229,5 +229,19 @@ class JaxBackend:
             init_val=init_state,
         )
 
+    def fori_loop(
+        self,
+        n: int,
+        body_fn: Any,
+        init_state: Any,
+    ) -> Any:
+        """Ship a counted loop to XLA via jax.lax.fori_loop.
+
+        body_fn(k, state) -> state where k is a traced device integer, so the
+        entire n-iteration loop compiles to one XLA kernel.  Tensor pytree
+        registration handles state flattening/unflattening transparently.
+        """
+        return jax.lax.fori_loop(0, n, body_fn, init_state)
+
 
 __all__ = ["JaxBackend"]
