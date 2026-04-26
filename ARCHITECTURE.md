@@ -312,10 +312,13 @@ CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
                                                   face normal = ê_j
 
 CartesianRestrictionOperator(RestrictionOperator)
-                                       — (Rₕ f)ᵢ via exact SymPy antiderivative
-                                         integration over each cell; degree selects
-                                         cell-average (degree = ndim) or face-average
-                                         (degree = ndim − 1)
+                                       — Rₕᵏ: Ωᵏ → k-cochains via exact SymPy integration.
+                                         degree=ndim:   Rₕⁿ(ZeroForm)  → CellField   (cell average)
+                                         degree=ndim-1: Rₕⁿ⁻¹(OneForm) → FaceField   (face-normal flux)
+                                         degree=1:      Rₕ¹(OneForm)   → EdgeField   (edge line integral)
+                                         degree=0:      Rₕ⁰(ZeroForm)  → PointField  (vertex evaluation)
+                                         Commutation: Dₖ ∘ Rₕᵏ = Rₕᵏ⁺¹ ∘ dₖ holds exactly
+                                         for all k (FTC for k=0; Stokes for k=1)
 
 CartesianExteriorDerivative(DiscreteExteriorDerivative)
                                        — exact discrete exterior derivative on CartesianMesh.
