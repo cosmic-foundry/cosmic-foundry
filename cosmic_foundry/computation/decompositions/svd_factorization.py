@@ -123,7 +123,11 @@ class SVDFactorization(Factorization):
 
     def factorize(self, a: Tensor) -> SVDDecomposedTensor:
         """Decompose A = U Σ Vᵀ; return an SVDDecomposedTensor."""
-        u, s, vt = a.svd()
+        backend = a.backend
+        u_raw, s_raw, vt_raw = backend.svd(a._value, a.shape)
+        u = Tensor._wrap(u_raw, backend)
+        s = Tensor._wrap(s_raw, backend)
+        vt = Tensor._wrap(vt_raw, backend)
         return SVDDecomposedTensor(u, s, vt, self._rcond)
 
 

@@ -33,6 +33,7 @@ from typing import Any
 import pytest
 import sympy
 
+from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.tensor import Tensor
@@ -304,7 +305,9 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             a_m = Operator(FVMDiscretization(mesh, self._flux, bc)(), mesh).assemble(
                 backend=_NP_BACKEND
             )
-            _, s_vec, vt = a_m.svd()
+            decomp = SVDFactorization().factorize(a_m)
+            s_vec = decomp.s
+            vt = decomp.vt
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
             assembled.append((a_m, null_vecs, vol, orig, n_cells))

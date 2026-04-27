@@ -40,7 +40,6 @@ Tensor contraction:
 
 Linear algebra (rank-2 only):
     t.diag()   — main diagonal → rank-1
-    t.svd()    — (U, s, Vt); singular values descending
 
 Any rank:
     t.copy()     — deep copy (same backend)
@@ -658,17 +657,6 @@ class Tensor(Generic[T]):
         if not self.shape:
             return Tensor._wrap(self._backend.abs(self._value), self._backend)
         return Tensor._wrap(self._backend.norm(self._value), self._backend)
-
-    def svd(self) -> tuple[Tensor, Tensor, Tensor]:
-        """One-sided Jacobi SVD: returns (U, s, Vt) with singular values descending."""
-        if len(self.shape) != 2:
-            raise ValueError(f"svd requires rank-2 Tensor, got shape {self.shape}")
-        u_raw, s_raw, vt_raw = self._backend.svd(self._value, self.shape)
-        return (
-            Tensor._wrap(u_raw, self._backend),
-            Tensor._wrap(s_raw, self._backend),
-            Tensor._wrap(vt_raw, self._backend),
-        )
 
     # ------------------------------------------------------------------
     # Factory class methods
