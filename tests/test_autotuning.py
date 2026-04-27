@@ -3,9 +3,9 @@
 Claim types:
   _SelectionValidClaim   — selected solver produces a valid solution on a
                            full-rank problem at calibration size
-  _CrossoverClaim        — at large N, the lower-exponent solver (LU, p=3)
-                           is predicted faster than the higher-exponent
-                           solver (Jacobi, p=4)
+  _CrossoverClaim        — at large N, the autotuner selects the lower-exponent
+                           solver (LU, p=3) over the higher-exponent solver
+                           (Jacobi, p=4), whether via screening or cost model
 """
 
 from __future__ import annotations
@@ -59,13 +59,13 @@ class _SelectionValidClaim(Claim):
 
 
 class _CrossoverClaim(Claim):
-    """Claim: at large N, the autotuner predicts LU (p=3) faster than Jacobi (p=4).
+    """Claim: at large N, the autotuner selects DenseLUSolver (p=3) over Jacobi (p=4).
 
     At N = 128 and beyond, the N³ vs N⁴ exponent gap dominates any plausible
-    difference in α coefficients.  A failure here would mean DenseLUSolver's
-    measured α is implausibly large compared to DenseJacobiSolver's — a signal
-    that the cost model or benchmarking is broken rather than that Jacobi is
-    genuinely faster.
+    difference in α coefficients.  The claim is satisfied whether the autotuner
+    reaches this conclusion via the screen-and-prune phase (Jacobi pruned before
+    full calibration) or via the cost model on fully calibrated results.  Either
+    path is correct behavior; what matters is the outcome.
     """
 
     @property
@@ -75,19 +75,12 @@ class _CrossoverClaim(Claim):
     def check(self) -> None:
         autotuner = Autotuner(_SOLVERS, [_BACKEND], benchmarker=Benchmarker(n_trials=3))
         autotuner.calibrate(_CALIB_DESCRIPTOR)
+        selection = autotuner.select(_LARGE_DESCRIPTOR)
 
-        # Extract the alpha for each solver from calibration results.
-        alphas = {type(r.solver): r.alpha for r in autotuner.results}
-        lu_cost = alphas[DenseLUSolver] * _LARGE_N**DenseLUSolver.cost_exponent
-        jacobi_cost = (
-            alphas[DenseJacobiSolver] * _LARGE_N**DenseJacobiSolver.cost_exponent
-        )
-
-        assert lu_cost < jacobi_cost, (
-            f"expected LU (predicted {lu_cost:.2e}s) < Jacobi (predicted "
-            f"{jacobi_cost:.2e}s) at N={_LARGE_N}, but Jacobi was predicted faster. "
-            f"LU α={alphas[DenseLUSolver]:.2e}, "
-            f"Jacobi α={alphas[DenseJacobiSolver]:.2e}"
+        assert isinstance(selection.solver, DenseLUSolver), (
+            f"expected DenseLUSolver at N={_LARGE_N}, "
+            f"got {type(selection.solver).__name__} "
+            f"(predicted cost {selection.predicted_cost:.2e}s)"
         )
 
 

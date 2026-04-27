@@ -16,6 +16,11 @@ class PythonBackend:
     environments where NumPy is unavailable.
     """
 
+    @property
+    def min_ops(self) -> int:
+        """CPU backend: 1 000 ops is enough for compute to dominate overhead."""
+        return 1_000
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
