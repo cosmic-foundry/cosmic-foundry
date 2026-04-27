@@ -20,6 +20,7 @@ from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.edge_field import EdgeField
 from cosmic_foundry.theory.discrete.face_field import FaceField
+from cosmic_foundry.theory.discrete.fvm_discretization import FVMDiscretization
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 from cosmic_foundry.theory.discrete.point_field import PointField
@@ -37,6 +38,7 @@ __all__ = [
     "Discretization",
     "EdgeField",
     "FaceField",
+    "FVMDiscretization",
     "Mesh",
     "NumericalFlux",
     "PeriodicGhostCells",
