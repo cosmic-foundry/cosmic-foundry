@@ -1,34 +1,34 @@
-"""DirectSolver: LinearSolver backed by a Factorization."""
+"""DirectSolver: LinearSolver backed by a Decomposition."""
 
 from __future__ import annotations
 
-from cosmic_foundry.computation.factorization import Factorization
+from cosmic_foundry.computation.decompositions.decomposition import Decomposition
 from cosmic_foundry.computation.linear_solver import LinearSolver
 from cosmic_foundry.computation.tensor import Tensor
 
 
 class DirectSolver(LinearSolver):
-    """LinearSolver that delegates to a Factorization.
+    """LinearSolver that delegates to a Decomposition.
 
-    solve(a, b) factors A once and then solves by substitution.
-    Cost is dominated by the factorization step: O(N³) for LU,
-    O(N³/3) for Cholesky.  The factored form is not cached; each
-    solve call re-factors A.  For problems where A is constant across
-    time steps, the caller should reuse the FactoredMatrix directly.
+    solve(a, b) decomposes A once and then solves by applying the stored
+    DecomposedTensor.  Cost is dominated by the decomposition step: O(N³)
+    for LU and SVD.  The decomposed form is not cached; each solve call
+    re-decomposes A.  For problems where A is constant across time steps,
+    the caller should reuse the DecomposedTensor directly.
 
     Parameters
     ----------
-    factorization:
-        The Factorization algorithm to use.
+    decomposition:
+        The Decomposition algorithm to use.
     """
 
-    cost_exponent = 3  # O(N^3) factorization dominates the O(N^2) substitution
+    cost_exponent = 3  # O(N^3) decomposition dominates the O(N^2) substitution
 
-    def __init__(self, factorization: Factorization) -> None:
-        self._factorization = factorization
+    def __init__(self, decomposition: Decomposition) -> None:
+        self._decomposition = decomposition
 
     def solve(self, a: Tensor, b: Tensor) -> Tensor:
-        return self._factorization.factorize(a).solve(b)
+        return self._decomposition.decompose(a).solve(b)
 
 
 __all__ = ["DirectSolver"]

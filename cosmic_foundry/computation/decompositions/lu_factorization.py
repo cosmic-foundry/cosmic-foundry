@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from cosmic_foundry.computation.factorization import FactoredMatrix, Factorization
+from cosmic_foundry.computation.decompositions.decomposition import DecomposedTensor
+from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
 
 # Diagonal magnitude below which a pivot is treated as singular.
@@ -92,7 +93,7 @@ def _back_body(k_fwd: Any, state: tuple) -> tuple:
     return (x, y, a_lu, is_singular, indices, zeros_n, n_minus_1)
 
 
-class LUFactoredMatrix(FactoredMatrix):
+class LUDecomposedTensor(DecomposedTensor):
     """Packed LU factors from which A u = b can be solved by substitution.
 
     Stores the combined LU matrix (L below diagonal with implicit unit
@@ -106,7 +107,9 @@ class LUFactoredMatrix(FactoredMatrix):
     transparently: singular columns are pinned to zero (minimum-norm,
     zero-mean convention).  The caller must ensure the RHS has zero
     projection onto the null space; if it does not, the residual
-    ‖b − Au‖₂ after the solve will be large.
+    ‖b − Au‖₂ after the solve will be large.  For rank-deficient systems
+    where the null-space structure is unknown, prefer SVDFactorization —
+    it identifies and handles rank deficiency automatically.
 
     Both substitution passes use backend.fori_loop with module-level body
     functions so JAX can cache the traced XLA computation across solves.
@@ -172,8 +175,8 @@ class LUFactorization(Factorization):
     with JAX tracing (no Python bool over traced values).
     """
 
-    def factorize(self, a: Tensor) -> LUFactoredMatrix:
-        """Factor A with partial pivoting; return a LUFactoredMatrix."""
+    def factorize(self, a: Tensor) -> LUDecomposedTensor:
+        """Factor A with partial pivoting; return a LUDecomposedTensor."""
         n = a.shape[0]
         backend = a.backend
         a = a.copy()
@@ -187,7 +190,7 @@ class LUFactorization(Factorization):
         a_f, pivot_f, is_singular_f, *_ = backend.fori_loop(
             n, _factorize_body, (a, pivot, is_singular, indices, neg_inf, zeros_n)
         )
-        return LUFactoredMatrix(a_f, pivot_f, is_singular_f)
+        return LUDecomposedTensor(a_f, pivot_f, is_singular_f)
 
 
-__all__ = ["LUFactorization", "LUFactoredMatrix"]
+__all__ = ["LUDecomposedTensor", "LUFactorization"]

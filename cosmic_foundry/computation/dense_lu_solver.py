@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.direct_solver import DirectSolver
-from cosmic_foundry.computation.lu_factorization import LUFactorization
 
 
 class DenseLUSolver(DirectSolver):
