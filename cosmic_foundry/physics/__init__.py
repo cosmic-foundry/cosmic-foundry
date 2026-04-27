@@ -17,6 +17,7 @@ from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFl
 from cosmic_foundry.physics.advective_flux import AdvectiveFlux
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.physics.fvm_discretization import FVMDiscretization
+from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.physics.state import State
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "AdvectiveFlux",
     "DiffusiveFlux",
     "FVMDiscretization",
+    "Operator",
     "State",
 ]

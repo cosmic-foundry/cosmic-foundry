@@ -9,6 +9,7 @@ import sympy
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.physics.state import State
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
@@ -178,6 +179,15 @@ class FVMDiscretization(Discretization):
     def __call__(self) -> _AssembledFVMOperator:
         """Produce the assembled discrete operator."""
         return _AssembledFVMOperator(self._numerical_flux, self._boundary_condition)
+
+    def to_operator(self, backend: Any = None) -> Operator:
+        """Assemble and return a Tensor-backed Operator.
+
+        Equivalent to Operator(self.assemble(backend), self.mesh).  The
+        resulting Operator.matrix can be passed directly to
+        LinearSolver.solve(op.matrix, b).
+        """
+        return Operator(self.assemble(backend), self._mesh)
 
 
 __all__ = ["FVMDiscretization"]
