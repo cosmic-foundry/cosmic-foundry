@@ -77,15 +77,6 @@ class Backend(Protocol):
     # Synchronization (no-op for synchronous backends)
     def sync(self, raw: Any) -> None: ...
 
-    # Minimum operation count below which device overhead (kernel launch,
-    # dispatch latency) dominates measured time.  The Autotuner uses this
-    # floor to choose a screen N that keeps compute cost above the noise
-    # floor when comparing backends.  GPU/TPU backends set a much higher
-    # floor than CPU backends because their kernel launch overhead is orders
-    # of magnitude larger.
-    @property
-    def min_ops(self) -> int: ...
-
     # Counted loop: body_fn(k, state) -> state for k in 0..n-1.
     # k is a Python int on synchronous backends; a traced device integer on
     # JaxBackend so the entire loop compiles to a single XLA fori_loop kernel.

@@ -40,20 +40,6 @@ class JaxBackend:
             self._device: Any = devices[0]
         else:
             self._device = None
-        # Determine the ops-floor at construction time so it is stable for the
-        # lifetime of this backend instance.  GPU and TPU have millisecond-scale
-        # kernel launch overhead; 1 M ops keeps measured compute above that
-        # noise floor.  CPU dispatch is negligible, so 1 K ops suffices.
-        platform = (
-            self._device.platform
-            if self._device is not None
-            else jax.devices()[0].platform
-        )
-        self._min_ops: int = 1_000_000 if platform in ("gpu", "tpu") else 1_000
-
-    @property
-    def min_ops(self) -> int:
-        return self._min_ops
 
     def _maybe_place(self, arr: Any) -> Any:
         if self._device is not None:

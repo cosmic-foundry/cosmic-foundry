@@ -26,11 +26,6 @@ class NumpyBackend:
     def __init__(self, dtype: np.dtype | type | None = None) -> None:
         self._dtype = dtype
 
-    @property
-    def min_ops(self) -> int:
-        """CPU backend: 1 000 ops is enough for compute to dominate overhead."""
-        return 1_000
-
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
