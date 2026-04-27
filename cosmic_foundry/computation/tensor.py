@@ -38,12 +38,17 @@ Tensor contraction:
     einsum(spec, a, b, ...)  — general Einstein summation
     a @ b  — fast-path delegate: dot / vecmat / matvec / matmul
 
-Linear algebra (rank-2 only):
-    t.diag()   — main diagonal → rank-1
+Reductions and extractions (functional APIs):
+    norm(t)      — Frobenius norm → rank-0 Tensor
+    max(t)       — maximum element → rank-0 Tensor
+    argmax(t)    — index of max in 1-d Tensor → rank-0 int Tensor
+    abs(t)       — element-wise absolute value
+    diag(t)      — main diagonal of rank-2 Tensor → rank-1
+    take(t, i)   — gather elements at indices
+    element(t, i, j, ...)  — extract scalar at indices
+    copy(t)      — deep copy (same backend)
 
-Any rank:
-    t.copy()     — deep copy (same backend)
-    t.norm()     — Frobenius norm → rank-0 Tensor
+Infrastructure:
     t.to_list()  — underlying data as a Python scalar or nested list
     t.to(b)      — new Tensor with the same data on backend b
     t.backend    — the backend instance for this Tensor
@@ -485,10 +490,6 @@ class Tensor(Generic[T]):
     # Utilities
     # ------------------------------------------------------------------
 
-    def copy(self) -> Tensor:
-        """Return a deep copy of this Tensor (same backend)."""
-        return Tensor._wrap(self._backend.copy(self._value), self._backend)
-
     def to_list(self) -> Any:
         """Scalar for rank-0; deep-copied nested list for rank ≥ 1."""
         if not self.is_allocated:
@@ -619,45 +620,6 @@ class Tensor(Generic[T]):
     # Linear algebra
     # ------------------------------------------------------------------
 
-    def abs(self) -> Tensor:
-        return Tensor._wrap(self._backend.abs(self._value), self._backend)
-
-    def max(self) -> Tensor:
-        """Maximum of all elements; returns a 0-d scalar Tensor."""
-        return Tensor._wrap(self._backend.reduce_max(self._value), self._backend)
-
-    def argmax(self) -> Tensor[int]:
-        """Index of the maximum element in a 1-d Tensor; returns rank-0 Tensor[int]."""
-        return Tensor._wrap(self._backend.argmax(self._value), self._backend)
-
-    def element(self, *indices: int) -> Tensor:
-        """Return the scalar at the given static integer indices as a 0-d Tensor."""
-        if not self.is_allocated:
-            return Tensor._wrap((), self._backend)
-        raw = self._value
-        for i in indices:
-            raw = raw[i]
-        return Tensor._wrap(raw, self._backend)
-
-    def take(self, indices: Tensor) -> Tensor:
-        """Gather elements at integer indices; return a new Tensor."""
-        self._check_backend(indices)
-        return Tensor._wrap(
-            self._backend.take(self._value, indices._value), self._backend
-        )
-
-    def diag(self) -> Tensor:
-        """Main diagonal of a rank-2 Tensor → rank-1."""
-        if len(self.shape) != 2:
-            raise ValueError(f"diag requires rank-2 Tensor, got shape {self.shape}")
-        return Tensor._wrap(self._backend.diag(self._value, self.shape), self._backend)
-
-    def norm(self) -> Tensor:
-        """Frobenius norm (absolute value for rank-0) → rank-0 Tensor."""
-        if not self.shape:
-            return Tensor._wrap(self._backend.abs(self._value), self._backend)
-        return Tensor._wrap(self._backend.norm(self._value), self._backend)
-
     # ------------------------------------------------------------------
     # Factory class methods
     # ------------------------------------------------------------------
@@ -708,6 +670,60 @@ def arange(n: int, *, backend: Backend | None = None) -> Tensor[int]:
     """Return a 1-d integer Tensor [0, 1, ..., n-1]."""
     b: Any = backend if backend is not None else get_default_backend()
     return Tensor._wrap(b.arange(n), b)
+
+
+def copy(tensor: Tensor) -> Tensor:
+    """Return a deep copy of the Tensor (same backend)."""
+    return Tensor._wrap(tensor._backend.copy(tensor._value), tensor._backend)
+
+
+def abs(tensor: Tensor) -> Tensor:
+    """Element-wise absolute value."""
+    return Tensor._wrap(tensor._backend.abs(tensor._value), tensor._backend)
+
+
+def max(tensor: Tensor) -> Tensor:
+    """Maximum of all elements; returns a rank-0 scalar Tensor."""
+    return Tensor._wrap(tensor._backend.reduce_max(tensor._value), tensor._backend)
+
+
+def argmax(tensor: Tensor) -> Tensor[int]:
+    """Index of the maximum element in a 1-d Tensor; returns rank-0 Tensor[int]."""
+    return Tensor._wrap(tensor._backend.argmax(tensor._value), tensor._backend)
+
+
+def element(tensor: Tensor, *indices: int) -> Tensor:
+    """Return the scalar at the given static integer indices as a rank-0 Tensor."""
+    if not tensor.is_allocated:
+        return Tensor._wrap((), tensor._backend)
+    raw = tensor._value
+    for i in indices:
+        raw = raw[i]
+    return Tensor._wrap(raw, tensor._backend)
+
+
+def take(tensor: Tensor, indices: Tensor) -> Tensor:
+    """Gather elements at integer indices; return a new Tensor."""
+    tensor._check_backend(indices)
+    return Tensor._wrap(
+        tensor._backend.take(tensor._value, indices._value), tensor._backend
+    )
+
+
+def diag(tensor: Tensor) -> Tensor:
+    """Main diagonal of a rank-2 Tensor → rank-1."""
+    if len(tensor.shape) != 2:
+        raise ValueError(f"diag requires rank-2 Tensor, got shape {tensor.shape}")
+    return Tensor._wrap(
+        tensor._backend.diag(tensor._value, tensor.shape), tensor._backend
+    )
+
+
+def norm(tensor: Tensor) -> Tensor:
+    """Frobenius norm (absolute value for rank-0) → rank-0 Tensor."""
+    if not tensor.shape:
+        return Tensor._wrap(tensor._backend.abs(tensor._value), tensor._backend)
+    return Tensor._wrap(tensor._backend.norm(tensor._value), tensor._backend)
 
 
 __all__ = ["MaterializationError", "Real", "Tensor", "arange", "einsum", "where"]

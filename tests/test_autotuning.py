@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.autotuning.autotuner import Autotuner
 from cosmic_foundry.computation.autotuning.benchmarker import Benchmarker
 from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDescriptor
@@ -51,7 +52,7 @@ class _SelectionValidClaim(Claim):
         a = Benchmarker._make_matrix(_CALIB_DESCRIPTOR, _BACKEND)
         b = Tensor([1.0] * _CALIB_N, backend=_BACKEND)
         u = selection.solver.solve(a, b)
-        residual = (b - a @ u).norm()
+        residual = tensor.norm(b - a @ u)
         assert residual.get() < _CALIB_DESCRIPTOR.tol, (
             f"selected {type(selection.solver).__name__} residual "
             f"{residual.get():.2e} >= tol {_CALIB_DESCRIPTOR.tol}"

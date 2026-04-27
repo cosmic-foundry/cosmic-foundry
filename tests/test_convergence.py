@@ -33,6 +33,7 @@ from typing import Any
 import pytest
 import sympy
 
+from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
@@ -174,7 +175,7 @@ class _SolverClaim(CalibratedClaim[float]):
         a = Operator(disc(), self._mesh).assemble()
         b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
-        residual = (b - a @ u).norm().get()
+        residual = tensor.norm(b - a @ u).get()
         assert (
             residual < self._solver._tol
         ), f"Did not converge: residual {residual:.3e}"
@@ -235,7 +236,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         else:
             b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
-        residual = (b - a @ u).norm().get()
+        residual = tensor.norm(b - a @ u).get()
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
@@ -349,7 +350,9 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
                 ],
                 backend=_NP_BACKEND,
             )
-            rel_err = (a_c @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
+            rel_err = tensor.norm(a_c @ v_n - r_n).get() / (
+                tensor.norm(r_n).get() + 1e-30
+            )
             if rel_err < 0.1:
                 phi_terms.append(phi_n)
         assert phi_terms, "No admissible manufactured-solution modes found"
