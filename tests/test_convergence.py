@@ -331,12 +331,12 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
     The manufactured solution φ is selected automatically from candidates
-    sin(nπx) for n=1..k_max, where k_max = _N_ADMISS // p.  Admissibility is
-    tested on a fixed _N_ADMISS=8 mesh, not the coarsest mesh of the current
-    run: on a consistent scheme, every smooth mode has rel_err → 0 as N grows,
+    sin(nπx) for n=1..k_max, where k_max = N_min // p gives at least 2p cells
+    per wavelength on the coarsest convergence mesh.  Admissibility is tested
+    on a fixed _N_ADMISS=8 mesh: on a consistent scheme rel_err → 0 as N grows,
     so testing at large N_min would eventually admit BC-incompatible modes (e.g.
-    odd-n modes under PeriodicGhostCells whose rel_err converges below 0.1).
-    At N=8 those modes still produce O(1) error and are cleanly rejected.
+    sin(πx) under PeriodicGhostCells converges below 0.1 at N≈70).  At N=8
+    those modes still produce O(1) error and are cleanly rejected.
     The source ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator.
 
     Before measuring the L²_h error the assembled stiffness matrix is
@@ -398,15 +398,16 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             assembled.append((a_m, null_vecs, vol, orig, n_cells))
 
         # Auto-select admissible manufactured-solution modes.
-        # Admissibility is evaluated on a fixed _N_ADMISS-cell mesh (not the
-        # coarsest mesh of the current run) so that BC-incompatible modes are
-        # consistently rejected regardless of N_max.  For a consistent scheme
-        # rel_err → 0 as N grows, so testing at large N_min would eventually
-        # admit modes that violate the ghost-cell convention (e.g. sin(πx) under
-        # PeriodicGhostCells, which converges below 0.1 at N≈70).  At N=8 those
-        # modes produce O(1) error and are cleanly rejected.
-        # k_max = _N_ADMISS // p gives at least 2p cells/wavelength on the
-        # admissibility mesh; it is a small constant (e.g. 2 for order-4).
+        # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest
+        # convergence mesh (sufficient for the asymptotic regime).
+        # Admissibility is tested on a fixed _N_ADMISS=8 mesh rather than the
+        # coarsest convergence mesh.  For a consistent scheme rel_err → 0 as
+        # N grows, so testing at large N_min would eventually admit
+        # BC-incompatible modes (e.g. sin(πx) under PeriodicGhostCells
+        # converges below 0.1 at N≈70).  At N=8 those modes still produce O(1)
+        # error and are cleanly rejected.  The v_n / r_n tensors are also
+        # evaluated at _N_ADMISS cells rather than n_c, keeping the loop fast.
+        _, _, _, _, n_c = assembled[0]
         admiss_mesh = CartesianMesh(
             origin=(sympy.Rational(0),),
             spacing=(sympy.Rational(1, _N_ADMISS),),
@@ -417,7 +418,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         a_adm = Operator(
             FVMDiscretization(admiss_mesh, self._flux, bc)(), admiss_mesh
         ).assemble(backend=_NP_BACKEND)
-        k_max = max(1, _N_ADMISS // p)
+        k_max = max(1, n_c // p)
         phi_terms: list[sympy.Expr] = []
         for n in range(1, k_max + 1):
             phi_n = sympy.sin(n * sympy.pi * _x)
