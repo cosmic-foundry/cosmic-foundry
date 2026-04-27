@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import NamedTuple
 
@@ -17,7 +18,7 @@ from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 class SelectionResult(NamedTuple):
     """The winning (solver, backend) pair and its predicted cost.
 
-    predicted_cost is in the same units as alpha · Nᵖ — a wall-time
+    predicted_cost is in the same units as alpha · N^exponent — a wall-time
     estimate in seconds.  Use it only to compare configurations against
     each other, not as an absolute time bound.
     """
@@ -30,28 +31,31 @@ class SelectionResult(NamedTuple):
 class Autotuner:
     """Selects the fastest (LinearSolver, Backend) pair for a given problem.
 
-    calibrate() runs a three-phase measurement to avoid spending time on
-    pairs that are clearly dominated:
+    calibrate() fits an empirical cost model T ≈ α · N^p for each
+    (solver, backend) pair by geometric probing, then prunes dominated pairs
+    before running a final high-quality timing at the target N.
 
-      Overhead-detection phase:
-        For each (solver, backend) pair, probe at N = 2, 4, 8, … doubling
-        until consecutive measured α values agree within alpha_stability.
-        That convergence signals that compute cost dominates dispatch
-        overhead at that N, giving a reliable baseline α without any
-        hardcoded device constants.  Pairs for which no stable N is found
-        below descriptor.n skip screening and go directly to full calibration.
+      Probe phase (per pair):
+        Time at N = 2, 4, 8, … doubling up to descriptor.n // 2.  Detect
+        the overhead floor by watching for T(2N)/T(N) ≥ time_ratio_threshold
+        (default 2.0): below the floor, T is roughly flat (overhead dominates);
+        above it, T grows with N.  Collect (N, T) pairs from the compute-
+        dominated regime and fit α and p via log-log linear regression.  If
+        fewer than two stable points are found, fall back to a two-point fit
+        at descriptor.n // 2 and descriptor.n.
 
       Prune phase:
-        Project each stable screen α to descriptor.n via α · Nᵖ.  Drop any
-        pair whose projected cost exceeds prune_threshold × the best
-        projected cost.
+        Project each pair's fitted α · descriptor.n^p.  Drop pairs whose
+        projected cost exceeds prune_threshold × the best projected cost.
 
-      Full calibration phase:
-        Run the complete warmup + multi-trial benchmark at descriptor.n for
-        surviving pairs only.  These results are stored and used by select().
+      Final calibration phase (survivors only):
+        Time once at descriptor.n with the full warmup + multi-trial protocol.
+        Compute α_final = T / descriptor.n^p_fitted, where p_fitted comes from
+        the probe phase.  This pins the scale of the cost model to the actual
+        target size while keeping the empirically fitted shape (exponent).
 
-    select() applies T = α · Nᵖ to the calibrated results and returns the
-    pair with the lowest predicted cost.  O(1) per call once calibrated.
+    select() evaluates α · N^p for each calibrated pair and returns the
+    cheapest.  O(1) per call once calibrated.
 
     Parameters
     ----------
@@ -63,14 +67,12 @@ class Autotuner:
     benchmarker:
         Benchmarker instance; defaults to Benchmarker() if not supplied.
     prune_threshold:
-        A screened pair is dropped if its projected cost at descriptor.n
-        exceeds prune_threshold times the best screened projected cost.
-        Default 10.0: keep everything within an order of magnitude of the
-        current leader.
-    alpha_stability:
-        Consecutive screen probes are considered stable when
-        alpha_prev / alpha_curr < alpha_stability.  Default 1.5: accept
-        once alpha has stopped inflating by more than 50% per doubling.
+        Drop screened pairs whose projected cost exceeds this multiple of the
+        best projected cost.  Default 10.0.
+    time_ratio_threshold:
+        T(2N)/T(N) must reach this value before a point is considered above
+        the overhead floor.  Default 2.0: any ratio below this suggests the
+        measured time is still flat (overhead dominated).
     """
 
     def __init__(
@@ -79,58 +81,57 @@ class Autotuner:
         backends: Sequence[Backend],
         benchmarker: Benchmarker | None = None,
         prune_threshold: float = 10.0,
-        alpha_stability: float = 1.5,
+        time_ratio_threshold: float = 2.0,
     ) -> None:
         self._solvers = list(solvers)
         self._backends = list(backends)
         self._benchmarker = benchmarker if benchmarker is not None else Benchmarker()
         self._prune_threshold = prune_threshold
-        self._alpha_stability = alpha_stability
+        self._time_ratio_threshold = time_ratio_threshold
         self._results: list[BenchmarkResult] = []
 
     def calibrate(self, descriptor: ProblemDescriptor) -> None:
-        """Benchmark (solver, backend) pairs at descriptor.n; store α values.
-
-        Runs the overhead-detection → prune → full-calibration protocol
-        described in the class docstring.
-        """
+        """Fit cost models for all pairs; prune dominated ones; store final results."""
         all_pairs = [
             (solver, backend) for solver in self._solvers for backend in self._backends
         ]
 
-        screened: list[tuple[LinearSolver, Backend, float]] = []
-        unscreened: list[tuple[LinearSolver, Backend]] = []
-
+        # Probe phase: fit (alpha, exponent) per pair from the probe sequence.
+        # Fall back to a two-point fit when the probe range is too small.
+        probe_fits: list[tuple[LinearSolver, Backend, BenchmarkResult]] = []
         for solver, backend in all_pairs:
-            screen = self._detect_screen_result(solver, backend, descriptor)
-            if screen is None:
-                unscreened.append((solver, backend))
-            else:
-                projected = screen.alpha * descriptor.n**solver.cost_exponent
-                screened.append((solver, backend, projected))
+            fit = self._fit_cost_model(solver, backend, descriptor)
+            if fit is None:
+                fit = self._fallback_fit(solver, backend, descriptor)
+            probe_fits.append((solver, backend, fit))
 
-        if screened:
-            best_projected = min(cost for _, _, cost in screened)
-            survivors: list[tuple[LinearSolver, Backend]] = [
-                (s, b)
-                for s, b, cost in screened
-                if cost <= self._prune_threshold * best_projected
-            ]
-        else:
-            survivors = []
-        survivors.extend(unscreened)
-
-        self._results = [
-            self._benchmarker.measure(solver, backend, descriptor)
-            for solver, backend in survivors
+        # Prune phase.
+        best_projected = min(
+            fit.alpha * descriptor.n**fit.exponent for _, _, fit in probe_fits
+        )
+        survivors = [
+            (solver, backend, fit)
+            for solver, backend, fit in probe_fits
+            if fit.alpha * descriptor.n**fit.exponent
+            <= self._prune_threshold * best_projected
         ]
+
+        # Final calibration: one high-quality timing at descriptor.n per survivor.
+        # alpha is re-pinned to this measurement; exponent is kept from the probe fit.
+        self._results = []
+        for solver, backend, probe_fit in survivors:
+            t = self._benchmarker.time_solve(solver, backend, descriptor)
+            alpha = t / descriptor.n**probe_fit.exponent
+            self._results.append(
+                BenchmarkResult(solver, backend, alpha, probe_fit.exponent)
+            )
 
     def select(self, descriptor: ProblemDescriptor) -> SelectionResult:
         """Return the (solver, backend) pair with minimum predicted cost.
 
-        Predicted cost = α · Nᵖ where α is the calibrated coefficient, p is
-        solver.cost_exponent, and N = descriptor.n.  The descriptor.n used
-        here need not match the calibration n — the model extrapolates to any N.
+        Predicted cost = α · N^p where α and p are empirically fitted and
+        N = descriptor.n.  The descriptor.n used here need not match the
+        calibration n — the power-law model extrapolates to any N.
 
         Raises
         ------
@@ -141,49 +142,71 @@ class Autotuner:
             raise RuntimeError("Autotuner.calibrate() must be called before select().")
         best = min(
             self._results,
-            key=lambda r: r.alpha * descriptor.n**r.solver.cost_exponent,
+            key=lambda r: r.alpha * descriptor.n**r.exponent,
         )
-        predicted = best.alpha * descriptor.n**best.solver.cost_exponent
+        predicted = best.alpha * descriptor.n**best.exponent
         return SelectionResult(best.solver, best.backend, predicted)
 
     @property
     def results(self) -> list[BenchmarkResult]:
-        """Calibration results for surviving pairs, in iteration order."""
+        """Final calibration results for surviving pairs, in iteration order."""
         return list(self._results)
 
-    def _detect_screen_result(
+    def _fit_cost_model(
         self,
         solver: LinearSolver,
         backend: Backend,
         descriptor: ProblemDescriptor,
     ) -> BenchmarkResult | None:
-        """Return a BenchmarkResult at the smallest N where alpha has stabilized.
+        """Probe at N=2,4,…,descriptor.n//2; fit (alpha, exponent) by log-log fit.
 
-        Probes at N = 2, 4, 8, … doubling until consecutive alpha values satisfy
-        alpha_prev / alpha_curr < self._alpha_stability.  That ratio converges to
-        1.0 once compute dominates dispatch overhead; above the floor it is
-        proportional to 2^p (one halving multiplies measured alpha by 2^p when
-        overhead dominates).
-
-        Returns None when no stable N is found below descriptor.n, signaling
-        that this pair should skip the screen and go straight to full calibration.
-        The returned result carries the alpha at the stable N and is reused
-        directly by calibrate() to avoid a redundant measurement.
+        Detects the overhead floor by watching for T(2N)/T(N) >= time_ratio_threshold.
+        Below the floor T is flat (overhead dominated); above it T grows as N^p.
+        Collects (N, T) pairs from the stable regime and fits by least squares.
+        Returns None when fewer than two stable points are collected.
         """
-        n = 2
-        prev = self._benchmarker.measure(
-            solver, backend, self._probe_descriptor(descriptor, n)
+        prev_t = self._benchmarker.time_solve(
+            solver, backend, self._probe_descriptor(descriptor, 2)
         )
+        stable: list[tuple[int, float]] = []
+        found_floor = False
+
         n = 4
-        while n < descriptor.n:
-            curr = self._benchmarker.measure(
+        while n <= descriptor.n // 2:
+            t = self._benchmarker.time_solve(
                 solver, backend, self._probe_descriptor(descriptor, n)
             )
-            if prev.alpha / curr.alpha < self._alpha_stability:
-                return prev
-            prev = curr
+            if not found_floor and t / prev_t >= self._time_ratio_threshold:
+                found_floor = True
+            if found_floor:
+                stable.append((n, t))
+            prev_t = t
             n *= 2
-        return None
+
+        if len(stable) < 2:
+            return None
+        return _log_log_fit(solver, backend, stable)
+
+    def _fallback_fit(
+        self,
+        solver: LinearSolver,
+        backend: Backend,
+        descriptor: ProblemDescriptor,
+    ) -> BenchmarkResult:
+        """Two-point fit at descriptor.n//2 and descriptor.n.
+
+        Used when the probe range is too small to collect two stable points
+        (e.g. very small descriptor.n or a backend with a very high overhead floor).
+        """
+        n1 = max(2, descriptor.n // 2)
+        n2 = descriptor.n
+        t1 = self._benchmarker.time_solve(
+            solver, backend, self._probe_descriptor(descriptor, n1)
+        )
+        t2 = self._benchmarker.time_solve(
+            solver, backend, self._probe_descriptor(descriptor, n2)
+        )
+        return _log_log_fit(solver, backend, [(n1, t1), (n2, t2)])
 
     @staticmethod
     def _probe_descriptor(descriptor: ProblemDescriptor, n: int) -> ProblemDescriptor:
@@ -194,6 +217,24 @@ class Autotuner:
             tol=descriptor.tol,
             spectral_radius=descriptor.spectral_radius,
         )
+
+
+def _log_log_fit(
+    solver: LinearSolver,
+    backend: Backend,
+    points: list[tuple[int, float]],
+) -> BenchmarkResult:
+    """Fit T = alpha * N^exponent to (N, T) points by log-log linear regression."""
+    xs = [math.log(n) for n, _ in points]
+    ys = [math.log(t) for _, t in points]
+    k = len(xs)
+    mx = sum(xs) / k
+    my = sum(ys) / k
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False))
+    den = sum((x - mx) ** 2 for x in xs)
+    exponent = num / den if den else 1.0
+    alpha = math.exp(my - exponent * mx)
+    return BenchmarkResult(solver, backend, alpha, exponent)
 
 
 __all__ = ["Autotuner", "SelectionResult"]

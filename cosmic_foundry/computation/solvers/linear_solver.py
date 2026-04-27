@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import ClassVar
 
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -18,19 +17,10 @@ class LinearSolver(ABC):
     discretization code, and lets the same solver be reused across time steps
     when A is constant.
 
-    Required:
-        solve         — apply the algorithm and return the solution Tensor
-        cost_exponent — class attribute p such that T_solve(N) ≈ alpha · N^p;
-                        used by adaptive mesh-size selection in convergence
-                        tests so each solver gets the largest N that fits in
-                        its share of the time budget.
-
-    Cost exponent guidance: direct dense factorization is O(N^3); Jacobi
-    iteration on a 1-D second-order operator is O(N^4) (O(N^2) iterations
-    each costing O(N^2) for the matvec).
+    The empirical cost scaling exponent p (such that T_solve(N) ≈ α · N^p) is
+    measured by the Autotuner rather than declared here; theoretical values will
+    be derived by symbolic op-tracing in a future pass.
     """
-
-    cost_exponent: ClassVar[int]
 
     @abstractmethod
     def solve(self, a: Tensor, b: Tensor) -> Tensor:

@@ -1,4 +1,4 @@
-"""Benchmarker: measures the empirical cost coefficient α for a solver/backend pair."""
+"""Benchmarker: times a single solver/backend/size triple."""
 
 from __future__ import annotations
 
@@ -12,20 +12,22 @@ from cosmic_foundry.computation.tensor import Tensor
 
 
 class BenchmarkResult(NamedTuple):
-    """Empirical timing result for one (solver, backend) pair.
+    """Empirical cost-model fit for one (solver, backend) pair.
 
-    alpha satisfies T_solve(N) ≈ alpha · N^solver.cost_exponent, where T_solve
-    is the wall time of a single solve call at size N.  Multiply by
-    N^cost_exponent at the target problem size to predict solve time.
+    alpha and exponent satisfy T_solve(N) ≈ alpha · N^exponent, where
+    T_solve is the wall time of a single solve at size N.  Both values are
+    fitted empirically by Autotuner from a geometric probe sequence; neither
+    is derived from theoretical complexity.
     """
 
     solver: LinearSolver
     backend: Backend
     alpha: float
+    exponent: float
 
 
 class Benchmarker:
-    """Measures α in T ≈ α · Nᵖ for a (LinearSolver, Backend) pair.
+    """Times a solver/backend pair on a synthetic problem of a given size.
 
     Generates a synthetic SPD matrix representative of the problem class,
     runs n_warmup solves to let JIT compilers amortize compilation, then
@@ -56,13 +58,13 @@ class Benchmarker:
         self._n_warmup = n_warmup
         self._n_trials = n_trials
 
-    def measure(
+    def time_solve(
         self,
         solver: LinearSolver,
         backend: Backend,
         descriptor: ProblemDescriptor,
-    ) -> BenchmarkResult:
-        """Time solver on a synthetic problem of size descriptor.n; return α."""
+    ) -> float:
+        """Return the minimum wall time in seconds for one solve at descriptor.n."""
         a = self._make_matrix(descriptor, backend)
         b: Tensor = Tensor([1.0] * descriptor.n, backend=backend)
 
@@ -77,8 +79,7 @@ class Benchmarker:
             result.sync()
             best = min(best, time.perf_counter() - t0)
 
-        alpha = best / descriptor.n**solver.cost_exponent
-        return BenchmarkResult(solver, backend, alpha)
+        return best
 
     @staticmethod
     def _make_matrix(descriptor: ProblemDescriptor, backend: Backend) -> Tensor:

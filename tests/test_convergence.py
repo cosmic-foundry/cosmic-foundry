@@ -75,22 +75,8 @@ _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 _CALIB_N = 32  # mesh size used to calibrate each solver's cost coefficient
 
 
-@functools.cache
-def _calibrate_alpha(solver_class: type, fma_rate: float) -> float:
-    """Calibrate the cost coefficient for solver_class from a timed assemble+SVD+solve.
-
-    The cost model is T ≈ alpha × N^p / fma_rate where p = solver_class.cost_exponent.
-    alpha encodes all constant factors — assembly, SVD, iteration count, FMA overhead,
-    Python-loop overhead — for this solver on this machine.
-
-    Times Operator(disc(), mesh).assemble() + svd + solve at _CALIB_N, takes the
-    best of 3 runs (eliminates OS scheduling noise), and returns alpha = T × fma_rate /
-    N^p.  Including assembly and SVD in the timing ensures N_max is conservative enough
-    that all three phases of each convergence claim fit within the walltime budget.
-    Memoised on (solver_class, fma_rate) so each (solver type, machine) pair calibrates
-    once per session.
-    """
-    n = _CALIB_N
+def _time_solve_at(solver_class: type, n: int) -> float:
+    """Return the best-of-3 wall time (seconds) for assemble + svd + solve at size n."""
     mesh = CartesianMesh(
         origin=(sympy.Rational(0),),
         spacing=(sympy.Rational(1, n),),
@@ -109,7 +95,28 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> float:
         a_cal.svd()
         solver.solve(a_cal, b_cal)
         best = min(best, time.perf_counter() - t0)
-    return best * fma_rate / n**solver_class.cost_exponent
+    return best
+
+
+@functools.cache
+def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]:
+    """Empirically fit (alpha, exponent) for solver_class from a two-point log-log fit.
+
+    The cost model is T ≈ alpha × N^exponent / fma_rate.  Both alpha and
+    exponent are measured rather than declared: time at _CALIB_N // 2 and
+    _CALIB_N, fit exponent from the log-log slope, then pin alpha at _CALIB_N.
+    Including assembly and SVD in the timing ensures N_max is conservative enough
+    that all three phases of each convergence claim fit within the walltime budget.
+    Memoised on (solver_class, fma_rate) so each (solver type, machine) pair
+    calibrates once per session.
+    """
+    n1 = _CALIB_N // 2
+    n2 = _CALIB_N
+    t1 = _time_solve_at(solver_class, n1)
+    t2 = _time_solve_at(solver_class, n2)
+    exponent = math.log(t2 / t1) / math.log(n2 / n1)
+    alpha = t2 * fma_rate / n2**exponent
+    return alpha, exponent
 
 
 def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) -> int:
@@ -117,12 +124,11 @@ def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) 
 
     Allocates MAX_WALLTIME_S equally across all convergence-rate claims and
     solves for the N_max each claim can afford under its solver's cost model
-    T ≈ alpha × N^p × Σ(f^p) / fma_rate.  alpha is calibrated once per
+    T ≈ alpha × N^p × Σ(f^p) / fma_rate.  alpha and p are calibrated once per
     (solver type, fma_rate) pair by _calibrate_alpha.  Rounding to the nearest
     multiple of 8 keeps all mesh sizes exact integers.
     """
-    p = type(solver).cost_exponent
-    alpha = _calibrate_alpha(type(solver), fma_rate)
+    alpha, p = _calibrate_alpha(type(solver), fma_rate)
     sum_fp = sum(f**p for f in _MESH_FRACTIONS)
     budget_per_claim = MAX_WALLTIME_S / n_convergence_claims
     n_raw = (budget_per_claim * fma_rate / (alpha * sum_fp)) ** (1 / p)
