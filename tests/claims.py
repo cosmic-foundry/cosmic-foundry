@@ -14,8 +14,10 @@ C = TypeVar("C")
 MAX_WALLTIME_S = float(os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S", "5.0"))
 
 # Fixed per-session overhead not covered by MAX_WALLTIME_S: performance-test
-# calibration (~7s), structure/tensor tests (~4s), convergence calibration (~2s).
-FIXED_SESSION_OVERHEAD_S = 20.0
+# calibration (~7s), structure/tensor tests (~4s), convergence calibration (~2s),
+# autotuning claims (~4s including Autotuner.calibrate() probe phase).
+# 25s observed on CI; local headroom is comparable.
+FIXED_SESSION_OVERHEAD_S = 25.0
 
 # Tolerance multiplier on the total expected session time.
 BUDGET_TOLERANCE = 1.1
