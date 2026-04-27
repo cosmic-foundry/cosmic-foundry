@@ -350,7 +350,9 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
                 ],
                 backend=_NP_BACKEND,
             )
-            rel_err = (a_c @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
+            rel_err = tensor.norm(a_c @ v_n - r_n).get() / (
+                tensor.norm(r_n).get() + 1e-30
+            )
             if rel_err < 0.1:
                 phi_terms.append(phi_n)
         assert phi_terms, "No admissible manufactured-solution modes found"
