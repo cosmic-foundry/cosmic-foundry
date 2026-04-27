@@ -36,6 +36,7 @@ import pytest
 import sympy
 
 from cosmic_foundry.computation.autotuning.benchmarker import fit_log_log
+from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.tensor import Tensor
@@ -73,11 +74,22 @@ from tests.claims import MAX_WALLTIME_S, CalibratedClaim
 # mesh size is an integer whenever N_max is a multiple of 8.
 _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 
-_CALIB_N = 32  # mesh size used to calibrate each solver's cost coefficient
+# NumpyBackend for all convergence claims: numpy SVD/solve are O(N²) assembly-
+# dominated (Python-loop assembly costs O(N²) regardless of backend), so the
+# cost model fits cleanly.  PythonBackend SVD is superlinear at N>64 (cache
+# effects in the Jacobi SVD loop), making calibration unreliable there.
+_NP_BACKEND = NumpyBackend()
+
+_CALIB_N = 64  # mesh size used to calibrate each solver's cost coefficient
 
 
 def _time_solve_at(solver_class: type, n: int) -> float:
-    """Return the best-of-3 wall time (seconds) for assemble + svd + solve at size n."""
+    """Return the best-of-3 wall time (seconds) for assemble + svd + solve at size n.
+
+    Uses NumpyBackend so that SVD and solve are fast (LAPACK-backed) and the
+    dominant cost is the O(N²) Python-loop assembly.  The convergence claims use
+    the same backend, so calibration and tests measure the same code paths.
+    """
     mesh = CartesianMesh(
         origin=(sympy.Rational(0),),
         spacing=(sympy.Rational(1, n),),
@@ -85,14 +97,14 @@ def _time_solve_at(solver_class: type, n: int) -> float:
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
     disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
-    a_cal = Operator(disc(), mesh).assemble()
-    b_cal = Tensor([1.0] * n)
+    a_cal = Operator(disc(), mesh).assemble(backend=_NP_BACKEND)
+    b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
     solver.solve(a_cal, b_cal)  # warm-up: ensure any lazy initialization is done
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        a_cal = Operator(disc(), mesh).assemble()
+        a_cal = Operator(disc(), mesh).assemble(backend=_NP_BACKEND)
         a_cal.svd()
         solver.solve(a_cal, b_cal)
         best = min(best, time.perf_counter() - t0)
@@ -376,7 +388,9 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            a_m = Operator(FVMDiscretization(mesh, self._flux, bc)(), mesh).assemble()
+            a_m = Operator(FVMDiscretization(mesh, self._flux, bc)(), mesh).assemble(
+                backend=_NP_BACKEND
+            )
             _, s_vec, vt = a_m.svd()
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
@@ -406,13 +420,15 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
                 [
                     (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
-                ]
+                ],
+                backend=_NP_BACKEND,
             )
             r_n = Tensor(
                 [
                     (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
                     for i in range(n_c)
-                ]
+                ],
+                backend=_NP_BACKEND,
             )
             rel_err = (a_c @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
             if rel_err < 0.1:
@@ -442,11 +458,11 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
                 return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
 
-            b_m = Tensor([_rho_avg(i) for i in range(n_cells)])
+            b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
             u_arr = self._solver.solve(a_m, b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
-            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)])
+            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
             diff = u_arr - phi_arr
             errors.append(math.sqrt(vol * (diff @ diff)))
 

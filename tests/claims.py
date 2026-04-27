@@ -14,7 +14,7 @@ C = TypeVar("C")
 MAX_WALLTIME_S = float(os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S", "5.0"))
 
 # Fixed per-session overhead not covered by MAX_WALLTIME_S: performance-test
-# calibration (~7s), structure/tensor tests (~4s), convergence calibration (~7s).
+# calibration (~7s), structure/tensor tests (~4s), convergence calibration (~2s).
 FIXED_SESSION_OVERHEAD_S = 20.0
 
 # Tolerance multiplier on the total expected session time.
@@ -64,24 +64,3 @@ class DeviceCalibration:
     gpu_backend: Any | None
     cpu_fma_rate: float
     gpu_fma_rate: float | None
-
-
-@dataclass(frozen=True)
-class ConvergenceCalibration:
-    """Per-device, per-solver calibration data for convergence-rate claims.
-
-    Holds backend instances and a cost coefficient α per (device, solver class)
-    pair.  Each α is calibrated by a real timed solve on the target device, so
-    _convergence_n_max(α, solver.cost_exponent, budget) reflects actual solver
-    throughput on that hardware — not a modeled roofline, and not shared
-    across solvers with different complexity (Jacobi is O(N^4), LU is O(N^3),
-    so a single α would mis-size at least one of them).
-
-    cpu_alphas is keyed by LinearSolver subclass (e.g. DenseJacobiSolver).
-    gpu_* fields are None when no GPU device is available.
-    """
-
-    cpu_backend: Any
-    gpu_backend: Any | None
-    cpu_alphas: dict[type, float]
-    gpu_alphas: dict[type, float] | None
