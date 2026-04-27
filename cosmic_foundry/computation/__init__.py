@@ -11,6 +11,7 @@ from cosmic_foundry.computation.autotuning import (  # noqa: E402
     BenchmarkResult,
     ProblemDescriptor,
     SelectionResult,
+    fit_log_log,
 )
 from cosmic_foundry.computation.backends import (  # noqa: E402
     Backend,
@@ -68,6 +69,7 @@ __all__ = [
     "DirectSolver",
     "Factorization",
     "IterativeSolver",
+    "fit_log_log",
     "JaxBackend",
     "LUDecomposedTensor",
     "LUFactorization",

@@ -35,6 +35,7 @@ from typing import Any
 import pytest
 import sympy
 
+from cosmic_foundry.computation.autotuning.benchmarker import fit_log_log
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.tensor import Tensor
@@ -114,8 +115,8 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]
     n2 = _CALIB_N
     t1 = _time_solve_at(solver_class, n1)
     t2 = _time_solve_at(solver_class, n2)
-    exponent = math.log(t2 / t1) / math.log(n2 / n1)
-    alpha = t2 * fma_rate / n2**exponent
+    alpha_raw, exponent = fit_log_log([(n1, t1), (n2, t2)])
+    alpha = alpha_raw * fma_rate
     return alpha, exponent
 
 

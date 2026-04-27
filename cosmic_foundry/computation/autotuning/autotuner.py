@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 from typing import NamedTuple
 
 from cosmic_foundry.computation.autotuning.benchmarker import (
     Benchmarker,
     BenchmarkResult,
+    fit_log_log,
 )
 from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDescriptor
 from cosmic_foundry.computation.backends import Backend
@@ -185,7 +185,7 @@ class Autotuner:
 
         if len(stable) < 2:
             return None
-        return _log_log_fit(solver, backend, stable)
+        return _make_result(solver, backend, stable)
 
     def _fallback_fit(
         self,
@@ -206,7 +206,7 @@ class Autotuner:
         t2 = self._benchmarker.time_solve(
             solver, backend, self._probe_descriptor(descriptor, n2)
         )
-        return _log_log_fit(solver, backend, [(n1, t1), (n2, t2)])
+        return _make_result(solver, backend, [(n1, t1), (n2, t2)])
 
     @staticmethod
     def _probe_descriptor(descriptor: ProblemDescriptor, n: int) -> ProblemDescriptor:
@@ -219,21 +219,13 @@ class Autotuner:
         )
 
 
-def _log_log_fit(
+def _make_result(
     solver: LinearSolver,
     backend: Backend,
     points: list[tuple[int, float]],
 ) -> BenchmarkResult:
-    """Fit T = alpha * N^exponent to (N, T) points by log-log linear regression."""
-    xs = [math.log(n) for n, _ in points]
-    ys = [math.log(t) for _, t in points]
-    k = len(xs)
-    mx = sum(xs) / k
-    my = sum(ys) / k
-    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False))
-    den = sum((x - mx) ** 2 for x in xs)
-    exponent = num / den if den else 1.0
-    alpha = math.exp(my - exponent * mx)
+    """Wrap fit_log_log in a BenchmarkResult for the given solver and backend."""
+    alpha, exponent = fit_log_log(points)
     return BenchmarkResult(solver, backend, alpha, exponent)
 
 

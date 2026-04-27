@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from typing import NamedTuple
 
@@ -100,4 +101,30 @@ class Benchmarker:
         return Tensor(rows, backend=backend)
 
 
-__all__ = ["BenchmarkResult", "Benchmarker"]
+def fit_log_log(points: list[tuple[int, float]]) -> tuple[float, float]:
+    """Fit T = alpha * N^exponent to (N, T) pairs by log-log linear regression.
+
+    Parameters
+    ----------
+    points:
+        List of (N, T) pairs where N is problem size and T is wall time in
+        seconds.  Must contain at least two distinct N values.
+
+    Returns
+    -------
+    (alpha, exponent):
+        Coefficients of the fitted power law T = alpha * N^exponent.
+    """
+    xs = [math.log(n) for n, _ in points]
+    ys = [math.log(t) for _, t in points]
+    k = len(xs)
+    mx = sum(xs) / k
+    my = sum(ys) / k
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False))
+    den = sum((x - mx) ** 2 for x in xs)
+    exponent = num / den if den else 1.0
+    alpha = math.exp(my - exponent * mx)
+    return alpha, exponent
+
+
+__all__ = ["BenchmarkResult", "Benchmarker", "fit_log_log"]
