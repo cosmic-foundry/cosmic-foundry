@@ -72,30 +72,25 @@ _MAX_WALLTIME_S = 60.0
 # mesh size is an integer whenever N_max is a multiple of 8.
 _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 
-_JACOBI_CALIB_N = 32  # mesh size used to calibrate the Jacobi cost coefficient
+_CALIB_N = 32  # mesh size used to calibrate each solver's cost coefficient
 
 
 @functools.cache
-def _calibrate_jacobi_alpha(fma_rate: float) -> float:
-    """Calibrate the Jacobi cost coefficient from a small timed solve.
+def _calibrate_alpha(solver_class: type, fma_rate: float) -> float:
+    """Calibrate the cost coefficient for solver_class from a timed assemble+SVD+solve.
 
-    The Jacobi cost model is T ≈ ALPHA × N^4 × Σ(f^4) / fma_rate.  ALPHA
-    encodes the constant factor: O(N²/π²) iterations (spectral radius
-    1 − π²/N²), each costing O(N²) FMAs for a dense matvec, plus Python-loop
-    overhead on top of the bare FMA count.
+    The cost model is T ≈ alpha × N^p / fma_rate where p = solver_class.cost_exponent.
+    alpha encodes all constant factors — assembly, SVD, iteration count, FMA overhead,
+    Python-loop overhead — for this solver on this machine.
 
-    Rather than hardcoding ALPHA, this function times DenseJacobiSolver at a
-    fixed calibration size and derives ALPHA = T × fma_rate / N_calib^4.  The
-    result is memoised on fma_rate so the solve runs once per session (the
-    session-scoped fma_rate fixture guarantees a single value per run).
-
-    Calibrating at _JACOBI_CALIB_N = 32 runs in ~0.15 s and gives ALPHA ≈ 7,
-    close enough to the asymptotic value that rounding N_max to the nearest
-    multiple of 8 eliminates any residual error.  If the Jacobi implementation
-    changes speed by a factor k, ALPHA changes by k and N_max adjusts by k^0.25
-    automatically.
+    Times disc.assemble() + a.svd() + solver_class().solve() at _CALIB_N, takes the
+    best of 3 runs (eliminates OS scheduling noise), and returns alpha = T × fma_rate /
+    N^p.  Including assembly and SVD in the timing ensures N_max is conservative enough
+    that all three phases of each convergence claim fit within the walltime budget.
+    Memoised on (solver_class, fma_rate) so each (solver type, machine) pair calibrates
+    once per session.
     """
-    n = _JACOBI_CALIB_N
+    n = _CALIB_N
     mesh = CartesianMesh(
         origin=(sympy.Rational(0),),
         spacing=(sympy.Rational(1, n),),
@@ -105,34 +100,32 @@ def _calibrate_jacobi_alpha(fma_rate: float) -> float:
     disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
     a_cal = disc.assemble()
     b_cal = Tensor([1.0] * n)
-    solver = DenseJacobiSolver(tol=1e-8)
+    solver = solver_class()
     solver.solve(a_cal, b_cal)  # warm-up: ensure any lazy initialization is done
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
+        a_cal = disc.assemble()
+        a_cal.svd()
         solver.solve(a_cal, b_cal)
         best = min(best, time.perf_counter() - t0)
-    return best * fma_rate / n**4
+    return best * fma_rate / n**solver_class.cost_exponent
 
 
-def _convergence_n_max(fma_rate: float, n_convergence_claims: int) -> int:
-    """N_max for the convergence mesh sequence given the machine's FMA rate.
+def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) -> int:
+    """N_max for the convergence mesh sequence for solver given the machine's FMA rate.
 
-    Allocates _MAX_WALLTIME_S equally across all convergence-rate claims using
-    the Jacobi cost model T ≈ alpha × N_max^4 × Σ(f^4) / fma_rate — where
-    alpha is calibrated at session start by _calibrate_jacobi_alpha — and
-    solves for N_max.  Rounding to the nearest multiple of 8 keeps all mesh
-    sizes exact integers (since every fraction in _MESH_FRACTIONS is an exact
-    rational over multiples of 8).
-
-    The result is a conservative bound: LU claims are O(N³) so they run faster
-    than the budget at the same N_max, keeping the actual total below
-    _MAX_WALLTIME_S on all hardware.
+    Allocates _MAX_WALLTIME_S equally across all convergence-rate claims and
+    solves for the N_max each claim can afford under its solver's cost model
+    T ≈ alpha × N^p × Σ(f^p) / fma_rate.  alpha is calibrated once per
+    (solver type, fma_rate) pair by _calibrate_alpha.  Rounding to the nearest
+    multiple of 8 keeps all mesh sizes exact integers.
     """
-    alpha = _calibrate_jacobi_alpha(fma_rate)
-    sum_f4 = sum(f**4 for f in _MESH_FRACTIONS)
+    p = type(solver).cost_exponent
+    alpha = _calibrate_alpha(type(solver), fma_rate)
+    sum_fp = sum(f**p for f in _MESH_FRACTIONS)
     budget_per_claim = _MAX_WALLTIME_S / n_convergence_claims
-    n_raw = (budget_per_claim * fma_rate / (alpha * sum_f4)) ** 0.25
+    n_raw = (budget_per_claim * fma_rate / (alpha * sum_fp)) ** (1 / p)
     return max(16, round(n_raw / 8) * 8)
 
 
@@ -353,7 +346,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         )
 
     def check(self, fma_rate: float) -> None:
-        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS)
+        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS, self._solver)
         meshes = [
             CartesianMesh(
                 origin=(sympy.Rational(0),),
@@ -368,16 +361,27 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         p = self._flux.order
         bc = self._bc_type()
 
+        # Pre-assemble all mesh stiffness matrices and SVD decompositions.
+        # Assembly is O(N²) sympy work; hoisting it out of the solve loop keeps
+        # the budgeted hot path (solve only) aligned with what calibration measures.
+        assembled: list[tuple[Any, list[Any], float, float, int]] = []
+        for mesh in meshes:
+            vol = float(mesh.cell_volume)
+            orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
+            n_cells = mesh.shape[0]
+            a_m = FVMDiscretization(mesh, self._flux, bc).assemble()
+            _, s_vec, vt = a_m.svd()
+            null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
+            null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
+            assembled.append((a_m, null_vecs, vol, orig, n_cells))
+
         # Auto-select admissible manufactured-solution modes.
         # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
         # Each candidate sin(nπx) is tested for BC consistency: if
         # ||A·R_h(φ_n) - R_h(ρ_n)|| / ||R_h(ρ_n)|| >= 0.1 the mode violates
         # the ghost-cell convention (O(1) boundary error) and is dropped.
-        coarse = meshes[0]  # fractions are ascending; first entry is smallest
-        n_c = coarse.shape[0]
-        vol_c = float(coarse.cell_volume)
-        orig_c = float(coarse.coordinate((0,))[0]) - 0.5 * vol_c
-        a_c = FVMDiscretization(coarse, self._flux, bc).assemble()
+        # Reuse the coarsest mesh assembly rather than reassembling it.
+        a_c, _, vol_c, orig_c, n_c = assembled[0]
         k_max = max(1, n_c // p)
         phi_terms: list[sympy.Expr] = []
         for n in range(1, k_max + 1):
@@ -423,27 +427,13 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
 
         errors: list[float] = []
-        for mesh in meshes:
-            vol = float(mesh.cell_volume)
-            orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
-            n_cells = mesh.shape[0]
+        for a_m, null_vecs, vol, orig, n_cells in assembled:
 
             def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
                 return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
 
             def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
                 return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
-
-            disc = FVMDiscretization(mesh, self._flux, bc)
-
-            # Project u_h onto the orthogonal complement of the assembled
-            # matrix's null space before measuring truncation error.  The SVD
-            # threshold is relative to the largest singular value; for full-rank
-            # systems no null vectors are found and the projection is a no-op.
-            a_m = disc.assemble()
-            _, s_vec, vt = a_m.svd()
-            null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
-            null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
 
             b_m = Tensor([_rho_avg(i) for i in range(n_cells)])
             u_arr = self._solver.solve(a_m, b_m)

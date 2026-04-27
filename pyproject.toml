@@ -30,6 +30,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-mpl",
+    "pytest-timeout",
     "pre-commit",
     "black",
     "ruff",
@@ -111,6 +112,12 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests", "validation"]
 addopts = "-q"
+# Session-level timeout (backstop for runaway tests) is set programmatically
+# from MAX_WALLTIME_S × BUDGET_TOLERANCE in tests/claims.py via pytest_configure
+# in tests/conftest.py.  The per-claim contract (same factor applied to each
+# claim's slice of the budget) is enforced inside each claim's check() with a
+# precise overshoot message.
+timeout_method = "thread"
 markers = [
     "multihost: requires jax.distributed multi-process setup",
     "visual: pytest-mpl image-comparison tests",

@@ -22,6 +22,8 @@ class DirectSolver(LinearSolver):
         The Factorization algorithm to use.
     """
 
+    cost_exponent = 3  # O(N^3) factorization dominates the O(N^2) substitution
+
     def __init__(self, factorization: Factorization) -> None:
         self._factorization = factorization
 
