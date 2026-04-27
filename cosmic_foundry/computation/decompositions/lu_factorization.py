@@ -4,18 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.decompositions.decomposition import DecomposedTensor
 from cosmic_foundry.computation.decompositions.factorization import Factorization
-from cosmic_foundry.computation.tensor import (
-    Tensor,
-    abs,
-    arange,
-    argmax,
-    copy,
-    einsum,
-    take,
-    where,
-)
+from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
 
 # Diagonal magnitude below which a pivot is treated as singular.
 _SINGULAR_TOL: float = 1e-10
@@ -34,11 +26,11 @@ def _factorize_body(k: Any, state: tuple) -> tuple:
 
     # Find pivot: argmax of |col_k| for rows >= k.
     col_k = a[(slice(None), k)]
-    masked_col = where(indices >= k, abs(col_k), neg_inf)
-    max_row = argmax(masked_col)
+    masked_col = where(indices >= k, tensor.abs(col_k), neg_inf)
+    max_row = tensor.argmax(masked_col)
 
     # Swap rows k and max_row.
-    row_k = copy(a[k])
+    row_k = tensor.copy(a[k])
     a = a.set(k, a[max_row])
     a = a.set(max_row, row_k)
 
@@ -52,7 +44,7 @@ def _factorize_body(k: Any, state: tuple) -> tuple:
     # divide-by-zero in the factor computation (singular flag records it).
     row_k_new = a[k]
     diag_k = row_k_new[k]
-    sing_k = abs(diag_k) < _SINGULAR_TOL
+    sing_k = tensor.abs(diag_k) < _SINGULAR_TOL
     is_singular = is_singular.set(k, sing_k)
     safe_diag = where(sing_k, Tensor(1.0, backend=a.backend), diag_k)
     a = a.set((k, k), safe_diag)
@@ -145,7 +137,7 @@ class LUDecomposedTensor(DecomposedTensor):
         n_minus_1: Tensor = Tensor(n - 1, backend=backend)
 
         # Forward substitution: Ly = Pb  (L has unit diagonal).
-        y: Tensor = take(b, self._pivot)
+        y: Tensor = tensor.take(b, self._pivot)
         y, *_ = backend.fori_loop(n, _fwd_body, (y, self._a_lu, indices, zeros_n))
 
         # Back substitution: Ux = y.
@@ -188,7 +180,7 @@ class LUFactorization(Factorization):
         """Factor A with partial pivoting; return a LUDecomposedTensor."""
         n = a.shape[0]
         backend = a.backend
-        a = copy(a)
+        a = tensor.copy(a)
 
         pivot: Tensor = arange(n, backend=backend)
         is_singular: Tensor = Tensor([False] * n, backend=backend)
