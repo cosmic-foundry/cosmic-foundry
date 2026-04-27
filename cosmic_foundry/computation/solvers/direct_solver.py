@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
-from cosmic_foundry.computation.linear_solver import LinearSolver
+from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 from cosmic_foundry.computation.tensor import Tensor
 
 

@@ -22,13 +22,13 @@ from cosmic_foundry.computation.decompositions import (  # noqa: E402
     SVDDecomposedTensor,
     SVDFactorization,
 )
-from cosmic_foundry.computation.dense_jacobi_solver import (  # noqa: E402
+from cosmic_foundry.computation.solvers import (  # noqa: E402
     DenseJacobiSolver,
+    DenseLUSolver,
+    DirectSolver,
+    IterativeSolver,
+    LinearSolver,
 )
-from cosmic_foundry.computation.dense_lu_solver import DenseLUSolver  # noqa: E402
-from cosmic_foundry.computation.direct_solver import DirectSolver  # noqa: E402
-from cosmic_foundry.computation.iterative_solver import IterativeSolver  # noqa: E402
-from cosmic_foundry.computation.linear_solver import LinearSolver  # noqa: E402
 from cosmic_foundry.computation.tensor import (  # noqa: E402
     MaterializationError,
     Real,

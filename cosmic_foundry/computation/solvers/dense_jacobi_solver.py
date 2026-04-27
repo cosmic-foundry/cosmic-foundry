@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, NamedTuple
 
-from cosmic_foundry.computation.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import Tensor, einsum, where
 
 

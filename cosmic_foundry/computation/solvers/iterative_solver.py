@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any
 
-from cosmic_foundry.computation.linear_solver import LinearSolver
+from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 from cosmic_foundry.computation.tensor import Tensor
 
 
