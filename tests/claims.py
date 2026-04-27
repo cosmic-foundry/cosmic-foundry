@@ -9,15 +9,16 @@ from typing import Any, Generic, TypeVar
 
 C = TypeVar("C")
 
-# Single source of truth for the convergence-rate test-suite walltime budget
-# and the over-budget tolerance.  Both numbers feed three independent enforcement
-# layers — _convergence_n_max sizing, the per-claim end-of-check() assertion,
-# and the pytest session_timeout backstop — so changing them here updates every
-# layer consistently.
-# Budget can be set via COSMIC_FOUNDRY_TEST_BUDGET_S environment variable
-# (float, seconds); defaults to 60s if not set.
-MAX_WALLTIME_S = float(os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S", "60.0"))
-BUDGET_TOLERANCE = 1.5
+# Convergence-test walltime budget.  Controls N_max sizing only; set via
+# COSMIC_FOUNDRY_TEST_BUDGET_S env var (default 5s locally, 30s in CI).
+MAX_WALLTIME_S = float(os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S", "5.0"))
+
+# Fixed per-session overhead not covered by MAX_WALLTIME_S: performance-test
+# calibration (~7s), structure/tensor tests (~4s), convergence calibration (~7s).
+FIXED_SESSION_OVERHEAD_S = 20.0
+
+# Tolerance multiplier on the total expected session time.
+BUDGET_TOLERANCE = 1.1
 
 
 class Claim(ABC):
