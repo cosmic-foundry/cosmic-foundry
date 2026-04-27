@@ -16,12 +16,12 @@ to _CLAIMS; the single parametric test covers all entries.
                                         averages for source and reference field
 
 _FLUXES contains all NumericalFlux instances; adding a new flux automatically
-generates _OrderClaim entries for it.  _ELLIPTIC_FLUXES is the SPD subset
-that also gets solver/convergence claims — fluxes whose assembled stiffness
-matrix is not SPD (e.g. AdvectiveFlux) belong only in _FLUXES.  _SOLVERS
-(iterative) and _DIRECT_SOLVERS (direct) are registries for the elliptic
-claims.  The convergence mesh sequence is computed adaptively at runtime from
-the machine's FMA rate; see _convergence_n_max.
+generates _OrderClaim entries for it.  _SOLVERS (iterative, non-SPD-restricted)
+and _SPD_SOLVERS (iterative, SPD-only) and _DIRECT_SOLVERS (direct) are solver
+registries.  Diffusive claims use all three; advection-diffusion claims exclude
+_SPD_SOLVERS because that matrix is non-symmetric.  The convergence mesh
+sequence is computed adaptively at runtime from the machine's FMA rate; see
+_convergence_n_max.
 """
 
 from __future__ import annotations
@@ -35,8 +35,13 @@ import sympy
 
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
+from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
+from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
+    DenseGaussSeidelSolver,
+)
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
+from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
@@ -447,22 +452,26 @@ _ADVECTION_DIFFUSION_FLUXES = [
 ]
 _FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES, *_ADVECTION_DIFFUSION_FLUXES]
 # DiffusiveFlux assembles an SPD matrix (DirichletGhostCells);
-# compatible with all solvers.
+# compatible with all solvers including CG.
 # AdvectiveFlux assembles a rank-(N-1) circulant matrix under PeriodicGhostCells;
-# compatible with DenseLUSolver only (zero-mean null-space convention handles the
+# compatible with direct solvers only (zero-mean null-space convention handles the
 # singularity).
-# AdvectionDiffusionFlux assembles A_adv + κ·A_diff; non-singular under
-# DirichletGhostCells for any κ > 0, compatible with all solvers at unit Péclet
-# number (κ=1, h≈1/N).
-_SOLVERS = [DenseJacobiSolver(tol=1e-8)]
-_DIRECT_SOLVERS = [DenseLUSolver()]
+# AdvectionDiffusionFlux assembles A_adv + κ·A_diff; non-symmetric under
+# DirichletGhostCells, so CG is excluded; Jacobi/GS/direct solvers work for κ=1.
+_SOLVERS = [DenseJacobiSolver(tol=1e-8), DenseGaussSeidelSolver(tol=1e-8)]
+_SPD_SOLVERS = [DenseCGSolver(tol=1e-8)]  # SPD (symmetric positive definite) only
+_DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
-    # Diffusive (SPD, DirichletBC): all solvers
-    *[_SolverClaim(s, f, _mesh_n8) for s in _SOLVERS for f in _DIFFUSIVE_FLUXES],
+    # Diffusive (SPD, DirichletBC): all solvers including CG
+    *[
+        _SolverClaim(s, f, _mesh_n8)
+        for s in [*_SOLVERS, *_SPD_SOLVERS]
+        for f in _DIFFUSIVE_FLUXES
+    ],
     *[
         _DirectSolverClaim(s, f, _mesh_n8)
         for s in _DIRECT_SOLVERS
@@ -470,7 +479,7 @@ _CLAIMS: list[CalibratedClaim[float]] = [
     ],
     *[
         _ConvergenceRateClaim(s, f)
-        for s in [*_SOLVERS, *_DIRECT_SOLVERS]
+        for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
         for f in _DIFFUSIVE_FLUXES
     ],
     # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
@@ -484,7 +493,7 @@ _CLAIMS: list[CalibratedClaim[float]] = [
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
-    # Advection-diffusion (non-singular under DirichletBC for κ>0): all solvers
+    # Advection-diffusion (non-singular under DirichletBC for κ>0): non-SPD solvers only
     *[
         _SolverClaim(s, f, _mesh_n8)
         for s in _SOLVERS

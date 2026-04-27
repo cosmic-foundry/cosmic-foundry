@@ -36,7 +36,8 @@ _NP_BACKEND = NumpyBackend()
 # mesh size is an integer whenever N_max is a multiple of 8.
 _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 
-_CALIB_N = 64  # mesh size used to calibrate each solver's cost coefficient
+_CALIB_N = 64  # preferred upper probe mesh size for calibration
+_MAX_PROBE_TIME_S = 1.5  # if a probe at _CALIB_N//2 exceeds this, back off one level
 
 _manifold = EuclideanManifold(1)
 
@@ -74,18 +75,29 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]
     """Empirically fit (alpha, exponent) for solver_class from a two-point log-log fit.
 
     The cost model is T ≈ alpha × N^exponent / fma_rate.  Both alpha and
-    exponent are measured rather than declared: time at _CALIB_N // 2 and
-    _CALIB_N, fit exponent from the log-log slope, then pin alpha at _CALIB_N.
+    exponent are measured rather than declared: time at two successive mesh
+    sizes, fit exponent from the log-log slope, then pin alpha at the larger.
     Including assembly and SVD in the timing ensures N_max is conservative enough
     that all three phases of each convergence claim fit within the walltime budget.
+
+    The preferred probe sizes are _CALIB_N // 2 and _CALIB_N.  If the smaller
+    probe already exceeds _MAX_PROBE_TIME_S (slow iterative solver), the pair is
+    halved to _CALIB_N // 4 and _CALIB_N // 2 so that calibration itself stays
+    within a few seconds regardless of solver cost.
+
     Memoised on (solver_class, fma_rate) so each (solver type, machine) pair
     calibrates once per session.
     """
-    n1 = _CALIB_N // 2
     n2 = _CALIB_N
-    t1 = _time_solve_at(solver_class, n1)
+    _wall0 = time.perf_counter()
+    t1 = _time_solve_at(solver_class, n2 // 2)
+    if time.perf_counter() - _wall0 > _MAX_PROBE_TIME_S:
+        # Slow solver: the warm-up + 3 timed runs at n2//2 already exceeded the
+        # threshold.  Back off one level so the larger probe stays tractable.
+        n2 = n2 // 2
+        t1 = _time_solve_at(solver_class, n2 // 2)
     t2 = _time_solve_at(solver_class, n2)
-    alpha_raw, exponent = fit_log_log([(n1, t1), (n2, t2)])
+    alpha_raw, exponent = fit_log_log([(n2 // 2, t1), (n2, t2)])
     alpha = alpha_raw * fma_rate
     return alpha, exponent
 
