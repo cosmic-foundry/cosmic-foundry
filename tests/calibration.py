@@ -16,6 +16,7 @@ import sympy
 
 from cosmic_foundry.computation.autotuning.benchmarker import fit_log_log
 from cosmic_foundry.computation.backends import NumpyBackend
+from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
@@ -62,7 +63,7 @@ def _time_solve_at(solver_class: type, n: int) -> float:
     for _ in range(3):
         t0 = time.perf_counter()
         a_cal = Operator(disc(), mesh).assemble(backend=_NP_BACKEND)
-        a_cal.svd()
+        SVDFactorization().factorize(a_cal)
         solver.solve(a_cal, b_cal)
         best = min(best, time.perf_counter() - t0)
     return best
