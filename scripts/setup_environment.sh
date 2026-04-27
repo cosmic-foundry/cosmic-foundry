@@ -108,6 +108,17 @@ fi
 
 conda activate cosmic_foundry
 
+# Apply CUDA overlay on Linux hosts that have an NVIDIA GPU.
+# The base environment is cross-platform; CUDA packages are layered on
+# top only where hardware support is confirmed.
+CUDA_ENV_FILE="${REPO_ROOT}/environment/cosmic_foundry_cuda.yml"
+if [ "$OS" = "Linux" ] && command -v nvidia-smi &>/dev/null; then
+  echo "NVIDIA GPU detected — applying CUDA overlay..."
+  conda env update -n cosmic_foundry -f "$CUDA_ENV_FILE"
+else
+  echo "Skipping CUDA packages (requires Linux with NVIDIA driver)."
+fi
+
 # Install the cosmic_foundry package in editable mode with dev and docs
 # extras. Editable install lets source changes take effect without
 # reinstalling; the [dev,docs] extras are the superset CI uses, so local
