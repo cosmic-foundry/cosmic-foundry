@@ -13,21 +13,22 @@ from cosmic_foundry.computation.backends import (  # noqa: E402
     get_default_backend,
     set_default_backend,
 )
+from cosmic_foundry.computation.decompositions import (  # noqa: E402
+    DecomposedTensor,
+    Decomposition,
+    Factorization,
+    LUDecomposedTensor,
+    LUFactorization,
+    SVDDecomposedTensor,
+    SVDFactorization,
+)
 from cosmic_foundry.computation.dense_jacobi_solver import (  # noqa: E402
     DenseJacobiSolver,
 )
 from cosmic_foundry.computation.dense_lu_solver import DenseLUSolver  # noqa: E402
 from cosmic_foundry.computation.direct_solver import DirectSolver  # noqa: E402
-from cosmic_foundry.computation.factorization import (  # noqa: E402
-    FactoredMatrix,
-    Factorization,
-)
 from cosmic_foundry.computation.iterative_solver import IterativeSolver  # noqa: E402
 from cosmic_foundry.computation.linear_solver import LinearSolver  # noqa: E402
-from cosmic_foundry.computation.lu_factorization import (  # noqa: E402
-    LUFactoredMatrix,
-    LUFactorization,
-)
 from cosmic_foundry.computation.tensor import (  # noqa: E402
     MaterializationError,
     Real,
@@ -50,20 +51,23 @@ jax.tree_util.register_pytree_node(
 
 __all__ = [
     "Backend",
+    "Decomposition",
+    "DecomposedTensor",
     "DenseJacobiSolver",
     "DenseLUSolver",
     "DirectSolver",
     "Factorization",
-    "FactoredMatrix",
     "IterativeSolver",
     "JaxBackend",
+    "LUDecomposedTensor",
     "LUFactorization",
-    "LUFactoredMatrix",
     "LinearSolver",
     "MaterializationError",
     "NumpyBackend",
     "PythonBackend",
     "Real",
+    "SVDDecomposedTensor",
+    "SVDFactorization",
     "Tensor",
     "arange",
     "einsum",
