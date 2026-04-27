@@ -158,10 +158,11 @@ def _calibrate_solver_alpha(solver: object, backend: object) -> float:
     from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
     from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
     from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-    from cosmic_foundry.physics.fvm_discretization import FVMDiscretization
+    from cosmic_foundry.physics.operator import Operator
     from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
         DirichletGhostCells,
     )
+    from cosmic_foundry.theory.discrete.fvm_discretization import FVMDiscretization
 
     n = _JACOBI_CALIB_N
     manifold = EuclideanManifold(1)
@@ -172,7 +173,7 @@ def _calibrate_solver_alpha(solver: object, backend: object) -> float:
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, manifold)
     disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
-    a_cal = disc.assemble(backend=backend)
+    a_cal = Operator(disc(), mesh).assemble(backend=backend)
     b_cal = Tensor([1.0] * n, backend=backend)
     r = solver.solve(a_cal, b_cal)  # warm-up: let XLA compile
     r.sync()
