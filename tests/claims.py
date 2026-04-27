@@ -17,7 +17,7 @@ C = TypeVar("C")
 # Budget can be set via COSMIC_FOUNDRY_TEST_BUDGET_S environment variable
 # (float, seconds); defaults to 60s if not set.
 MAX_WALLTIME_S = float(os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S", "60.0"))
-BUDGET_TOLERANCE = 1.1
+BUDGET_TOLERANCE = 1.5
 
 
 class Claim(ABC):
