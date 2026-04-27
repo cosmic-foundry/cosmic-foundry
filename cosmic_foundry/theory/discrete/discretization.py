@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import sympy
 
@@ -73,13 +74,16 @@ class Discretization(ABC):
     def __call__(self) -> DiscreteOperator:
         """Produce the assembled DiscreteOperator."""
 
-    def assemble(self) -> Tensor:
+    def assemble(self, backend: Any = None) -> Tensor:
         """Assemble the N^d × N^d stiffness matrix as a rank-2 Tensor.
 
         Applies Lₕ to each sympy unit-basis vector in turn and converts the
         resulting sympy expressions to float.  Row and column ordering is
         lexicographic with axis 0 varying fastest.  Intended for direct
         solvers and inspection; not for large N.
+
+        backend, when provided, is forwarded to the Tensor constructor so that
+        the assembled matrix lives on the requested device.
         """
         op = self()
         shape = self.mesh.shape
@@ -104,7 +108,7 @@ class Discretization(ABC):
             for i in range(n_total):
                 rows[i][j] = float(lh_ej(to_multi(i)))  # type: ignore[arg-type]
 
-        return Tensor(rows)
+        return Tensor(rows, backend=backend)
 
 
 __all__ = ["Discretization"]

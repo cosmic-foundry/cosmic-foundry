@@ -45,10 +45,13 @@ class IterativeSolver(LinearSolver):
         """Extract the solution Tensor from the final state."""
 
     def solve(self, a: Tensor, b: Tensor) -> Tensor:
-        state = self.init_state(a, b)
-        while not self.converged(state).get():
-            state = self.step(state)
-        return self.extract(state)
+        init = self.init_state(a, b)
+        final = a.backend.while_loop(
+            cond_fn=lambda s: ~self.converged(s),
+            body_fn=self.step,
+            init_state=init,
+        )
+        return self.extract(final)
 
 
 __all__ = ["IterativeSolver"]

@@ -14,11 +14,14 @@ time via ``Tensor(..., backend=b)`` or be migrated later with
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from cosmic_foundry.computation.backends.jax_backend import JaxBackend
 from cosmic_foundry.computation.backends.numpy_backend import NumpyBackend
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
+
+S = TypeVar("S")
 
 
 @runtime_checkable
@@ -62,6 +65,8 @@ class Backend(Protocol):
     def le(self, a: Any, b: Any) -> Any: ...
     def gt(self, a: Any, b: Any) -> Any: ...
     def ge(self, a: Any, b: Any) -> Any: ...
+    def logical_not(self, raw: Any) -> Any: ...
+    def logical_or(self, a: Any, b: Any) -> Any: ...
     def arange(self, n: int) -> Any: ...
     def rdiv_scalar(self, s: float, raw: Any) -> Any: ...
     def take(self, raw: Any, indices: Any) -> Any: ...
@@ -72,8 +77,26 @@ class Backend(Protocol):
     # Synchronization (no-op for synchronous backends)
     def sync(self, raw: Any) -> None: ...
 
-    # Control flow — device-side for JaxBackend, Python loop elsewhere
-    def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any: ...
+    # Counted loop: body_fn(k, state) -> state for k in 0..n-1.
+    # k is a Python int on synchronous backends; a traced device integer on
+    # JaxBackend so the entire loop compiles to a single XLA fori_loop kernel.
+    def fori_loop(
+        self,
+        n: int,
+        body_fn: Callable[[Any, S], S],
+        init_state: S,
+    ) -> S: ...
+
+    # Device-side iteration: cond_fn returns a 0-d bool Tensor; True = continue.
+    # Synchronous backends run a Python while loop; async backends (JaxBackend)
+    # ship the loop to the device via lax.while_loop so the convergence check
+    # never round-trips to the host.
+    def while_loop(
+        self,
+        cond_fn: Callable[[S], Any],
+        body_fn: Callable[[S], S],
+        init_state: S,
+    ) -> S: ...
 
 
 _default_backend: Backend = PythonBackend()
