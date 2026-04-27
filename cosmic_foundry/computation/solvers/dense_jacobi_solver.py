@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
-from cosmic_foundry.computation.tensor import Tensor, einsum, where
+from cosmic_foundry.computation.tensor import Tensor, abs, diag, einsum, max, where
 
 
 class _JacobiState(NamedTuple):
@@ -55,19 +55,19 @@ class DenseJacobiSolver(IterativeSolver):
 
     def init_state(self, a: Tensor, b: Tensor) -> _JacobiState:
         n = a.shape[0]
-        diag: Tensor = a.diag()
+        diag_mat: Tensor = diag(a)
 
         # Gershgorin bound on λ_max(D⁻¹A): ω = min(2/G, 1) guarantees contraction.
         # G = max_i Σ_j |A_{ij} / A_{ii}|  (row sums of |D⁻¹A|, including diagonal)
-        row_sums: Tensor = einsum("ij->i", a.abs()) / diag.abs()
-        lambda_max: Tensor = row_sums.max()  # 0-d Tensor
+        row_sums: Tensor = einsum("ij->i", abs(a)) / abs(diag_mat)
+        lambda_max: Tensor = max(row_sums)  # 0-d Tensor
         two_over_lm: Tensor = 2.0 / lambda_max  # __rtruediv__, 0-d Tensor
         omega: Tensor = where(two_over_lm > 1.0, 1.0, two_over_lm)
 
         u: Tensor = Tensor.zeros(n, backend=a.backend)
         r: Tensor = b - a @ u
         iteration: Tensor = Tensor(0, backend=a.backend)
-        return _JacobiState(u, r, a, b, diag, omega, iteration)
+        return _JacobiState(u, r, a, b, diag_mat, omega, iteration)
 
     def step(self, state: Any) -> _JacobiState:
         s: _JacobiState = state

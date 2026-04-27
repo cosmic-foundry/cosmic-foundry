@@ -20,7 +20,20 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
-from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
+from cosmic_foundry.computation.tensor import (
+    Tensor,
+    abs,
+    arange,
+    argmax,
+    copy,
+    diag,
+    einsum,
+    element,
+    max,
+    norm,
+    take,
+    where,
+)
 from tests.claims import Claim
 
 _PY = PythonBackend()
@@ -214,12 +227,12 @@ def _rank1_slice_write(b: Any) -> Tensor:
 
 
 def _rank2_col_slice_write(b: Any) -> Tensor:
-    t = _mk_mat3(b).copy()
+    t = copy(_mk_mat3(b))
     return t.set((slice(1, 3), 0), Tensor([9.0, 9.0], backend=b))
 
 
 def _rank2_submatrix_write(b: Any) -> Tensor:
-    t = _mk_mat3(b).copy()
+    t = copy(_mk_mat3(b))
     return t.set(
         (slice(0, 2), slice(0, 2)), Tensor([[9.0, 8.0], [7.0, 6.0]], backend=b)
     )
@@ -251,21 +264,21 @@ _ARITHMETIC_CASES = [
     ("vecmat", lambda b: Tensor([1.0, 2.0], backend=b) @ _mk_mat(b)),
     ("einsum_ij_jk", lambda b: einsum("ij,jk->ik", _mk_mat(b), _mk_mat(b))),
     ("einsum_trace", lambda b: einsum("ii->", _mk_mat(b))),
-    ("norm_vec", lambda b: Tensor([_mk_vec(b).norm().get()], backend=b)),
-    ("diag", lambda b: _mk_mat(b).diag()),
+    ("norm_vec", lambda b: Tensor([norm(_mk_vec(b)).get()], backend=b)),
+    ("diag", lambda b: diag(_mk_mat(b))),
     ("zeros_factory", lambda b: Tensor.zeros(2, 3, backend=b)),
     ("eye_factory", lambda b: Tensor.eye(3, backend=b)),
-    ("abs_vec", lambda b: Tensor([-1.0, 2.0, -3.0], backend=b).abs()),
-    ("abs_mat", lambda b: Tensor([[-1.0, 2.0], [3.0, -4.0]], backend=b).abs()),
-    ("max_vec", lambda b: Tensor([1.0, 5.0, 3.0], backend=b).max()),
+    ("abs_vec", lambda b: abs(Tensor([-1.0, 2.0, -3.0], backend=b))),
+    ("abs_mat", lambda b: abs(Tensor([[-1.0, 2.0], [3.0, -4.0]], backend=b))),
+    ("max_vec", lambda b: max(Tensor([1.0, 5.0, 3.0], backend=b))),
     (
         "element_rank2",
-        lambda b: Tensor([[1.0, 2.0], [3.0, 4.0]], backend=b).element(1, 0),
+        lambda b: element(Tensor([[1.0, 2.0], [3.0, 4.0]], backend=b), 1, 0),
     ),
     (
         "take_permute",
-        lambda b: Tensor([10.0, 20.0, 30.0], backend=b).take(
-            Tensor([2, 0, 1], backend=b)
+        lambda b: take(
+            Tensor([10.0, 20.0, 30.0], backend=b), Tensor([2, 0, 1], backend=b)
         ),
     ),
     ("rdiv_scalar", lambda b: 6.0 / Tensor([1.0, 2.0, 3.0], backend=b)),
@@ -291,11 +304,11 @@ _ARITHMETIC_CASES = [
         lambda b: where(Tensor(True, backend=b), Tensor([1.0, 2.0], backend=b), 0.0),
     ),
     ("arange_4", lambda b: arange(4, backend=b)),
-    ("argmax_val", lambda b: Tensor([1.0, 3.0, 2.0], backend=b).argmax()),
+    ("argmax_val", lambda b: argmax(Tensor([1.0, 3.0, 2.0], backend=b))),
     (
         "dynamic_index",
         lambda b: Tensor([10.0, 20.0, 30.0], backend=b)[
-            Tensor([1.0, 3.0, 2.0], backend=b).argmax()
+            argmax(Tensor([1.0, 3.0, 2.0], backend=b))
         ],
     ),
 ]

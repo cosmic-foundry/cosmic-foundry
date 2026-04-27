@@ -18,7 +18,7 @@ from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDesc
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.tensor import Tensor, norm
 from tests.claims import Claim
 
 # Calibration size: small enough to be cheap, large enough that the power-law
@@ -51,7 +51,7 @@ class _SelectionValidClaim(Claim):
         a = Benchmarker._make_matrix(_CALIB_DESCRIPTOR, _BACKEND)
         b = Tensor([1.0] * _CALIB_N, backend=_BACKEND)
         u = selection.solver.solve(a, b)
-        residual = (b - a @ u).norm()
+        residual = norm(b - a @ u)
         assert residual.get() < _CALIB_DESCRIPTOR.tol, (
             f"selected {type(selection.solver).__name__} residual "
             f"{residual.get():.2e} >= tol {_CALIB_DESCRIPTOR.tol}"

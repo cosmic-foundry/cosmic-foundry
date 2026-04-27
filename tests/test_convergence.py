@@ -36,7 +36,7 @@ import sympy
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianRestrictionOperator,
@@ -174,7 +174,7 @@ class _SolverClaim(CalibratedClaim[float]):
         a = Operator(disc(), self._mesh).assemble()
         b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
-        residual = (b - a @ u).norm().get()
+        residual = norm(b - a @ u).get()
         assert (
             residual < self._solver._tol
         ), f"Did not converge: residual {residual:.3e}"
@@ -235,7 +235,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         else:
             b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
-        residual = (b - a @ u).norm().get()
+        residual = norm(b - a @ u).get()
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
