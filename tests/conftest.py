@@ -11,6 +11,7 @@ from cosmic_foundry.computation.backends import JaxBackend
 from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import (
     BUDGET_TOLERANCE,
+    FIXED_SESSION_OVERHEAD_S,
     MAX_WALLTIME_S,
     ConvergenceCalibration,
     DeviceCalibration,
@@ -20,12 +21,13 @@ from tests.claims import (
 def pytest_configure(config: pytest.Config) -> None:
     """Set the pytest-timeout session backstop from the shared budget constants.
 
-    Sets the session timeout from MAX_WALLTIME_S × BUDGET_TOLERANCE so that
-    changes to tests/claims.py update the timeout automatically without
-    requiring command-line flags.
+    Session timeout = (MAX_WALLTIME_S + FIXED_SESSION_OVERHEAD_S) * BUDGET_TOLERANCE.
+    FIXED_SESSION_OVERHEAD_S covers costs that don't scale with the convergence
+    budget: performance calibration, structure/tensor tests, and convergence
+    calibration (~20s total).  Changes to tests/claims.py update the timeout
+    automatically without requiring command-line flags.
     """
-    timeout = MAX_WALLTIME_S * BUDGET_TOLERANCE
-    # Set the option so pytest-timeout reads it
+    timeout = (MAX_WALLTIME_S + FIXED_SESSION_OVERHEAD_S) * BUDGET_TOLERANCE
     config.option.session_timeout = timeout
 
 
