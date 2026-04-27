@@ -6,10 +6,7 @@ from typing import Any, cast
 
 import sympy
 
-from cosmic_foundry.computation.backends.python_backend import PythonBackend
-from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.physics.state import State
 from cosmic_foundry.theory.continuous.differential_form import ZeroForm
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
@@ -70,7 +67,8 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
 
-    Maps a DiscreteField of cell averages to a State of average discrete divergences:
+    Maps a DiscreteField of cell averages to a DiscreteField of average discrete
+    divergences:
 
         (Lₕ U)(i) = (1/|Ωᵢ|) ∮_∂Ωᵢ F·n̂ dA
                   = (1/|Ωᵢ|) Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
@@ -105,8 +103,8 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     def continuous_operator(self) -> DifferentialOperator:
         return _DivergenceComposition(self._numerical_flux.continuous_operator)
 
-    def __call__(self, U: DiscreteField[sympy.Expr]) -> State:
-        """Apply the assembled operator; returns an eager cell-residual State."""
+    def __call__(self, U: DiscreteField[sympy.Expr]) -> DiscreteField[sympy.Expr]:
+        """Apply the assembled operator; return cell residuals as DiscreteField."""
         mesh = cast(CartesianMesh, U.mesh)
         if self._bc is not None:
             U = self._bc.extend(U, mesh)
@@ -124,7 +122,7 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
             return tuple(idx)
 
         vol = mesh.cell_volume
-        residuals = []
+        residuals: list[sympy.Expr] = []
         for flat_i in range(mesh.n_cells):
             idx = _to_multi(flat_i)
             total: sympy.Expr = sympy.Integer(0)
@@ -139,7 +137,17 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
                 )
             residuals.append(total / vol)
 
-        return State(mesh, Tensor(residuals, backend=PythonBackend()))
+        residuals_frozen = tuple(residuals)
+
+        def lookup(idx: tuple[int, ...]) -> sympy.Expr:
+            flat = 0
+            stride = 1
+            for a, i in enumerate(idx):
+                flat += i * stride
+                stride *= shape[a]
+            return residuals_frozen[flat]
+
+        return _CallableDiscreteField(mesh, lookup)
 
 
 class FVMDiscretization(Discretization):
@@ -162,8 +170,7 @@ class FVMDiscretization(Discretization):
         The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
     boundary_condition:
         Optional DiscreteBoundaryCondition; when supplied, ghost cells are
-        applied in __call__ and assemble (inherited from Discretization) uses
-        the full boundary-aware operator.
+        applied in __call__.
     """
 
     def __init__(

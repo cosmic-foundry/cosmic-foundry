@@ -46,7 +46,7 @@ from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFlux
 from cosmic_foundry.physics.advective_flux import AdvectiveFlux
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-from cosmic_foundry.physics.fvm_discretization import FVMDiscretization
+from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     OneForm,
@@ -58,6 +58,7 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
+from cosmic_foundry.theory.discrete.fvm_discretization import FVMDiscretization
 from tests.claims import MAX_WALLTIME_S, CalibratedClaim
 
 # ---------------------------------------------------------------------------
@@ -82,7 +83,7 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> float:
     alpha encodes all constant factors — assembly, SVD, iteration count, FMA overhead,
     Python-loop overhead — for this solver on this machine.
 
-    Times disc.assemble() + a.svd() + solver_class().solve() at _CALIB_N, takes the
+    Times Operator(disc(), mesh).assemble() + svd + solve at _CALIB_N, takes the
     best of 3 runs (eliminates OS scheduling noise), and returns alpha = T × fma_rate /
     N^p.  Including assembly and SVD in the timing ensures N_max is conservative enough
     that all three phases of each convergence claim fit within the walltime budget.
@@ -97,14 +98,14 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> float:
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
     disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
-    a_cal = disc.assemble()
+    a_cal = Operator(disc(), mesh).assemble()
     b_cal = Tensor([1.0] * n)
     solver = solver_class()
     solver.solve(a_cal, b_cal)  # warm-up: ensure any lazy initialization is done
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        a_cal = disc.assemble()
+        a_cal = Operator(disc(), mesh).assemble()
         a_cal.svd()
         solver.solve(a_cal, b_cal)
         best = min(best, time.perf_counter() - t0)
@@ -238,7 +239,7 @@ class _SolverClaim(CalibratedClaim[float]):
     def check(self, fma_rate: float) -> None:
         disc = FVMDiscretization(self._mesh, self._flux, DirichletGhostCells())
         n = math.prod(self._mesh.shape)
-        a = disc.assemble()
+        a = Operator(disc(), self._mesh).assemble()
         b = Tensor([1.0] * n)
         u = self._solver.solve(a, b)
         residual = (b - a @ u).norm().get()
@@ -285,7 +286,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         bc = self._bc_type()
         disc = FVMDiscretization(self._mesh, self._flux, bc)
         n = math.prod(self._mesh.shape)
-        a = disc.assemble()
+        a = Operator(disc(), self._mesh).assemble()
         if self._bc_type is PeriodicGhostCells:
             h = float(self._mesh.cell_volume)
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
@@ -368,7 +369,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            a_m = FVMDiscretization(mesh, self._flux, bc).assemble()
+            a_m = Operator(FVMDiscretization(mesh, self._flux, bc)(), mesh).assemble()
             _, s_vec, vt = a_m.svd()
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
