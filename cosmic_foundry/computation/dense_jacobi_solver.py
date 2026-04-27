@@ -15,7 +15,7 @@ class _JacobiState(NamedTuple):
     b: Tensor
     diag: Tensor
     omega: Tensor  # 0-d scalar Tensor
-    iteration: int
+    iteration: Tensor  # 0-d int Tensor (trace-compatible: no Python int in state)
 
 
 class DenseJacobiSolver(IterativeSolver):
@@ -66,7 +66,8 @@ class DenseJacobiSolver(IterativeSolver):
 
         u: Tensor = Tensor.zeros(n, backend=a.backend)
         r: Tensor = b - a @ u
-        return _JacobiState(u, r, a, b, diag, omega, 0)
+        iteration: Tensor = Tensor(0, backend=a.backend)
+        return _JacobiState(u, r, a, b, diag, omega, iteration)
 
     def step(self, state: Any) -> _JacobiState:
         s: _JacobiState = state
@@ -76,9 +77,9 @@ class DenseJacobiSolver(IterativeSolver):
 
     def converged(self, state: Any) -> Tensor:
         s: _JacobiState = state
-        if s.iteration >= self._max_iter:
-            return Tensor(True, backend=s.r.backend)
-        return (s.r @ s.r) < self._tol**2
+        max_iter_reached = s.iteration >= self._max_iter
+        residual_small = (s.r @ s.r) < self._tol**2
+        return max_iter_reached | residual_small
 
     def extract(self, state: Any) -> Tensor:
         s: _JacobiState = state

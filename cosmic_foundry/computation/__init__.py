@@ -22,9 +22,10 @@ from cosmic_foundry.computation.tensor import (  # noqa: E402
     where,
 )
 
-# Register Tensor as a JAX pytree so jax.lax.fori_loop (and other JAX
-# transformations) can flatten state tuples containing Tensors into raw JAX
-# arrays and re-wrap them on the way out.  The raw backend value is the leaf;
+# Register Tensor as a JAX pytree so jax.lax.fori_loop, jax.lax.while_loop,
+# and other JAX transformations can flatten state pytrees containing Tensors
+# into raw JAX arrays and re-wrap them on the way out.  The leaf is the raw
+# backend value;
 # the backend instance is carried as static aux data.
 jax.tree_util.register_pytree_node(
     Tensor,

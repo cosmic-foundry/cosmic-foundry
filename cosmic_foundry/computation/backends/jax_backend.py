@@ -185,6 +185,12 @@ class JaxBackend:
     def ge(self, a: Any, b: Any) -> Any:
         return jnp.greater_equal(a, b)
 
+    def logical_not(self, raw: Any) -> Any:
+        return jnp.logical_not(raw)
+
+    def logical_or(self, a: Any, b: Any) -> Any:
+        return jnp.logical_or(a, b)
+
     def arange(self, n: int) -> Any:
         return jnp.arange(n)
 
@@ -202,6 +208,26 @@ class JaxBackend:
 
     def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any:
         return jax.lax.fori_loop(0, n, body_fn, init_state)
+
+    def while_loop(
+        self,
+        cond_fn: Any,
+        body_fn: Any,
+        init_state: Any,
+    ) -> Any:
+        """Ship the iteration loop to XLA via jax.lax.while_loop.
+
+        cond_fn returns a 0-d bool Tensor; we unwrap to its raw JAX scalar so
+        XLA evaluates the convergence test on-device on every iteration with
+        no host roundtrip.  Tensor is registered as a JAX pytree (see
+        cosmic_foundry.computation), so init_state and the body's return value
+        are flattened/unflattened transparently.
+        """
+        return jax.lax.while_loop(
+            cond_fun=lambda s: cond_fn(s)._value,
+            body_fun=body_fn,
+            init_val=init_state,
+        )
 
 
 __all__ = ["JaxBackend"]

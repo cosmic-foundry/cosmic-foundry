@@ -223,6 +223,12 @@ class _DeclaredBackend:
     def ge(self, a: Any, b: Any) -> tuple[int, ...]:
         return self.lt(a, b)
 
+    def logical_not(self, raw: Any) -> tuple[int, ...]:
+        return raw  # type: ignore[no-any-return]
+
+    def logical_or(self, a: Any, b: Any) -> tuple[int, ...]:
+        return self.lt(a, b)
+
     def where(self, cond: Any, x: Any, y: Any) -> tuple[int, ...]:
         c_s = cond if isinstance(cond, tuple) else ()
         x_s = x if isinstance(x, tuple) else ()
@@ -277,6 +283,9 @@ class _DeclaredBackend:
         return (n,)
 
     def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any:
+        return init_state
+
+    def while_loop(self, cond_fn: Any, body_fn: Any, init_state: Any) -> Any:
         return init_state
 
 
@@ -506,9 +515,16 @@ class Tensor(Generic[T]):
     def __neg__(self) -> Tensor:
         return Tensor._wrap(self._backend.neg(self._value), self._backend)
 
-    def __add__(self, other: Tensor) -> Tensor:
-        self._check_backend(other)
-        return Tensor._wrap(self._backend.add(self._value, other._value), self._backend)
+    def __add__(self, other: Any) -> Tensor:
+        if isinstance(other, Tensor):
+            self._check_backend(other)
+            other_raw = other._value
+        else:
+            other_raw = self._backend.to_native(other)
+        return Tensor._wrap(self._backend.add(self._value, other_raw), self._backend)
+
+    def __radd__(self, other: Any) -> Tensor:
+        return self.__add__(other)
 
     def __sub__(self, other: Any) -> Tensor:
         if isinstance(other, Tensor):
@@ -581,6 +597,19 @@ class Tensor(Generic[T]):
             else self._backend.to_native(other)
         )
         return Tensor._wrap(self._backend.ge(self._value, other_raw), self._backend)
+
+    def __invert__(self) -> Tensor:
+        return Tensor._wrap(self._backend.logical_not(self._value), self._backend)
+
+    def __or__(self, other: Any) -> Tensor:
+        other_raw = (
+            other._value
+            if isinstance(other, Tensor)
+            else self._backend.to_native(other)
+        )
+        return Tensor._wrap(
+            self._backend.logical_or(self._value, other_raw), self._backend
+        )
 
     def __matmul__(self, other: Tensor) -> Tensor:
         self._check_backend(other)

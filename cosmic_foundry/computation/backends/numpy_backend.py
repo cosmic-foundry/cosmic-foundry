@@ -170,6 +170,12 @@ class NumpyBackend:
     def ge(self, a: Any, b: Any) -> Any:
         return np.greater_equal(a, b)
 
+    def logical_not(self, raw: Any) -> Any:
+        return np.logical_not(raw)
+
+    def logical_or(self, a: Any, b: Any) -> Any:
+        return np.logical_or(a, b)
+
     def arange(self, n: int) -> Any:
         return np.arange(n)
 
@@ -189,4 +195,19 @@ class NumpyBackend:
         state = init_state
         for k in range(n):
             state = body_fn(k, state)
+        return state
+
+    def while_loop(
+        self,
+        cond_fn: Any,
+        body_fn: Any,
+        init_state: Any,
+    ) -> Any:
+        from cosmic_foundry.computation.tensor import Tensor
+
+        state = init_state
+        cond = cond_fn(state)
+        while bool(cond.get() if isinstance(cond, Tensor) else cond):
+            state = body_fn(state)
+            cond = cond_fn(state)
         return state
