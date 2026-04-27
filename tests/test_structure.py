@@ -47,6 +47,7 @@ _PACKAGES = [
     "cosmic_foundry.computation",
     "cosmic_foundry.computation.decompositions",
     "cosmic_foundry.computation.solvers",
+    "cosmic_foundry.computation.autotuning",
 ]
 _PURE_PACKAGES = [
     _PACKAGE_ROOT / "theory" / "foundation",

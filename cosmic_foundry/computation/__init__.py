@@ -5,6 +5,14 @@ import jax
 # Guarantee float64 precision before any JAX computation is JIT-compiled.
 jax.config.update("jax_enable_x64", True)
 
+from cosmic_foundry.computation.autotuning import (  # noqa: E402
+    Autotuner,
+    Benchmarker,
+    BenchmarkResult,
+    ProblemDescriptor,
+    SelectionResult,
+    fit_log_log,
+)
 from cosmic_foundry.computation.backends import (  # noqa: E402
     Backend,
     JaxBackend,
@@ -50,7 +58,10 @@ jax.tree_util.register_pytree_node(
 )
 
 __all__ = [
+    "Autotuner",
     "Backend",
+    "BenchmarkResult",
+    "Benchmarker",
     "Decomposition",
     "DecomposedTensor",
     "DenseJacobiSolver",
@@ -58,14 +69,17 @@ __all__ = [
     "DirectSolver",
     "Factorization",
     "IterativeSolver",
+    "fit_log_log",
     "JaxBackend",
     "LUDecomposedTensor",
     "LUFactorization",
     "LinearSolver",
     "MaterializationError",
     "NumpyBackend",
+    "ProblemDescriptor",
     "PythonBackend",
     "Real",
+    "SelectionResult",
     "SVDDecomposedTensor",
     "SVDFactorization",
     "Tensor",

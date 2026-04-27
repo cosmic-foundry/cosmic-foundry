@@ -22,8 +22,6 @@ class DirectSolver(LinearSolver):
         The Decomposition algorithm to use.
     """
 
-    cost_exponent = 3  # O(N^3) decomposition dominates the O(N^2) substitution
-
     def __init__(self, decomposition: Decomposition) -> None:
         self._decomposition = decomposition
 

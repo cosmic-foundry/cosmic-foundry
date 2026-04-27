@@ -49,8 +49,6 @@ class DenseJacobiSolver(IterativeSolver):
         Hard cap on Jacobi iterations.
     """
 
-    cost_exponent = 4  # O(N^2) iterations × O(N^2) matvec per iteration
-
     def __init__(self, tol: float = 1e-10, max_iter: int = 100_000) -> None:
         self._tol = tol
         self._max_iter = max_iter
