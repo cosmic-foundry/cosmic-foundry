@@ -58,14 +58,13 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.claims import CalibratedClaim
+from tests.claims import MAX_WALLTIME_S, CalibratedClaim
 
 # ---------------------------------------------------------------------------
 # Adaptive mesh-size selection
 # ---------------------------------------------------------------------------
 
 # The only hardcoded time constant: total allowed test-suite walltime.
-_MAX_WALLTIME_S = 60.0
 
 # Mesh fractions: each convergence-rate claim sweeps N_max × f for f in this
 # tuple.  The fractions are exact rationals over multiples of 8, so every
@@ -115,7 +114,7 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> float:
 def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) -> int:
     """N_max for the convergence mesh sequence for solver given the machine's FMA rate.
 
-    Allocates _MAX_WALLTIME_S equally across all convergence-rate claims and
+    Allocates MAX_WALLTIME_S equally across all convergence-rate claims and
     solves for the N_max each claim can afford under its solver's cost model
     T ≈ alpha × N^p × Σ(f^p) / fma_rate.  alpha is calibrated once per
     (solver type, fma_rate) pair by _calibrate_alpha.  Rounding to the nearest
@@ -124,7 +123,7 @@ def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) 
     p = type(solver).cost_exponent
     alpha = _calibrate_alpha(type(solver), fma_rate)
     sum_fp = sum(f**p for f in _MESH_FRACTIONS)
-    budget_per_claim = _MAX_WALLTIME_S / n_convergence_claims
+    budget_per_claim = MAX_WALLTIME_S / n_convergence_claims
     n_raw = (budget_per_claim * fma_rate / (alpha * sum_fp)) ** (1 / p)
     return max(16, round(n_raw / 8) * 8)
 

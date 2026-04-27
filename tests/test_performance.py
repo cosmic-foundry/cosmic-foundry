@@ -68,11 +68,7 @@ _NP = NumpyBackend()
 # ---------------------------------------------------------------------------
 
 
-class _PerfClaim(CalibratedClaim[float]):
-    pass
-
-
-class _MatvecPerfClaim(_PerfClaim):
+class _MatvecPerfClaim(CalibratedClaim[float]):
     """Claim: N×N @ N matvec runs within EFFICIENCY_FACTOR of the FMA roofline.
 
     Expected FMAs: 2N² (N rows × N multiply-adds).
@@ -104,7 +100,7 @@ class _MatvecPerfClaim(_PerfClaim):
         )
 
 
-class _MatmulPerfClaim(_PerfClaim):
+class _MatmulPerfClaim(CalibratedClaim[float]):
     """Claim: N×N @ N×N matmul runs within EFFICIENCY_FACTOR of the FMA roofline.
 
     Expected FMAs: 2N³ (N² output elements × N multiply-adds each).
@@ -136,7 +132,7 @@ class _MatmulPerfClaim(_PerfClaim):
         )
 
 
-class _DotPerfClaim(_PerfClaim):
+class _DotPerfClaim(CalibratedClaim[float]):
     """Claim: N @ N dot product runs within EFFICIENCY_FACTOR of the FMA roofline.
 
     Expected FMAs: 2N (N multiplies + N-1 adds ≈ 2N).
@@ -168,7 +164,7 @@ class _DotPerfClaim(_PerfClaim):
         )
 
 
-class _NumpyParityPerfClaim(_PerfClaim):
+class _NumpyParityPerfClaim(CalibratedClaim[float]):
     """NumpyBackend Tensor op ≤ NUMPY_PARITY_FACTOR × raw NumPy op.
 
     Measures the overhead of the Tensor wrapper (backend dispatch, shape
@@ -234,7 +230,7 @@ class _NumpyParityPerfClaim(_PerfClaim):
         )
 
 
-class _BackendSpeedupClaim(_PerfClaim):
+class _BackendSpeedupClaim(CalibratedClaim[float]):
     """NumpyBackend Tensor op is at least min_speedup× faster than PythonBackend.
 
     Catches regressions where NumPy is accidentally bypassed (e.g. an
@@ -325,11 +321,7 @@ _DEVICE_WARMUP = 3
 # ---------------------------------------------------------------------------
 
 
-class _DevicePerfClaim(CalibratedClaim[DeviceCalibration]):
-    pass
-
-
-class _DeviceCpuPerfClaim(_DevicePerfClaim):
+class _DeviceCpuPerfClaim(CalibratedClaim[DeviceCalibration]):
     """Backend CPU op ≤ _DEVICE_EFFICIENCY_FACTOR × CPU JIT roofline (post-warmup)."""
 
     def __init__(self, op: str, n: int) -> None:
@@ -376,7 +368,7 @@ class _DeviceCpuPerfClaim(_DevicePerfClaim):
         )
 
 
-class _DeviceGpuPerfClaim(_DevicePerfClaim):
+class _DeviceGpuPerfClaim(CalibratedClaim[DeviceCalibration]):
     """Backend GPU op ≤ _DEVICE_EFFICIENCY_FACTOR × GPU JIT roofline (post-warmup).
 
     Skipped automatically when device_calibration.gpu_fma_rate is None.
@@ -430,7 +422,7 @@ class _DeviceGpuPerfClaim(_DevicePerfClaim):
         )
 
 
-class _DeviceGpuVsCpuRooflineClaim(_DevicePerfClaim):
+class _DeviceGpuVsCpuRooflineClaim(CalibratedClaim[DeviceCalibration]):
     """GPU JIT roofline ≥ min_speedup × CPU JIT roofline.
 
     Catches miscalibration (e.g. GPU measurement accidentally ran on CPU)
