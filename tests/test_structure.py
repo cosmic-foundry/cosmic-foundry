@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 
 from cosmic_foundry.computation.decompositions.factorization import Factorization
-from cosmic_foundry.computation.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
@@ -46,6 +46,7 @@ _PACKAGES = [
     "cosmic_foundry.physics",
     "cosmic_foundry.computation",
     "cosmic_foundry.computation.decompositions",
+    "cosmic_foundry.computation.solvers",
 ]
 _PURE_PACKAGES = [
     _PACKAGE_ROOT / "theory" / "foundation",

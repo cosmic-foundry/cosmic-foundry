@@ -188,8 +188,8 @@ def _calibrate_solver_alpha(solver: object, backend: object) -> float:
 
 def _calibrate_solver_alphas(backend: object) -> dict[type, float]:
     """Calibrate every LinearSolver class registered for convergence testing."""
-    from cosmic_foundry.computation.dense_jacobi_solver import DenseJacobiSolver
-    from cosmic_foundry.computation.dense_lu_solver import DenseLUSolver
+    from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
+    from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 
     return {
         DenseJacobiSolver: _calibrate_solver_alpha(
