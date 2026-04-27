@@ -81,6 +81,7 @@ _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 _NP_BACKEND = NumpyBackend()
 
 _CALIB_N = 64  # mesh size used to calibrate each solver's cost coefficient
+_N_ADMISS = 8  # fixed mesh size for manufactured-solution admissibility checks
 
 
 def _time_solve_at(solver_class: type, n: int) -> float:
@@ -330,13 +331,13 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
     """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
     The manufactured solution φ is selected automatically from candidates
-    sin(nπx) for n=1..k_max, where k_max = N_min // p gives at least 2p
-    cells per wavelength on the coarsest mesh (sufficient for the asymptotic
-    regime).  A candidate is admitted only when A·R_h(sin(nπx)) matches
-    R_h(∇·F(sin(nπx))) to within 10% on the coarsest mesh; modes inconsistent
-    with the BC's ghost-cell convention (e.g. odd-n modes under PeriodicGhostCells)
-    produce O(1) relative error and are excluded automatically.  The source
-    ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator.
+    sin(nπx) for n=1..k_max, where k_max = _N_ADMISS // p.  Admissibility is
+    tested on a fixed _N_ADMISS=8 mesh, not the coarsest mesh of the current
+    run: on a consistent scheme, every smooth mode has rel_err → 0 as N grows,
+    so testing at large N_min would eventually admit BC-incompatible modes (e.g.
+    odd-n modes under PeriodicGhostCells whose rel_err converges below 0.1).
+    At N=8 those modes still produce O(1) error and are cleanly rejected.
+    The source ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator.
 
     Before measuring the L²_h error the assembled stiffness matrix is
     decomposed via SVD; any null-space components of u_h are projected out,
@@ -397,13 +398,26 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             assembled.append((a_m, null_vecs, vol, orig, n_cells))
 
         # Auto-select admissible manufactured-solution modes.
-        # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
-        # Each candidate sin(nπx) is tested for BC consistency: if
-        # ||A·R_h(φ_n) - R_h(ρ_n)|| / ||R_h(ρ_n)|| >= 0.1 the mode violates
-        # the ghost-cell convention (O(1) boundary error) and is dropped.
-        # Reuse the coarsest mesh assembly rather than reassembling it.
-        a_c, _, vol_c, orig_c, n_c = assembled[0]
-        k_max = max(1, n_c // p)
+        # Admissibility is evaluated on a fixed _N_ADMISS-cell mesh (not the
+        # coarsest mesh of the current run) so that BC-incompatible modes are
+        # consistently rejected regardless of N_max.  For a consistent scheme
+        # rel_err → 0 as N grows, so testing at large N_min would eventually
+        # admit modes that violate the ghost-cell convention (e.g. sin(πx) under
+        # PeriodicGhostCells, which converges below 0.1 at N≈70).  At N=8 those
+        # modes produce O(1) error and are cleanly rejected.
+        # k_max = _N_ADMISS // p gives at least 2p cells/wavelength on the
+        # admissibility mesh; it is a small constant (e.g. 2 for order-4).
+        admiss_mesh = CartesianMesh(
+            origin=(sympy.Rational(0),),
+            spacing=(sympy.Rational(1, _N_ADMISS),),
+            shape=(_N_ADMISS,),
+        )
+        vol_adm = float(admiss_mesh.cell_volume)
+        orig_adm = float(admiss_mesh.coordinate((0,))[0]) - 0.5 * vol_adm
+        a_adm = Operator(
+            FVMDiscretization(admiss_mesh, self._flux, bc)(), admiss_mesh
+        ).assemble(backend=_NP_BACKEND)
+        k_max = max(1, _N_ADMISS // p)
         phi_terms: list[sympy.Expr] = []
         for n in range(1, k_max + 1):
             phi_n = sympy.sin(n * sympy.pi * _x)
@@ -418,19 +432,21 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
             v_n = Tensor(
                 [
-                    (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
-                    for i in range(n_c)
+                    (F_pn(orig_adm + (i + 1) * vol_adm) - F_pn(orig_adm + i * vol_adm))
+                    / vol_adm
+                    for i in range(_N_ADMISS)
                 ],
                 backend=_NP_BACKEND,
             )
             r_n = Tensor(
                 [
-                    (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
-                    for i in range(n_c)
+                    (F_rn(orig_adm + (i + 1) * vol_adm) - F_rn(orig_adm + i * vol_adm))
+                    / vol_adm
+                    for i in range(_N_ADMISS)
                 ],
                 backend=_NP_BACKEND,
             )
-            rel_err = (a_c @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
+            rel_err = (a_adm @ v_n - r_n).norm().get() / (r_n.norm().get() + 1e-30)
             if rel_err < 0.1:
                 phi_terms.append(phi_n)
         assert phi_terms, "No admissible manufactured-solution modes found"
