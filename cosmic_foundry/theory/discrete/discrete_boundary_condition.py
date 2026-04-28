@@ -1,15 +1,35 @@
-"""DiscreteBoundaryCondition: ghost-cell extension rules for FVM operators."""
+"""DiscreteBoundaryCondition: ghost-cell extension rules for discrete operators."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any
 
+import sympy
+
 from cosmic_foundry.theory.discrete.discrete_field import (
     DiscreteField,
     _CallableDiscreteField,
 )
 from cosmic_foundry.theory.discrete.mesh import Mesh
+
+
+def _apply_zero_ghosts(field: DiscreteField[Any], mesh: Mesh) -> DiscreteField[Any]:
+    """Extend field with zero-valued ghost cells (absorbing/no-BC behavior).
+
+    Out-of-bounds indices return sympy.Integer(0); in-bounds indices
+    delegate to field.  Used by FVMDiscretization and FDDiscretization
+    when no DiscreteBoundaryCondition is supplied.
+    """
+    shape = mesh.shape
+
+    def extended(idx: tuple[int, ...]) -> Any:
+        for i, N in zip(idx, shape, strict=True):
+            if i < 0 or i >= N:
+                return sympy.Integer(0)
+        return field(idx)  # type: ignore[arg-type]
+
+    return _CallableDiscreteField(mesh, extended)
 
 
 class DiscreteBoundaryCondition(ABC):

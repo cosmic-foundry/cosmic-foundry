@@ -13,6 +13,7 @@ from cosmic_foundry.theory.continuous.differential_operator import (
 )
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
+    _apply_zero_ghosts,
 )
 from cosmic_foundry.theory.discrete.discrete_field import (
     DiscreteField,
@@ -21,22 +22,6 @@ from cosmic_foundry.theory.discrete.discrete_field import (
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
-
-
-def _apply_zero_ghosts(
-    U: DiscreteField[sympy.Expr],
-    mesh: CartesianMesh,
-) -> DiscreteField[sympy.Expr]:
-    """Extend U with zero-valued ghost cells for no-BC operator evaluation."""
-    shape = mesh.shape
-
-    def extended(idx: tuple[int, ...]) -> sympy.Expr:
-        for i, N in zip(idx, shape, strict=True):
-            if i < 0 or i >= N:
-                return sympy.Integer(0)
-        return U(idx)  # type: ignore[arg-type]
-
-    return _CallableDiscreteField(mesh, extended)
 
 
 class FVMDiscretization(Discretization[sympy.Expr]):

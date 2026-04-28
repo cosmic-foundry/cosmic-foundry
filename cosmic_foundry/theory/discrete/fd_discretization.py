@@ -10,6 +10,7 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
+    _apply_zero_ghosts,
 )
 from cosmic_foundry.theory.discrete.discrete_field import (
     DiscreteField,
@@ -44,22 +45,6 @@ def _fd_laplacian_coeffs(order: int) -> dict[int, sympy.Rational]:
         coeffs[k] = sol[c[k]]
         coeffs[-k] = sol[c[k]]
     return coeffs
-
-
-def _apply_zero_ghosts(
-    U: DiscreteField[sympy.Expr],
-    mesh: CartesianMesh,
-) -> DiscreteField[sympy.Expr]:
-    """Extend U with zero-valued ghost cells when no BC is supplied."""
-    shape = mesh.shape
-
-    def extended(idx: tuple[int, ...]) -> sympy.Expr:
-        for i, N in zip(idx, shape, strict=True):
-            if i < 0 or i >= N:
-                return sympy.Integer(0)
-        return U(idx)  # type: ignore[arg-type]
-
-    return _CallableDiscreteField(mesh, extended)
 
 
 class FDDiscretization(Discretization[sympy.Expr]):
