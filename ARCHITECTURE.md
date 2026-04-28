@@ -588,79 +588,99 @@ correctness, work-per-accuracy, scaling with state dimension, and
 conservation-law fidelity.  Structured into three tiers that activate
 as the corresponding integrator families come online; the harness
 skeleton and Tier A ship alongside Phase 0 so that subsequent phases
-each land with a benchmarkable deliverable.
+each land with a benchmarkable deliverable.  Everything in the library
+is Lane C: every problem RHS is coded from first-principles ODE
+definitions, every rate coefficient is generated procedurally, and
+every reference solution is computed inline by our own integrators
+at tightened tolerance.  No external code is ported, no
+rate-coefficient or trajectory tables are loaded from disk, and no
+external integrator is invoked at any point.
 
-*Tier A — Non-stiff (with Phase 0–1).* Linear scalar `dy/dt = λy`
-(promoted from the temporal-convergence claim), Logistic, Lotka-Volterra,
-SIR, Kepler two-body (analytical orbit; energy / angular-momentum
-invariants), Lorenz-63 (chaotic; integrator-sensitivity probe), non-stiff
-Brusselator.
+*Tier A — Non-stiff (with Phase 0–1).* Scalar linear `dy/dt = λy`
+(promoted from the temporal-convergence claim); logistic;
+two-species predator-prey (conserved quantity, no closed form);
+three-compartment SIR; two-body gravitational (analytical orbit with
+energy and angular-momentum invariants); three-equation chaotic
+system (integrator-sensitivity probe); two-species reaction-diffusion
+oscillator.
 
-*Tier B — Stiff baselines (with Phase 4).* Robertson (3 species,
-mass-conserving, rate disparity ~10⁹), HIRES (8 species), POLLU
-(20 species), OREGO (3 species, oscillatory), van der Pol with
-`μ ∈ {1, 10², 10³, 10⁵}` as a fixed-problem stiffness sweep.
+*Tier B — Stiff baselines (with Phase 4).* Parametric synthetic
+problems exercising the stiffness regimes that real applications
+present:
+
+- Stiff scalar with forcing, `dy/dt = -k · y + s(t)`, with
+  `k ∈ {10, 10², 10⁴, 10⁶}` — stability-detection probe.
+- Three-species mass-conserving stiff chemistry archetype, with
+  parameterized rate disparity (up to ~10⁹ between fast and slow
+  timescales).
+- Synthetic small-and-medium stiff networks of `n ∈ {8, 20}` species,
+  produced by the Tier C generator at small sizes and tuned for
+  stiffness contrast rather than nuclear-network resemblance.
+- Stiff nonlinear oscillator `du/dt = v, dv/dt = -ω² u − α(u² − 1) v`
+  with `α ∈ {1, 10², 10³, 10⁵}` as a fixed-problem stiffness sweep.
 
 *Tier C — Network-scale, nuclear-resembling (with Phase 7).* The
-user-facing payload.  Each Tier C problem exercises the integrator on
-systems that numerically resemble thermonuclear reaction networks: dozens
-to hundreds of species, rate coefficients spanning ~10 orders of
-magnitude, sparse Jacobian, exact mass conservation, positivity of every
-species.  Concrete problems:
+user-facing payload.  Synthetic networks designed to numerically
+resemble thermonuclear reaction networks: dozens to hundreds of
+species, rate coefficients spanning ~10 orders of magnitude, sparse
+Jacobian, exact mass conservation, positivity of every species.
+Concrete problems:
 
 - **Synthetic alpha-chain networks**, parameterized by chain length
-  `n ∈ {13, 19, 21, 51, 101, 201, 501}`.  Linear capture-chain topology
-  emulating alpha-rich nuclear burning; rate coefficients drawn from a
-  log-normal distribution to span ~10 decades.  Exact invariants by
-  construction: `Σ X_i = 1` (mass conservation) and `X_i ≥ 0`
-  (positivity).
-- **Synthetic CNO-cycle networks**, `n ∈ {6, 12, 24}`.  Cyclic topology
-  with parameterized breakout-branch ratios; tunable stiffness contrast.
+  `n ∈ {13, 19, 21, 51, 101, 201, 501}`.  Linear capture-chain
+  topology emulating alpha-rich nuclear burning; rate coefficients
+  drawn from a log-normal distribution to span ~10 decades.  Exact
+  invariants by construction: `Σ X_i = 1` (mass conservation) and
+  `X_i ≥ 0` (positivity).
+- **Synthetic CNO-cycle networks**, `n ∈ {6, 12, 24}`.  Cyclic
+  topology with parameterized breakout-branch ratios; tunable
+  stiffness contrast.
 - **Synthetic rp-process networks**, `n ∈ {30, 60, 120}`.  Branched
   topology emulating proton-rich freezeout structure with multiple
   competing timescales.
-- **Literature reproductions** of `aprox13`, `aprox19`, `aprox21`.
-  Network *topology and species list* reproduced from the open-license
-  Timmes (1999) rate tables; rate coefficients taken from the published
-  tables.  Lane B treatment for the topology data; no integration
-  routine consulted from any reference code.
 
-*Synthetic network generator.* Lane C origination.  Small DSL for
-declaring reaction-network topologies (alpha-chain, cycle, branched,
-random sparse), parameterized by species count and rate-coefficient
-distribution.  Produces a `WithJacobianRHS` instance with sparse (CSR)
-Jacobian, a linear conservation matrix `C` such that `C · Y = 0` is an
-exact algebraic identity, and a reference trajectory checked into the
-repo as a fixture.  The generator is deterministic in its random-rate
-draws (seeded) so fixtures are reproducible.
+*Synthetic network generator.* Small DSL for declaring
+reaction-network topologies (alpha-chain, cycle, branched, random
+sparse), parameterized by species count and rate-coefficient
+distribution.  Produces a `WithJacobianRHS` instance with sparse
+(CSR) Jacobian and a linear conservation matrix `C` such that
+`C · Y = 0` is an exact algebraic identity.  Random-rate draws are
+seeded so problem definitions are reproducible across runs.
 
-*Metrics.* Per `(integrator, problem)` cell: final-time L² and L∞ error
-vs reference; RHS and Jacobian evaluation counts; wall time; accepted
-and rejected step counts; conservation drift `‖C · Y(t_end)‖`; minimum
-`X_i` over the trajectory (positivity); for Tier C, runtime scaling
-exponent in `n`.
+*Metrics.* Per `(integrator, problem)` cell: final-time L² and L∞
+error vs reference; RHS and Jacobian evaluation counts; wall time;
+accepted and rejected step counts; conservation drift
+`‖C · Y(t_end)‖`; minimum `X_i` over the trajectory (positivity);
+for Tier C, runtime scaling exponent in `n`.
 
-*Harness.* Lives in `tests/benchmarks/`, separate from the correctness
-claims in `tests/test_convergence_order.py`.  Auto-discovers
-`BenchmarkProblem` instances and runs each `TimeIntegrator` from
-`_INSTANCES` against every compatible problem (compatibility =
-problem's `RHSProtocol` satisfies the integrator's `requires_rhs`).
-Emits a JSON report.  Run under an opt-in `@pytest.mark.benchmark` so
-day-to-day CI is unaffected; a dedicated GitHub Actions workflow runs
-the suite on a schedule and compares against a baseline checked into
-the repo.
+*Harness.* Lives in `tests/benchmarks/`, separate from the
+correctness claims in `tests/test_convergence_order.py`.
+Auto-discovers `BenchmarkProblem` instances and runs each
+`TimeIntegrator` from `_INSTANCES` against every compatible problem
+(compatibility = problem's `RHSProtocol` satisfies the integrator's
+`requires_rhs`).  Emits a JSON report.  Run under an opt-in
+`@pytest.mark.benchmark` so day-to-day CI is unaffected; a dedicated
+GitHub Actions workflow runs the suite on a schedule and surfaces
+regressions by comparing each run against the prior workflow run's
+report.
 
-*Reference-solution provenance.* Where an analytical solution exists,
-it is the reference — already the convention for convergence claims.
-Where no analytical solution exists (Robertson, HIRES, network
-problems), the reference is computed offline at very tight tolerance
-using a permissively-licensed external stiff integrator (Lane A
-precedent applies to the fixture-generation script only); the resulting
-trajectory is checked into the repo as a fixture.  Benchmark code at
-test time loads fixtures and never invokes external integrators.  The
-fixture-generation script lives under `computation/` so it inherits the
-existing scipy import allowance; it is run by maintainers when adding
-or revising a benchmark problem, not in CI.
+*Reference solutions are computed inline.*  Where an analytical
+solution exists (linear, two-body, etc.), it is the reference.  Where
+no analytical solution exists, the reference is computed at test time
+by running an integrator from `_INSTANCES` at very tight tolerance.
+A session-scoped pytest fixture caches the result so the cost is paid
+once per session, not once per parameterized run.  To mitigate the
+bootstrap risk of using the integrator family under test to verify
+itself, the reference integrator is chosen from a *different family
+or order* than the integrator under test wherever the integrator
+stack permits: a higher-order RK references a lower-order RK; once
+Phase 4 lands, an implicit integrator references an explicit one on
+stiff problems where both apply; once multiple families exist they
+cross-validate.  For phases where only one family is available,
+bootstrap verification is supplemented by the convergence-order
+claims from Phase 2 — a method that satisfies its symbolic order
+conditions and converges at the predicted rate is unlikely to harbor
+a family-wide bug invisible to self-reference.
 
 **Open questions — Epoch 4 design points:**
 
