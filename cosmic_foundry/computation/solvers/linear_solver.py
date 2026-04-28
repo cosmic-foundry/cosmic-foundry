@@ -59,29 +59,4 @@ class LinearSolver(ABC):
         """
 
 
-class TensorLinearOperator:
-    """Wraps a pre-assembled Tensor matrix as a LinearOperator.
-
-    Used by the benchmarker and tests that have a matrix already in hand.
-    apply() delegates to matrix-vector multiply; diagonal() and row_abs_sums()
-    are extracted directly from the matrix entries.
-    """
-
-    def __init__(self, a: Tensor) -> None:
-        self._a = a
-
-    def apply(self, u: Tensor) -> Tensor:
-        return self._a @ u
-
-    def diagonal(self, backend: Any) -> Tensor:
-        from cosmic_foundry.computation import tensor
-
-        return tensor.diag(self._a)
-
-    def row_abs_sums(self, backend: Any) -> Tensor:
-        from cosmic_foundry.computation import tensor
-
-        return tensor.einsum("ij->i", tensor.abs(self._a))
-
-
-__all__ = ["LinearOperator", "LinearSolver", "TensorLinearOperator"]
+__all__ = ["LinearOperator", "LinearSolver"]

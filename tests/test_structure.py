@@ -8,7 +8,7 @@ Claim types:
   _AbcInstantiationClaim    — ABCs cannot be directly instantiated
   _HierarchyClaim           — cosmic_foundry subclass relations are correct
   _ModuleAllClaim           — every public class in a module appears in __all__
-  _IterativeSolverJitClaim  — iterative solver runs on declared Tensors
+  _IterativeSolverJitClaim  — iterative solver runs on a small concrete Operator
   _MaterializationGateClaim — converged() raises MaterializationError on .get()
   _FactorizationJitClaim    — Factorization.factorize/solve run on declared Tensors
   _GenericBasesClaim        — no subclass leaves a generic base's TypeVars unbound
@@ -28,12 +28,18 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import sympy
 
+from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
-from cosmic_foundry.computation.solvers.linear_solver import TensorLinearOperator
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
+from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
+from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
+from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
+from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.manifold import Manifold
+from cosmic_foundry.theory.discrete import DirichletGhostCells, FVMDiscretization
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
 from tests.claims import Claim
 
@@ -59,6 +65,41 @@ _PURE_PACKAGES = [
 _STDLIB = sys.stdlib_module_names
 _SYMBOLIC_PACKAGES = {"sympy"}
 _JIT_N = 4
+_JIT_BACKEND = PythonBackend()
+
+
+def _make_jit_op() -> Operator:
+    mesh = CartesianMesh(
+        origin=(sympy.Rational(0),),
+        spacing=(sympy.Rational(1, _JIT_N),),
+        shape=(_JIT_N,),
+    )
+    flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
+    return Operator(FVMDiscretization(mesh, flux, DirichletGhostCells()), mesh)
+
+
+_JIT_OP = _make_jit_op()
+_JIT_B = Tensor([1.0] * _JIT_N, backend=_JIT_BACKEND)
+
+
+class _DeclaredLinearOperator:
+    """LinearOperator returning declared Tensors; used by _MaterializationGateClaim.
+
+    All methods return unallocated (declared) Tensors so that any solver
+    method that calls .get() inside converged() is caught by MaterializationError.
+    """
+
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    def apply(self, u: Tensor) -> Tensor:
+        return Tensor.declare(*u.shape)
+
+    def diagonal(self, backend: Any) -> Tensor:
+        return Tensor.declare(self._n)
+
+    def row_abs_sums(self, backend: Any) -> Tensor:
+        return Tensor.declare(self._n)
 
 
 # ---------------------------------------------------------------------------
@@ -276,13 +317,9 @@ class _IterativeSolverJitClaim(Claim):
         return f"iterative_jit/{self._cls.__qualname__}"
 
     def check(self) -> None:
-        n = _JIT_N
-        a = Tensor.declare(n, n)
-        op = TensorLinearOperator(a)
-        b = Tensor.declare(n)
         solver: Any = self._cls()
-        state = solver.init_state(op, b)
-        new_state = solver.step(op, state)
+        state = solver.init_state(_JIT_OP, _JIT_B)
+        new_state = solver.step(_JIT_OP, state)
         assert type(new_state) is type(state)
         converged = solver.converged(state)
         assert isinstance(converged, Tensor)
@@ -298,10 +335,8 @@ class _MaterializationGateClaim(Claim):
         return f"materialization_gate/{self._cls.__qualname__}"
 
     def check(self) -> None:
-        n = _JIT_N
-        a = Tensor.declare(n, n)
-        op = TensorLinearOperator(a)
-        b = Tensor.declare(n)
+        op = _DeclaredLinearOperator(_JIT_N)
+        b = Tensor.declare(_JIT_N)
         solver: Any = self._cls()
         state = solver.init_state(op, b)
         converged = solver.converged(state)
