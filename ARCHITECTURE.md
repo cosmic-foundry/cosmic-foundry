@@ -160,7 +160,7 @@ Constraint(ABC)                       — interface: support → Manifold
 | `OneForm` | `EdgeField[V]` | Ω¹; edge-integrated field (e.g. EMF in MHD constrained transport) |
 | `TwoForm` | `FaceField[V]` | Ω²; face-integrated field; scalar flux F·n̂·|A| or matrix-valued |
 | `ThreeForm` | `VolumeField[V]` | Ωⁿ (volume form); cell total-integral field (n-cochain) |
-| `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 6+ (rotating-frame metric, MHD) |
+| `TensorField`, `SymmetricTensorField` | **missing** | rank-(p,q) annotated discrete fields; needed Epoch 7+ (rotating-frame metric, MHD) |
 | `ExteriorDerivative` | `DiscreteExteriorDerivative` | exact chain map; d∘d=0; no truncation error |
 | `DifferentialOperator` | `DiscreteOperator` | map between fields (approximation, O(hᵖ) error) |
 | `DivergenceFormEquation` | — | bridge: `Discretization` maps a `DivergenceFormEquation` to a `DiscreteOperator` |
@@ -430,17 +430,19 @@ Backend(Protocol)   — per-instance dispatch strategy. Mixed-backend
                     — NumPy ndarray; dtype inferred from input by default
                       or fixed to an explicit numpy dtype; vectorized via
                       BLAS/LAPACK.
-    JaxBackend      — JAX array; planned (Epoch 3, C5).
+    JaxBackend      — JAX array; immutable functional updates routed through
+                      `Tensor.__setitem__` via `slice_set`. Caller is responsible
+                      for `@jax.jit` placement at solver / time-step granularity.
 
 LinearSolver        — mesh-agnostic interface: solve(a: Tensor, b: Tensor) → Tensor.
                       Accepts an assembled N×N stiffness matrix and an N-vector
                       RHS; returns the solution vector. Assembly and index mapping
                       are the caller's responsibility, keeping computation/ free
                       of theory/discrete/ and physics/ dependencies.
-                      SCOPE: linear operators only. Epoch 5 hydro (nonlinear
+                      SCOPE: linear operators only. Epoch 6 hydro (nonlinear
                       flux) requires a separate NonlinearSolver / Newton
                       iteration. LinearSolver is not the shared machinery
-                      for Epoch 5; only DivergenceFormDiscretization and NumericalFlux
+                      for Epoch 6; only DivergenceFormDiscretization and NumericalFlux
                       are reused across epochs.
                       Ships DenseJacobiSolver (weighted Jacobi, ω derived
                       from Gershgorin bound; works for both order=2 and
@@ -450,8 +452,13 @@ LinearSolver        — mesh-agnostic interface: solve(a: Tensor, b: Tensor) →
                       tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
 ```
 
-**Planned additions (Epoch 3):** `JaxBackend`; explicit time integrators
-(`RungeKutta2`, `RungeKutta4`); HDF5 checkpoint/restart with provenance sidecars.
+**Planned additions (Epoch 4):** time-integration layer — `TimeIntegrator`
+ABC, `RungeKuttaIntegrator`, `TimeStepper`, `Autotuner` extension; structured
+RHS protocols (`HamiltonianSplit`, `WithJacobian`, `Additive`,
+`LinearPlusNonlinear`, `OperatorSplit`) and additional integrator families
+introduced phase-by-phase per the [Epoch 4
+sprint](#current-work-epoch-4--time-integration-layer). HDF5 checkpoint/restart
+deferred pending integrator-state stabilization (see open questions).
 
 ### Cross-cutting
 
@@ -467,86 +474,160 @@ or a solver-level override is needed.
 
 ---
 
-## Current work: Epoch 3 — Computation layer
+## Current work: Epoch 4 — Time integration layer
 
-**Target.** A fully-capable, backend-agnostic computation layer: `Tensor`
-operating on any registered backend (Python, NumPy, JAX), with JAX enabling
-GPU/TPU execution and JIT compilation of full solve loops, plus the explicit
-time integration needed by Epoch 4 hydro.
+**Target.** A typed, modular time-integration layer that scales from explicit
+Runge-Kutta to implicit, exponential, multistep, variable-order, splitting,
+and symplectic methods without interface redesign.  The interface is shaped
+by a six-axis DSL — RHS protocol, state representation, step program,
+coefficient algebra, controller, verification primitives — and the roadmap
+relaxes each axis from its degenerate value through nine phases tied to
+physics-epoch needs.
 
-**C1 — Pure-Python Tensor class. ✓** Arbitrary-rank numeric array backed by
-nested lists. `Real` protocol. `einsum` general contraction. `__matmul__` fast
-paths for dot, vecmat, matvec, matmul; `einsum` fallback for exotic ranks.
-Multi-index `__getitem__`/`__setitem__`. Element-wise `*`, `/`. `copy()`,
-`norm()`, `diag()`, `svd()` (one-sided Jacobi). Solvers and discretization
-migrated to operate on `Tensor` throughout.
+The DSL framing rests on the observation that "basic arithmetic + black-box
+RHS" is provably the Butcher group (B-series): every richer family —
+exponential, IMEX, Rosenbrock, multistep, variable-order, symplectic —
+relaxes a specific structural constraint.  Each phase below relaxes exactly
+one or two of those constraints with concrete physics motivation, so the
+DSL is earned axis-by-axis rather than designed up-front.  Phase 0 already
+adopts the typed slot shape (`RHSProtocol`, integrator-specific `State`,
+`Controller`) so subsequent phases extend without breaking interfaces.
 
-**C2 — Numeric import boundary. ✓** `scripts/ci/check_numeric_imports.py`
-(AST-based) enforces that `math`, `numpy`, `scipy`, `jax`, `torch` appear
-only under `computation/`. Wired into `.pre-commit-config.yaml`.
+**Phase 0 — Explicit RK MVP.** `TimeIntegrator` ABC; `RungeKuttaIntegrator(A,
+b, c, order)` with named instances (Forward Euler, Midpoint, Heun, Ralston,
+RK4, Dormand-Prince, Bogacki-Shampine); `TimeStepper`; three-tier testing
+(symbolic order conditions on `sympy.Rational` tableaux, temporal convergence
+on `dy/dt = λy`, end-to-end through `TimeStepper.advance`); `Autotuner`
+extension producing `IntegratorSelectionResult(integrator, recommended_dt,
+predicted_cost)` from the descriptor's `t_span`, `epsilon`, and
+`spectral_radius`.  Interfaces are DSL-ready: typed `RHSProtocol` slot
+populated only by `BlackBoxRHS`; typed integrator state populated only by
+`RKState(t, y)`; typed `Controller` slot populated only by `ConstantStep`.
+Epoch 5 / 6 nonstiff baseline.
 
-**C3 — Roofline performance regression gate. ✓**
-`tests/test_performance.py`: session-scoped fixture measures the machine's
-pure-Python FMA rate at startup; 8 claims assert each operation completes
-within `EFFICIENCY_FACTOR = 8` of the roofline prediction. Self-calibrating.
+**Phase 1 — Adaptive step control.** `PIController(α, β)` over the embedded
+`b_hat` error estimate; step rejection on `err > tol`; `dt_suggest` carried
+in integrator state.  Activates the controller axis.  Verification: PI
+stability claim on the linear test problem; convergence under adaptive
+stepping; work-precision claims on a benchmark suite.
 
-**C4 — Backend protocol: PythonBackend + NumpyBackend. ✓** `Backend` protocol
-in `computation/backends/`; `Tensor` accepts `backend=` at construction;
-`Tensor.to(backend)` converts; `PythonBackend` wraps existing pure-Python
-logic; `NumpyBackend(dtype=None)` uses NumPy with dtype inferred from input
-by default. Mixed-backend arithmetic raises `ValueError`. 38 backend
-correctness claims in `tests/test_tensor_backends.py`.
+**Phase 2 — B-series order verification framework.** `RootedTree`
+enumeration through user-specified order; symbolic `γ(τ)` (tree integral)
+and `σ(τ)` (symmetry factor); `α(τ)` extraction from any RK program via the
+recursion `α(τ) = bᵀ Φ(τ)`.  Replaces the per-instance hardcoded order
+check with the universal "for all `τ` with `|τ| ≤ p`, `α(τ) = 1/γ(τ)`."
+Activates the verification axis.  Foundation for every subsequent phase's
+order proof.
 
-**C5 — JaxBackend. ✓** `JaxBackend` in `computation/backends/jax_backend.py`
-satisfies the `Backend` protocol using JAX arrays.  JAX arrays are immutable;
-`slice_set` uses `.at[idx].set(value)` and returns the updated array.
-`Tensor.__setitem__` now routes all index types through `backend.slice_set`,
-reassigning `self._data` with the result — this is the only interface change
-needed to support both mutable (Python/NumPy) and immutable (JAX) backends.
-Backend correctness claims in `test_tensor_backends.py` extended to cover
-`JaxBackend` for all claim types (roundtrip, arithmetic, conversion, slice,
-factory, mixed-backend).  **JIT scope decision**: `@jax.jit` is not applied
-per `Backend` method call; the caller applies it at the solver or time-step
-level.  Tracing a full solve loop requires all shape/rank branches to be
-static, which is a separate refactor deferred to C8 when the time integrator
-provides a natural JIT boundary.
+**Phase 3 — Symplectic / Hamiltonian splitting.** `HamiltonianSplit(T_of_p,
+V_of_q)` RHS protocol; `PartitionedState(t, q, p)` state;
+`SymplecticSplittingIntegrator(c, d)` parameterized by composition
+coefficients; named instances: symplectic Euler, Verlet/leapfrog,
+Forest-Ruth, Yoshida-6, Yoshida-8.  Verification framework extends to
+P-series (partitioned trees with two colors); symplecticity check via
+canonical 2-form preservation; modified-Hamiltonian conservation over long
+integrations.  First non-RK family.  Epoch 8 self-gravity / particle
+enabler.
 
-**C6 — Backend parity and performance. ✓ (NumpyBackend)** Added
-`_NumpyParityPerfClaim` and `_BackendSpeedupClaim` to `test_performance.py`.
-`_NumpyParityPerfClaim` asserts NumpyBackend Tensor overhead ≤
-`NUMPY_PARITY_FACTOR = 2` of raw `np.matmul`/`np.matvec` for N ∈ {8, 16, 32}.
-`_BackendSpeedupClaim` asserts NumpyBackend is at least 10× faster than
-PythonBackend for matmul (N ∈ {8, 16, 32}) and 5× for matvec (N ∈ {16, 32}),
-catching regressions where NumPy is accidentally bypassed.  JaxBackend
-performance claims (GPU vs CPU) deferred to C8, where `@jax.jit` provides
-the natural JIT boundary that makes JAX competitive.
+**Phase 4 — Implicit RK (DIRK / SDIRK).** `WithJacobianRHS(f, J)` protocol
+(`J` analytical or finite-difference); stage-solver injection through the
+existing `IterativeSolver` infrastructure; `WithFactoredOperatorState`
+caching `(I − γhJ)` factorizations across stages; named instances: backward
+Euler, implicit midpoint, SDIRK4, ESDIRK methods.  Verification: B-series
+unchanged (DIRK is RK with non-strictly-lower-triangular `A`); symbolic
+extraction of stability function `R(z)`; A-stability and L-stability
+claims; convergence on Van der Pol / Robertson / HIRES.  First phase that
+relaxes "finite arithmetic."  Epoch 9 microphysics enabler.
 
-**C7 — Collapse LazyDiscreteField. ✓** `LazyDiscreteField` deleted.
-`FaceField` covers all face-indexed fields; `_BasisField` (private to
-`Discretization`) is a `DiscreteField` unit basis for `assemble()`.
-Ghost-cell extension is handled by `DirichletGhostCells` and `PeriodicGhostCells`
-(concrete `DiscreteBoundaryCondition` subclasses).  All convergence claims pass.
+**Phase 5 — IMEX additive RK.** `AdditiveRHS(f_E, f_I)` protocol;
+`IMEXIntegrator(A_E, b_E, c_E, A_I, b_I, c_I, order)` consuming both
+tableaux and reusing the Phase 4 stage-solver for the implicit pieces;
+named instances: ARS222, ARS443, ARK4(3)6L (Kennedy-Carpenter).
+Verification: combined-method order conditions; convergence on advection-
+diffusion with stiff diffusion + nonstiff advection.  Epoch 10 MHD
+enabler.
 
-**C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
-`RungeKutta4`. Backend-agnostic; operates on `DiscreteField`-valued fields. Lane B
-derivation: truncation error O(hᵖ), p = 2, 4, confirmed symbolically.
+**Phase 6 — Explicit Adams-Bashforth.** `WithFHistoryState(t, y, [f_{n−1},
+…, f_{n−k+1}])`; `LinearMultistepIntegrator(ρ, σ)` parameterized by
+characteristic polynomials; RK4 bootstrap for the first `k − 1` steps;
+named instances: AB2, AB3, AB4.  Verification: LMM order conditions slot
+into the Phase 2 framework as a sibling tree calculus (NB-series).  First
+phase with non-trivial typed state.  Mostly groundwork for Phase 7.
 
-**C9 — HDF5 checkpoint/restart.** Write/read `DiscreteField`-valued fields with
-provenance sidecars (git hash, timestamp, parameter record). GPU-written
-checkpoints readable on CPU-only machines.
+**Phase 7 — BDF + VODE-style variable-order controller.** `NordsieckState`
+representation; `BDFFamily(q_max=6)` and `AdamsFamily(q_max=12)` as
+parametric families producing tableaux for any order `q`; `OrderSelector`
+choosing `q_next ∈ {q − 1, q, q + 1}` from cross-order error estimates;
+`StiffnessSwitcher` flipping Adams ↔ BDF based on a streaming spectral-
+radius estimate; `VODEController` composing all three.  Verification: order
+verification across `q ∈ {1, …, q_max}` for both families; family-switch
+correctness on a stiffness-step problem.  Activates the "method family +
+policy" axis — the integrator's identity becomes a function of run-time
+diagnostics, not a fixed tableau.
 
-**Open questions — Epoch 3 design points:**
+**Phase 8 — Exponential integrators.** `LinearPlusNonlinearRHS(L, N)`
+protocol; φ-function evaluation (scaling-and-squaring on dense `hL` for
+small problems, Krylov / Arnoldi projection for large problems);
+`PhiFunction(k)` coefficient algebra (operator-valued tableau entries);
+named instances: ETD-Euler, ETDRK2, ETDRK4 (Cox-Matthews), Krogstad's
+method.  Verification: stiff-order conditions (Hochbruck-Ostermann) on
+`a_ij(z), b_j(z)` as functions of `z`; convergence on Allen-Cahn /
+Gray-Scott / 2D Burgers.  Activates the coefficient-algebra axis.
+Epoch 11 radiation enabler.
 
-1. **`set_default_backend` vs. solver-level override.** The current design
-   sets a process-wide default. If two solvers in the same process need different
-   backends (e.g., CPU for assembly, GPU for iteration), a per-solver backend
-   argument to `LinearSolver.solve` may be needed. Deferred to C7.
+**Phase 9 — Operator splitting (Strang / Lie).** `OperatorSplitRHS([f_1, …,
+f_k])` protocol; `StrangSplittingIntegrator(sub_integrators, sequence)` as
+a meta-integrator delegating each substep to a peer `TimeIntegrator`.
+Verification: combined order from commutator analysis (Lie 1st order;
+Strang 2nd order; Yoshida-style triple-jump for higher even orders).
+Activates compositionality of the integrator stack itself.  Epoch 10 MHD /
+multi-physics enabler.
 
-**Open questions carried forward into Epoch 3:**
+**Open questions — Epoch 4 design points:**
 
-- AMR (Epoch 11): fixed-mesh `Discretization` will need hierarchical extension.
-- GR (Epoch 12): face geometry is state-dependent when the 3-metric is a dynamical field.
-- Multi-dimensional convergence sweep: currently 1-D only; 2-D/3-D deferred.
+1. **HDF5 checkpoint/restart placement.** The deliverable originally
+   scheduled inside the computation epoch (write/read time-stepping state
+   with provenance sidecars; GPU-written checkpoints readable on CPU-only
+   machines) requires understanding integrator state to be useful for
+   time-stepping workflows.  Options: fold into Phase 7 once `NordsieckState`
+   stabilizes the most demanding state shape, or stand up a separate
+   persistence epoch after Epoch 4 lands.  Decision deferred until Phase 4
+   establishes whether `WithFactoredOperatorState` carries non-serializable
+   data.
+
+2. **Coefficient-algebra typing for Phase 8.** Whether to parameterize
+   `RungeKuttaIntegrator` over a `Coefficient` type variable (uniform
+   surface, every method has the same class) or to introduce
+   `ExponentialRKIntegrator` as a sibling class (more readable for the
+   common case where coefficients are rationals).  Decision deferred until
+   Phase 4 / 5 stabilize the implicit/explicit type story.
+
+3. **Autotuner generalization.** Does the static autotuner from Phase 0
+   (`Constant` controller + descriptor-driven `recommended_dt`) survive
+   once VODE-style controllers exist in Phase 7, or does Phase 7 subsume
+   the static autotuner as the trivial constant-policy case?  Resolves in
+   Phase 7.
+
+4. **Stiffness detector reuse.** Phase 7 needs an online ρ(J) estimate;
+   Phase 8 may benefit from the same machinery (deciding when `‖hL‖` is
+   large enough to justify exponential treatment over fully-explicit).
+   Factor into a shared `StiffnessDiagnostic` from Phase 7 onward.
+
+5. **`set_default_backend` vs. solver-level override.** Carried forward
+   from the prior epoch.  Time-integrator code must inherit whichever
+   resolution lands; a per-`TimeStepper` backend override is the natural
+   API extension if process-wide defaults turn out to be insufficient.
+
+**Open questions carried forward into Epoch 4:**
+
+- AMR (Epoch 12): time-stepper must accept hierarchical state once meshes
+  refine; integrator state types may need a coarse-fine variant.
+- GR (Epoch 13): integrator state and step program become coupled to a
+  dynamical 3-metric; the structured-RHS protocol may need a
+  `WithMetricRHS` variant.
+- Temporal convergence verification across spatial dimensions: spatial
+  framework now covers 1D / 2D / 3D; temporal claims should likewise
+  verify across problem dimensions where applicable.
 
 ---
 
@@ -558,26 +639,27 @@ checkpoints readable on CPU-only machines.
 |-------|-------|------------|
 | 0 | Theory / Geometry | **Mathematical foundations. ✓** Layer architecture and symbolic-reasoning import boundary; `foundation/`, `continuous/`, `discrete/`, `geometry/` type hierarchies; `CellComplex`, `Mesh`, `StructuredMesh`, `DiscreteField`, `VolumeField`, `RestrictionOperator`; process discipline M0–M2. |
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
-| 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 5 onward. |
-| 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `TimeIntegrator` (RK2/RK4); HDF5 checkpoint/restart. In progress. |
+| 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 6 onward. |
+| 3 | Computation | **Backend-agnostic computation layer. ✓** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; mixed-backend arithmetic guards; AST-based numeric-import boundary; self-calibrating roofline performance gate; `LazyDiscreteField` collapsed into `FaceField` and `_BasisField`. |
+| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. In progress. |
 
 ### Physics epochs
 
 | Epoch | Capability |
 |-------|------------|
-| 4 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
-| 5 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
-| 6 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 5 hydro validation tests. |
-| 7 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
-| 8 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
-| 9 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
-| 10 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
-| 11 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
-| 12 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
-| 13 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
-| 14 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
-| 15 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
-| 16 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
+| 5 | Scalar transport: linear advection and diffusion on a `CartesianMesh` via FVM. First end-to-end simulation; validates the full pipeline. |
+| 6 | Newtonian hydrodynamics: Euler equations, FVM Godunov, PPM reconstruction, HLLC/HLLE Riemann solvers. |
+| 7 | Rotating reference frames: `RotatingChart` in `geometry/`; formally principled approach via metric change (fictitious forces = Christoffel symbols of the rotating-frame metric, not source terms); co-designed with Epoch 6 hydro validation tests. |
+| 8 | Self-gravity: multigrid Poisson solver; particle infrastructure. |
+| 9 | Microphysics: EOS interface, reaction networks, cooling tables, opacities. |
+| 10 | MHD: ideal and resistive, constrained transport, super-time-stepping. |
+| 11 | Radiation transport: gray FLD, multigroup FLD, two-moment M1. |
+| 12 | AMR: adaptive mesh refinement hierarchy, coarse–fine interpolation, load balancing. |
+| 13 | Special and general relativity: SR hydro, GR hydro/MHD on fixed spacetimes, dynamical spacetime via BSSN. |
+| 14 | Particle cosmology: SPH, meshless methods, FRW integrator, halo finders. *(stretch)* |
+| 15 | Moving mesh: Arepo-class Voronoi tessellation. *(stretch)* |
+| 16 | Stellar evolution: 1-D Lagrangian solver with nuclear burning and mixing. *(stretch)* |
+| 17 | Subgrid physics and synthetic observables: plugin interface, in-situ rendering. *(stretch)* |
 
 ### Per-epoch verification standard
 
