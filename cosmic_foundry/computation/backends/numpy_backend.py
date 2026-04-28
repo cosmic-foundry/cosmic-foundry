@@ -191,6 +191,16 @@ class NumpyBackend:
     def sync(self, raw: Any) -> None:
         pass
 
+    def scatter_add(
+        self,
+        dst: np.ndarray,
+        rows: list[int],
+        cols: list[int],
+        values: np.ndarray,
+    ) -> np.ndarray:
+        np.add.at(dst, (rows, cols), values)
+        return dst
+
     def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any:
         state = init_state
         for k in range(n):

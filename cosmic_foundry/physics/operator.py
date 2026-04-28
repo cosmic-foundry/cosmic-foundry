@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import sympy
-
+from cosmic_foundry.computation.backends import get_default_backend
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.physics.state import State
-from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
 
@@ -19,21 +17,6 @@ def _to_multi(flat: int, shape: tuple[int, ...]) -> tuple[int, ...]:
         idx.append(flat % n)
         flat //= n
     return tuple(idx)
-
-
-class _BasisField(DiscreteField[sympy.Expr]):
-    """Unit basis vector eⱼ: returns 1 at target cell, 0 everywhere else."""
-
-    def __init__(self, mesh: Mesh, target: tuple[int, ...]) -> None:
-        self._mesh = mesh
-        self._target = target
-
-    @property
-    def mesh(self) -> Mesh:
-        return self._mesh
-
-    def __call__(self, idx: tuple[int, ...]) -> sympy.Expr:  # type: ignore[override]
-        return sympy.Integer(1) if idx == self._target else sympy.Integer(0)
 
 
 class Operator:
@@ -84,25 +67,19 @@ class Operator:
         return State(self._mesh, Tensor(values))
 
     def assemble(self, backend: Any = None) -> Tensor:
-        """Materialize the operator as an N×N stiffness Tensor.
+        """Materialize the operator as an N×N stiffness Tensor via scatter.
 
-        Applies the operator to each sympy unit-basis vector in turn and
-        converts the resulting expressions to float.  Row and column ordering
-        is axis-0-fastest.  Intended for direct or iterative linear solvers;
-        not for repeated application in time integration.
-
-        backend, when provided, places the assembled matrix on the requested
-        device.
+        Reads precomputed stiffness_values, row_indices, col_indices from the
+        DiscreteOperator and scatters them into a zero matrix in one pass.
+        Row and column ordering is axis-0-fastest.  Intended for direct or
+        iterative linear solvers; not for repeated application in time integration.
         """
-        shape = self._mesh.shape
-        n_total = self._mesh.n_cells
-        rows: list[list[float]] = [[0.0] * n_total for _ in range(n_total)]
-        for j in range(n_total):
-            e_j = _BasisField(self._mesh, _to_multi(j, shape))
-            lh_ej = self._op(e_j)
-            for i in range(n_total):
-                rows[i][j] = float(lh_ej(_to_multi(i, shape)))  # type: ignore[arg-type]
-        return Tensor(rows, backend=backend)
+        b = backend if backend is not None else get_default_backend()
+        n = self._mesh.n_cells
+        dst = b.zeros((n, n))
+        vals = b.to_native(self._op.stiffness_values)
+        raw = b.scatter_add(dst, self._op.row_indices, self._op.col_indices, vals)
+        return Tensor(raw, backend=b)
 
 
 __all__ = ["Operator"]

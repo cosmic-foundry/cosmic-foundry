@@ -144,6 +144,17 @@ class PythonBackend:
     def sync(self, raw: Any) -> None:
         pass
 
+    def scatter_add(
+        self,
+        dst: Any,
+        rows: list[int],
+        cols: list[int],
+        values: list[float],
+    ) -> Any:
+        for r, c, v in zip(rows, cols, values, strict=True):
+            dst[r][c] += v
+        return dst
+
     def fori_loop(
         self,
         n: int,
