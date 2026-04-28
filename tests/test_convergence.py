@@ -61,7 +61,7 @@ from cosmic_foundry.theory.continuous.differential_form import (
 )
 from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
-    FVMDiscretization,
+    DivergenceFormDiscretization,
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
@@ -416,47 +416,57 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
-    *[_OrderClaim(FVMDiscretization(f)) for f in _FLUXES],
+    *[_OrderClaim(DivergenceFormDiscretization(f)) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers including CG
     *[
-        _SolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
+        _SolverClaim(
+            s, DivergenceFormDiscretization(f, DirichletGhostCells()), _mesh_n8
+        )
         for s in [*_SOLVERS, *_SPD_SOLVERS]
         for f in _DIFFUSIVE_FLUXES
     ],
     *[
-        _DirectSolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
+        _DirectSolverClaim(
+            s, DivergenceFormDiscretization(f, DirichletGhostCells()), _mesh_n8
+        )
         for s in _DIRECT_SOLVERS
         for f in _DIFFUSIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, FVMDiscretization(f, DirichletGhostCells()))
+        _ConvergenceRateClaim(s, DivergenceFormDiscretization(f, DirichletGhostCells()))
         for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
         for f in _DIFFUSIVE_FLUXES
     ],
     # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
     *[
-        _DirectSolverClaim(s, FVMDiscretization(f, PeriodicGhostCells()), _mesh_n8)
+        _DirectSolverClaim(
+            s, DivergenceFormDiscretization(f, PeriodicGhostCells()), _mesh_n8
+        )
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, FVMDiscretization(f, PeriodicGhostCells()))
+        _ConvergenceRateClaim(s, DivergenceFormDiscretization(f, PeriodicGhostCells()))
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
     # Advection-diffusion (non-singular under DirichletBC for κ>0): non-SPD solvers only
     *[
-        _SolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
+        _SolverClaim(
+            s, DivergenceFormDiscretization(f, DirichletGhostCells()), _mesh_n8
+        )
         for s in _SOLVERS
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     *[
-        _DirectSolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
+        _DirectSolverClaim(
+            s, DivergenceFormDiscretization(f, DirichletGhostCells()), _mesh_n8
+        )
         for s in _DIRECT_SOLVERS
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, FVMDiscretization(f, DirichletGhostCells()))
+        _ConvergenceRateClaim(s, DivergenceFormDiscretization(f, DirichletGhostCells()))
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],

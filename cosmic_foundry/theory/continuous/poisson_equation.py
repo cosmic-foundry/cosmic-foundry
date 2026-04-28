@@ -44,7 +44,7 @@ class PoissonEquation(DivergenceFormEquation):
 
     obtained from -∇²φ = ρ by recognizing the left-hand side as the
     divergence of the flux F(φ) = -∇φ.  The sign convention (flux = -∇φ,
-    not +∇φ) ensures the discrete operator assembled by FVMDiscretization
+    not +∇φ) ensures the discrete operator assembled by DivergenceFormDiscretization
     is positive definite — see C4 and C5.
 
     There is no LaplaceOperator class: -∇²φ = -∇·∇φ is fully captured by

@@ -39,7 +39,10 @@ from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.discrete import DirichletGhostCells, FVMDiscretization
+from cosmic_foundry.theory.discrete import (
+    DirichletGhostCells,
+    DivergenceFormDiscretization,
+)
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
 from tests.claims import Claim
 
@@ -75,7 +78,7 @@ def _make_jit_op() -> Operator:
         shape=(_JIT_N,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
-    return Operator(FVMDiscretization(flux, DirichletGhostCells()), mesh)
+    return Operator(DivergenceFormDiscretization(flux, DirichletGhostCells()), mesh)
 
 
 _JIT_OP = _make_jit_op()

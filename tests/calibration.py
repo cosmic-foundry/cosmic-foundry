@@ -21,7 +21,10 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.physics.operator import Operator
-from cosmic_foundry.theory.discrete import DirichletGhostCells, FVMDiscretization
+from cosmic_foundry.theory.discrete import (
+    DirichletGhostCells,
+    DivergenceFormDiscretization,
+)
 from tests.claims import MAX_WALLTIME_S
 
 # NumpyBackend for all convergence claims: numpy SVD/solve are LAPACK-backed
@@ -53,7 +56,7 @@ def _time_solve_at(solver_class: type, n: int) -> float:
         shape=(n,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
-    disc = FVMDiscretization(flux, DirichletGhostCells())
+    disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
     b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
     op = Operator(disc, mesh)

@@ -393,16 +393,16 @@ NumericalFlux implementations:
                                — F(U) = U − κ∇U; combines advective and diffusive
                                  parts at unit Péclet number.
 
-FVMDiscretization(Discretization)
-                               — free: mesh, numerical_flux, boundary_condition
-                                 Concrete FVM scheme; generic over
-                                 DivergenceFormEquation. For each cell Ωᵢ,
-                                 evaluates ∮_∂Ωᵢ F·n̂ dA by delegating to the
-                                 NumericalFlux at each face; BC enters through
-                                 boundary_condition.
-                                 Not specialized to any particular conservation law:
-                                 Epoch 2 supplies DiffusiveFlux for Poisson;
-                                 Epoch 5 supplies HyperbolicFlux for Euler.
+DivergenceFormDiscretization(Discretization)
+                               — free: numerical_flux, boundary_condition
+                                 Discretization of a linear operator L = ∇·f via
+                                 the divergence-form factorization.  Given a
+                                 NumericalFlux discretizing f: state → face values,
+                                 builds Lₕ = (1/vol) · d_{n−1} ∘ F̂ ∘ bc.extend.
+                                 The "flux" is a formal intermediate at faces;
+                                 the equations we currently solve (Poisson, steady
+                                 advection, steady advection-diffusion) are elliptic
+                                 algebraic constraints, not time evolutions.
                                  Specializations belong in the NumericalFlux —
                                  not in a new Discretization subclass per equation.
 ```
@@ -448,7 +448,7 @@ LinearSolver        — mesh-agnostic interface: solve(a: Tensor, b: Tensor) →
                       SCOPE: linear operators only. Epoch 5 hydro (nonlinear
                       flux) requires a separate NonlinearSolver / Newton
                       iteration. LinearSolver is not the shared machinery
-                      for Epoch 5; only FVMDiscretization and NumericalFlux
+                      for Epoch 5; only DivergenceFormDiscretization and NumericalFlux
                       are reused across epochs.
                       Ships DenseJacobiSolver (weighted Jacobi, ω derived
                       from Gershgorin bound; works for both order=2 and
@@ -566,7 +566,7 @@ checkpoints readable on CPU-only machines.
 |-------|-------|------------|
 | 0 | Theory / Geometry | **Mathematical foundations. ✓** Layer architecture and symbolic-reasoning import boundary; `foundation/`, `continuous/`, `discrete/`, `geometry/` type hierarchies; `CellComplex`, `Mesh`, `StructuredMesh`, `DiscreteField`, `VolumeField`, `RestrictionOperator`; process discipline M0–M2. |
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
-| 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `FVMDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 5 onward. |
+| 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 5 onward. |
 | 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `State` (concrete `DiscreteField`); `TimeIntegrator` (RK2/RK4); HDF5 checkpoint/restart. In progress. |
 
 ### Physics epochs
