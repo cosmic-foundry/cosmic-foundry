@@ -19,6 +19,7 @@ from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDesc
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
+from cosmic_foundry.computation.solvers.linear_solver import TensorLinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import Claim
 
@@ -50,8 +51,9 @@ class _SelectionValidClaim(Claim):
 
         # Build the same synthetic matrix used for calibration and verify solve.
         a = Benchmarker._make_matrix(_CALIB_DESCRIPTOR, _BACKEND)
+        op = TensorLinearOperator(a)
         b = Tensor([1.0] * _CALIB_N, backend=_BACKEND)
-        u = selection.solver.solve(a, b)
+        u = selection.solver.solve(op, b)
         residual = tensor.norm(b - a @ u)
         assert residual.get() < _CALIB_DESCRIPTOR.tol, (
             f"selected {type(selection.solver).__name__} residual "

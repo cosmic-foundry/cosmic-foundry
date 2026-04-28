@@ -36,24 +36,7 @@ class NumericalFlux(DiscreteOperator[_V]):
         order               — composite convergence order
         continuous_operator — the continuous flux operator approximated
         __call__            — apply the operator: DiscreteField → FaceField
-
-    stiffness_values/row_indices/col_indices are not meaningful for a face-flux
-    operator (its output lives in face space, not cell space) and raise
-    NotImplementedError if called.  They are concrete rather than abstract so
-    that NumericalFlux subclasses do not need to provide them.
     """
-
-    @property
-    def stiffness_values(self) -> list[float]:
-        raise NotImplementedError(f"{type(self).__name__} is a face-flux operator")
-
-    @property
-    def row_indices(self) -> list[int]:
-        raise NotImplementedError(f"{type(self).__name__} is a face-flux operator")
-
-    @property
-    def col_indices(self) -> list[int]:
-        raise NotImplementedError(f"{type(self).__name__} is a face-flux operator")
 
 
 __all__ = ["NumericalFlux"]

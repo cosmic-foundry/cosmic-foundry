@@ -64,14 +64,6 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
         return ZeroForm(phi.manifold, div, phi.symbols)
 
 
-def _flat_to_multi(flat: int, shape: tuple[int, ...]) -> tuple[int, ...]:
-    idx = []
-    for n in shape:
-        idx.append(flat % n)
-        flat //= n
-    return tuple(idx)
-
-
 class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
 
@@ -83,7 +75,9 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
 
     approximating (1/|Ωᵢ|) ∫_Ωᵢ L φ dV at convergence order p = numerical_flux.order.
     U is assumed to hold cell-average values; NumericalFlux stencils operate on
-    averages directly.
+    averages directly.  The mesh is read from U.mesh at call time, making this
+    operator applicable to symbolic meshes (for convergence testing) and concrete
+    meshes alike.
 
     When a DiscreteBoundaryCondition is supplied (via FVMDiscretization), ghost
     cells are applied via bc.extend(U, mesh) before face fluxes are evaluated,
@@ -91,69 +85,15 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
     the boundary.  When no BC is supplied, zero-valued ghost cells are used.
 
     continuous_operator is auto-derived as ∇·(numerical_flux.continuous_operator).
-
-    stiffness_values, row_indices, col_indices are precomputed at construction time
-    by applying the operator symbolically to a field of sympy symbols and reading
-    off coefficients.  Operator.assemble() uses these for a single scatter operation
-    instead of the N×N basis-vector loop.
     """
 
     def __init__(
         self,
         numerical_flux: NumericalFlux[sympy.Expr],
-        mesh: CartesianMesh,
         bc: DiscreteBoundaryCondition | None = None,
     ) -> None:
         self._numerical_flux = numerical_flux
         self._bc = bc
-        self._stiffness_values, self._row_indices, self._col_indices = (
-            self._build_stiffness(mesh)
-        )
-
-    def _build_stiffness(
-        self, mesh: CartesianMesh
-    ) -> tuple[list[float], list[int], list[int]]:
-        """Apply operator symbolically; extract nonzero stiffness coefficients."""
-        n = mesh.n_cells
-        shape = mesh.shape
-        u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
-
-        def _to_flat(idx: tuple[int, ...]) -> int:
-            flat, stride = 0, 1
-            for a, i in enumerate(idx):
-                flat += i * stride
-                stride *= shape[a]
-            return flat
-
-        sym_field: _CallableDiscreteField[sympy.Expr] = _CallableDiscreteField(
-            mesh, lambda idx: u_syms[_to_flat(idx)]
-        )
-        result = self(sym_field)
-
-        vals: list[float] = []
-        rows: list[int] = []
-        cols: list[int] = []
-        for i in range(n):
-            expr = result(_flat_to_multi(i, shape))  # type: ignore[arg-type]
-            for j, sym in enumerate(u_syms):
-                c = float(expr.coeff(sym))
-                if c != 0.0:
-                    vals.append(c)
-                    rows.append(i)
-                    cols.append(j)
-        return vals, rows, cols
-
-    @property
-    def stiffness_values(self) -> list[float]:
-        return self._stiffness_values
-
-    @property
-    def row_indices(self) -> list[int]:
-        return self._row_indices
-
-    @property
-    def col_indices(self) -> list[int]:
-        return self._col_indices
 
     @property
     def order(self) -> int:
@@ -244,11 +184,7 @@ class FVMDiscretization(Discretization):
 
     def __call__(self) -> _AssembledFVMOperator:
         """Produce the assembled discrete operator."""
-        return _AssembledFVMOperator(
-            self._numerical_flux,
-            self._mesh,  # type: ignore[arg-type]
-            self._boundary_condition,
-        )
+        return _AssembledFVMOperator(self._numerical_flux, self._boundary_condition)
 
 
 __all__ = ["FVMDiscretization"]

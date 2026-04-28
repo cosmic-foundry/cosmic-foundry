@@ -1,26 +1,26 @@
-"""DenseJacobiSolver: Jacobi iteration on an assembled dense matrix."""
+"""DenseJacobiSolver: matrix-free Jacobi iteration."""
 
 from __future__ import annotations
 
 from typing import Any, NamedTuple
 
-from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation import tensor as tensor_module
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
-from cosmic_foundry.computation.tensor import Tensor, einsum, where
+from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
+from cosmic_foundry.computation.tensor import Tensor, where
 
 
 class _JacobiState(NamedTuple):
     u: Tensor
-    r: Tensor  # cached residual b - a @ u
-    a: Tensor
+    r: Tensor  # cached residual b − op.apply(u)
     b: Tensor
     diag: Tensor
     omega: Tensor  # 0-d scalar Tensor
-    iteration: Tensor  # 0-d int Tensor (trace-compatible: no Python int in state)
+    iteration: Tensor  # 0-d int Tensor
 
 
 class DenseJacobiSolver(IterativeSolver):
-    """Jacobi iterative solver for A u = b on an N × N dense matrix.
+    """Jacobi iterative solver for A u = b.
 
     The damped fixed-point iteration u^{k+1} = u^k + ω D⁻¹(b − Au^k) is a
     contraction when ρ(I − ω D⁻¹A) < 1.  The relaxation factor ω is derived
@@ -36,11 +36,7 @@ class DenseJacobiSolver(IterativeSolver):
     violates diagonal dominance (G = 32/15 > 2), so standard Jacobi diverges
     and ω = 15/16 is applied automatically.
 
-    In plain terms: split A = D − (D − A) where D = diag(A).  Each damped
-    Jacobi step scales the correction by ω before applying the diagonal inverse.
-    With ω derived from the Gershgorin bound the iteration contracts for any
-    SPD operator assembled by FVMDiscretization with DirichletBC, regardless of
-    stencil width.
+    Each step uses op.apply() for the residual; no matrix is stored.
 
     Parameters
     ----------
@@ -54,33 +50,31 @@ class DenseJacobiSolver(IterativeSolver):
         self._tol = tol
         self._max_iter = max_iter
 
-    def init_state(self, a: Tensor, b: Tensor) -> _JacobiState:
-        n = a.shape[0]
-        diag_mat: Tensor = tensor.diag(a)
+    def init_state(self, op: LinearOperator, b: Tensor) -> _JacobiState:
+        backend = b.backend
+        n = b.shape[0]
+        diag = op.diagonal(backend)
+        abs_row_sums = op.row_abs_sums(backend)
 
-        # Gershgorin bound on λ_max(D⁻¹A): ω = min(2/G, 1) guarantees contraction.
-        # G = max_i Σ_j |A_{ij} / A_{ii}|  (row sums of |D⁻¹A|, including diagonal)
-        row_sums: Tensor = einsum("ij->i", tensor.abs(a)) / tensor.abs(diag_mat)
-        lambda_max: Tensor = tensor.max(row_sums)  # 0-d Tensor
-        two_over_lm: Tensor = 2.0 / lambda_max  # __rtruediv__, 0-d Tensor
+        # Gershgorin bound: G = max_i (Σ_j |A_{ij}|) / |A_{ii}|
+        lambda_max: Tensor = tensor_module.max(abs_row_sums / tensor_module.abs(diag))
+        two_over_lm: Tensor = 2.0 / lambda_max
         omega: Tensor = where(two_over_lm > 1.0, 1.0, two_over_lm)
 
-        u: Tensor = Tensor.zeros(n, backend=a.backend)
-        r: Tensor = b - a @ u
-        iteration: Tensor = Tensor(0, backend=a.backend)
-        return _JacobiState(u, r, a, b, diag_mat, omega, iteration)
+        u: Tensor = Tensor.zeros(n, backend=backend)
+        r: Tensor = b - op.apply(u)
+        iteration: Tensor = Tensor(0, backend=backend)
+        return _JacobiState(u, r, b, diag, omega, iteration)
 
-    def step(self, state: Any) -> _JacobiState:
+    def step(self, op: LinearOperator, state: Any) -> _JacobiState:
         s: _JacobiState = state
         u = s.u + s.omega * (s.r / s.diag)
-        r = s.b - s.a @ u
-        return _JacobiState(u, r, s.a, s.b, s.diag, s.omega, s.iteration + 1)
+        r = s.b - op.apply(u)
+        return _JacobiState(u, r, s.b, s.diag, s.omega, s.iteration + 1)
 
     def converged(self, state: Any) -> Tensor:
         s: _JacobiState = state
-        max_iter_reached = s.iteration >= self._max_iter
-        residual_small = (s.r @ s.r) < self._tol**2
-        return max_iter_reached | residual_small
+        return (s.iteration >= self._max_iter) | ((s.r @ s.r) < self._tol**2)
 
     def extract(self, state: Any) -> Tensor:
         s: _JacobiState = state

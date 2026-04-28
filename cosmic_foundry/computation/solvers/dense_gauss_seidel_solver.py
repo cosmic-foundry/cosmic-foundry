@@ -1,4 +1,4 @@
-"""DenseGaussSeidelSolver: Gauss-Seidel iteration on an assembled dense matrix."""
+"""DenseGaussSeidelSolver: Gauss-Seidel iteration (assembles matrix once in init)."""
 
 from __future__ import annotations
 
@@ -6,13 +6,12 @@ from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 
 
 def _gs_sweep_body(i: Any, state: tuple) -> tuple:
     u, a, b, diag = state
-    # u_i ← u_i + (b_i − A[i]·u) / A[ii]; A[i]·u incorporates already-updated
-    # u[0..i-1] from this sweep because u is updated in place via fori_loop.
     correction = (b[i] - a[i] @ u) / diag[i]
     return (u.set(i, u[i] + correction), a, b, diag)
 
@@ -20,14 +19,14 @@ def _gs_sweep_body(i: Any, state: tuple) -> tuple:
 class _GSState(NamedTuple):
     u: Tensor
     r: Tensor  # cached residual b - a @ u
-    a: Tensor
+    a: Tensor  # assembled matrix (built once in init_state)
     b: Tensor
     diag: Tensor
     iteration: Tensor  # 0-d int Tensor
 
 
 class DenseGaussSeidelSolver(IterativeSolver):
-    """Gauss-Seidel iterative solver for A u = b on an N × N dense matrix.
+    """Gauss-Seidel iterative solver for A u = b.
 
     Each sweep updates every component sequentially:
 
@@ -38,17 +37,15 @@ class DenseGaussSeidelSolver(IterativeSolver):
     upper) and solving (L + D) u^{k+1} = b − U u^k at each step.  The
     iteration converges whenever A is SPD or strictly diagonally dominant.
 
-    In plain terms: unlike Jacobi, which updates all components simultaneously
-    from the old values, Gauss-Seidel immediately uses each new value as it
-    is computed.  This halves the number of sweeps to convergence for SPD
-    systems (by the Ostrowski-Reich theorem) compared to Jacobi.
+    The sequential sweep requires explicit access to individual matrix entries
+    A[i,j], so the stiffness matrix is assembled once from op.apply() during
+    init_state and stored in the solver state.  Each Gauss-Seidel step uses
+    the stored matrix — op is not called again after initialization.
 
     The sweep is implemented via backend.fori_loop so it compiles to a single
     XLA kernel on JaxBackend.  The sequential update is inherent: the i-th
     update depends on u[0..i-1] from the current sweep, so the inner loop
-    cannot be parallelized across i.  For GPU workloads prefer
-    DenseCGSolver — it converges in O(√κ) iterations with fully parallel
-    matvec steps.
+    cannot be parallelized across i.  For GPU workloads prefer DenseCGSolver.
 
     Parameters
     ----------
@@ -62,15 +59,27 @@ class DenseGaussSeidelSolver(IterativeSolver):
         self._tol = tol
         self._max_iter = max_iter
 
-    def init_state(self, a: Tensor, b: Tensor) -> _GSState:
-        n = a.shape[0]
+    def _assemble(self, op: LinearOperator, b: Tensor) -> Tensor:
+        n = b.shape[0]
+        backend = b.backend
+        columns: list[list[float]] = []
+        for j in range(n):
+            e_j = Tensor.zeros(n, backend=backend)
+            e_j = e_j.set(j, Tensor(1.0, backend=backend))
+            columns.append(backend.flatten(op.apply(e_j)._value))
+        rows = [[columns[j][i] for j in range(n)] for i in range(n)]
+        return Tensor(rows, backend=backend)
+
+    def init_state(self, op: LinearOperator, b: Tensor) -> _GSState:
+        a = self._assemble(op, b)
+        n = b.shape[0]
         diag = tensor.diag(a)
-        u = Tensor.zeros(n, backend=a.backend)
+        u = Tensor.zeros(n, backend=b.backend)
         r = b - a @ u
-        iteration: Tensor = Tensor(0, backend=a.backend)
+        iteration: Tensor = Tensor(0, backend=b.backend)
         return _GSState(u, r, a, b, diag, iteration)
 
-    def step(self, state: Any) -> _GSState:
+    def step(self, op: LinearOperator, state: Any) -> _GSState:
         s: _GSState = state
         n = s.a.shape[0]
         u_new, *_ = s.a.backend.fori_loop(n, _gs_sweep_body, (s.u, s.a, s.b, s.diag))
@@ -79,9 +88,7 @@ class DenseGaussSeidelSolver(IterativeSolver):
 
     def converged(self, state: Any) -> Tensor:
         s: _GSState = state
-        max_iter_reached = s.iteration >= self._max_iter
-        residual_small = (s.r @ s.r) < self._tol**2
-        return max_iter_reached | residual_small
+        return (s.iteration >= self._max_iter) | ((s.r @ s.r) < self._tol**2)
 
     def extract(self, state: Any) -> Tensor:
         s: _GSState = state

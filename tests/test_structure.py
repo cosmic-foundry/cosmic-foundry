@@ -31,6 +31,7 @@ import pytest
 
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.linear_solver import TensorLinearOperator
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
@@ -132,6 +133,22 @@ def _discover_concrete_iterative_solvers(
                 seen.add(obj)
                 result.append(obj)
     return result
+
+
+def _discover_matrix_free_iterative_solvers(
+    modules: list[tuple[str, types.ModuleType]],
+) -> list[type]:
+    """Iterative solvers whose init_state does not assemble a dense matrix.
+
+    Assembling solvers (those with an _assemble method) build a dense matrix
+    during init_state, which requires materialized tensors and cannot run on
+    declared (unallocated) Tensor placeholders.
+    """
+    return [
+        cls
+        for cls in _discover_concrete_iterative_solvers(modules)
+        if not hasattr(cls, "_assemble")
+    ]
 
 
 def _discover_concrete_factorizations(
@@ -261,10 +278,11 @@ class _IterativeSolverJitClaim(Claim):
     def check(self) -> None:
         n = _JIT_N
         a = Tensor.declare(n, n)
+        op = TensorLinearOperator(a)
         b = Tensor.declare(n)
         solver: Any = self._cls()
-        state = solver.init_state(a, b)
-        new_state = solver.step(state)
+        state = solver.init_state(op, b)
+        new_state = solver.step(op, state)
         assert type(new_state) is type(state)
         converged = solver.converged(state)
         assert isinstance(converged, Tensor)
@@ -282,9 +300,10 @@ class _MaterializationGateClaim(Claim):
     def check(self) -> None:
         n = _JIT_N
         a = Tensor.declare(n, n)
+        op = TensorLinearOperator(a)
         b = Tensor.declare(n)
         solver: Any = self._cls()
-        state = solver.init_state(a, b)
+        state = solver.init_state(op, b)
         converged = solver.converged(state)
         with pytest.raises(MaterializationError):
             converged.get()
@@ -483,6 +502,7 @@ _MODULES = _discover_modules()
 _ABCS = _discover_abcs(_MODULES)
 _HIERARCHY_PAIRS = _discover_hierarchy_pairs(_ABCS)
 _ITERATIVE_SOLVERS = _discover_concrete_iterative_solvers(_MODULES)
+_MATRIX_FREE_ITERATIVE_SOLVERS = _discover_matrix_free_iterative_solvers(_MODULES)
 _FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
@@ -490,8 +510,8 @@ _CLAIMS: list[Claim] = [
     *[_AbcInstantiationClaim(cls) for cls in _ABCS],
     *[_HierarchyClaim(child, parent) for child, parent in _HIERARCHY_PAIRS],
     *[_ModuleAllClaim(mod_path, mod) for mod_path, mod in _MODULES],
-    *[_IterativeSolverJitClaim(cls) for cls in _ITERATIVE_SOLVERS],
-    *[_MaterializationGateClaim(cls) for cls in _ITERATIVE_SOLVERS],
+    *[_IterativeSolverJitClaim(cls) for cls in _MATRIX_FREE_ITERATIVE_SOLVERS],
+    *[_MaterializationGateClaim(cls) for cls in _MATRIX_FREE_ITERATIVE_SOLVERS],
     *[_FactorizationJitClaim(cls) for cls in _FACTORIZATIONS],
     _GenericBasesClaim(),
     _ManifoldIsolationClaim(),

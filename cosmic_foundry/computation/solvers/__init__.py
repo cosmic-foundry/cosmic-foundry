@@ -10,7 +10,10 @@ from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
-from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
+from cosmic_foundry.computation.solvers.linear_solver import (
+    LinearOperator,
+    LinearSolver,
+)
 
 __all__ = [
     "DenseCGSolver",
@@ -21,5 +24,6 @@ __all__ = [
     "DenseSVDSolver",
     "DirectSolver",
     "IterativeSolver",
+    "LinearOperator",
     "LinearSolver",
 ]

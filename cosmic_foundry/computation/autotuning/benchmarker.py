@@ -8,7 +8,10 @@ from typing import NamedTuple
 
 from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDescriptor
 from cosmic_foundry.computation.backends import Backend
-from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
+from cosmic_foundry.computation.solvers.linear_solver import (
+    LinearSolver,
+    TensorLinearOperator,
+)
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -67,16 +70,17 @@ class Benchmarker:
     ) -> float:
         """Return the minimum wall time in seconds for one solve at descriptor.n."""
         a = self._make_matrix(descriptor, backend)
+        op = TensorLinearOperator(a)
         b: Tensor = Tensor([1.0] * descriptor.n, backend=backend)
 
         for _ in range(self._n_warmup):
-            result = solver.solve(a, b)
+            result = solver.solve(op, b)
             result.sync()
 
         best = float("inf")
         for _ in range(self._n_trials):
             t0 = time.perf_counter()
-            result = solver.solve(a, b)
+            result = solver.solve(op, b)
             result.sync()
             best = min(best, time.perf_counter() - t0)
 

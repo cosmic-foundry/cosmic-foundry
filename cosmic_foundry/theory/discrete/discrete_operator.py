@@ -45,20 +45,5 @@ class DiscreteOperator(NumericFunction[DiscreteField[_V], DiscreteField[_V]]):
     def continuous_operator(self) -> DifferentialOperator:
         """The continuous operator this DiscreteOperator approximates."""
 
-    @property
-    @abstractmethod
-    def stiffness_values(self) -> list[float]:
-        """Non-zero stiffness matrix entries, one per (row, col) pair."""
-
-    @property
-    @abstractmethod
-    def row_indices(self) -> list[int]:
-        """Global row index for each entry in stiffness_values."""
-
-    @property
-    @abstractmethod
-    def col_indices(self) -> list[int]:
-        """Global column index for each entry in stiffness_values."""
-
 
 __all__ = ["DiscreteOperator"]

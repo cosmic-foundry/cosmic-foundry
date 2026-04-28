@@ -215,6 +215,19 @@ class JaxBackend:
     ) -> Any:
         return dst.at[rows, cols].add(values)
 
+    def spmv(
+        self,
+        rows: list[int],
+        cols: list[int],
+        vals: list[float],
+        u: Any,
+        n: int,
+    ) -> Any:
+        dt = self._dtype if self._dtype is not None else jnp.float64
+        vals_arr = jnp.asarray(vals, dtype=dt)
+        result = jnp.zeros(n, dtype=dt)
+        return result.at[jnp.asarray(rows)].add(vals_arr * u[jnp.asarray(cols)])
+
     def while_loop(
         self,
         cond_fn: Any,

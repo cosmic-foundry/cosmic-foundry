@@ -79,6 +79,15 @@ class Backend(Protocol):
         values: Any,
     ) -> Any: ...
 
+    def spmv(
+        self,
+        rows: list[int],
+        cols: list[int],
+        vals: list[float],
+        u: Any,
+        n: int,
+    ) -> Any: ...
+
     # Scalar extraction (called only on allocated rank-0 data)
     def get(self, raw: Any) -> Any: ...
 

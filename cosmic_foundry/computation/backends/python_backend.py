@@ -155,6 +155,19 @@ class PythonBackend:
             dst[r][c] += v
         return dst
 
+    def spmv(
+        self,
+        rows: list[int],
+        cols: list[int],
+        vals: list[float],
+        u: Any,
+        n: int,
+    ) -> Any:
+        result = [0.0] * n
+        for r, c, v in zip(rows, cols, vals, strict=True):
+            result[r] += v * u[c]
+        return result
+
     def fori_loop(
         self,
         n: int,
