@@ -10,32 +10,17 @@ _V = TypeVar("_V")
 
 
 class NumericalFlux(DiscreteOperator[_V]):
-    """Approximates the face-averaged flux F·n̂·|face_area| from cell averages.
+    """Discrete approximation of a continuous flux operator.
 
-    A NumericalFlux is a DiscreteOperator with a specific calling convention:
-    given a cell-average DiscreteField U, it returns a FaceField whose value
-    at face (axis, idx_low) is the approximate flux F·n̂·|face_area| at the
-    interface between cells idx_low and idx_low+1 along axis.
-
-    NumericalFlux earns its place in the hierarchy by narrowing the calling
-    convention: DiscreteOperator maps any DiscreteField to any DiscreteField;
-    NumericalFlux commits to the cell-average → FaceField direction, which
-    is the FVM face-flux assembly pattern.
-
-    The convergence order is the composite minimum:
-
-        order = min(reconstruction_order, face_quadrature_order,
-                    deconvolution_order)
-
-    Each component must independently achieve order p; the class is
-    responsible for ensuring they do.  For Lanes B and C, the composite
-    order is verified algebraically via SymPy Taylor expansion in
-    tests/test_convergence_order.py.
+    NumericalFlux narrows DiscreteOperator to flux approximations: concrete
+    subclasses in the physics layer implement specific physical fluxes
+    (diffusive, advective) that discrete schemes (FVM, FD) consume via their
+    respective assembly patterns.
 
     Required (inherited from DiscreteOperator):
-        order               — composite convergence order
+        order               — convergence order of the approximation
         continuous_operator — the continuous flux operator approximated
-        __call__            — apply the operator: DiscreteField → FaceField
+        __call__            — apply the operator: DiscreteField → DiscreteField
     """
 
 

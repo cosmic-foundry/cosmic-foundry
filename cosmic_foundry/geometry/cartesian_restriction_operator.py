@@ -60,14 +60,15 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
 
     degree == 1: edge-tangent line-integral restriction (Rₕ¹)
         Input: OneForm F
-        (Rₕ¹ F)_{a,v} = ∫_{edge(a,v)} F.component(a)|_{x_⊥=vertex} dx_a   → EdgeField
-        Satisfies D₀ ∘ Rₕ⁰ = Rₕ¹ ∘ d₀ exactly (by the fundamental theorem of calculus).
+        (Rₕ¹ F)_{a,c} = ∫_{x_c}^{x_{c+1}} F.component(a)|_{x_⊥=x_{c_⊥}} dx_a → EdgeField
+        Integrates over the full cell width [x_c, x_{c+1}] (face to face); transverse
+        coordinates fixed at the low face position.
         Only meaningful for ndim > 1; for ndim == 1 degree 1 == ndim → cell restrict.
 
-    degree == 0: vertex-evaluation restriction (Rₕ⁰)
+    degree == 0: cell-center evaluation restriction (Rₕ⁰)
         Input: ZeroForm f
-        (Rₕ⁰ f)(v) = f(x_v)   → PointField
-        Satisfies D₀ ∘ Rₕ⁰ = Rₕ¹ ∘ d₀ exactly.
+        (Rₕ⁰ f)(c) = f(x_c) where x_c = origin + (c + ½)h   → PointField
+        Satisfies D₀ ∘ Rₕ⁰ = Rₕ¹ ∘ d₀ exactly (by the fundamental theorem of calculus).
 
     All integrals are computed analytically via SymPy.
     """
@@ -116,33 +117,37 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
         return _CartesianVolumeIntegral(mesh, values)
 
     def _point_restrict(self, f: ZeroForm) -> PointField[sympy.Expr]:
-        """Vertex evaluation: (Rₕ⁰ f)(v) = f(x_v)."""
+        """Cell-center evaluation: (Rₕ⁰ f)(c) = f(origin + (c + ½)h)."""
         mesh = self._mesh
         ndim = len(mesh._shape)
 
-        def point_eval(v_idx: tuple[int, ...]) -> sympy.Expr:
+        def point_eval(c_idx: tuple[int, ...]) -> sympy.Expr:
             expr = f.expr
             for j in range(ndim):
-                x_vj = mesh._origin[j] + sympy.Integer(v_idx[j]) * mesh._spacing[j]
-                expr = expr.subs(f.symbols[j], x_vj)
+                x_cj = (
+                    mesh._origin[j]
+                    + (sympy.Integer(c_idx[j]) + sympy.Rational(1, 2))
+                    * mesh._spacing[j]
+                )
+                expr = expr.subs(f.symbols[j], x_cj)
             return sympy.simplify(expr)
 
         return _CallablePointField(mesh, point_eval)
 
     def _edge_restrict(self, F: OneForm) -> EdgeField[sympy.Expr]:
-        """Edge-tangent line integral: (Rₕ¹ F)(a,v) = ∫_{edge(a,v)} F_a dx_a."""
+        """Edge-tangent line integral: (Rₕ¹ F)(a,c) = ∫_{x_c}^{x_{c+1}} F_a dx_a."""
         mesh = self._mesh
         ndim = len(mesh._shape)
 
         def edge_integral(edge: tuple[int, tuple[int, ...]]) -> sympy.Expr:
-            axis, v_idx = edge
+            axis, c_idx = edge
             expr = F.component(axis)
-            lo = mesh._origin[axis] + sympy.Integer(v_idx[axis]) * mesh._spacing[axis]
+            lo = mesh._origin[axis] + sympy.Integer(c_idx[axis]) * mesh._spacing[axis]
             hi = lo + mesh._spacing[axis]
             for j in range(ndim):
                 if j != axis:
-                    x_vj = mesh._origin[j] + sympy.Integer(v_idx[j]) * mesh._spacing[j]
-                    expr = expr.subs(F.symbols[j], x_vj)
+                    x_cj = mesh._origin[j] + sympy.Integer(c_idx[j]) * mesh._spacing[j]
+                    expr = expr.subs(F.symbols[j], x_cj)
             expr = sympy.integrate(expr, (F.symbols[axis], lo, hi))
             return sympy.simplify(expr)
 
