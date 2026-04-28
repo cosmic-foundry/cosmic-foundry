@@ -59,11 +59,8 @@ from cosmic_foundry.theory.continuous.differential_form import (
     OneForm,
     ZeroForm,
 )
-from cosmic_foundry.theory.continuous.differential_operator import DivergenceComposition
-from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
-    FDDiscretization,
     FVMDiscretization,
     PeriodicGhostCells,
 )
@@ -81,18 +78,12 @@ class _OrderClaim(CalibratedClaim[float]):
 
     Verifies that the error polynomial has zeros at h⁰…h^{p-1} and a
     nonzero h^p leading term, using a manufactured polynomial solution
-    on a 1-D symbolic mesh.
-
-    point_dof=False (default): input field is cell-averaged; exact reference
-    is computed via CartesianRestrictionOperator (FVM convention).
-    point_dof=True: input field is point-evaluated at cell centers; exact
-    reference is the continuous operator evaluated at the same points (FD
-    convention).
+    on a 1-D symbolic mesh.  Input field is cell-averaged; exact reference
+    is computed via CartesianVolumeRestriction (cell-average DOF convention).
     """
 
-    def __init__(self, instance: Any, *, point_dof: bool = False) -> None:
+    def __init__(self, instance: Any) -> None:
         self._instance = instance
-        self._point_dof = point_dof
 
     @property
     def description(self) -> str:
@@ -116,38 +107,25 @@ class _OrderClaim(CalibratedClaim[float]):
         phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
         phi = ZeroForm(space, phi_expr, (x,))
 
-        def _x_at(idx: tuple[int, ...]) -> sympy.Expr:
-            return (
-                mesh._origin[0]
-                + (sympy.Integer(idx[0]) + sympy.Rational(1, 2)) * mesh._spacing[0]
+        vol = mesh.cell_volume
+        U_totals = CartesianVolumeRestriction(mesh)(phi)
+        U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
+        numerical_mf = instance(U_avg)
+        cont_result = instance.continuous_operator(phi)
+        assert isinstance(cont_result, DifferentialForm)
+        if isinstance(cont_result, ZeroForm):
+            exact_mf = CartesianVolumeRestriction(mesh)(cont_result)
+            test_idx: Any = (n,)
+            error = sympy.expand(
+                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
             )
-
-        if self._point_dof:
-            U = _CallableDiscreteField(mesh, lambda idx: phi_expr.subs(x, _x_at(idx)))
-            numerical_mf = instance(U)
-            cont_result = instance.continuous_operator(phi)
-            exact_val = cont_result.expr.subs(x, _x_at((n,)))
-            error = sympy.expand(sympy.simplify(numerical_mf((n,)) - exact_val))
         else:
-            vol = mesh.cell_volume
-            U_totals = CartesianVolumeRestriction(mesh)(phi)
-            U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
-            numerical_mf = instance(U_avg)
-            cont_result = instance.continuous_operator(phi)
-            assert isinstance(cont_result, DifferentialForm)
-            if isinstance(cont_result, ZeroForm):
-                exact_mf = CartesianVolumeRestriction(mesh)(cont_result)
-                test_idx: Any = (n,)
-                error = sympy.expand(
-                    sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
-                )
-            else:
-                assert isinstance(cont_result, OneForm)
-                exact_mf = CartesianFaceRestriction(mesh)(cont_result)
-                test_idx = (0, (n,))
-                error = sympy.expand(
-                    sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
-                )
+            assert isinstance(cont_result, OneForm)
+            exact_mf = CartesianFaceRestriction(mesh)(cont_result)
+            test_idx = (0, (n,))
+            error = sympy.expand(
+                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
+            )
 
         expected_leading = order
         poly = sympy.Poly(error, h)
@@ -247,10 +225,8 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
     the manufactured-solution source ρ = L(φ) and to auto-select admissible
     sinusoidal modes.  disc.order drives the k_max and slope assertions.
 
-    point_dof=False (default): cell-average DOF convention; ρ and φ are evaluated
-    as cell averages via antiderivative lambdification (FVM convention).
-    point_dof=True: point-value DOF convention; ρ and φ are evaluated at cell
-    centers (FD convention).
+    Cell-average DOF convention; ρ and φ are evaluated as cell averages via
+    antiderivative lambdification.
 
     Admissible modes are those for which A_h·φ_n ≈ ρ_n to within 10% on the
     coarsest mesh.  For PeriodicGhostCells only even-n modes are candidates:
@@ -261,10 +237,9 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
     from arbitrary null-space contributions (e.g. advection under PeriodicBC).
     """
 
-    def __init__(self, solver: Any, disc: Any, *, point_dof: bool = False) -> None:
+    def __init__(self, solver: Any, disc: Any) -> None:
         self._solver = solver
         self._disc = disc
-        self._point_dof = point_dof
 
     @property
     def description(self) -> str:
@@ -319,36 +294,22 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         for n in range(step, k_max + 1, step):
             phi_n = sympy.sin(n * sympy.pi * _x)
             rho_n = cont_op(ZeroForm(manifold, phi_n, (_x,))).expr
-            if self._point_dof:
-                f_pn = sympy.lambdify(_x, phi_n, "math")
-                f_rn = sympy.lambdify(_x, rho_n, "math")
-                v_n = Tensor(
-                    [f_pn(orig_c + (i + 0.5) * vol_c) for i in range(n_c)],
-                    backend=_NP_BACKEND,
-                )
-                r_n = Tensor(
-                    [f_rn(orig_c + (i + 0.5) * vol_c) for i in range(n_c)],
-                    backend=_NP_BACKEND,
-                )
-            else:
-                F_pn = sympy.lambdify(_x, sympy.integrate(phi_n, _x), "math")
-                F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
-                v_n = Tensor(
-                    [
-                        (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c))
-                        / vol_c
-                        for i in range(n_c)
-                    ],
-                    backend=_NP_BACKEND,
-                )
-                r_n = Tensor(
-                    [
-                        (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c))
-                        / vol_c
-                        for i in range(n_c)
-                    ],
-                    backend=_NP_BACKEND,
-                )
+            F_pn = sympy.lambdify(_x, sympy.integrate(phi_n, _x), "math")
+            F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
+            v_n = Tensor(
+                [
+                    (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
+                    for i in range(n_c)
+                ],
+                backend=_NP_BACKEND,
+            )
+            r_n = Tensor(
+                [
+                    (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
+                    for i in range(n_c)
+                ],
+                backend=_NP_BACKEND,
+            )
             rel_err = tensor.norm(op_c.apply(v_n) - r_n).get() / (
                 tensor.norm(r_n).get() + 1e-30
             )
@@ -361,39 +322,20 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         # Derive ρ = L(φ) symbolically from disc.continuous_operator.
         rho_expr = cont_op(phi).expr
 
-        if self._point_dof:
-            f_phi = sympy.lambdify(_x, phi_expr, "math")
-            f_rho = sympy.lambdify(_x, rho_expr, "math")
-        else:
-            F_phi = sympy.lambdify(_x, sympy.integrate(phi_expr, _x), "math")
-            F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
+        F_phi = sympy.lambdify(_x, sympy.integrate(phi_expr, _x), "math")
+        F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
 
         errors: list[float] = []
         for op_m, null_vecs, vol, orig, n_cells in assembled:
-            if self._point_dof:
 
-                def _phi_pt(i: int, _v: float = vol, _o: float = orig) -> float:
-                    return f_phi(_o + (i + 0.5) * _v)
+            def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
 
-                def _rho_pt(i: int, _v: float = vol, _o: float = orig) -> float:
-                    return f_rho(_o + (i + 0.5) * _v)
+            def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
 
-                b_m = Tensor([_rho_pt(i) for i in range(n_cells)], backend=_NP_BACKEND)
-                phi_arr = Tensor(
-                    [_phi_pt(i) for i in range(n_cells)], backend=_NP_BACKEND
-                )
-            else:
-
-                def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
-                    return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
-
-                def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
-                    return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
-
-                b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
-                phi_arr = Tensor(
-                    [_phi_avg(i) for i in range(n_cells)], backend=_NP_BACKEND
-                )
+            b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
+            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
 
             u_arr = self._solver.solve(op_m, b_m)
             for v in null_vecs:
@@ -435,7 +377,6 @@ def _assemble_from_op(op: Operator, n: int, backend: Any) -> Any:
 
 
 _manifold = EuclideanManifold(1)
-_fd_cont_op = DivergenceComposition(DiffusionOperator(_manifold))
 _mesh_n8 = CartesianMesh(
     origin=(sympy.Rational(0),),
     spacing=(sympy.Rational(1, 8),),
@@ -472,8 +413,6 @@ _SOLVERS = [
 _SPD_SOLVERS = [DenseCGSolver(tol=1e-8)]  # SPD (symmetric positive definite) only
 _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
-
-_FD_DISC_2 = FDDiscretization(2, _fd_cont_op, DirichletGhostCells())
 
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
@@ -520,21 +459,6 @@ _CLAIMS: list[CalibratedClaim[float]] = [
         _ConvergenceRateClaim(s, FVMDiscretization(f, DirichletGhostCells()))
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _ADVECTION_DIFFUSION_FLUXES
-    ],
-    # FD order claims: verify interior truncation error is O(h^p) for point-value DOFs.
-    _OrderClaim(FDDiscretization(2, _fd_cont_op), point_dof=True),
-    _OrderClaim(FDDiscretization(4, _fd_cont_op), point_dof=True),
-    # FD solver claims: order=2 yields an SPD matrix under DirichletGhostCells.
-    *[
-        _SolverClaim(s, _FD_DISC_2, _mesh_n8)
-        for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
-    ],
-    # FD convergence rate: order=2 achieves O(h²) globally with ghost-cell BCs.
-    # Order≥4 is limited to O(h²) by the one-layer ghost-cell boundary treatment;
-    # high-order BCs are not yet implemented.
-    *[
-        _ConvergenceRateClaim(s, _FD_DISC_2, point_dof=True)
-        for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
     ],
 ]
 
