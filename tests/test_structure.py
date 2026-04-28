@@ -36,9 +36,9 @@ from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
-from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete import (
+    DiffusiveFlux,
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
@@ -52,7 +52,6 @@ _PACKAGES = [
     "cosmic_foundry.theory.continuous",
     "cosmic_foundry.theory.discrete",
     "cosmic_foundry.geometry",
-    "cosmic_foundry.physics",
     "cosmic_foundry.computation",
     "cosmic_foundry.computation.decompositions",
     "cosmic_foundry.computation.solvers",

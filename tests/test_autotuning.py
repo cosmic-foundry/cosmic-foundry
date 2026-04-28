@@ -24,8 +24,8 @@ from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
-from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.discrete import (
+    DiffusiveFlux,
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
