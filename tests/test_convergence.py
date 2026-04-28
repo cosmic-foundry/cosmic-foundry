@@ -81,360 +81,22 @@ class _OrderClaim(CalibratedClaim[float]):
 
     Verifies that the error polynomial has zeros at h⁰…h^{p-1} and a
     nonzero h^p leading term, using a manufactured polynomial solution
-    on a 1-D symbolic mesh.  The exact value is computed as Rₕ(L φ)
-    via CartesianRestrictionOperator — no per-instance oracle.
+    on a 1-D symbolic mesh.
+
+    point_dof=False (default): input field is cell-averaged; exact reference
+    is computed via CartesianRestrictionOperator (FVM convention).
+    point_dof=True: input field is point-evaluated at cell centers; exact
+    reference is the continuous operator evaluated at the same points (FD
+    convention).
     """
 
-    def __init__(self, instance: Any) -> None:
+    def __init__(self, instance: Any, *, point_dof: bool = False) -> None:
         self._instance = instance
+        self._point_dof = point_dof
 
     @property
     def description(self) -> str:
         return f"{type(self._instance).__name__}(order={self._instance.order})"
-
-    def check(self, fma_rate: float) -> None:
-        instance = self._instance
-        h = sympy.Symbol("h", positive=True)
-        order = instance.order
-        n = order // 2
-
-        space = EuclideanManifold(1)
-        x = space.atlas[0].symbols[0]
-        mesh = CartesianMesh(
-            origin=(sympy.Integer(0),),
-            spacing=(h,),
-            shape=(2 * n + 2,),
-        )
-        ndim = len(mesh._shape)
-
-        coeffs = sympy.symbols(f"a:{order + 4}")
-        phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
-        phi = ZeroForm(space, phi_expr, (x,))
-
-        vol = mesh.cell_volume
-        U_totals = CartesianRestrictionOperator(mesh, degree=ndim)(
-            _as_n_form(phi, ndim)
-        )
-        U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
-        numerical_mf = instance(U_avg)
-
-        cont_result = instance.continuous_operator(phi)
-        assert isinstance(cont_result, DifferentialForm)
-        restriction_degree = ndim - cont_result.degree
-        if restriction_degree == ndim:
-            # cont_result is ZeroForm; wrap as n-form for de Rham-correct restriction
-            cont_form: DifferentialForm = _as_n_form(cont_result, ndim)
-        else:
-            cont_form = cont_result
-        exact_mf = CartesianRestrictionOperator(mesh, degree=restriction_degree)(
-            cont_form
-        )
-
-        test_idx: Any = (0, (n,)) if restriction_degree < ndim else (n,)
-        # When restriction_degree==ndim, exact_mf is a VolumeField (totals);
-        # numerical_mf is a State (averages).  Normalize exact by vol to compare.
-        if restriction_degree == ndim:
-            error = sympy.expand(
-                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
-            )
-        else:
-            error = sympy.expand(
-                sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
-            )
-        expected_leading = order
-        poly = sympy.Poly(error, h)
-        for k in range(expected_leading):
-            assert poly.nth(k) == 0, (
-                f"Unexpected O(h^{k}) term in {type(instance).__name__}"
-                f"(order={order}): {poly.nth(k)}"
-            )
-        assert poly.nth(expected_leading) != 0, (
-            f"Missing O(h^{expected_leading}) leading term in "
-            f"{type(instance).__name__}(order={order})"
-        )
-
-
-class _SolverClaim(CalibratedClaim[float]):
-    """Claim: solver converges on FVMDiscretization(flux, DirichletGhostCells).
-
-    Verifies that ‖b − Au‖₂ < tol after solve returns.
-    """
-
-    def __init__(
-        self,
-        solver: DenseJacobiSolver,
-        flux: Any,
-        mesh: CartesianMesh,
-    ) -> None:
-        self._solver = solver
-        self._flux = flux
-        self._mesh = mesh
-
-    @property
-    def description(self) -> str:
-        n = math.prod(self._mesh.shape)
-        return (
-            f"{type(self._solver).__name__}/"
-            f"{type(self._flux).__name__}(order={self._flux.order})/N={n}"
-        )
-
-    def check(self, fma_rate: float) -> None:
-        disc = FVMDiscretization(self._flux, DirichletGhostCells())
-        n = math.prod(self._mesh.shape)
-        op = Operator(disc, self._mesh)
-        b = Tensor([1.0] * n)
-        u = self._solver.solve(op, b)
-        residual = tensor.norm(b - op.apply(u)).get()
-        assert (
-            residual < self._solver._tol
-        ), f"Did not converge: residual {residual:.3e}"
-
-
-class _DirectSolverClaim(CalibratedClaim[float]):
-    """Claim: direct solver residual < tol after one factorization pass.
-
-    Builds the discretization from flux, mesh, and bc_type, then verifies:
-      1. Final residual ‖f − Au‖_{L²_h} < tol.
-    No monotonicity or iteration-count checks: a direct solver produces the
-    exact solution (up to floating-point rounding) in a single pass.
-
-    For PeriodicGhostCells the RHS is a zero-mean sinusoid so the system is
-    consistent (in the column space of the circulant advection matrix).
-    """
-
-    def __init__(
-        self,
-        solver: DenseLUSolver,
-        flux: Any,
-        mesh: CartesianMesh,
-        bc_type: type = DirichletGhostCells,
-    ) -> None:
-        self._solver = solver
-        self._flux = flux
-        self._mesh = mesh
-        self._bc_type = bc_type
-
-    @property
-    def description(self) -> str:
-        n = math.prod(self._mesh.shape)
-        suffix = "/periodic" if self._bc_type is PeriodicGhostCells else ""
-        return (
-            f"{type(self._solver).__name__}/"
-            f"{type(self._flux).__name__}(order={self._flux.order})"
-            f"/N={n}{suffix}"
-        )
-
-    def check(self, fma_rate: float) -> None:
-        bc = self._bc_type()
-        disc = FVMDiscretization(self._flux, bc)
-        n = math.prod(self._mesh.shape)
-        op = Operator(disc, self._mesh)
-        if self._bc_type is PeriodicGhostCells:
-            h = float(self._mesh.cell_volume)
-            orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
-            b = Tensor(
-                [
-                    (
-                        math.sin(2 * math.pi * (orig + (i + 1) * h))
-                        - math.sin(2 * math.pi * (orig + i * h))
-                    )
-                    / h
-                    for i in range(n)
-                ]
-            )
-        else:
-            b = Tensor([1.0] * n)
-        u = self._solver.solve(op, b)
-        residual = tensor.norm(b - op.apply(u)).get()
-        assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
-
-
-class _ConvergenceRateClaim(CalibratedClaim[float]):
-    """Claim: ‖φ_h − Rₕ φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
-
-    The manufactured solution φ is selected automatically from candidates
-    sin(nπx) for n=1..k_max, where k_max = N_min // p gives at least 2p cells
-    per wavelength on the coarsest mesh (sufficient for the asymptotic regime).
-    A candidate is admitted only when A·R_h(sin(nπx)) matches R_h(∇·F(sin(nπx)))
-    to within 10% on the coarsest mesh; modes inconsistent with the BC's
-    ghost-cell convention produce O(1) relative error and are excluded.
-    For PeriodicGhostCells only even-n modes are tested: sin(nπx) is 1-periodic
-    iff n is even, so odd modes are algebraically incompatible regardless of N.
-    The source ρ = ∇·F(φ) is derived symbolically from flux.continuous_operator.
-
-    Before measuring the L²_h error the assembled stiffness matrix is
-    decomposed via SVD; any null-space components of u_h are projected out,
-    isolating truncation error from the arbitrary null-space component a
-    direct solver may introduce for singular systems (e.g. advection under
-    PeriodicBC).
-    """
-
-    def __init__(
-        self,
-        solver: Any,
-        flux: Any,
-        bc_type: type = DirichletGhostCells,
-    ) -> None:
-        self._solver = solver
-        self._flux = flux
-        self._bc_type = bc_type
-
-    @property
-    def description(self) -> str:
-        suffix = "/periodic" if self._bc_type is PeriodicGhostCells else ""
-        return (
-            f"{type(self._solver).__name__}/"
-            f"{type(self._flux).__name__}(order={self._flux.order})/"
-            f"convergence_rate{suffix}"
-        )
-
-    def check(self, fma_rate: float) -> None:
-        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS, self._solver)
-        meshes = [
-            CartesianMesh(
-                origin=(sympy.Rational(0),),
-                spacing=(sympy.Rational(1, int(n_max * f)),),
-                shape=(int(n_max * f),),
-            )
-            for f in _MESH_FRACTIONS
-        ]
-
-        manifold = self._flux.continuous_operator.manifold
-        _x = manifold.atlas[0].symbols[0]
-        p = self._flux.order
-        bc = self._bc_type()
-
-        # Pre-build all operators and SVD decompositions for null-space extraction.
-        # Operator construction runs the sympy probe once; SVD is used only for
-        # null-space extraction (singular systems under PeriodicGhostCells).
-        assembled: list[tuple[Any, list[Any], float, float, int]] = []
-        for mesh in meshes:
-            vol = float(mesh.cell_volume)
-            orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
-            n_cells = mesh.shape[0]
-            op_m = Operator(FVMDiscretization(self._flux, bc), mesh)
-            a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
-            decomp = SVDFactorization().factorize(a_m)
-            s_vec = decomp.s
-            vt = decomp.vt
-            null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
-            null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
-            assembled.append((op_m, null_vecs, vol, orig, n_cells))
-
-        # Auto-select admissible manufactured-solution modes.
-        # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
-        # For PeriodicGhostCells only even-n candidates are tested: sin(nπx) is
-        # 1-periodic iff n is even (period = 2/n, which divides 1 iff n is even),
-        # so odd modes are algebraically incompatible with the BC regardless of N.
-        # This is necessary because for a consistent scheme rel_err → 0 as N grows;
-        # at CI mesh sizes odd modes would otherwise converge below the 0.1
-        # threshold even though they violate periodicity.
-        op_c, _, vol_c, orig_c, n_c = assembled[0]
-        k_max = max(1, n_c // p)
-        step = 2 if isinstance(bc, PeriodicGhostCells) else 1
-        phi_terms: list[sympy.Expr] = []
-        for n in range(step, k_max + 1, step):
-            phi_n = sympy.sin(n * sympy.pi * _x)
-            one_form_n = self._flux.continuous_operator(
-                ZeroForm(manifold, phi_n, (_x,))
-            )
-            rho_n = sum(
-                sympy.diff(one_form_n.component(i), one_form_n.symbols[i])
-                for i in range(len(one_form_n.symbols))
-            )
-            F_pn = sympy.lambdify(_x, sympy.integrate(phi_n, _x), "math")
-            F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
-            v_n = Tensor(
-                [
-                    (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c)) / vol_c
-                    for i in range(n_c)
-                ],
-                backend=_NP_BACKEND,
-            )
-            r_n = Tensor(
-                [
-                    (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c)) / vol_c
-                    for i in range(n_c)
-                ],
-                backend=_NP_BACKEND,
-            )
-            rel_err = tensor.norm(op_c.apply(v_n) - r_n).get() / (
-                tensor.norm(r_n).get() + 1e-30
-            )
-            if rel_err < 0.1:
-                phi_terms.append(phi_n)
-        assert phi_terms, "No admissible manufactured-solution modes found"
-        phi_expr = sympy.Add(*phi_terms)
-        phi = ZeroForm(manifold, phi_expr, (_x,))
-
-        # Derive ρ = ∇·F(φ) symbolically from the flux's continuous operator.
-        one_form = self._flux.continuous_operator(phi)
-        rho_expr = sum(
-            sympy.diff(one_form.component(i), one_form.symbols[i])
-            for i in range(len(one_form.symbols))
-        )
-
-        # Lambdify antiderivatives for O(1) float cell-average evaluation:
-        # cell_avg(f, i) = (F(x_{i+1}) − F(x_i)) / h  where F' = f.
-        F_phi = sympy.lambdify(_x, sympy.integrate(phi_expr, _x), "math")
-        F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
-
-        errors: list[float] = []
-        for op_m, null_vecs, vol, orig, n_cells in assembled:
-
-            def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
-                return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
-
-            def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
-                return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
-
-            b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
-            u_arr = self._solver.solve(op_m, b_m)
-            for v in null_vecs:
-                u_arr = u_arr - float(u_arr @ v) * v
-            phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
-            diff = u_arr - phi_arr
-            errors.append(math.sqrt(vol * (diff @ diff)))
-
-        hs = [float(m.cell_volume) for m in meshes]
-        log_h = [math.log(hv) for hv in hs]
-        log_e = [math.log(ev) for ev in errors]
-        n_pts = len(log_h)
-        sx = sum(log_h)
-        sy = sum(log_e)
-        sxy = sum(lh * le for lh, le in zip(log_h, log_e, strict=False))
-        sxx = sum(lh * lh for lh in log_h)
-        syy = sum(le * le for le in log_e)
-        denom_x = n_pts * sxx - sx**2
-        slope = (n_pts * sxy - sx * sy) / denom_x
-        r2 = (n_pts * sxy - sx * sy) ** 2 / (denom_x * (n_pts * syy - sy**2))
-        assert slope >= self._flux.order - 0.1, (
-            f"Convergence rate {slope:.3f} < expected "
-            f"{self._flux.order - 0.1:.1f} for "
-            f"{type(self._flux).__name__}(order={self._flux.order})"
-        )
-        assert r2 >= 0.999, (
-            f"Convergence not clean power-law: R²={r2:.4f} for "
-            f"{type(self._flux).__name__}(order={self._flux.order}) — "
-            f"errors do not lie on h^p even though the slope is correct"
-        )
-
-
-class _FDOrderClaim(CalibratedClaim[float]):
-    """Claim: FDDiscretization achieves O(h^p) truncation error at interior cells.
-
-    Feeds exact point values (cell-center evaluations of a polynomial φ) to the
-    discrete operator, then checks that the error polynomial has zeros at h⁰…h^{p-1}
-    and a nonzero h^p term.  Uses point evaluation of continuous_operator(φ) as the
-    exact reference, matching the point-value DOF convention of FD schemes.
-    """
-
-    def __init__(self, instance: Any) -> None:
-        self._instance = instance
-
-    @property
-    def description(self) -> str:
-        return f"FD:{type(self._instance).__name__}(order={self._instance.order})"
 
     def check(self, fma_rate: float) -> None:
         instance = self._instance
@@ -460,82 +122,171 @@ class _FDOrderClaim(CalibratedClaim[float]):
                 + (sympy.Integer(idx[0]) + sympy.Rational(1, 2)) * mesh._spacing[0]
             )
 
-        U_point = _CallableDiscreteField(mesh, lambda idx: phi_expr.subs(x, _x_at(idx)))
-        numerical_mf = instance(U_point)
-
-        cont_result = instance.continuous_operator(phi)
-        exact_val = cont_result.expr.subs(x, _x_at((n,)))
-
-        error = sympy.expand(sympy.simplify(numerical_mf((n,)) - exact_val))
-        poly = sympy.Poly(error, h)
-        for k in range(order):
-            assert poly.nth(k) == 0, (
-                f"Unexpected O(h^{k}) term in "
-                f"FDDiscretization(order={order}): {poly.nth(k)}"
+        if self._point_dof:
+            U = _CallableDiscreteField(mesh, lambda idx: phi_expr.subs(x, _x_at(idx)))
+            numerical_mf = instance(U)
+            cont_result = instance.continuous_operator(phi)
+            exact_val = cont_result.expr.subs(x, _x_at((n,)))
+            error = sympy.expand(sympy.simplify(numerical_mf((n,)) - exact_val))
+        else:
+            ndim = len(mesh._shape)
+            vol = mesh.cell_volume
+            U_totals = CartesianRestrictionOperator(mesh, degree=ndim)(
+                _as_n_form(phi, ndim)
             )
-        assert (
-            poly.nth(order) != 0
-        ), f"Missing O(h^{order}) leading term in FDDiscretization(order={order})"
+            U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
+            numerical_mf = instance(U_avg)
+            cont_result = instance.continuous_operator(phi)
+            assert isinstance(cont_result, DifferentialForm)
+            restriction_degree = ndim - cont_result.degree
+            if restriction_degree == ndim:
+                # ZeroForm: wrap as n-form for de Rham-correct restriction
+                cont_form: DifferentialForm = _as_n_form(cont_result, ndim)
+            else:
+                cont_form = cont_result
+            exact_mf = CartesianRestrictionOperator(mesh, degree=restriction_degree)(
+                cont_form
+            )
+            test_idx: Any = (0, (n,)) if restriction_degree < ndim else (n,)
+            # When restriction_degree==ndim, exact_mf is a VolumeField (totals);
+            # numerical_mf is a State (averages).  Normalize exact by vol to compare.
+            if restriction_degree == ndim:
+                error = sympy.expand(
+                    sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
+                )
+            else:
+                error = sympy.expand(
+                    sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
+                )
+
+        expected_leading = order
+        poly = sympy.Poly(error, h)
+        for k in range(expected_leading):
+            assert poly.nth(k) == 0, (
+                f"Unexpected O(h^{k}) term in {type(instance).__name__}"
+                f"(order={order}): {poly.nth(k)}"
+            )
+        assert poly.nth(expected_leading) != 0, (
+            f"Missing O(h^{expected_leading}) leading term in "
+            f"{type(instance).__name__}(order={order})"
+        )
 
 
-class _FDSolverClaim(CalibratedClaim[float]):
-    """Claim: solver converges on FDDiscretization(order, DirichletGhostCells).
+class _SolverClaim(CalibratedClaim[float]):
+    """Claim: solver residual < tol after solve on the given Discretization.
 
-    Verifies that ‖b − Au‖₂ < tol after solve returns.
+    Verifies that ‖b − Au‖₂ < tol after solve returns.  disc is pre-built
+    with its BC; Operator binds it to mesh at check time.
     """
 
-    def __init__(
-        self, solver: Any, order: int, mesh: CartesianMesh, cont_op: Any
-    ) -> None:
+    def __init__(self, solver: Any, disc: Any, mesh: CartesianMesh) -> None:
         self._solver = solver
-        self._order = order
+        self._disc = disc
         self._mesh = mesh
-        self._cont_op = cont_op
 
     @property
     def description(self) -> str:
         n = math.prod(self._mesh.shape)
         return (
-            f"FD:{type(self._solver).__name__}/"
-            f"FDDiscretization(order={self._order})/N={n}"
+            f"{type(self._solver).__name__}/"
+            f"{type(self._disc).__name__}(order={self._disc.order})/N={n}"
         )
 
     def check(self, fma_rate: float) -> None:
-        disc = FDDiscretization(self._order, self._cont_op, DirichletGhostCells())
-        op = Operator(disc, self._mesh)
         n = math.prod(self._mesh.shape)
+        op = Operator(self._disc, self._mesh)
         b = Tensor([1.0] * n, backend=_NP_BACKEND)
         u = self._solver.solve(op, b)
         residual = tensor.norm(b - op.apply(u)).get()
         tol = getattr(self._solver, "_tol", 1e-10)
-        assert residual < tol, f"Residual {residual:.3e} >= tol {tol:.0e}"
+        assert residual < tol, f"Did not converge: residual {residual:.3e}"
 
 
-class _FDConvergenceRateClaim(CalibratedClaim[float]):
-    """Claim: FDDiscretization convergence rate ≥ order − 0.1 with point-value DOFs.
+class _DirectSolverClaim(CalibratedClaim[float]):
+    """Claim: direct solver residual < tol after one factorization pass.
 
-    Uses sin(πx) as the manufactured solution with Dirichlet BCs on [0,1].
-    Source ρ(x) = π²sin(πx) is evaluated at cell-center points (not averaged),
-    matching FD's point-value DOF convention.  L²_h error is measured against
-    the exact cell-center values φ(x_i) = sin(πx_i).
+    disc is pre-built with its BC; Operator binds it to mesh at check time.
+    For PeriodicGhostCells the RHS is a zero-mean sinusoid so the system is
+    consistent (in the column space of the circulant advection matrix).
     """
 
-    def __init__(self, solver: Any, disc_order: int, cont_op: Any) -> None:
+    def __init__(self, solver: Any, disc: Any, mesh: CartesianMesh) -> None:
         self._solver = solver
-        self._disc_order = disc_order
-        self._cont_op = cont_op
+        self._disc = disc
+        self._mesh = mesh
 
     @property
     def description(self) -> str:
+        n = math.prod(self._mesh.shape)
+        periodic = isinstance(self._disc.boundary_condition, PeriodicGhostCells)
+        suffix = "/periodic" if periodic else ""
         return (
-            f"FD:{type(self._solver).__name__}/"
-            f"FDDiscretization(order={self._disc_order})/"
-            "convergence_rate"
+            f"{type(self._solver).__name__}/"
+            f"{type(self._disc).__name__}(order={self._disc.order})"
+            f"/N={n}{suffix}"
         )
 
     def check(self, fma_rate: float) -> None:
-        import math as _math
+        n = math.prod(self._mesh.shape)
+        op = Operator(self._disc, self._mesh)
+        if isinstance(self._disc.boundary_condition, PeriodicGhostCells):
+            h = float(self._mesh.cell_volume)
+            orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
+            b = Tensor(
+                [
+                    (
+                        math.sin(2 * math.pi * (orig + (i + 1) * h))
+                        - math.sin(2 * math.pi * (orig + i * h))
+                    )
+                    / h
+                    for i in range(n)
+                ]
+            )
+        else:
+            b = Tensor([1.0] * n)
+        u = self._solver.solve(op, b)
+        residual = tensor.norm(b - op.apply(u)).get()
+        assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
+
+class _ConvergenceRateClaim(CalibratedClaim[float]):
+    """Claim: ‖φ_h − φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
+
+    disc is pre-built with its BC; Operator binds it to each mesh at check time.
+    disc.continuous_operator (a ZeroForm → ZeroForm operator) is used to derive
+    the manufactured-solution source ρ = L(φ) and to auto-select admissible
+    sinusoidal modes.  disc.order drives the k_max and slope assertions.
+
+    point_dof=False (default): cell-average DOF convention; ρ and φ are evaluated
+    as cell averages via antiderivative lambdification (FVM convention).
+    point_dof=True: point-value DOF convention; ρ and φ are evaluated at cell
+    centers (FD convention).
+
+    Admissible modes are those for which A_h·φ_n ≈ ρ_n to within 10% on the
+    coarsest mesh.  For PeriodicGhostCells only even-n modes are candidates:
+    sin(nπx) is 1-periodic iff n is even.
+
+    Before measuring L²_h error the stiffness matrix is SVD-decomposed; any
+    null-space components of u_h are projected out, isolating truncation error
+    from arbitrary null-space contributions (e.g. advection under PeriodicBC).
+    """
+
+    def __init__(self, solver: Any, disc: Any, *, point_dof: bool = False) -> None:
+        self._solver = solver
+        self._disc = disc
+        self._point_dof = point_dof
+
+    @property
+    def description(self) -> str:
+        periodic = isinstance(self._disc.boundary_condition, PeriodicGhostCells)
+        suffix = "/periodic" if periodic else ""
+        return (
+            f"{type(self._solver).__name__}/"
+            f"{type(self._disc).__name__}(order={self._disc.order})/"
+            f"convergence_rate{suffix}"
+        )
+
+    def check(self, fma_rate: float) -> None:
         n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS, self._solver)
         meshes = [
             CartesianMesh(
@@ -546,29 +297,119 @@ class _FDConvergenceRateClaim(CalibratedClaim[float]):
             for f in _MESH_FRACTIONS
         ]
 
-        errors: list[float] = []
+        cont_op = self._disc.continuous_operator
+        manifold = cont_op.manifold
+        _x = manifold.atlas[0].symbols[0]
+        p = self._disc.order
+        periodic = isinstance(self._disc.boundary_condition, PeriodicGhostCells)
+
+        # Pre-build all operators and SVD decompositions for null-space extraction.
+        assembled: list[tuple[Any, list[Any], float, float, int]] = []
         for mesh in meshes:
+            vol = float(mesh.cell_volume)
+            orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            h = float(mesh.cell_volume)
-            orig = float(mesh._origin[0])
+            op_m = Operator(self._disc, mesh)
+            a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
+            decomp = SVDFactorization().factorize(a_m)
+            s_vec = decomp.s
+            vt = decomp.vt
+            null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
+            null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
+            assembled.append((op_m, null_vecs, vol, orig, n_cells))
 
-            disc = FDDiscretization(
-                self._disc_order, self._cont_op, DirichletGhostCells()
+        # Auto-select admissible manufactured-solution modes.
+        # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
+        # For PeriodicGhostCells only even-n candidates are tested: sin(nπx) is
+        # 1-periodic iff n is even, so odd modes are algebraically incompatible.
+        op_c, _, vol_c, orig_c, n_c = assembled[0]
+        k_max = max(1, n_c // p)
+        step = 2 if periodic else 1
+        phi_terms: list[sympy.Expr] = []
+        for n in range(step, k_max + 1, step):
+            phi_n = sympy.sin(n * sympy.pi * _x)
+            rho_n = cont_op(ZeroForm(manifold, phi_n, (_x,))).expr
+            if self._point_dof:
+                f_pn = sympy.lambdify(_x, phi_n, "math")
+                f_rn = sympy.lambdify(_x, rho_n, "math")
+                v_n = Tensor(
+                    [f_pn(orig_c + (i + 0.5) * vol_c) for i in range(n_c)],
+                    backend=_NP_BACKEND,
+                )
+                r_n = Tensor(
+                    [f_rn(orig_c + (i + 0.5) * vol_c) for i in range(n_c)],
+                    backend=_NP_BACKEND,
+                )
+            else:
+                F_pn = sympy.lambdify(_x, sympy.integrate(phi_n, _x), "math")
+                F_rn = sympy.lambdify(_x, sympy.integrate(rho_n, _x), "math")
+                v_n = Tensor(
+                    [
+                        (F_pn(orig_c + (i + 1) * vol_c) - F_pn(orig_c + i * vol_c))
+                        / vol_c
+                        for i in range(n_c)
+                    ],
+                    backend=_NP_BACKEND,
+                )
+                r_n = Tensor(
+                    [
+                        (F_rn(orig_c + (i + 1) * vol_c) - F_rn(orig_c + i * vol_c))
+                        / vol_c
+                        for i in range(n_c)
+                    ],
+                    backend=_NP_BACKEND,
+                )
+            rel_err = tensor.norm(op_c.apply(v_n) - r_n).get() / (
+                tensor.norm(r_n).get() + 1e-30
             )
-            op = Operator(disc, mesh)
+            if rel_err < 0.1:
+                phi_terms.append(phi_n)
+        assert phi_terms, "No admissible manufactured-solution modes found"
+        phi_expr = sympy.Add(*phi_terms)
+        phi = ZeroForm(manifold, phi_expr, (_x,))
 
-            x_centers = [orig + (i + 0.5) * h for i in range(n_cells)]
-            b = Tensor(
-                [_math.pi**2 * _math.sin(_math.pi * x) for x in x_centers],
-                backend=_NP_BACKEND,
-            )
-            u = self._solver.solve(op, b)
-            phi_arr = Tensor(
-                [_math.sin(_math.pi * x) for x in x_centers],
-                backend=_NP_BACKEND,
-            )
-            diff = u - phi_arr
-            errors.append(_math.sqrt(h * float((diff @ diff).get())))
+        # Derive ρ = L(φ) symbolically from disc.continuous_operator.
+        rho_expr = cont_op(phi).expr
+
+        if self._point_dof:
+            f_phi = sympy.lambdify(_x, phi_expr, "math")
+            f_rho = sympy.lambdify(_x, rho_expr, "math")
+        else:
+            F_phi = sympy.lambdify(_x, sympy.integrate(phi_expr, _x), "math")
+            F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
+
+        errors: list[float] = []
+        for op_m, null_vecs, vol, orig, n_cells in assembled:
+            if self._point_dof:
+
+                def _phi_pt(i: int, _v: float = vol, _o: float = orig) -> float:
+                    return f_phi(_o + (i + 0.5) * _v)
+
+                def _rho_pt(i: int, _v: float = vol, _o: float = orig) -> float:
+                    return f_rho(_o + (i + 0.5) * _v)
+
+                b_m = Tensor([_rho_pt(i) for i in range(n_cells)], backend=_NP_BACKEND)
+                phi_arr = Tensor(
+                    [_phi_pt(i) for i in range(n_cells)], backend=_NP_BACKEND
+                )
+            else:
+
+                def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                    return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
+
+                def _rho_avg(i: int, _v: float = vol, _o: float = orig) -> float:
+                    return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
+
+                b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
+                phi_arr = Tensor(
+                    [_phi_avg(i) for i in range(n_cells)], backend=_NP_BACKEND
+                )
+
+            u_arr = self._solver.solve(op_m, b_m)
+            for v in null_vecs:
+                u_arr = u_arr - float(u_arr @ v) * v
+            diff = u_arr - phi_arr
+            errors.append(math.sqrt(vol * (diff @ diff)))
 
         hs = [float(m.cell_volume) for m in meshes]
         log_h = [math.log(hv) for hv in hs]
@@ -582,13 +423,13 @@ class _FDConvergenceRateClaim(CalibratedClaim[float]):
         denom_x = n_pts * sxx - sx**2
         slope = (n_pts * sxy - sx * sy) / denom_x
         r2 = (n_pts * sxy - sx * sy) ** 2 / (denom_x * (n_pts * syy - sy**2))
-        assert slope >= self._disc_order - 0.1, (
-            f"FD convergence rate {slope:.3f} < expected "
-            f"{self._disc_order - 0.1:.1f} (order={self._disc_order})"
+        assert slope >= p - 0.1, (
+            f"Convergence rate {slope:.3f} < expected {p - 0.1:.1f} for "
+            f"{type(self._disc).__name__}(order={p})"
         )
         assert r2 >= 0.999, (
-            f"FD convergence not clean power-law: R²={r2:.4f} "
-            f"(order={self._disc_order})"
+            f"Convergence not clean power-law: R²={r2:.4f} for "
+            f"{type(self._disc).__name__}(order={p})"
         )
 
 
@@ -651,63 +492,67 @@ _SPD_SOLVERS = [DenseCGSolver(tol=1e-8)]  # SPD (symmetric positive definite) on
 _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 
+_FD_DISC_2 = FDDiscretization(2, _fd_cont_op, DirichletGhostCells())
+
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
     *[_OrderClaim(FVMDiscretization(f)) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers including CG
     *[
-        _SolverClaim(s, f, _mesh_n8)
+        _SolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
         for s in [*_SOLVERS, *_SPD_SOLVERS]
         for f in _DIFFUSIVE_FLUXES
     ],
     *[
-        _DirectSolverClaim(s, f, _mesh_n8)
+        _DirectSolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
         for s in _DIRECT_SOLVERS
         for f in _DIFFUSIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f)
+        _ConvergenceRateClaim(s, FVMDiscretization(f, DirichletGhostCells()))
         for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
         for f in _DIFFUSIVE_FLUXES
     ],
     # Advective (rank-(N-1) circulant, PeriodicBC): direct solver only
     *[
-        _DirectSolverClaim(s, f, _mesh_n8, PeriodicGhostCells)
+        _DirectSolverClaim(s, FVMDiscretization(f, PeriodicGhostCells()), _mesh_n8)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f, PeriodicGhostCells)
+        _ConvergenceRateClaim(s, FVMDiscretization(f, PeriodicGhostCells()))
         for s in _DIRECT_SOLVERS
         for f in _ADVECTIVE_FLUXES
     ],
     # Advection-diffusion (non-singular under DirichletBC for κ>0): non-SPD solvers only
     *[
-        _SolverClaim(s, f, _mesh_n8)
+        _SolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
         for s in _SOLVERS
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     *[
-        _DirectSolverClaim(s, f, _mesh_n8)
+        _DirectSolverClaim(s, FVMDiscretization(f, DirichletGhostCells()), _mesh_n8)
         for s in _DIRECT_SOLVERS
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     *[
-        _ConvergenceRateClaim(s, f)
+        _ConvergenceRateClaim(s, FVMDiscretization(f, DirichletGhostCells()))
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     # FD order claims: verify interior truncation error is O(h^p) for point-value DOFs.
-    _FDOrderClaim(FDDiscretization(2, _fd_cont_op)),
-    _FDOrderClaim(FDDiscretization(4, _fd_cont_op)),
+    _OrderClaim(FDDiscretization(2, _fd_cont_op), point_dof=True),
+    _OrderClaim(FDDiscretization(4, _fd_cont_op), point_dof=True),
     # FD solver claims: order=2 yields an SPD matrix under DirichletGhostCells.
-    *[_FDSolverClaim(s, 2, _mesh_n8, _fd_cont_op) for s in [*_SOLVERS, *_SPD_SOLVERS]],
-    *[_FDSolverClaim(s, 2, _mesh_n8, _fd_cont_op) for s in _DIRECT_SOLVERS],
+    *[
+        _SolverClaim(s, _FD_DISC_2, _mesh_n8)
+        for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
+    ],
     # FD convergence rate: order=2 achieves O(h²) globally with ghost-cell BCs.
     # Order≥4 is limited to O(h²) by the one-layer ghost-cell boundary treatment;
     # high-order BCs are not yet implemented.
     *[
-        _FDConvergenceRateClaim(s, 2, _fd_cont_op)
+        _ConvergenceRateClaim(s, _FD_DISC_2, point_dof=True)
         for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
     ],
 ]
@@ -715,7 +560,7 @@ _CLAIMS: list[CalibratedClaim[float]] = [
 # Count convergence-rate claims after the list is built so that adding or
 # removing claims automatically updates the per-claim time budget.
 _N_CONVERGENCE_CLAIMS: int = sum(
-    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim | _FDConvergenceRateClaim)
+    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim)
 )
 
 
