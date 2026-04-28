@@ -7,8 +7,10 @@ from typing import Any, cast
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.theory.continuous.differential_form import ZeroForm
-from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
+from cosmic_foundry.theory.continuous.differential_operator import (
+    DifferentialOperator,
+    DivergenceComposition,
+)
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
 )
@@ -35,32 +37,6 @@ def _apply_zero_ghosts(
         return U(idx)  # type: ignore[arg-type]
 
     return _CallableDiscreteField(mesh, extended)
-
-
-class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
-    """∇·F: the divergence of a DifferentialOperator F mapping ZeroForm → OneForm."""
-
-    def __init__(self, flux_op: DifferentialOperator) -> None:
-        self._flux_op = flux_op
-
-    @property
-    def manifold(self) -> Any:
-        return self._flux_op.manifold
-
-    @property
-    def order(self) -> int:
-        return self._flux_op.order + 1
-
-    def __call__(self, phi: Any) -> ZeroForm[Any]:
-        one_form = self._flux_op(phi)
-        div: sympy.Expr = sum(
-            (
-                sympy.diff(one_form.component(i), one_form.symbols[i])
-                for i in range(len(one_form.symbols))
-            ),
-            sympy.Integer(0),
-        )
-        return ZeroForm(phi.manifold, div, phi.symbols)
 
 
 class FVMDiscretization(Discretization[sympy.Expr]):
@@ -109,7 +85,7 @@ class FVMDiscretization(Discretization[sympy.Expr]):
 
     @property
     def continuous_operator(self) -> DifferentialOperator:
-        return _DivergenceComposition(self._numerical_flux.continuous_operator)
+        return DivergenceComposition(self._numerical_flux.continuous_operator)
 
     def __call__(self, U: DiscreteField[sympy.Expr]) -> DiscreteField[sympy.Expr]:
         """Apply the discrete divergence operator; return cell residuals."""

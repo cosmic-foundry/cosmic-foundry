@@ -59,8 +59,11 @@ from cosmic_foundry.theory.continuous.differential_form import (
     ThreeForm,
     ZeroForm,
 )
+from cosmic_foundry.theory.continuous.differential_operator import DivergenceComposition
+from cosmic_foundry.theory.continuous.diffusion_operator import DiffusionOperator
 from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
+    FDDiscretization,
     FVMDiscretization,
     PeriodicGhostCells,
 )
@@ -417,6 +420,180 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         )
 
 
+class _FDOrderClaim(CalibratedClaim[float]):
+    """Claim: FDDiscretization achieves O(h^p) truncation error at interior cells.
+
+    Feeds exact point values (cell-center evaluations of a polynomial φ) to the
+    discrete operator, then checks that the error polynomial has zeros at h⁰…h^{p-1}
+    and a nonzero h^p term.  Uses point evaluation of continuous_operator(φ) as the
+    exact reference, matching the point-value DOF convention of FD schemes.
+    """
+
+    def __init__(self, instance: Any) -> None:
+        self._instance = instance
+
+    @property
+    def description(self) -> str:
+        return f"FD:{type(self._instance).__name__}(order={self._instance.order})"
+
+    def check(self, fma_rate: float) -> None:
+        instance = self._instance
+        h = sympy.Symbol("h", positive=True)
+        order = instance.order
+        n = order // 2
+
+        space = EuclideanManifold(1)
+        x = space.atlas[0].symbols[0]
+        mesh = CartesianMesh(
+            origin=(sympy.Integer(0),),
+            spacing=(h,),
+            shape=(2 * n + 2,),
+        )
+
+        coeffs = sympy.symbols(f"a:{order + 4}")
+        phi_expr: sympy.Expr = sum(c * x**k for k, c in enumerate(coeffs))
+        phi = ZeroForm(space, phi_expr, (x,))
+
+        def _x_at(idx: tuple[int, ...]) -> sympy.Expr:
+            return (
+                mesh._origin[0]
+                + (sympy.Integer(idx[0]) + sympy.Rational(1, 2)) * mesh._spacing[0]
+            )
+
+        U_point = _CallableDiscreteField(mesh, lambda idx: phi_expr.subs(x, _x_at(idx)))
+        numerical_mf = instance(U_point)
+
+        cont_result = instance.continuous_operator(phi)
+        exact_val = cont_result.expr.subs(x, _x_at((n,)))
+
+        error = sympy.expand(sympy.simplify(numerical_mf((n,)) - exact_val))
+        poly = sympy.Poly(error, h)
+        for k in range(order):
+            assert poly.nth(k) == 0, (
+                f"Unexpected O(h^{k}) term in "
+                f"FDDiscretization(order={order}): {poly.nth(k)}"
+            )
+        assert (
+            poly.nth(order) != 0
+        ), f"Missing O(h^{order}) leading term in FDDiscretization(order={order})"
+
+
+class _FDSolverClaim(CalibratedClaim[float]):
+    """Claim: solver converges on FDDiscretization(mesh, order, DirichletGhostCells).
+
+    Verifies that ‖b − Au‖₂ < tol after solve returns.
+    """
+
+    def __init__(
+        self, solver: Any, order: int, mesh: CartesianMesh, cont_op: Any
+    ) -> None:
+        self._solver = solver
+        self._order = order
+        self._mesh = mesh
+        self._cont_op = cont_op
+
+    @property
+    def description(self) -> str:
+        n = math.prod(self._mesh.shape)
+        return (
+            f"FD:{type(self._solver).__name__}/"
+            f"FDDiscretization(order={self._order})/N={n}"
+        )
+
+    def check(self, fma_rate: float) -> None:
+        disc = FDDiscretization(
+            self._mesh, self._order, self._cont_op, DirichletGhostCells()
+        )
+        op = Operator(disc, self._mesh)
+        n = math.prod(self._mesh.shape)
+        b = Tensor([1.0] * n, backend=_NP_BACKEND)
+        u = self._solver.solve(op, b)
+        residual = tensor.norm(b - op.apply(u)).get()
+        tol = getattr(self._solver, "_tol", 1e-10)
+        assert residual < tol, f"Residual {residual:.3e} >= tol {tol:.0e}"
+
+
+class _FDConvergenceRateClaim(CalibratedClaim[float]):
+    """Claim: FDDiscretization convergence rate ≥ order − 0.1 with point-value DOFs.
+
+    Uses sin(πx) as the manufactured solution with Dirichlet BCs on [0,1].
+    Source ρ(x) = π²sin(πx) is evaluated at cell-center points (not averaged),
+    matching FD's point-value DOF convention.  L²_h error is measured against
+    the exact cell-center values φ(x_i) = sin(πx_i).
+    """
+
+    def __init__(self, solver: Any, disc_order: int, cont_op: Any) -> None:
+        self._solver = solver
+        self._disc_order = disc_order
+        self._cont_op = cont_op
+
+    @property
+    def description(self) -> str:
+        return (
+            f"FD:{type(self._solver).__name__}/"
+            f"FDDiscretization(order={self._disc_order})/"
+            "convergence_rate"
+        )
+
+    def check(self, fma_rate: float) -> None:
+        import math as _math
+
+        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS, self._solver)
+        meshes = [
+            CartesianMesh(
+                origin=(sympy.Rational(0),),
+                spacing=(sympy.Rational(1, int(n_max * f)),),
+                shape=(int(n_max * f),),
+            )
+            for f in _MESH_FRACTIONS
+        ]
+
+        errors: list[float] = []
+        for mesh in meshes:
+            n_cells = mesh.shape[0]
+            h = float(mesh.cell_volume)
+            orig = float(mesh._origin[0])
+
+            disc = FDDiscretization(
+                mesh, self._disc_order, self._cont_op, DirichletGhostCells()
+            )
+            op = Operator(disc, mesh)
+
+            x_centers = [orig + (i + 0.5) * h for i in range(n_cells)]
+            b = Tensor(
+                [_math.pi**2 * _math.sin(_math.pi * x) for x in x_centers],
+                backend=_NP_BACKEND,
+            )
+            u = self._solver.solve(op, b)
+            phi_arr = Tensor(
+                [_math.sin(_math.pi * x) for x in x_centers],
+                backend=_NP_BACKEND,
+            )
+            diff = u - phi_arr
+            errors.append(_math.sqrt(h * float((diff @ diff).get())))
+
+        hs = [float(m.cell_volume) for m in meshes]
+        log_h = [math.log(hv) for hv in hs]
+        log_e = [math.log(ev) for ev in errors]
+        n_pts = len(log_h)
+        sx = sum(log_h)
+        sy = sum(log_e)
+        sxy = sum(lh * le for lh, le in zip(log_h, log_e, strict=False))
+        sxx = sum(lh * lh for lh in log_h)
+        syy = sum(le * le for le in log_e)
+        denom_x = n_pts * sxx - sx**2
+        slope = (n_pts * sxy - sx * sy) / denom_x
+        r2 = (n_pts * sxy - sx * sy) ** 2 / (denom_x * (n_pts * syy - sy**2))
+        assert slope >= self._disc_order - 0.1, (
+            f"FD convergence rate {slope:.3f} < expected "
+            f"{self._disc_order - 0.1:.1f} (order={self._disc_order})"
+        )
+        assert r2 >= 0.999, (
+            f"FD convergence not clean power-law: R²={r2:.4f} "
+            f"(order={self._disc_order})"
+        )
+
+
 def _assemble_from_op(op: Operator, n: int, backend: Any) -> Any:
     """Build the N×N stiffness matrix from op.apply on basis vectors."""
     columns: list[list[float]] = []
@@ -438,6 +615,7 @@ def _as_n_form(f: ZeroForm, ndim: int) -> DifferentialForm:
 
 
 _manifold = EuclideanManifold(1)
+_fd_cont_op = DivergenceComposition(DiffusionOperator(_manifold))
 _dummy_mesh = CartesianMesh(
     origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
 )
@@ -524,12 +702,25 @@ _CLAIMS: list[CalibratedClaim[float]] = [
         for s in [*_SOLVERS, *_DIRECT_SOLVERS]
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
+    # FD order claims: verify interior truncation error is O(h^p) for point-value DOFs.
+    _FDOrderClaim(FDDiscretization(_dummy_mesh, 2, _fd_cont_op)),
+    _FDOrderClaim(FDDiscretization(_dummy_mesh, 4, _fd_cont_op)),
+    # FD solver claims: order=2 yields an SPD matrix under DirichletGhostCells.
+    *[_FDSolverClaim(s, 2, _mesh_n8, _fd_cont_op) for s in [*_SOLVERS, *_SPD_SOLVERS]],
+    *[_FDSolverClaim(s, 2, _mesh_n8, _fd_cont_op) for s in _DIRECT_SOLVERS],
+    # FD convergence rate: order=2 achieves O(h²) globally with ghost-cell BCs.
+    # Order≥4 is limited to O(h²) by the one-layer ghost-cell boundary treatment;
+    # high-order BCs are not yet implemented.
+    *[
+        _FDConvergenceRateClaim(s, 2, _fd_cont_op)
+        for s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]
+    ],
 ]
 
 # Count convergence-rate claims after the list is built so that adding or
 # removing claims automatically updates the per-claim time budget.
 _N_CONVERGENCE_CLAIMS: int = sum(
-    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim)
+    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim | _FDConvergenceRateClaim)
 )
 
 
