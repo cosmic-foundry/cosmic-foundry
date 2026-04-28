@@ -64,9 +64,8 @@ identity; numerical computation packages (JAX, NumPy, SciPy) are excluded by
 definition. Enforced by `tests/test_theory_no_third_party_imports.py`.
 
 **`physics/` is the application/concreteness layer.** It implements specific
-physical models (PDE operators, discretization schemes) and houses `State`,
-the concrete simulation-state type that couples mesh geometry with numeric
-storage via `computation/`. `physics/` may import from all other packages.
+physical models (PDE operators, discretization schemes). `physics/` may import
+from all other packages.
 
 **`computation/` is the numeric machinery layer.** It must not import from
 `theory/` or `geometry/` or `physics/`; enforced by
@@ -373,14 +372,6 @@ Concrete PDE model implementations and simulation state.
 Application/concreteness layer: may import from all other packages.
 
 ```
-State(DiscreteField[float])     — concrete Tensor-backed simulation-state field.
-                                  Stores cell-average values φ̄ᵢ = (1/|Ωᵢ|)∫_Ωᵢ f dV.
-                                  Multi-index cell access via mesh shape.
-                                  Backed by any Backend. The canonical type for
-                                  time integrators, checkpoint/restart, and I/O.
-                                  PythonBackend with sympy.Expr leaves also works,
-                                  enabling symbolic evaluation for convergence proofs.
-
 NumericalFlux implementations:
 ├── DiffusiveFlux(order)       — F(U) = −∇U; stencil coefficients derived
 │                                 symbolically in __init__ from the antisymmetric
@@ -537,10 +528,10 @@ Ghost-cell extension is handled by `DirichletGhostCells` and `PeriodicGhostCells
 (concrete `DiscreteBoundaryCondition` subclasses).  All convergence claims pass.
 
 **C8 — Explicit time integrators.** `TimeIntegrator` ABC; `RungeKutta2` and
-`RungeKutta4`. Backend-agnostic; operates on `State`-valued fields. Lane B
+`RungeKutta4`. Backend-agnostic; operates on `DiscreteField`-valued fields. Lane B
 derivation: truncation error O(hᵖ), p = 2, 4, confirmed symbolically.
 
-**C9 — HDF5 checkpoint/restart.** Write/read `State`-valued fields with
+**C9 — HDF5 checkpoint/restart.** Write/read `DiscreteField`-valued fields with
 provenance sidecars (git hash, timestamp, parameter record). GPU-written
 checkpoints readable on CPU-only machines.
 
@@ -568,7 +559,7 @@ checkpoints readable on CPU-only machines.
 | 0 | Theory / Geometry | **Mathematical foundations. ✓** Layer architecture and symbolic-reasoning import boundary; `foundation/`, `continuous/`, `discrete/`, `geometry/` type hierarchies; `CellComplex`, `Mesh`, `StructuredMesh`, `DiscreteField`, `VolumeField`, `RestrictionOperator`; process discipline M0–M2. |
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
 | 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 5 onward. |
-| 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `State` (concrete `DiscreteField`); `TimeIntegrator` (RK2/RK4); HDF5 checkpoint/restart. In progress. |
+| 3 | Computation | **Backend-agnostic computation layer.** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; JIT-compiled solve loop; `TimeIntegrator` (RK2/RK4); HDF5 checkpoint/restart. In progress. |
 
 ### Physics epochs
 
