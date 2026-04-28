@@ -206,6 +206,15 @@ class JaxBackend:
     def sync(self, raw: Any) -> None:
         jax.block_until_ready(raw)
 
+    def scatter_add(
+        self,
+        dst: Any,
+        rows: list[int],
+        cols: list[int],
+        values: Any,
+    ) -> Any:
+        return dst.at[rows, cols].add(values)
+
     def while_loop(
         self,
         cond_fn: Any,

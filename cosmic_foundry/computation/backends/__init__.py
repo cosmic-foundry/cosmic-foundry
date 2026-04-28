@@ -71,6 +71,14 @@ class Backend(Protocol):
     def rdiv_scalar(self, s: float, raw: Any) -> Any: ...
     def take(self, raw: Any, indices: Any) -> Any: ...
 
+    def scatter_add(
+        self,
+        dst: Any,
+        rows: list[int],
+        cols: list[int],
+        values: Any,
+    ) -> Any: ...
+
     # Scalar extraction (called only on allocated rank-0 data)
     def get(self, raw: Any) -> Any: ...
 
