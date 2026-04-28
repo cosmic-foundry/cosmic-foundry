@@ -46,7 +46,8 @@ from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
-    CartesianRestrictionOperator,
+    CartesianFaceRestriction,
+    CartesianVolumeRestriction,
 )
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFlux
@@ -56,7 +57,6 @@ from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     OneForm,
-    ThreeForm,
     ZeroForm,
 )
 from cosmic_foundry.theory.continuous.differential_operator import DivergenceComposition
@@ -129,32 +129,22 @@ class _OrderClaim(CalibratedClaim[float]):
             exact_val = cont_result.expr.subs(x, _x_at((n,)))
             error = sympy.expand(sympy.simplify(numerical_mf((n,)) - exact_val))
         else:
-            ndim = len(mesh._shape)
             vol = mesh.cell_volume
-            U_totals = CartesianRestrictionOperator(mesh, degree=ndim)(
-                _as_n_form(phi, ndim)
-            )
+            U_totals = CartesianVolumeRestriction(mesh)(phi)
             U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
             numerical_mf = instance(U_avg)
             cont_result = instance.continuous_operator(phi)
             assert isinstance(cont_result, DifferentialForm)
-            restriction_degree = ndim - cont_result.degree
-            if restriction_degree == ndim:
-                # ZeroForm: wrap as n-form for de Rham-correct restriction
-                cont_form: DifferentialForm = _as_n_form(cont_result, ndim)
-            else:
-                cont_form = cont_result
-            exact_mf = CartesianRestrictionOperator(mesh, degree=restriction_degree)(
-                cont_form
-            )
-            test_idx: Any = (0, (n,)) if restriction_degree < ndim else (n,)
-            # When restriction_degree==ndim, exact_mf is a VolumeField (totals);
-            # numerical_mf is a State (averages).  Normalize exact by vol to compare.
-            if restriction_degree == ndim:
+            if isinstance(cont_result, ZeroForm):
+                exact_mf = CartesianVolumeRestriction(mesh)(cont_result)
+                test_idx: Any = (n,)
                 error = sympy.expand(
                     sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
                 )
             else:
+                assert isinstance(cont_result, OneForm)
+                exact_mf = CartesianFaceRestriction(mesh)(cont_result)
+                test_idx = (0, (n,))
                 error = sympy.expand(
                     sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
                 )
@@ -442,15 +432,6 @@ def _assemble_from_op(op: Operator, n: int, backend: Any) -> Any:
         columns.append(backend.flatten(op.apply(e_j)._value))
     rows = [[columns[j][i] for j in range(n)] for i in range(n)]
     return Tensor(rows, backend=backend)
-
-
-def _as_n_form(f: ZeroForm, ndim: int) -> DifferentialForm:
-    """Wrap scalar density ZeroForm as the n-form f·dV (Cartesian coordinates)."""
-    if ndim == 1:
-        return OneForm(f.manifold, (f.expr,), f.symbols)
-    if ndim == 3:
-        return ThreeForm(f.manifold, f.expr, f.symbols)
-    raise NotImplementedError(f"_as_n_form not implemented for ndim={ndim}")
 
 
 _manifold = EuclideanManifold(1)

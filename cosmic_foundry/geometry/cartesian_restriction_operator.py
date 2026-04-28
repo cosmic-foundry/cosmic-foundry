@@ -1,8 +1,9 @@
-"""CartesianRestrictionOperator: analytic restriction on CartesianMesh."""
+"""Cartesian restriction operators: analytic Rₕᵏ on CartesianMesh."""
 
 from __future__ import annotations
 
 from itertools import product
+from typing import TypeVar
 
 import sympy
 
@@ -12,14 +13,13 @@ from cosmic_foundry.theory.continuous.differential_form import (
     OneForm,
     ZeroForm,
 )
-from cosmic_foundry.theory.continuous.symbolic_function import SymbolicFunction
-from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.edge_field import EdgeField, _CallableEdgeField
 from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
-from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.point_field import PointField, _CallablePointField
 from cosmic_foundry.theory.discrete.restriction_operator import RestrictionOperator
 from cosmic_foundry.theory.discrete.volume_field import VolumeField
+
+_F = TypeVar("_F")
 
 
 class _CartesianVolumeIntegral(VolumeField[sympy.Expr]):
@@ -41,70 +41,50 @@ class _CartesianVolumeIntegral(VolumeField[sympy.Expr]):
         return self._values[idx]
 
 
-class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.Expr]):
-    """Restriction operator Rₕ for CartesianMesh via analytic SymPy integration.
+class CartesianRestrictionOperator(RestrictionOperator[_F, sympy.Expr]):
+    """Abstract base for all Cartesian restriction operators Rₕᵏ.
 
-    Implements Rₕᵏ: Ωᵏ → k-cochains for all k ∈ {0, 1, ndim−1, ndim}.
-    The degree parameter selects which restriction is applied.
+    Encodes the two invariants shared by every Rₕᵏ on a CartesianMesh:
+    the mesh is a CartesianMesh, and the output value type is sympy.Expr
+    (all restrictions are computed via analytic SymPy integration).
 
-    degree == ndim (default): cell volume-integral restriction (Rₕⁿ)
-        Input: n-Form f  (OneForm in 1-D, TwoForm in 2-D, ThreeForm in 3-D)
-        (Rₕⁿ f)ᵢ = ∫_Ωᵢ f   → VolumeField
-        The scalar density f.expr is integrated against dx₁∧⋯∧dxₙ; valid in
-        Cartesian coordinates where the Jacobian is 1.  Non-Cartesian metrics
-        must fold √|g| into f before calling this restriction.
+    Concrete subclasses fix the input form type and cochain degree:
+        CartesianVolumeRestriction  — DifferentialForm → VolumeField  (FV DOFs)
+        CartesianFaceRestriction    — DifferentialForm → FaceField
+        CartesianEdgeRestriction    — OneForm          → EdgeField
+        CartesianPointRestriction   — ZeroForm         → PointField   (FD DOFs)
 
-    degree == ndim - 1: face-normal flux restriction (Rₕⁿ⁻¹)
-        Input: OneForm F
-        (Rₕⁿ⁻¹ F)_{a,i} = ∫_{transverse} F.component(a)|_{x_a=face} dx_⊥   → FaceField
-
-    degree == 1: edge-tangent line-integral restriction (Rₕ¹)
-        Input: OneForm F
-        (Rₕ¹ F)_{a,c} = ∫_{x_c}^{x_{c+1}} F.component(a)|_{x_⊥=x_{c_⊥}} dx_a → EdgeField
-        Integrates over the full cell width [x_c, x_{c+1}] (face to face); transverse
-        coordinates fixed at the low face position.
-        Only meaningful for ndim > 1; for ndim == 1 degree 1 == ndim → cell restrict.
-
-    degree == 0: cell-center evaluation restriction (Rₕ⁰)
-        Input: ZeroForm f
-        (Rₕ⁰ f)(c) = f(x_c) where x_c = origin + (c + ½)h   → PointField
-        Satisfies D₀ ∘ Rₕ⁰ = Rₕ¹ ∘ d₀ exactly (by the fundamental theorem of calculus).
-
-    All integrals are computed analytically via SymPy.
+    A future non-Cartesian geometry (e.g. cylindrical, Schwarzschild) would
+    provide a parallel abstract base with the same structure, inheriting from
+    RestrictionOperator and fixing its own mesh type and value type.
     """
 
-    def __init__(self, mesh: CartesianMesh, degree: int | None = None) -> None:
+    def __init__(self, mesh: CartesianMesh) -> None:
         self._mesh = mesh
-        ndim = len(mesh._shape)
-        self._degree = ndim if degree is None else degree
 
     @property
-    def mesh(self) -> Mesh:
+    def mesh(self) -> CartesianMesh:
         return self._mesh
 
-    @property
-    def degree(self) -> int:
-        return self._degree
 
-    def __call__(self, f: SymbolicFunction) -> DiscreteField[sympy.Expr]:
-        ndim = len(self._mesh._shape)
-        if self._degree == ndim:
-            assert isinstance(f, DifferentialForm) and f.degree == ndim, (
-                f"degree={ndim} restriction requires an n-Form of degree {ndim} "
-                f"(e.g. ThreeForm in 3-D, OneForm in 1-D), got {type(f).__name__}"
-            )
-            return self._cell_restrict(f)
-        if self._degree == 0 and isinstance(f, ZeroForm):
-            return self._point_restrict(f)
-        assert isinstance(f, OneForm), (
-            f"degree={self._degree} restriction requires a OneForm, "
-            f"got {type(f).__name__}"
-        )
-        if self._degree == 1:
-            return self._edge_restrict(f)
-        return self._face_restrict(f)
+class CartesianVolumeRestriction(CartesianRestrictionOperator[ZeroForm]):
+    """Rₕⁿ: ZeroForm → VolumeField via exact SymPy cell-volume integration.
 
-    def _cell_restrict(self, f: DifferentialForm) -> VolumeField[sympy.Expr]:
+    (Rₕⁿ f)ᵢ = ∫_Ωᵢ f dV — total cell integral, returned as a VolumeField.
+    Cell averages are VolumeField values divided by cell_volume.
+
+    Input is a ZeroForm (scalar field).  In Cartesian coordinates the volume
+    element dV = 1, so f is integrated directly as a scalar density; no
+    explicit n-form wrapping is needed.  Non-Cartesian geometries would
+    fold √|g| into the integrand in their own subclass.
+
+    This is the FV restriction: the choice of cell-average DOFs.
+    Both CartesianVolumeRestriction and CartesianPointRestriction accept a
+    ZeroForm; the distinction is how the scalar is sampled (cell average vs.
+    point value at cell center).
+    """
+
+    def __call__(self, f: ZeroForm) -> VolumeField[sympy.Expr]:
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):
@@ -116,26 +96,66 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
             values[idx] = sympy.simplify(expr)
         return _CartesianVolumeIntegral(mesh, values)
 
-    def _point_restrict(self, f: ZeroForm) -> PointField[sympy.Expr]:
-        """Cell-center evaluation: (Rₕ⁰ f)(c) = f(origin + (c + ½)h)."""
+
+class CartesianFaceRestriction(CartesianRestrictionOperator[DifferentialForm]):
+    """Rₕⁿ⁻¹: DifferentialForm → FaceField via exact SymPy face-normal integration.
+
+    The abstract input is the (n-1)-form.  In the Cartesian representation,
+    this is always a OneForm (vector field): F.component(axis) gives the
+    face-normal flux density regardless of mesh dimension, via the Hodge
+    isomorphism in flat Cartesian space.
+
+    (Rₕⁿ⁻¹ F)_{a,i} = ∫_{transverse} F.component(a)|_{x_a=face} dx_⊥ → FaceField.
+
+    A future non-Cartesian implementation (e.g. CylindricalFaceRestriction)
+    would take the same DifferentialForm input and handle the (n-1)-form
+    appropriate to that geometry.
+
+    Commutation Dₙ₋₁ ∘ Rₕⁿ⁻¹ = Rₕⁿ ∘ dₙ₋₁ holds exactly (Stokes theorem).
+    """
+
+    def __call__(self, f: DifferentialForm) -> FaceField[sympy.Expr]:
+        assert isinstance(f, OneForm), (
+            "CartesianFaceRestriction requires OneForm as the Cartesian proxy "
+            "for the (n-1)-form; got "
+            f"{type(f).__name__}"
+        )
         mesh = self._mesh
         ndim = len(mesh._shape)
 
-        def point_eval(c_idx: tuple[int, ...]) -> sympy.Expr:
-            expr = f.expr
+        def face_flux(face: tuple[int, tuple[int, ...]]) -> sympy.Expr:
+            axis, idx_low = face
+            expr = f.component(axis)
+            face_x = (
+                mesh._origin[axis]
+                + sympy.Integer(idx_low[axis] + 1) * mesh._spacing[axis]
+            )
+            expr = expr.subs(f.symbols[axis], face_x)
             for j in range(ndim):
-                x_cj = (
-                    mesh._origin[j]
-                    + (sympy.Integer(c_idx[j]) + sympy.Rational(1, 2))
-                    * mesh._spacing[j]
-                )
-                expr = expr.subs(f.symbols[j], x_cj)
+                if j != axis:
+                    lo = mesh._origin[j] + sympy.Integer(idx_low[j]) * mesh._spacing[j]
+                    hi = lo + mesh._spacing[j]
+                    expr = sympy.integrate(expr, (f.symbols[j], lo, hi))
             return sympy.simplify(expr)
 
-        return _CallablePointField(mesh, point_eval)
+        return _CallableFaceField(mesh, face_flux)
 
-    def _edge_restrict(self, F: OneForm) -> EdgeField[sympy.Expr]:
-        """Edge-tangent line integral: (Rₕ¹ F)(a,c) = ∫_{x_c}^{x_{c+1}} F_a dx_a."""
+
+class CartesianEdgeRestriction(CartesianRestrictionOperator[OneForm]):
+    """Rₕ¹: OneForm → EdgeField via exact SymPy edge-tangent integration.
+
+    (Rₕ¹ F)_{a,c} = ∫_{x_c}^{x_{c+1}} F.component(a)|_{x_⊥=x_{c_⊥}} dx_a → EdgeField.
+
+    OneForm is the correct input type here: Rₕ¹ always integrates a 1-form
+    along 1-dimensional edges, independent of mesh dimension.
+
+    Integrates over the full cell width [x_c, x_{c+1}]; transverse coordinates
+    fixed at the low-face position.  Only meaningful for ndim > 1; for ndim == 1
+    this coincides with CartesianVolumeRestriction.
+    Commutation D₀ ∘ Rₕ⁰ = Rₕ¹ ∘ d₀ holds exactly (FTC).
+    """
+
+    def __call__(self, F: OneForm) -> EdgeField[sympy.Expr]:
         mesh = self._mesh
         ndim = len(mesh._shape)
 
@@ -153,26 +173,41 @@ class CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.E
 
         return _CallableEdgeField(mesh, edge_integral)
 
-    def _face_restrict(self, F: OneForm) -> FaceField[sympy.Expr]:
+
+class CartesianPointRestriction(CartesianRestrictionOperator[ZeroForm]):
+    """Rₕ⁰: ZeroForm → PointField via cell-center evaluation.
+
+    (Rₕ⁰ f)(c) = f(origin + (c + ½)·spacing) → PointField.
+
+    ZeroForm is the correct input type here: Rₕ⁰ always evaluates a 0-form
+    (scalar field) at points, independent of mesh dimension.
+
+    This is the FD restriction: the choice of point-value DOFs at cell centers.
+    Commutation D₀ ∘ Rₕ⁰ = Rₕ¹ ∘ d₀ holds exactly (FTC).
+    """
+
+    def __call__(self, f: ZeroForm) -> PointField[sympy.Expr]:
         mesh = self._mesh
         ndim = len(mesh._shape)
 
-        def face_flux(face: tuple[int, tuple[int, ...]]) -> sympy.Expr:
-            axis, idx_low = face
-            expr = F.component(axis)
-            face_x = (
-                mesh._origin[axis]
-                + sympy.Integer(idx_low[axis] + 1) * mesh._spacing[axis]
-            )
-            expr = expr.subs(F.symbols[axis], face_x)
+        def point_eval(c_idx: tuple[int, ...]) -> sympy.Expr:
+            expr = f.expr
             for j in range(ndim):
-                if j != axis:
-                    lo = mesh._origin[j] + sympy.Integer(idx_low[j]) * mesh._spacing[j]
-                    hi = lo + mesh._spacing[j]
-                    expr = sympy.integrate(expr, (F.symbols[j], lo, hi))
+                x_cj = (
+                    mesh._origin[j]
+                    + (sympy.Integer(c_idx[j]) + sympy.Rational(1, 2))
+                    * mesh._spacing[j]
+                )
+                expr = expr.subs(f.symbols[j], x_cj)
             return sympy.simplify(expr)
 
-        return _CallableFaceField(mesh, face_flux)
+        return _CallablePointField(mesh, point_eval)
 
 
-__all__ = ["CartesianRestrictionOperator"]
+__all__ = [
+    "CartesianEdgeRestriction",
+    "CartesianFaceRestriction",
+    "CartesianPointRestriction",
+    "CartesianRestrictionOperator",
+    "CartesianVolumeRestriction",
+]

@@ -228,23 +228,21 @@ DiscreteField(NumericFunction[Mesh, V])
                                     FaceField[scalar]        ↔ scalar flux F·n̂·|A|
                                     FaceField[sympy.Matrix]  ↔ matrix-valued flux
                                   The canonical return type of NumericalFlux.__call__
-                                  and CartesianRestrictionOperator (degree = ndim−1).
+                                  and CartesianFaceRestriction.
                                   Concrete subclass:
                                     _CallableFaceField — callable-backed (NumericalFlux,
-                                                         CartesianRestrictionOperator)
+                                                         CartesianFaceRestriction)
 
 RestrictionOperator(NumericFunction[F, DiscreteField[V]])
                                — free: mesh: Mesh;
                                   formal bridge from continuous/ to discrete/:
                                   a Function plus a Mesh yields a DiscreteField.
                                   F is a generic input type so that concrete
-                                  subclasses can narrow it (e.g. SymbolicFunction)
-                                  without an LSP violation.
-                                  Degree selects the cochain level:
-                                    degree=ndim:   ∫_Ωᵢ f dV → VolumeField  (n-cochain)
-                                    degree=ndim-1: ∫_Aᵢ F·n̂ dA → FaceField
-                                    degree=1:      ∫_eᵢ F·dl → EdgeField
-                                    degree=0:      f(vᵢ) → PointField
+                                  subclasses can narrow it (e.g. ZeroForm, OneForm)
+                                  without an LSP violation.  The output cochain
+                                  level is fixed by the concrete subclass — the
+                                  return type of __call__ encodes the DEC degree k,
+                                  making a separate degree property redundant.
 
 DiscreteBoundaryCondition(ABC)
                             — discrete counterpart of BoundaryCondition.
@@ -327,15 +325,34 @@ CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
                                                   face area = ∏_{k≠j} Δxₖ  (face ⊥ axis j)
                                                   face normal = ê_j
 
-CartesianRestrictionOperator(RestrictionOperator[SymbolicFunction, sympy.Expr])
-                                       — Rₕᵏ: Ωᵏ → k-cochains via exact SymPy integration.
-                                         degree=ndim:   Rₕⁿ(n-Form)   → VolumeField (∫_Ωᵢ f dV, total)
-                                                        (ThreeForm in 3-D, OneForm in 1-D)
-                                         degree=ndim-1: Rₕⁿ⁻¹(OneForm) → FaceField   (face-normal flux ∫ F_a dA_⊥)
-                                                        OneForm used as Cartesian (n-1)-Form proxy:
-                                                        F.component(a) stands for *(F)_a dA_⊥
-                                         degree=1:      Rₕ¹(OneForm)   → EdgeField   (edge line integral)
-                                         degree=0:      Rₕ⁰(ZeroForm)  → PointField  (vertex evaluation)
+CartesianRestrictionOperator(RestrictionOperator[F, sympy.Expr])
+                                       — abstract base for all Rₕᵏ on CartesianMesh.
+                                         Encodes the two Cartesian invariants: mesh is
+                                         CartesianMesh; output value type is sympy.Expr.
+                                         A future non-Cartesian geometry provides a
+                                         parallel abstract base (same structure, different
+                                         mesh type and value type).
+├── CartesianVolumeRestriction(CartesianRestrictionOperator[ZeroForm])
+│                                      — Rₕⁿ: ZeroForm → VolumeField (∫_Ωᵢ f dV, total)
+│                                        In Cartesian coords dV=1, so ZeroForm integrates
+│                                        directly as scalar density; no n-form wrapping.
+│                                        FV restriction: cell-average DOF choice.
+├── CartesianFaceRestriction(CartesianRestrictionOperator[DifferentialForm])
+│                                      — Rₕⁿ⁻¹: DifferentialForm → FaceField
+│                                        Abstract input is the (n-1)-form; the Cartesian
+│                                        representation uses OneForm as proxy (Hodge
+│                                        isomorphism in flat space): F.component(a)
+│                                        gives the face-normal flux density at all dims.
+│                                        ∫_{transverse} F.component(a)|_{x_a=face} dx_⊥
+├── CartesianEdgeRestriction(CartesianRestrictionOperator[OneForm])
+│                                      — Rₕ¹: OneForm → EdgeField (edge line integral)
+│                                        OneForm is dimension-independent here: Rₕ¹
+│                                        always integrates a 1-form along 1-D edges.
+└── CartesianPointRestriction(CartesianRestrictionOperator[ZeroForm])
+                                       — Rₕ⁰: ZeroForm → PointField (cell-center eval)
+                                         ZeroForm is dimension-independent: Rₕ⁰ always
+                                         evaluates a scalar at points.
+                                         FD restriction: point-value DOF choice.
                                          Commutation: Dₖ ∘ Rₕᵏ = Rₕᵏ⁺¹ ∘ dₖ holds exactly
                                          for all k (FTC for k=0; Stokes for k=1)
 
