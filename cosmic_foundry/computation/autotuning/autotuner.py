@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import NamedTuple
 
 from cosmic_foundry.computation.autotuning.benchmarker import (
@@ -12,7 +12,11 @@ from cosmic_foundry.computation.autotuning.benchmarker import (
 )
 from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDescriptor
 from cosmic_foundry.computation.backends import Backend
-from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
+from cosmic_foundry.computation.solvers.linear_solver import (
+    LinearOperator,
+    LinearSolver,
+)
+from cosmic_foundry.computation.tensor import Tensor
 
 
 class SelectionResult(NamedTuple):
@@ -64,6 +68,11 @@ class Autotuner:
         solvers carry configuration (tol, max_iter for Jacobi, rcond for SVD).
     backends:
         Backends to benchmark each solver against.
+    operator_factory:
+        Callable that produces a (LinearOperator, Tensor) pair for a given
+        problem size n and backend.  Called at each probe size during
+        calibrate(); the caller is responsible for constructing operators
+        representative of the target problem class.
     benchmarker:
         Benchmarker instance; defaults to Benchmarker() if not supplied.
     prune_threshold:
@@ -79,12 +88,14 @@ class Autotuner:
         self,
         solvers: Sequence[LinearSolver],
         backends: Sequence[Backend],
+        operator_factory: Callable[[int, Backend], tuple[LinearOperator, Tensor]],
         benchmarker: Benchmarker | None = None,
         prune_threshold: float = 10.0,
         time_ratio_threshold: float = 2.0,
     ) -> None:
         self._solvers = list(solvers)
         self._backends = list(backends)
+        self._operator_factory = operator_factory
         self._benchmarker = benchmarker if benchmarker is not None else Benchmarker()
         self._prune_threshold = prune_threshold
         self._time_ratio_threshold = time_ratio_threshold
@@ -120,7 +131,8 @@ class Autotuner:
         # alpha is re-pinned to this measurement; exponent is kept from the probe fit.
         self._results = []
         for solver, backend, probe_fit in survivors:
-            t = self._benchmarker.time_solve(solver, backend, descriptor)
+            op, b = self._operator_factory(descriptor.n, backend)
+            t = self._benchmarker.time_solve(solver, op, b)
             alpha = t / descriptor.n**probe_fit.exponent
             self._results.append(
                 BenchmarkResult(solver, backend, alpha, probe_fit.exponent)
@@ -165,17 +177,15 @@ class Autotuner:
         Collects (N, T) pairs from the stable regime and fits by least squares.
         Returns None when fewer than two stable points are collected.
         """
-        prev_t = self._benchmarker.time_solve(
-            solver, backend, self._probe_descriptor(descriptor, 2)
-        )
+        op, b = self._operator_factory(2, backend)
+        prev_t = self._benchmarker.time_solve(solver, op, b)
         stable: list[tuple[int, float]] = []
         found_floor = False
 
         n = 4
         while n <= descriptor.n // 2:
-            t = self._benchmarker.time_solve(
-                solver, backend, self._probe_descriptor(descriptor, n)
-            )
+            op, b = self._operator_factory(n, backend)
+            t = self._benchmarker.time_solve(solver, op, b)
             if not found_floor and t / prev_t >= self._time_ratio_threshold:
                 found_floor = True
             if found_floor:
@@ -200,23 +210,11 @@ class Autotuner:
         """
         n1 = max(2, descriptor.n // 2)
         n2 = descriptor.n
-        t1 = self._benchmarker.time_solve(
-            solver, backend, self._probe_descriptor(descriptor, n1)
-        )
-        t2 = self._benchmarker.time_solve(
-            solver, backend, self._probe_descriptor(descriptor, n2)
-        )
+        op1, b1 = self._operator_factory(n1, backend)
+        t1 = self._benchmarker.time_solve(solver, op1, b1)
+        op2, b2 = self._operator_factory(n2, backend)
+        t2 = self._benchmarker.time_solve(solver, op2, b2)
         return _make_result(solver, backend, [(n1, t1), (n2, t2)])
-
-    @staticmethod
-    def _probe_descriptor(descriptor: ProblemDescriptor, n: int) -> ProblemDescriptor:
-        return ProblemDescriptor(
-            n=n,
-            g=descriptor.g,
-            r=min(descriptor.r, n),
-            tol=descriptor.tol,
-            spectral_radius=descriptor.spectral_radius,
-        )
 
 
 def _make_result(

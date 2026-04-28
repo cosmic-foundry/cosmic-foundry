@@ -16,7 +16,6 @@ import sympy
 
 from cosmic_foundry.computation.autotuning.benchmarker import fit_log_log
 from cosmic_foundry.computation.backends import NumpyBackend
-from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
@@ -43,11 +42,10 @@ _manifold = EuclideanManifold(1)
 
 
 def _time_solve_at(solver_class: type, n: int) -> float:
-    """Return the best-of-3 wall time (seconds) for assemble + svd + solve at size n.
+    """Return the best-of-3 wall time (seconds) for construct + solve at size n.
 
-    Uses NumpyBackend so that SVD and solve are fast (LAPACK-backed) and the
-    dominant cost is the O(N²) Python-loop assembly.  The convergence claims use
-    the same backend, so calibration and tests measure the same code paths.
+    Uses NumpyBackend so that the backend operations are LAPACK-backed and
+    the dominant cost is the sympy probe + sparse apply calls.
     """
     mesh = CartesianMesh(
         origin=(sympy.Rational(0),),
@@ -56,16 +54,15 @@ def _time_solve_at(solver_class: type, n: int) -> float:
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
     disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
-    a_cal = Operator(disc(), mesh).assemble(backend=_NP_BACKEND)
     b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
-    solver.solve(a_cal, b_cal)  # warm-up: ensure any lazy initialization is done
+    op = Operator(disc, mesh)
+    solver.solve(op, b_cal)  # warm-up
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        a_cal = Operator(disc(), mesh).assemble(backend=_NP_BACKEND)
-        SVDFactorization().factorize(a_cal)
-        solver.solve(a_cal, b_cal)
+        op = Operator(disc, mesh)
+        solver.solve(op, b_cal)
         best = min(best, time.perf_counter() - t0)
     return best
 
@@ -77,8 +74,6 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]
     The cost model is T ≈ alpha × N^exponent / fma_rate.  Both alpha and
     exponent are measured rather than declared: time at two successive mesh
     sizes, fit exponent from the log-log slope, then pin alpha at the larger.
-    Including assembly and SVD in the timing ensures N_max is conservative enough
-    that all three phases of each convergence claim fit within the walltime budget.
 
     The preferred probe sizes are _CALIB_N // 2 and _CALIB_N.  If the smaller
     probe already exceeds _MAX_PROBE_TIME_S (slow iterative solver), the pair is
@@ -92,8 +87,6 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]
     _wall0 = time.perf_counter()
     t1 = _time_solve_at(solver_class, n2 // 2)
     if time.perf_counter() - _wall0 > _MAX_PROBE_TIME_S:
-        # Slow solver: the warm-up + 3 timed runs at n2//2 already exceeded the
-        # threshold.  Back off one level so the larger probe stays tractable.
         n2 = n2 // 2
         t1 = _time_solve_at(solver_class, n2 // 2)
     t2 = _time_solve_at(solver_class, n2)

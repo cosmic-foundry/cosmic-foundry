@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from cosmic_foundry.computation.backends import get_default_backend
+import sympy
+
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.physics.state import State
+from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
 
@@ -23,16 +25,19 @@ class Operator:
     """A symbolic DiscreteOperator instantiated on a specific Mesh.
 
     Operator binds an abstract scheme (a DiscreteOperator produced by a
-    Discretization) to concrete geometry (a Mesh), making it ready to apply
-    or assemble:
+    Discretization) to concrete geometry (a Mesh).  At construction time it
+    probes the operator symbolically — applying it once to a field of sympy
+    symbols — to extract the sparse stiffness structure (row_indices,
+    col_indices, stiffness_values).  This precomputation is O(N · stencil_width)
+    and is done once; subsequent apply() calls are O(nnz) sparse matrix-vector
+    products.
 
-        op = Operator(disc(), mesh)
-        residual = op(state)          # functional apply: O(N) stencil evaluation
-        A = op.assemble(backend)      # materialize N×N matrix for a linear solver
+        op = Operator(disc, mesh)
+        residual  = op(state)       # symbolic path: O(N) stencil evaluation
+        u         = solver.solve(op, b)  # solver uses op.apply() internally
 
-    __call__ is the primary operation for time integration; assemble() is the
-    cold path used by implicit solvers.  The matrix is not stored — it is
-    produced on demand.
+    apply() is the primary numeric path; __call__ is the symbolic path used
+    by time integration and convergence testing.
 
     Parameters
     ----------
@@ -45,17 +50,75 @@ class Operator:
     def __init__(self, op: DiscreteOperator[Any], mesh: Mesh) -> None:
         self._op = op
         self._mesh = mesh
+        self._rows, self._cols, self._vals = self._build_stiffness()
+
+    def _build_stiffness(self) -> tuple[list[int], list[int], list[float]]:
+        """Probe the operator symbolically; extract nonzero stiffness entries."""
+        n = self._mesh.n_cells
+        shape = self._mesh.shape
+        u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
+
+        def _to_flat(idx: tuple[int, ...]) -> int:
+            flat, stride = 0, 1
+            for a, i in enumerate(idx):
+                flat += i * stride
+                stride *= shape[a]
+            return flat
+
+        sym_field: _CallableDiscreteField[sympy.Expr] = _CallableDiscreteField(
+            self._mesh, lambda idx: u_syms[_to_flat(idx)]
+        )
+        result = self._op(sym_field)
+
+        rows: list[int] = []
+        cols: list[int] = []
+        vals: list[float] = []
+        for i in range(n):
+            expr = result(_to_multi(i, shape))  # type: ignore[arg-type]
+            for j, sym in enumerate(u_syms):
+                c = float(expr.coeff(sym))
+                if c != 0.0:
+                    rows.append(i)
+                    cols.append(j)
+                    vals.append(c)
+        return rows, cols, vals
 
     @property
     def mesh(self) -> Mesh:
         return self._mesh
 
+    def apply(self, u: Tensor) -> Tensor:
+        """Apply the operator to u via sparse matrix-vector product; O(nnz).
+
+        JIT-compilable on all backends: the stiffness structure (rows, cols,
+        vals) is static and captured at construction time.
+        """
+        backend = u.backend
+        n = u.shape[0]
+        raw = backend.spmv(self._rows, self._cols, self._vals, u._value, n)
+        return Tensor(raw, backend=backend)
+
+    def diagonal(self, backend: Any) -> Tensor:
+        """Return the diagonal entries of the stiffness matrix."""
+        n = self._mesh.n_cells
+        d = [0.0] * n
+        for r, c, v in zip(self._rows, self._cols, self._vals, strict=True):
+            if r == c:
+                d[r] += v
+        return Tensor(d, backend=backend)
+
+    def row_abs_sums(self, backend: Any) -> Tensor:
+        """Return per-row sums of |A_{ij}| (used for Gershgorin bound)."""
+        n = self._mesh.n_cells
+        s = [0.0] * n
+        for r, v in zip(self._rows, self._vals, strict=True):
+            s[r] += abs(v)
+        return Tensor(s, backend=backend)
+
     def __call__(self, state: State) -> State:
         """Apply the operator to a State; return a new State of residuals.
 
         Evaluates the stencil cell-by-cell via the symbolic DiscreteOperator.
-        This path is correct for any input but carries sympy overhead; a
-        Tensor-native evaluation path is the intended future replacement.
         """
         result = self._op(state)
         shape = self._mesh.shape
@@ -65,21 +128,6 @@ class Operator:
             for i in range(n_total)
         ]
         return State(self._mesh, Tensor(values))
-
-    def assemble(self, backend: Any = None) -> Tensor:
-        """Materialize the operator as an N×N stiffness Tensor via scatter.
-
-        Reads precomputed stiffness_values, row_indices, col_indices from the
-        DiscreteOperator and scatters them into a zero matrix in one pass.
-        Row and column ordering is axis-0-fastest.  Intended for direct or
-        iterative linear solvers; not for repeated application in time integration.
-        """
-        b = backend if backend is not None else get_default_backend()
-        n = self._mesh.n_cells
-        dst = b.zeros((n, n))
-        vals = b.to_native(self._op.stiffness_values)
-        raw = b.scatter_add(dst, self._op.row_indices, self._op.col_indices, vals)
-        return Tensor(raw, backend=b)
 
 
 __all__ = ["Operator"]

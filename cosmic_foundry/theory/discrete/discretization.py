@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from typing import TypeVar
 
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
@@ -10,25 +10,29 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.mesh import Mesh
 
+_V = TypeVar("_V")
 
-class Discretization(ABC):
-    """Encapsulates a discrete scheme on a mesh.
 
-    A Discretization holds the scheme choice — reconstruction, numerical
-    flux, quadrature — for a particular mesh and approximation order.
-    Calling it produces the DiscreteOperator Lₕ that makes the commutation
+class Discretization(DiscreteOperator[_V]):
+    """A DiscreteOperator defined on a specific mesh with a chosen scheme.
+
+    A Discretization IS the discrete operator Lₕ that makes the commutation
     diagram
 
         Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
 
-    hold, where p is the approximation order.
+    hold at convergence order p.  Each mesh — including each AMR level — has
+    its own Discretization instance; there is no shared "scheme object" that
+    produces operators for varying meshes.
 
-    Required:
-        __call__ — produce the DiscreteOperator (signature defined by subclass)
+    Required (from DiscreteOperator):
+        order               — integer convergence order
+        continuous_operator — the DifferentialOperator this approximates
+        __call__            — apply Lₕ: DiscreteField → DiscreteField
 
     Concrete:
         mesh               — the mesh on which the scheme is defined
-        boundary_condition — the DiscreteBoundaryCondition on ∂Ω (None if not yet set)
+        boundary_condition — the DiscreteBoundaryCondition on ∂Ω (None if not set)
     """
 
     def __init__(
@@ -48,10 +52,6 @@ class Discretization(ABC):
     def boundary_condition(self) -> DiscreteBoundaryCondition | None:
         """The discrete boundary condition on ∂Ω."""
         return self._boundary_condition
-
-    @abstractmethod
-    def __call__(self) -> DiscreteOperator:
-        """Produce the assembled DiscreteOperator."""
 
 
 __all__ = ["Discretization"]

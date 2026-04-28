@@ -201,6 +201,20 @@ class NumpyBackend:
         np.add.at(dst, (rows, cols), values)
         return dst
 
+    def spmv(
+        self,
+        rows: list[int],
+        cols: list[int],
+        vals: list[float],
+        u: np.ndarray,
+        n: int,
+    ) -> np.ndarray:
+        dt = self._dtype if self._dtype is not None else np.float64
+        vals_arr = np.asarray(vals, dtype=dt)
+        result = np.zeros(n, dtype=dt)
+        np.add.at(result, rows, vals_arr * u[cols])
+        return result
+
     def fori_loop(self, n: int, body_fn: Any, init_state: Any) -> Any:
         state = init_state
         for k in range(n):

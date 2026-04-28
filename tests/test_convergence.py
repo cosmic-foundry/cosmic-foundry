@@ -178,10 +178,10 @@ class _SolverClaim(CalibratedClaim[float]):
     def check(self, fma_rate: float) -> None:
         disc = FVMDiscretization(self._mesh, self._flux, DirichletGhostCells())
         n = math.prod(self._mesh.shape)
-        a = Operator(disc(), self._mesh).assemble()
+        op = Operator(disc, self._mesh)
         b = Tensor([1.0] * n)
-        u = self._solver.solve(a, b)
-        residual = tensor.norm(b - a @ u).get()
+        u = self._solver.solve(op, b)
+        residual = tensor.norm(b - op.apply(u)).get()
         assert (
             residual < self._solver._tol
         ), f"Did not converge: residual {residual:.3e}"
@@ -225,7 +225,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         bc = self._bc_type()
         disc = FVMDiscretization(self._mesh, self._flux, bc)
         n = math.prod(self._mesh.shape)
-        a = Operator(disc(), self._mesh).assemble()
+        op = Operator(disc, self._mesh)
         if self._bc_type is PeriodicGhostCells:
             h = float(self._mesh.cell_volume)
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
@@ -241,8 +241,8 @@ class _DirectSolverClaim(CalibratedClaim[float]):
             )
         else:
             b = Tensor([1.0] * n)
-        u = self._solver.solve(a, b)
-        residual = tensor.norm(b - a @ u).get()
+        u = self._solver.solve(op, b)
+        residual = tensor.norm(b - op.apply(u)).get()
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
@@ -301,23 +301,22 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         p = self._flux.order
         bc = self._bc_type()
 
-        # Pre-assemble all mesh stiffness matrices and SVD decompositions.
-        # Assembly is O(N²) sympy work; hoisting it out of the solve loop keeps
-        # the budgeted hot path (solve only) aligned with what calibration measures.
+        # Pre-build all operators and SVD decompositions for null-space extraction.
+        # Operator construction runs the sympy probe once; SVD is used only for
+        # null-space extraction (singular systems under PeriodicGhostCells).
         assembled: list[tuple[Any, list[Any], float, float, int]] = []
         for mesh in meshes:
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            a_m = Operator(FVMDiscretization(mesh, self._flux, bc)(), mesh).assemble(
-                backend=_NP_BACKEND
-            )
+            op_m = Operator(FVMDiscretization(mesh, self._flux, bc), mesh)
+            a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
             decomp = SVDFactorization().factorize(a_m)
             s_vec = decomp.s
             vt = decomp.vt
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
-            assembled.append((a_m, null_vecs, vol, orig, n_cells))
+            assembled.append((op_m, null_vecs, vol, orig, n_cells))
 
         # Auto-select admissible manufactured-solution modes.
         # k_max = N_min // p ensures >= 2p cells/wavelength on the coarsest mesh.
@@ -327,7 +326,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         # This is necessary because for a consistent scheme rel_err → 0 as N grows;
         # at CI mesh sizes odd modes would otherwise converge below the 0.1
         # threshold even though they violate periodicity.
-        a_c, _, vol_c, orig_c, n_c = assembled[0]
+        op_c, _, vol_c, orig_c, n_c = assembled[0]
         k_max = max(1, n_c // p)
         step = 2 if isinstance(bc, PeriodicGhostCells) else 1
         phi_terms: list[sympy.Expr] = []
@@ -356,7 +355,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
                 ],
                 backend=_NP_BACKEND,
             )
-            rel_err = tensor.norm(a_c @ v_n - r_n).get() / (
+            rel_err = tensor.norm(op_c.apply(v_n) - r_n).get() / (
                 tensor.norm(r_n).get() + 1e-30
             )
             if rel_err < 0.1:
@@ -378,7 +377,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         F_rho = sympy.lambdify(_x, sympy.integrate(rho_expr, _x), "math")
 
         errors: list[float] = []
-        for a_m, null_vecs, vol, orig, n_cells in assembled:
+        for op_m, null_vecs, vol, orig, n_cells in assembled:
 
             def _phi_avg(i: int, _v: float = vol, _o: float = orig) -> float:
                 return (F_phi(_o + (i + 1) * _v) - F_phi(_o + i * _v)) / _v
@@ -387,7 +386,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
                 return (F_rho(_o + (i + 1) * _v) - F_rho(_o + i * _v)) / _v
 
             b_m = Tensor([_rho_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
-            u_arr = self._solver.solve(a_m, b_m)
+            u_arr = self._solver.solve(op_m, b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
             phi_arr = Tensor([_phi_avg(i) for i in range(n_cells)], backend=_NP_BACKEND)
@@ -416,6 +415,17 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             f"{type(self._flux).__name__}(order={self._flux.order}) — "
             f"errors do not lie on h^p even though the slope is correct"
         )
+
+
+def _assemble_from_op(op: Operator, n: int, backend: Any) -> Any:
+    """Build the N×N stiffness matrix from op.apply on basis vectors."""
+    columns: list[list[float]] = []
+    for j in range(n):
+        e_j = Tensor.zeros(n, backend=backend)
+        e_j = e_j.set(j, Tensor(1.0, backend=backend))
+        columns.append(backend.flatten(op.apply(e_j)._value))
+    rows = [[columns[j][i] for j in range(n)] for i in range(n)]
+    return Tensor(rows, backend=backend)
 
 
 def _as_n_form(f: ZeroForm, ndim: int) -> DifferentialForm:
@@ -470,7 +480,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
-    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
+    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers including CG
     *[
         _SolverClaim(s, f, _mesh_n8)

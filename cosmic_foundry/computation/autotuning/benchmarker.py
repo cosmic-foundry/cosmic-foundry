@@ -1,4 +1,4 @@
-"""Benchmarker: times a single solver/backend/size triple."""
+"""Benchmarker: times a single solver against a pre-built operator."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ import math
 import time
 from typing import NamedTuple
 
-from cosmic_foundry.computation.autotuning.problem_descriptor import ProblemDescriptor
 from cosmic_foundry.computation.backends import Backend
-from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
+from cosmic_foundry.computation.solvers.linear_solver import (
+    LinearOperator,
+    LinearSolver,
+)
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -28,23 +30,12 @@ class BenchmarkResult(NamedTuple):
 
 
 class Benchmarker:
-    """Times a solver/backend pair on a synthetic problem of a given size.
+    """Times a solver on a caller-supplied operator and right-hand side.
 
-    Generates a synthetic SPD matrix representative of the problem class,
-    runs n_warmup solves to let JIT compilers amortize compilation, then
+    Runs n_warmup solves to let JIT compilers amortize compilation, then
     takes the minimum over n_trials timed solves.  Taking the minimum
     rather than the mean eliminates OS scheduling noise while still
     catching algorithmic slowdowns.
-
-    The synthetic matrix is a tridiagonal SPD matrix (diagonal = 2,
-    off-diagonals = −1) representative of the Poisson stiffness matrix.
-    This gives G ≈ 2 for interior rows regardless of descriptor.g.  The
-    g parameter is used by Autotuner for cost-model predictions but not
-    for matrix generation; future work can generate descriptor-matched
-    matrices for problems with G ≠ 2.
-
-    For rank-deficient problems (descriptor.r < descriptor.n), the last
-    (n − r) rows and columns are zeroed, producing a rank-r matrix.
 
     Parameters
     ----------
@@ -62,43 +53,22 @@ class Benchmarker:
     def time_solve(
         self,
         solver: LinearSolver,
-        backend: Backend,
-        descriptor: ProblemDescriptor,
+        op: LinearOperator,
+        b: Tensor,
     ) -> float:
-        """Return the minimum wall time in seconds for one solve at descriptor.n."""
-        a = self._make_matrix(descriptor, backend)
-        b: Tensor = Tensor([1.0] * descriptor.n, backend=backend)
-
+        """Return the minimum wall time in seconds for one solve."""
         for _ in range(self._n_warmup):
-            result = solver.solve(a, b)
+            result = solver.solve(op, b)
             result.sync()
 
         best = float("inf")
         for _ in range(self._n_trials):
             t0 = time.perf_counter()
-            result = solver.solve(a, b)
+            result = solver.solve(op, b)
             result.sync()
             best = min(best, time.perf_counter() - t0)
 
         return best
-
-    @staticmethod
-    def _make_matrix(descriptor: ProblemDescriptor, backend: Backend) -> Tensor:
-        """Synthetic SPD tridiagonal matrix of size n with numerical rank r.
-
-        Interior rows have G = 2 (diagonal-dominant: matches Poisson stiffness).
-        Rows and columns beyond index r − 1 are zeroed to produce rank r.
-        """
-        n = descriptor.n
-        r = min(descriptor.r, n)
-        rows = [[0.0] * n for _ in range(n)]
-        for i in range(r):
-            rows[i][i] = 2.0
-            if i > 0:
-                rows[i][i - 1] = -1.0
-            if i < r - 1:
-                rows[i][i + 1] = -1.0
-        return Tensor(rows, backend=backend)
 
 
 def fit_log_log(points: list[tuple[int, float]]) -> tuple[float, float]:
