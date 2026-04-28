@@ -27,8 +27,9 @@ class CartesianExteriorDerivative(DiscreteExteriorDerivative):
     Implements the three legs of the discrete de Rham chain complex:
 
         d₀ (degree=0): PointField → EdgeField
-            (d₀φ)(a, v) = φ(v + eₐ) − φ(v)
-            Indexed by (tangent_axis, low_vertex_idx).
+            (d₀φ)(a, c) = φ(c + eₐ) − φ(c)
+            Indexed by (tangent_axis, low_cell_idx).  PointField values are at
+            cell centers; each edge connects two adjacent cell centers.
 
         d₁ (degree=1): EdgeField → FaceField   [3-D only]
             (d₁A)(a, c) = A(b, v_base) + A(c̃, v_base+eᵦ)
@@ -79,7 +80,7 @@ class CartesianExteriorDerivative(DiscreteExteriorDerivative):
         return self._d2(field)  # type: ignore[arg-type]
 
     def _d0(self, phi: PointField[sympy.Expr]) -> EdgeField[sympy.Expr]:
-        """Gradient: (d₀φ)(a, v) = φ(v + eₐ) − φ(v)."""
+        """Gradient: (d₀φ)(a, c) = φ(c + eₐ) − φ(c), c a cell-center index."""
         mesh = self._mesh
 
         def compute(edge: tuple[int, tuple[int, ...]]) -> sympy.Expr:

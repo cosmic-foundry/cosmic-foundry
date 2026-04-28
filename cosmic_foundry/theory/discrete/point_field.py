@@ -13,24 +13,24 @@ _V = TypeVar("_V")
 
 
 class PointField(DiscreteField[_V]):
-    """Abstract vertex-indexed DiscreteField: values defined at mesh vertices.
+    """Abstract cell-center-indexed DiscreteField: values defined at cell centers.
 
-    A vertex is identified by a multi-index tuple (i₀, i₁, …, iₙ₋₁).  On a
-    mesh with cell shape (N₀, N₁, …), the vertex index set is
-    (N₀+1) × (N₁+1) × ….
+    A cell center is identified by a multi-index tuple (i₀, i₁, …, iₙ₋₁).
+    On a mesh with cell shape (N₀, N₁, …), the index set is N₀ × N₁ × ….
+    Cell center c sits at origin + (c + ½) * h along each axis.
 
     PointField is the discrete counterpart of ZeroForm: a 0-form assigns a
-    value to each point (vertex) in the domain.  It is the natural DOF
-    location for finite-difference schemes, in contrast to VolumeField which
-    stores total volume integrals (Ωⁿ / volume-form DOFs used in FVM).
+    value to each point in the domain.  It is the natural DOF location for
+    finite-difference schemes, in contrast to VolumeField which stores total
+    volume integrals (Ωⁿ / volume-form DOFs used in FVM).
 
     Required (in addition to DiscreteField.mesh):
-        __call__ — evaluate the field at a vertex multi-index idx
+        __call__ — evaluate the field at a cell-center multi-index idx
     """
 
     @abstractmethod
     def __call__(self, idx: tuple[int, ...]) -> _V:  # type: ignore[override]
-        """Evaluate the field at vertex multi-index idx."""
+        """Evaluate the field at cell-center multi-index idx."""
 
 
 class _CallablePointField(PointField[_V]):
