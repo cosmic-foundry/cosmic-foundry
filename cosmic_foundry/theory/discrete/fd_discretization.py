@@ -10,7 +10,6 @@ from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
-    _apply_zero_ghosts,
 )
 from cosmic_foundry.theory.discrete.discrete_field import (
     DiscreteField,
@@ -72,7 +71,7 @@ class FDDiscretization(Discretization[sympy.Expr]):
         when called with a ZeroForm argument.  Typically
         DivergenceComposition(DiffusionOperator(manifold)) for the Laplacian.
     boundary_condition:
-        Ghost-cell extension rule; uses zero ghost cells if None.
+        Ghost-cell extension rule; defaults to ZeroGhostCells() (absorbing).
     """
 
     min_order: int = 2
@@ -104,10 +103,7 @@ class FDDiscretization(Discretization[sympy.Expr]):
     def __call__(self, U: DiscreteField[sympy.Expr]) -> DiscreteField[sympy.Expr]:
         """Apply -∇²: (Au)[i] = -Σ_a (Σ_k c_k U[i + k·eₐ]) / hₐ²."""
         mesh = cast(CartesianMesh, U.mesh)
-        if self._boundary_condition is not None:
-            U = self._boundary_condition.extend(U, mesh)
-        else:
-            U = _apply_zero_ghosts(U, mesh)
+        U = self._boundary_condition.extend(U, mesh)
 
         ndim = len(mesh._shape)
         shape = mesh.shape

@@ -14,24 +14,6 @@ from cosmic_foundry.theory.discrete.discrete_field import (
 from cosmic_foundry.theory.discrete.mesh import Mesh
 
 
-def _apply_zero_ghosts(field: DiscreteField[Any], mesh: Mesh) -> DiscreteField[Any]:
-    """Extend field with zero-valued ghost cells (absorbing/no-BC behavior).
-
-    Out-of-bounds indices return sympy.Integer(0); in-bounds indices
-    delegate to field.  Used by FVMDiscretization and FDDiscretization
-    when no DiscreteBoundaryCondition is supplied.
-    """
-    shape = mesh.shape
-
-    def extended(idx: tuple[int, ...]) -> Any:
-        for i, N in zip(idx, shape, strict=True):
-            if i < 0 or i >= N:
-                return sympy.Integer(0)
-        return field(idx)  # type: ignore[arg-type]
-
-    return _CallableDiscreteField(mesh, extended)
-
-
 class DiscreteBoundaryCondition(ABC):
     """Abstract ghost-cell extension rule for FVM operators.
 
@@ -93,6 +75,25 @@ class DirichletGhostCells(DiscreteBoundaryCondition):
         return _CallableDiscreteField(mesh, extended)
 
 
+class ZeroGhostCells(DiscreteBoundaryCondition):
+    """Zero-valued ghost cells (absorbing / no-BC behavior).
+
+    Out-of-bounds indices return sympy.Integer(0); in-bounds indices
+    delegate to field.  Default BC for Discretization when none is supplied.
+    """
+
+    def extend(self, field: DiscreteField[Any], mesh: Mesh) -> DiscreteField[Any]:
+        shape = mesh.shape
+
+        def extended(idx: tuple[int, ...]) -> Any:
+            for i, N in zip(idx, shape, strict=True):
+                if i < 0 or i >= N:
+                    return sympy.Integer(0)
+            return field(idx)  # type: ignore[arg-type]
+
+        return _CallableDiscreteField(mesh, extended)
+
+
 class PeriodicGhostCells(DiscreteBoundaryCondition):
     """Periodic ghost cells via wrap-around indexing modulo mesh shape.
 
@@ -112,4 +113,9 @@ class PeriodicGhostCells(DiscreteBoundaryCondition):
         return _CallableDiscreteField(mesh, extended)
 
 
-__all__ = ["DiscreteBoundaryCondition", "DirichletGhostCells", "PeriodicGhostCells"]
+__all__ = [
+    "DirichletGhostCells",
+    "DiscreteBoundaryCondition",
+    "PeriodicGhostCells",
+    "ZeroGhostCells",
+]

@@ -11,6 +11,7 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DirichletGhostCells,
     DiscreteBoundaryCondition,
     PeriodicGhostCells,
+    ZeroGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_exterior_derivative import (
     DiscreteExteriorDerivative,
@@ -48,4 +49,5 @@ __all__ = [
     "RestrictionOperator",
     "StructuredMesh",
     "VolumeField",
+    "ZeroGhostCells",
 ]
