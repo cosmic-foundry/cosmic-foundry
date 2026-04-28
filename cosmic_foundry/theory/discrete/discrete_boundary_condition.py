@@ -46,6 +46,18 @@ class DiscreteBoundaryCondition(ABC):
         ghost values for out-of-bounds indices consistent with this BC.
         """
 
+    def n_ghost_layers(self, order: int) -> int:
+        """Ghost cell layers required on each side for a stencil of this order.
+
+        For order p = 2n, a centered stencil accesses n cells on each side of a
+        face, so the boundary cell needs n − 1 interior neighbors plus n ghost
+        cells beyond the mesh edge.  The default n = order // 2 is correct for
+        all standard BCs (Dirichlet, Neumann, Periodic, Inhomogeneous Dirichlet).
+        Subclasses may override if their ghost-cell formula is only valid up to a
+        smaller depth.
+        """
+        return order // 2
+
 
 class DirichletGhostCells(DiscreteBoundaryCondition):
     """Homogeneous Dirichlet ghost cells via odd reflection about boundary faces.
@@ -113,9 +125,85 @@ class PeriodicGhostCells(DiscreteBoundaryCondition):
         return _CallableDiscreteField(mesh, extended)
 
 
+class NeumannGhostCells(DiscreteBoundaryCondition):
+    """Homogeneous Neumann ghost cells via even reflection about boundary faces.
+
+    For each axis a with mesh size N = mesh.shape[a]:
+        idx[a] < 0  → reflect to −1−idx[a], keep sign   (even reflection)
+        idx[a] ≥ N → reflect to 2N−1−idx[a], keep sign  (even reflection)
+    Corners (out of bounds along multiple axes) are handled recursively.
+    Enforces ∂φ/∂n = 0 at each boundary face (zero normal flux condition).
+
+    Discrete counterpart of a homogeneous Neumann boundary condition.
+    The assembled stiffness matrix has constant functions in its null space:
+    A · ones = 0 (no net flux through a domain where all normal gradients vanish).
+    """
+
+    def extend(self, field: DiscreteField[Any], mesh: Mesh) -> DiscreteField[Any]:
+        shape = mesh.shape
+
+        def extended(idx: tuple[int, ...]) -> Any:
+            for a, (i, N) in enumerate(zip(idx, shape, strict=True)):
+                if i < 0:
+                    reflected = idx[:a] + (-1 - i,) + idx[a + 1 :]
+                    return extended(reflected)  # no sign flip: even reflection
+                if i >= N:
+                    reflected = idx[:a] + (2 * N - 1 - i,) + idx[a + 1 :]
+                    return extended(reflected)  # no sign flip: even reflection
+            return field(idx)  # type: ignore[arg-type]
+
+        return _CallableDiscreteField(mesh, extended)
+
+
+class InhomogeneousDirichletGhostCells(DiscreteBoundaryCondition):
+    """Inhomogeneous Dirichlet ghost cells: φ = g at each boundary face.
+
+    Ghost-cell formula: u_ghost = 2·g − u_mirror, where the mirror cell is the
+    in-bounds cell obtained by reflecting the ghost index about the boundary face.
+    This enforces the face average (u_ghost + u_mirror) / 2 = g exactly.
+
+    g specifies the boundary value.  It may be:
+      - A scalar or SymPy expression: the same value is applied to every boundary
+        face of every axis.
+      - A callable g(axis: int, is_low: bool) → Any: called once per ghost-cell
+        lookup with the boundary axis and side (is_low=True for the low face at
+        origin[axis], False for the high face).  This allows different values on
+        different faces (e.g. g(0, True)=1, g(0, False)=2) without requiring
+        spatial coordinates.
+
+    Corners (out of bounds along multiple axes) are handled by applying the
+    formula recursively along each out-of-bounds axis in turn.
+
+    Reduces to DirichletGhostCells when g ≡ 0 (or g returns 0 for all calls).
+    """
+
+    def __init__(self, g: Any) -> None:
+        if callable(g):
+            self._g = g
+        else:
+            self._g = lambda _axis, _is_low: g
+
+    def extend(self, field: DiscreteField[Any], mesh: Mesh) -> DiscreteField[Any]:
+        shape = mesh.shape
+
+        def extended(idx: tuple[int, ...]) -> Any:
+            for a, (i, N) in enumerate(zip(idx, shape, strict=True)):
+                if i < 0:
+                    reflected = idx[:a] + (-1 - i,) + idx[a + 1 :]
+                    return 2 * self._g(a, True) - extended(reflected)
+                if i >= N:
+                    reflected = idx[:a] + (2 * N - 1 - i,) + idx[a + 1 :]
+                    return 2 * self._g(a, False) - extended(reflected)
+            return field(idx)  # type: ignore[arg-type]
+
+        return _CallableDiscreteField(mesh, extended)
+
+
 __all__ = [
     "DirichletGhostCells",
     "DiscreteBoundaryCondition",
+    "InhomogeneousDirichletGhostCells",
+    "NeumannGhostCells",
     "PeriodicGhostCells",
     "ZeroGhostCells",
 ]

@@ -10,6 +10,8 @@ from cosmic_foundry.theory.discrete.cell_complex import CellComplex
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DirichletGhostCells,
     DiscreteBoundaryCondition,
+    InhomogeneousDirichletGhostCells,
+    NeumannGhostCells,
     PeriodicGhostCells,
     ZeroGhostCells,
 )
@@ -42,7 +44,9 @@ __all__ = [
     "DivergenceFormDiscretization",
     "EdgeField",
     "FaceField",
+    "InhomogeneousDirichletGhostCells",
     "Mesh",
+    "NeumannGhostCells",
     "NumericalFlux",
     "PeriodicGhostCells",
     "PointField",
