@@ -582,6 +582,86 @@ Strang 2nd order; Yoshida-style triple-jump for higher even orders).
 Activates compositionality of the integrator stack itself.  Epoch 10 MHD /
 multi-physics enabler.
 
+**Cross-phase deliverable: integrator benchmark library.** A growing
+problem catalog and harness against which integrators are graded on
+correctness, work-per-accuracy, scaling with state dimension, and
+conservation-law fidelity.  Structured into three tiers that activate
+as the corresponding integrator families come online; the harness
+skeleton and Tier A ship alongside Phase 0 so that subsequent phases
+each land with a benchmarkable deliverable.
+
+*Tier A — Non-stiff (with Phase 0–1).* Linear scalar `dy/dt = λy`
+(promoted from the temporal-convergence claim), Logistic, Lotka-Volterra,
+SIR, Kepler two-body (analytical orbit; energy / angular-momentum
+invariants), Lorenz-63 (chaotic; integrator-sensitivity probe), non-stiff
+Brusselator.
+
+*Tier B — Stiff baselines (with Phase 4).* Robertson (3 species,
+mass-conserving, rate disparity ~10⁹), HIRES (8 species), POLLU
+(20 species), OREGO (3 species, oscillatory), van der Pol with
+`μ ∈ {1, 10², 10³, 10⁵}` as a fixed-problem stiffness sweep.
+
+*Tier C — Network-scale, nuclear-resembling (with Phase 7).* The
+user-facing payload.  Each Tier C problem exercises the integrator on
+systems that numerically resemble thermonuclear reaction networks: dozens
+to hundreds of species, rate coefficients spanning ~10 orders of
+magnitude, sparse Jacobian, exact mass conservation, positivity of every
+species.  Concrete problems:
+
+- **Synthetic alpha-chain networks**, parameterized by chain length
+  `n ∈ {13, 19, 21, 51, 101, 201, 501}`.  Linear capture-chain topology
+  emulating alpha-rich nuclear burning; rate coefficients drawn from a
+  log-normal distribution to span ~10 decades.  Exact invariants by
+  construction: `Σ X_i = 1` (mass conservation) and `X_i ≥ 0`
+  (positivity).
+- **Synthetic CNO-cycle networks**, `n ∈ {6, 12, 24}`.  Cyclic topology
+  with parameterized breakout-branch ratios; tunable stiffness contrast.
+- **Synthetic rp-process networks**, `n ∈ {30, 60, 120}`.  Branched
+  topology emulating proton-rich freezeout structure with multiple
+  competing timescales.
+- **Literature reproductions** of `aprox13`, `aprox19`, `aprox21`.
+  Network *topology and species list* reproduced from the open-license
+  Timmes (1999) rate tables; rate coefficients taken from the published
+  tables.  Lane B treatment for the topology data; no integration
+  routine consulted from any reference code.
+
+*Synthetic network generator.* Lane C origination.  Small DSL for
+declaring reaction-network topologies (alpha-chain, cycle, branched,
+random sparse), parameterized by species count and rate-coefficient
+distribution.  Produces a `WithJacobianRHS` instance with sparse (CSR)
+Jacobian, a linear conservation matrix `C` such that `C · Y = 0` is an
+exact algebraic identity, and a reference trajectory checked into the
+repo as a fixture.  The generator is deterministic in its random-rate
+draws (seeded) so fixtures are reproducible.
+
+*Metrics.* Per `(integrator, problem)` cell: final-time L² and L∞ error
+vs reference; RHS and Jacobian evaluation counts; wall time; accepted
+and rejected step counts; conservation drift `‖C · Y(t_end)‖`; minimum
+`X_i` over the trajectory (positivity); for Tier C, runtime scaling
+exponent in `n`.
+
+*Harness.* Lives in `tests/benchmarks/`, separate from the correctness
+claims in `tests/test_convergence_order.py`.  Auto-discovers
+`BenchmarkProblem` instances and runs each `TimeIntegrator` from
+`_INSTANCES` against every compatible problem (compatibility =
+problem's `RHSProtocol` satisfies the integrator's `requires_rhs`).
+Emits a JSON report.  Run under an opt-in `@pytest.mark.benchmark` so
+day-to-day CI is unaffected; a dedicated GitHub Actions workflow runs
+the suite on a schedule and compares against a baseline checked into
+the repo.
+
+*Reference-solution provenance.* Where an analytical solution exists,
+it is the reference — already the convention for convergence claims.
+Where no analytical solution exists (Robertson, HIRES, network
+problems), the reference is computed offline at very tight tolerance
+using a permissively-licensed external stiff integrator (Lane A
+precedent applies to the fixture-generation script only); the resulting
+trajectory is checked into the repo as a fixture.  Benchmark code at
+test time loads fixtures and never invokes external integrators.  The
+fixture-generation script lives under `computation/` so it inherits the
+existing scipy import allowance; it is run by maintainers when adding
+or revising a benchmark problem, not in CI.
+
 **Open questions — Epoch 4 design points:**
 
 1. **Coefficient-algebra typing for Phase 8.** Whether to parameterize
