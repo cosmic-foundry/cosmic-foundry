@@ -47,7 +47,7 @@ class Operator:
         The Mesh on which the operator is instantiated.
     """
 
-    def __init__(self, op: DiscreteOperator[Any], mesh: Mesh) -> None:
+    def __init__(self, op: DiscreteOperator[Any, Any], mesh: Mesh) -> None:
         self._op = op
         self._mesh = mesh
         self._rows, self._cols, self._vals = self._build_stiffness()
@@ -74,7 +74,7 @@ class Operator:
         cols: list[int] = []
         vals: list[float] = []
         for i in range(n):
-            expr = result(_to_multi(i, shape))  # type: ignore[arg-type]
+            expr = result(_to_multi(i, shape))
             for j, sym in enumerate(u_syms):
                 c = float(expr.coeff(sym))
                 if c != 0.0:
@@ -123,10 +123,7 @@ class Operator:
         result = self._op(state)
         shape = self._mesh.shape
         n_total = self._mesh.n_cells
-        values = [
-            float(result(_to_multi(i, shape)))  # type: ignore[arg-type]
-            for i in range(n_total)
-        ]
+        values = [float(result(_to_multi(i, shape))) for i in range(n_total)]
         return State(self._mesh, Tensor(values))
 
 

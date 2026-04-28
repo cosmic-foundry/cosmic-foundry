@@ -276,9 +276,11 @@ Discretization(ABC)           — free: mesh: Mesh, boundary_condition: Discrete
                               (Function → DiscreteField); Discretization projects
                               operators (DivergenceFormEquation → DiscreteOperator).
 
-DiscreteOperator(NumericFunction[DiscreteField, DiscreteField])
-                            — the output of Discretization; the Lₕ that makes
-                              Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the chosen order.
+DiscreteOperator(NumericFunction[_In, _Out])
+                            — discrete operator parameterized by input and
+                              output types.  Subclasses fix the cochain shape:
+                                Discretization: DiscreteField → DiscreteField
+                                NumericalFlux:  DiscreteField → FaceField
                               Earns its class via two falsifiable claims:
                                 order: int — composite convergence order
                                 continuous_operator: DifferentialOperator —
@@ -288,9 +290,8 @@ DiscreteOperator(NumericFunction[DiscreteField, DiscreteField])
                               Not independently constructed from stencil
                               coefficients; produced by a Discretization.
 
-NumericalFlux(DiscreteOperator)
-                            — a DiscreteOperator with the cell-average →
-                              face-flux calling convention:
+NumericalFlux(DiscreteOperator[DiscreteField, FaceField])
+                            — cell-average → face-flux operator:
                                 __call__(U: DiscreteField) → FaceField
                               where U holds cell-average values.  The
                               returned FaceField is indexed as

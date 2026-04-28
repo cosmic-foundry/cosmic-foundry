@@ -8,16 +8,16 @@ from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
     ZeroGhostCells,
 )
+from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 
 _V = TypeVar("_V")
 
 
-class Discretization(DiscreteOperator[_V]):
+class Discretization(DiscreteOperator[DiscreteField[_V], DiscreteField[_V]]):
     """A DiscreteOperator defined by a scheme and boundary condition.
 
-    A Discretization IS the discrete operator Lₕ that makes the commutation
-    diagram
+    Same kind in, same kind out — the Lₕ that makes the commutation diagram
 
         Lₕ ∘ Rₕ ≈ Rₕ ∘ L   (up to O(hᵖ))
 
