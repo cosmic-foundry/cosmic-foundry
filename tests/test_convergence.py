@@ -39,6 +39,7 @@ from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
     DenseGaussSeidelSolver,
 )
+from cosmic_foundry.computation.solvers.dense_gmres_solver import DenseGMRESSolver
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
@@ -458,7 +459,11 @@ _FLUXES = [*_DIFFUSIVE_FLUXES, *_ADVECTIVE_FLUXES, *_ADVECTION_DIFFUSION_FLUXES]
 # singularity).
 # AdvectionDiffusionFlux assembles A_adv + κ·A_diff; non-symmetric under
 # DirichletGhostCells, so CG is excluded; Jacobi/GS/direct solvers work for κ=1.
-_SOLVERS = [DenseJacobiSolver(tol=1e-8), DenseGaussSeidelSolver(tol=1e-8)]
+_SOLVERS = [
+    DenseJacobiSolver(tol=1e-8),
+    DenseGaussSeidelSolver(tol=1e-8),
+    DenseGMRESSolver(tol=1e-8),
+]
 _SPD_SOLVERS = [DenseCGSolver(tol=1e-8)]  # SPD (symmetric positive definite) only
 _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
