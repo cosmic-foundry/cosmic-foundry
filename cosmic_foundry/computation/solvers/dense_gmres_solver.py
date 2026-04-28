@@ -1,0 +1,139 @@
+"""DenseGMRESSolver: GMRES(k) iteration on an assembled dense matrix."""
+
+from __future__ import annotations
+
+from typing import Any, NamedTuple
+
+from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
+from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.tensor import Tensor
+
+
+class _GMRESState(NamedTuple):
+    u: Tensor  # current solution, shape (N,)
+    r: Tensor  # residual b − A u, shape (N,)
+    a: Tensor  # system matrix, shape (N, N)
+    b: Tensor  # RHS, shape (N,)
+    iteration: Tensor  # restart cycle count, rank-0 int Tensor
+
+
+class DenseGMRESSolver(IterativeSolver):
+    """GMRES(k) solver for A u = b; A must be non-singular (not necessarily SPD).
+
+    Each restart cycle builds a rank-k Krylov subspace
+
+        K_k = span{r₀, Ar₀, …, A^{k−1}r₀}
+
+    via the Arnoldi process and finds the y ∈ Rᵏ that minimizes ‖β e₁ − H̃ y‖₂,
+    where H̃ ∈ R^{(k+1)×k} is the upper Hessenberg matrix and β = ‖r₀‖₂.  The
+    solution update is u ← u + Vₖ y where the columns of Vₖ are the k Arnoldi
+    basis vectors.
+
+    In plain terms: unlike CG (which requires A to be SPD), GMRES minimizes the
+    residual over the full Krylov subspace without assuming symmetry or positive
+    definiteness.  CG takes one step per Krylov vector and is cheaper per
+    iteration; GMRES(k) stores all k basis vectors and solves a small
+    least-squares problem at the end of each cycle.
+
+    Restart structure: after k Arnoldi steps the basis is discarded and the
+    process restarts from the current residual.  Restart limits memory to O(k N)
+    and arithmetic to O(k² N) per cycle.  Choose k large enough that the
+    Krylov subspace captures the dominant modes: k ≥ √κ for condition number
+    κ is a rough guide.  For small N (≤ k) the restart never triggers and GMRES
+    converges in at most N cycles.
+
+    Orthogonalization uses modified Gram-Schmidt via a masked full inner product:
+    h_all = V @ w computes all k+1 inner products; indices beyond the current
+    step j are zeroed so that the fori_loop carry has fixed shape, enabling
+    compilation to a single XLA kernel on JaxBackend.
+
+    The Hessenberg least-squares problem min ‖β e₁ − H̃ y‖₂ is solved via the
+    Moore-Penrose pseudoinverse (SVDFactorization) so that breakdown (h_{j+1,j}≈0,
+    i.e. Krylov subspace exhausted) is handled gracefully rather than causing a
+    divide-by-zero.
+
+    Prefer DenseCGSolver for SPD systems — CG converges in O(√κ) iterations
+    with a simpler per-step cost.  Use DenseGMRESSolver for non-symmetric or
+    indefinite matrices (e.g. advection-dominated flows, non-self-adjoint
+    operators) where CG does not apply.
+
+    Parameters
+    ----------
+    tol:
+        Convergence tolerance: iteration stops when ‖r‖₂² < tol².
+    max_iter:
+        Hard cap on restart cycles.
+    restart:
+        Arnoldi basis size k per restart cycle.
+    """
+
+    def __init__(
+        self, tol: float = 1e-10, max_iter: int = 1000, restart: int = 20
+    ) -> None:
+        self._tol = tol
+        self._max_iter = max_iter
+        self._restart = restart
+
+    def init_state(self, a: Tensor, b: Tensor) -> _GMRESState:
+        u = Tensor.zeros(b.shape[0], backend=a.backend)
+        r = tensor.copy(b)  # r₀ = b − A·0 = b
+        iteration: Tensor = Tensor(0, backend=a.backend)
+        return _GMRESState(u, r, a, b, iteration)
+
+    def step(self, state: Any) -> _GMRESState:
+        s: _GMRESState = state
+        k = self._restart
+        n = s.a.shape[0]
+        backend = s.a.backend
+
+        beta = tensor.norm(s.r)
+        V = Tensor.zeros(k + 1, n, backend=backend)
+        V = V.set(0, s.r / beta)
+        H_rows = Tensor.zeros(k, k + 1, backend=backend)
+
+        # Pre-allocate constants captured by the closure; avoids repeated
+        # allocation inside the fori_loop body.
+        zero_k1 = Tensor.zeros(k + 1, backend=backend)
+        eps: Tensor = Tensor(1e-30, backend=backend)
+
+        def _arnoldi_body(j: Any, carry: tuple) -> tuple:
+            V_c, H_rows_c = carry
+            w = s.a @ V_c[j]  # matvec: (N,)
+            h_all = V_c @ w  # (k+1,) inner products
+            # Mask inner products beyond step j so the carry has fixed shape.
+            mask = tensor.arange(k + 1, backend=backend) <= j
+            h_masked = tensor.where(mask, h_all, zero_k1)
+            w = w - tensor.einsum("i,ij->j", h_masked, V_c)  # subtract projections
+            h_next = tensor.norm(w)  # rank-0: ‖w‖₂
+            v_next = w / (h_next + eps)  # normalize; eps guards breakdown
+            h_row = h_masked.set(j + 1, h_next)  # append subdiagonal entry
+            V_c = V_c.set(j + 1, v_next)
+            H_rows_c = H_rows_c.set(j, h_row)
+            return V_c, H_rows_c
+
+        V, H_rows = backend.fori_loop(k, _arnoldi_body, (V, H_rows))
+
+        # H̃ = H_rows.T ∈ R^{(k+1)×k} — upper Hessenberg matrix
+        H_tilde = tensor.einsum("ij->ji", H_rows)
+        # g = [β, 0, …, 0] ∈ R^{k+1}
+        g = Tensor.zeros(k + 1, backend=backend)
+        g = g.set(0, beta)
+        # Solve min_y ‖g − H̃ y‖₂ via pseudoinverse; handles rank-deficient H̃
+        # (Krylov subspace exhausted) without special-casing.
+        y = SVDFactorization().factorize(H_tilde).solve(g)
+        # u ← u + Vₖ y  (Vₖ = first k rows of V)
+        u_new = s.u + tensor.einsum("ij,i->j", V[0:k], y)
+        r_new = s.b - s.a @ u_new
+        return _GMRESState(u_new, r_new, s.a, s.b, s.iteration + 1)
+
+    def converged(self, state: Any) -> Tensor:
+        s: _GMRESState = state
+        return (s.r @ s.r < self._tol**2) | (s.iteration >= self._max_iter)
+
+    def extract(self, state: Any) -> Tensor:
+        s: _GMRESState = state
+        return s.u
+
+
+__all__ = ["DenseGMRESSolver"]
