@@ -67,26 +67,24 @@ class CartesianRestrictionOperator(RestrictionOperator[_F, sympy.Expr]):
         return self._mesh
 
 
-class CartesianVolumeRestriction(CartesianRestrictionOperator[DifferentialForm]):
-    """Rₕⁿ: n-Form → VolumeField via exact SymPy cell-volume integration.
+class CartesianVolumeRestriction(CartesianRestrictionOperator[ZeroForm]):
+    """Rₕⁿ: ZeroForm → VolumeField via exact SymPy cell-volume integration.
 
     (Rₕⁿ f)ᵢ = ∫_Ωᵢ f dV — total cell integral, returned as a VolumeField.
     Cell averages are VolumeField values divided by cell_volume.
 
-    Input must be an n-Form whose degree equals the mesh dimension
-    (OneForm in 1-D, TwoForm in 2-D, ThreeForm in 3-D).  Valid in
-    Cartesian coordinates where the Jacobian is 1; non-Cartesian metrics
-    must fold √|g| into f before calling.
+    Input is a ZeroForm (scalar field).  In Cartesian coordinates the volume
+    element dV = 1, so f is integrated directly as a scalar density; no
+    explicit n-form wrapping is needed.  Non-Cartesian geometries would
+    fold √|g| into the integrand in their own subclass.
 
     This is the FV restriction: the choice of cell-average DOFs.
+    Both CartesianVolumeRestriction and CartesianPointRestriction accept a
+    ZeroForm; the distinction is how the scalar is sampled (cell average vs.
+    point value at cell center).
     """
 
-    def __call__(self, f: DifferentialForm) -> VolumeField[sympy.Expr]:
-        ndim = len(self._mesh._shape)
-        assert isinstance(f, DifferentialForm) and f.degree == ndim, (
-            f"CartesianVolumeRestriction requires an n-Form of degree {ndim}, "
-            f"got {type(f).__name__}"
-        )
+    def __call__(self, f: ZeroForm) -> VolumeField[sympy.Expr]:
         mesh = self._mesh
         values: dict[tuple[int, ...], sympy.Expr] = {}
         for idx in product(*[range(s) for s in mesh._shape]):

@@ -57,7 +57,6 @@ from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     OneForm,
-    ThreeForm,
     ZeroForm,
 )
 from cosmic_foundry.theory.continuous.differential_operator import DivergenceComposition
@@ -130,19 +129,14 @@ class _OrderClaim(CalibratedClaim[float]):
             exact_val = cont_result.expr.subs(x, _x_at((n,)))
             error = sympy.expand(sympy.simplify(numerical_mf((n,)) - exact_val))
         else:
-            ndim = len(mesh._shape)
             vol = mesh.cell_volume
-            U_totals = CartesianVolumeRestriction(mesh)(_as_n_form(phi, ndim))
+            U_totals = CartesianVolumeRestriction(mesh)(phi)
             U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
             numerical_mf = instance(U_avg)
             cont_result = instance.continuous_operator(phi)
             assert isinstance(cont_result, DifferentialForm)
             if isinstance(cont_result, ZeroForm):
-                # ZeroForm result: restrict as n-form (cell volume integrals).
-                # exact_mf is VolumeField totals; numerical_mf is averages.
-                exact_mf = CartesianVolumeRestriction(mesh)(
-                    _as_n_form(cont_result, ndim)
-                )
+                exact_mf = CartesianVolumeRestriction(mesh)(cont_result)
                 test_idx: Any = (n,)
                 error = sympy.expand(
                     sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
@@ -438,15 +432,6 @@ def _assemble_from_op(op: Operator, n: int, backend: Any) -> Any:
         columns.append(backend.flatten(op.apply(e_j)._value))
     rows = [[columns[j][i] for j in range(n)] for i in range(n)]
     return Tensor(rows, backend=backend)
-
-
-def _as_n_form(f: ZeroForm, ndim: int) -> DifferentialForm:
-    """Wrap scalar density ZeroForm as the n-form f·dV (Cartesian coordinates)."""
-    if ndim == 1:
-        return OneForm(f.manifold, (f.expr,), f.symbols)
-    if ndim == 3:
-        return ThreeForm(f.manifold, f.expr, f.symbols)
-    raise NotImplementedError(f"_as_n_form not implemented for ndim={ndim}")
 
 
 _manifold = EuclideanManifold(1)

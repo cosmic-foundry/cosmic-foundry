@@ -332,9 +332,10 @@ CartesianRestrictionOperator(RestrictionOperator[F, sympy.Expr])
                                          A future non-Cartesian geometry provides a
                                          parallel abstract base (same structure, different
                                          mesh type and value type).
-├── CartesianVolumeRestriction(CartesianRestrictionOperator[DifferentialForm])
-│                                      — Rₕⁿ: n-Form → VolumeField (∫_Ωᵢ f dV, total)
-│                                        (ThreeForm in 3-D, OneForm in 1-D)
+├── CartesianVolumeRestriction(CartesianRestrictionOperator[ZeroForm])
+│                                      — Rₕⁿ: ZeroForm → VolumeField (∫_Ωᵢ f dV, total)
+│                                        In Cartesian coords dV=1, so ZeroForm integrates
+│                                        directly as scalar density; no n-form wrapping.
 │                                        FV restriction: cell-average DOF choice.
 ├── CartesianFaceRestriction(CartesianRestrictionOperator[DifferentialForm])
 │                                      — Rₕⁿ⁻¹: DifferentialForm → FaceField
