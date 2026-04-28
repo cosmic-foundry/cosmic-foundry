@@ -46,7 +46,8 @@ from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.cartesian_restriction_operator import (
-    CartesianRestrictionOperator,
+    CartesianFaceRestriction,
+    CartesianVolumeRestriction,
 )
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFlux
@@ -131,30 +132,25 @@ class _OrderClaim(CalibratedClaim[float]):
         else:
             ndim = len(mesh._shape)
             vol = mesh.cell_volume
-            U_totals = CartesianRestrictionOperator(mesh, degree=ndim)(
-                _as_n_form(phi, ndim)
-            )
+            U_totals = CartesianVolumeRestriction(mesh)(_as_n_form(phi, ndim))
             U_avg = _CallableDiscreteField(mesh, lambda idx, _U=U_totals: _U(idx) / vol)
             numerical_mf = instance(U_avg)
             cont_result = instance.continuous_operator(phi)
             assert isinstance(cont_result, DifferentialForm)
-            restriction_degree = ndim - cont_result.degree
-            if restriction_degree == ndim:
-                # ZeroForm: wrap as n-form for de Rham-correct restriction
-                cont_form: DifferentialForm = _as_n_form(cont_result, ndim)
-            else:
-                cont_form = cont_result
-            exact_mf = CartesianRestrictionOperator(mesh, degree=restriction_degree)(
-                cont_form
-            )
-            test_idx: Any = (0, (n,)) if restriction_degree < ndim else (n,)
-            # When restriction_degree==ndim, exact_mf is a VolumeField (totals);
-            # numerical_mf is a State (averages).  Normalize exact by vol to compare.
-            if restriction_degree == ndim:
+            if isinstance(cont_result, ZeroForm):
+                # ZeroForm result: restrict as n-form (cell volume integrals).
+                # exact_mf is VolumeField totals; numerical_mf is averages.
+                exact_mf = CartesianVolumeRestriction(mesh)(
+                    _as_n_form(cont_result, ndim)
+                )
+                test_idx: Any = (n,)
                 error = sympy.expand(
                     sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx) / vol)
                 )
             else:
+                assert isinstance(cont_result, OneForm)
+                exact_mf = CartesianFaceRestriction(mesh)(cont_result)
+                test_idx = (0, (n,))
                 error = sympy.expand(
                     sympy.simplify(numerical_mf(test_idx) - exact_mf(test_idx))
                 )
