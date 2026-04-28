@@ -25,12 +25,11 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
-from tests.claims import Claim
+from tests.claims import Claim, assemble_linear_op
 
 # Calibration size: small enough to be cheap, large enough that the power-law
 # extrapolation to _LARGE_N is meaningful.
@@ -58,7 +57,7 @@ def _op_factory(n: int, backend: Backend) -> tuple[LinearOperator, Tensor]:
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _MANIFOLD)
     disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
-    op: LinearOperator = Operator(disc, mesh)
+    op: LinearOperator = assemble_linear_op(disc, mesh)
     b = Tensor([1.0] * n, backend=backend)
     return op, b
 
