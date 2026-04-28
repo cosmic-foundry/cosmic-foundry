@@ -23,7 +23,7 @@ class DivergenceFormEquation(DifferentialOperator[DifferentialForm, ZeroForm]):
 
     is obtained by integrating over any control volume Ωᵢ and applying
     the divergence theorem.  This integral form — not the differential form
-    — is what FVMDiscretization assembles: the NumericalFlux evaluates the
+    — is what DivergenceFormDiscretization assembles: the NumericalFlux evaluates the
     left-hand side face by face.
 
     The operator is spatial only.  Time derivatives are handled by the time

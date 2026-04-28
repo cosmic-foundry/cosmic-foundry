@@ -24,8 +24,9 @@ class DiscreteOperator(NumericFunction[DiscreteField[_V], DiscreteField[_V]]):
                               approximates; the mathematical specification
                               against which the convergence test measures error
 
-    Concrete subclasses are Discretization subclasses (e.g. FVMDiscretization),
-    which derive continuous_operator automatically from the numerical flux.
+    Concrete subclasses are Discretization subclasses (e.g.
+    DivergenceFormDiscretization), which derive continuous_operator
+    automatically from the numerical flux.
 
     Required:
         order               — composite convergence order

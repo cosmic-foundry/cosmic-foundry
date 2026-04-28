@@ -1,4 +1,4 @@
-"""FVMDiscretization: finite-volume DiscreteOperator on a CartesianMesh."""
+"""DivergenceFormDiscretization: discretizes a linear operator factored as L = ∇·f."""
 
 from __future__ import annotations
 
@@ -25,29 +25,35 @@ from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
-class FVMDiscretization(Discretization[sympy.Expr]):
-    """Finite-volume discrete operator for a divergence-form equation on a
-    CartesianMesh.
+class DivergenceFormDiscretization(Discretization[sympy.Expr]):
+    """Discretization of a linear operator factored as L = ∇·f.
 
-    Maps a DiscreteField of cell averages to a DiscreteField of average discrete
-    divergences:
+    Given a NumericalFlux that discretizes f: state → face values, builds the
+    discrete operator Lₕ acting on cell-average DOFs:
 
-        (Lₕ U)(i) = (1/|Ωᵢ|) ∮_∂Ωᵢ F·n̂ dA
-                  = (1/|Ωᵢ|) Σ_a [F(U)((a, i)) − F(U)((a, i−eₐ))]
+        Lₕ U = (1/vol) · d_{n−1}(F̂(bc.extend(U)))
 
-    approximating (1/|Ωᵢ|) ∫_Ωᵢ L φ dV at convergence order p = numerical_flux.order.
-    U is assumed to hold cell-average values; NumericalFlux stencils operate on
-    averages directly.
+    where F̂ is the NumericalFlux, d_{n−1} is the discrete exterior derivative
+    (CartesianExteriorDerivative at degree=2), and /vol normalizes from
+    cell-total to cell-average DOFs.
 
-    Ghost cells are applied via boundary_condition.extend(U, mesh) before face
-    fluxes are evaluated.  Defaults to ZeroGhostCells() when no BC is supplied.
+    The "flux" is a formal intermediate quantity at faces — a local function
+    of cell averages, defined for the convenience of factoring L as ∇·f.  It
+    does not represent transfer of conserved quantity between cells; the
+    equations we solve (Poisson, steady advection, steady advection-diffusion)
+    are elliptic algebraic constraints, not time evolutions.
 
-    continuous_operator is auto-derived as ∇·(numerical_flux.continuous_operator).
+    The unique role of this class is to package (NumericalFlux, BC) into a
+    Discretization with the appropriate continuous_operator declaration.  All
+    operational steps delegate to existing machinery (BC.extend, NumericalFlux,
+    CartesianExteriorDerivative, mesh.cell_volume).
 
     Parameters
     ----------
     numerical_flux:
-        The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
+        The NumericalFlux discretizing the flux operator f.  Determines the
+        convergence order and the continuous operator being approximated:
+        continuous_operator = ∇·(numerical_flux.continuous_operator).
     boundary_condition:
         DiscreteBoundaryCondition; defaults to ZeroGhostCells() (absorbing).
     """
@@ -69,7 +75,7 @@ class FVMDiscretization(Discretization[sympy.Expr]):
         return DivergenceComposition(self._numerical_flux.continuous_operator)
 
     def __call__(self, U: DiscreteField[sympy.Expr]) -> DiscreteField[sympy.Expr]:
-        """Apply the discrete divergence operator; return cell residuals."""
+        """Apply Lₕ U: discretization of ∇·f at cell-average DOFs."""
         mesh = cast(CartesianMesh, U.mesh)
         U = self._boundary_condition.extend(U, mesh)
         face_fluxes = self._numerical_flux(U)
@@ -78,4 +84,4 @@ class FVMDiscretization(Discretization[sympy.Expr]):
         return _CallableDiscreteField(mesh, lambda idx: div(idx) / vol)
 
 
-__all__ = ["FVMDiscretization"]
+__all__ = ["DivergenceFormDiscretization"]
