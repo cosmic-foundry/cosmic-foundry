@@ -8,7 +8,7 @@ Claim types:
   _AbcInstantiationClaim    — ABCs cannot be directly instantiated
   _HierarchyClaim           — cosmic_foundry subclass relations are correct
   _ModuleAllClaim           — every public class in a module appears in __all__
-  _IterativeSolverJitClaim  — iterative solver runs on a small concrete Operator
+  _IterativeSolverJitClaim  — iterative solver runs on a small assembled LinearOperator
   _MaterializationGateClaim — converged() raises MaterializationError on .get()
   _FactorizationJitClaim    — Factorization.factorize/solve run on declared Tensors
   _GenericBasesClaim        — no subclass leaves a generic base's TypeVars unbound
@@ -37,14 +37,13 @@ from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
-from tests.claims import Claim
+from tests.claims import Claim, assemble_linear_op
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
@@ -71,14 +70,16 @@ _JIT_N = 4
 _JIT_BACKEND = PythonBackend()
 
 
-def _make_jit_op() -> Operator:
+def _make_jit_op() -> Any:
     mesh = CartesianMesh(
         origin=(sympy.Rational(0),),
         spacing=(sympy.Rational(1, _JIT_N),),
         shape=(_JIT_N,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
-    return Operator(DivergenceFormDiscretization(flux, DirichletGhostCells()), mesh)
+    return assemble_linear_op(
+        DivergenceFormDiscretization(flux, DirichletGhostCells()), mesh
+    )
 
 
 _JIT_OP = _make_jit_op()

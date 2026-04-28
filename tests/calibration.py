@@ -20,12 +20,11 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
-from tests.claims import MAX_WALLTIME_S
+from tests.claims import MAX_WALLTIME_S, assemble_linear_op
 
 # NumpyBackend for all convergence claims: numpy SVD/solve are LAPACK-backed
 # and the dominant cost is the O(N²) Python-loop assembly, so the cost model
@@ -59,12 +58,12 @@ def _time_solve_at(solver_class: type, n: int) -> float:
     disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
     b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
-    op = Operator(disc, mesh)
+    op = assemble_linear_op(disc, mesh)
     solver.solve(op, b_cal)  # warm-up
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        op = Operator(disc, mesh)
+        op = assemble_linear_op(disc, mesh)
         solver.solve(op, b_cal)
         best = min(best, time.perf_counter() - t0)
     return best

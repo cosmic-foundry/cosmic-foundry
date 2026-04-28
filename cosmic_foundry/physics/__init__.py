@@ -4,8 +4,6 @@ physics/ sits above geometry/ and theory/, providing:
   - Concrete NumericalFlux implementations (diffusive, advective,
     advection-diffusion) that combine CartesianMesh geometry with
     DiscreteField arithmetic
-  - Operator: the Tensor-backed materialization of a symbolic DiscreteOperator,
-    produced by Operator.assemble(disc(), mesh)
   - State: the concrete Tensor-backed DiscreteField[float] used as
     simulation state throughout time integration
 
@@ -17,13 +15,11 @@ from __future__ import annotations
 from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFlux
 from cosmic_foundry.physics.advective_flux import AdvectiveFlux
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.physics.state import State
 
 __all__ = [
     "AdvectionDiffusionFlux",
     "AdvectiveFlux",
     "DiffusiveFlux",
-    "Operator",
     "State",
 ]

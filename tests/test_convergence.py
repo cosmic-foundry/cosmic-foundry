@@ -53,7 +53,6 @@ from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFlux
 from cosmic_foundry.physics.advective_flux import AdvectiveFlux
 from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
-from cosmic_foundry.physics.operator import Operator
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     OneForm,
@@ -66,7 +65,7 @@ from cosmic_foundry.theory.discrete import (
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 from tests.calibration import _MESH_FRACTIONS, _NP_BACKEND, _convergence_n_max
-from tests.claims import CalibratedClaim
+from tests.claims import CalibratedClaim, assemble_linear_op
 
 # ---------------------------------------------------------------------------
 # Claim classes
@@ -144,7 +143,7 @@ class _SolverClaim(CalibratedClaim[float]):
     """Claim: solver residual < tol after solve on the given Discretization.
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.  disc is pre-built
-    with its BC; Operator binds it to mesh at check time.
+    with its BC; assembled to a LinearOperator at check time.
     """
 
     def __init__(self, solver: Any, disc: Any, mesh: CartesianMesh) -> None:
@@ -162,7 +161,7 @@ class _SolverClaim(CalibratedClaim[float]):
 
     def check(self, fma_rate: float) -> None:
         n = math.prod(self._mesh.shape)
-        op = Operator(self._disc, self._mesh)
+        op = assemble_linear_op(self._disc, self._mesh)
         b = Tensor([1.0] * n, backend=_NP_BACKEND)
         u = self._solver.solve(op, b)
         residual = tensor.norm(b - op.apply(u)).get()
@@ -173,7 +172,7 @@ class _SolverClaim(CalibratedClaim[float]):
 class _DirectSolverClaim(CalibratedClaim[float]):
     """Claim: direct solver residual < tol after one factorization pass.
 
-    disc is pre-built with its BC; Operator binds it to mesh at check time.
+    disc is pre-built with its BC; assembled to a LinearOperator at check time.
     For PeriodicGhostCells the RHS is a zero-mean sinusoid so the system is
     consistent (in the column space of the circulant advection matrix).
     """
@@ -196,7 +195,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
 
     def check(self, fma_rate: float) -> None:
         n = math.prod(self._mesh.shape)
-        op = Operator(self._disc, self._mesh)
+        op = assemble_linear_op(self._disc, self._mesh)
         if isinstance(self._disc.boundary_condition, PeriodicGhostCells):
             h = float(self._mesh.cell_volume)
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
@@ -220,7 +219,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
 class _ConvergenceRateClaim(CalibratedClaim[float]):
     """Claim: ‖φ_h − φ_exact‖_{L²_h} converges at O(h^p) over the mesh sequence.
 
-    disc is pre-built with its BC; Operator binds it to each mesh at check time.
+    disc is pre-built with its BC; assembled to a LinearOperator at check time.
     disc.continuous_operator (a ZeroForm → ZeroForm operator) is used to derive
     the manufactured-solution source ρ = L(φ) and to auto-select admissible
     sinusoidal modes.  disc.order drives the k_max and slope assertions.
@@ -274,7 +273,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            op_m = Operator(self._disc, mesh)
+            op_m = assemble_linear_op(self._disc, mesh)
             a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
             decomp = SVDFactorization().factorize(a_m)
             s_vec = decomp.s
@@ -365,7 +364,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         )
 
 
-def _assemble_from_op(op: Operator, n: int, backend: Any) -> Any:
+def _assemble_from_op(op: Any, n: int, backend: Any) -> Any:
     """Build the N×N stiffness matrix from op.apply on basis vectors."""
     columns: list[list[float]] = []
     for j in range(n):
