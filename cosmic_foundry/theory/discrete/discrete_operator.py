@@ -15,9 +15,8 @@ _V = TypeVar("_V")
 class DiscreteOperator(NumericFunction[DiscreteField[_V], DiscreteField[_V]]):
     """The discrete analog of DifferentialOperator: Lₕ: DiscreteField → DiscreteField.
 
-    A DiscreteOperator is the output of a Discretization — the Lₕ that makes
-    the commutation diagram Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the chosen approximation
-    order.  It earns its class by two falsifiable claims:
+    The Lₕ that makes the commutation diagram Lₕ ∘ Rₕ ≈ Rₕ ∘ L hold to the
+    chosen approximation order.  It earns its class by two falsifiable claims:
 
         order               — integer convergence order; verified by Lane C
                               Taylor expansion in test_convergence_order.py
@@ -25,9 +24,8 @@ class DiscreteOperator(NumericFunction[DiscreteField[_V], DiscreteField[_V]]):
                               approximates; the mathematical specification
                               against which the convergence test measures error
 
-    A DiscreteOperator is not constructed directly from stencil coefficients;
-    it is produced by a Discretization, which derives continuous_operator
-    automatically from the numerical flux.
+    Concrete subclasses are Discretization subclasses (e.g. FVMDiscretization),
+    which derive continuous_operator automatically from the numerical flux.
 
     Required:
         order               — composite convergence order

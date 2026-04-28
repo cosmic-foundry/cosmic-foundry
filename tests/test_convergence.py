@@ -178,7 +178,7 @@ class _SolverClaim(CalibratedClaim[float]):
     def check(self, fma_rate: float) -> None:
         disc = FVMDiscretization(self._mesh, self._flux, DirichletGhostCells())
         n = math.prod(self._mesh.shape)
-        op = Operator(disc(), self._mesh)
+        op = Operator(disc, self._mesh)
         b = Tensor([1.0] * n)
         u = self._solver.solve(op, b)
         residual = tensor.norm(b - op.apply(u)).get()
@@ -225,7 +225,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         bc = self._bc_type()
         disc = FVMDiscretization(self._mesh, self._flux, bc)
         n = math.prod(self._mesh.shape)
-        op = Operator(disc(), self._mesh)
+        op = Operator(disc, self._mesh)
         if self._bc_type is PeriodicGhostCells:
             h = float(self._mesh.cell_volume)
             orig = float(self._mesh.coordinate((0,))[0]) - 0.5 * h
@@ -309,7 +309,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            op_m = Operator(FVMDiscretization(mesh, self._flux, bc)(), mesh)
+            op_m = Operator(FVMDiscretization(mesh, self._flux, bc), mesh)
             a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
             decomp = SVDFactorization().factorize(a_m)
             s_vec = decomp.s
@@ -480,7 +480,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
-    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)()) for f in _FLUXES],
+    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers including CG
     *[
         _SolverClaim(s, f, _mesh_n8)

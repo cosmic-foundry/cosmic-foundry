@@ -1,4 +1,4 @@
-"""FVMDiscretization: assemble a DiscreteOperator from a NumericalFlux."""
+"""FVMDiscretization: finite-volume DiscreteOperator on a CartesianMesh."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from cosmic_foundry.theory.discrete.discrete_field import (
     DiscreteField,
     _CallableDiscreteField,
 )
-from cosmic_foundry.theory.discrete.discrete_operator import DiscreteOperator
 from cosmic_foundry.theory.discrete.discretization import Discretization
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
@@ -64,8 +63,9 @@ class _DivergenceComposition(DifferentialOperator[Any, ZeroForm[Any]]):
         return ZeroForm(phi.manifold, div, phi.symbols)
 
 
-class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
-    """Assembled discrete divergence operator produced by FVMDiscretization.__call__.
+class FVMDiscretization(Discretization[sympy.Expr]):
+    """Finite-volume discrete operator for a divergence-form equation on a
+    CartesianMesh.
 
     Maps a DiscreteField of cell averages to a DiscreteField of average discrete
     divergences:
@@ -75,25 +75,33 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
 
     approximating (1/|Ωᵢ|) ∫_Ωᵢ L φ dV at convergence order p = numerical_flux.order.
     U is assumed to hold cell-average values; NumericalFlux stencils operate on
-    averages directly.  The mesh is read from U.mesh at call time, making this
-    operator applicable to symbolic meshes (for convergence testing) and concrete
-    meshes alike.
+    averages directly.
 
-    When a DiscreteBoundaryCondition is supplied (via FVMDiscretization), ghost
-    cells are applied via bc.extend(U, mesh) before face fluxes are evaluated,
-    making the operator well-defined for all cells including those adjacent to
-    the boundary.  When no BC is supplied, zero-valued ghost cells are used.
+    When a DiscreteBoundaryCondition is supplied, ghost cells are applied via
+    bc.extend(U, mesh) before face fluxes are evaluated.  When no BC is supplied,
+    zero-valued ghost cells are used.
 
     continuous_operator is auto-derived as ∇·(numerical_flux.continuous_operator).
+
+    Parameters
+    ----------
+    mesh:
+        The CartesianMesh on which the scheme is defined.
+    numerical_flux:
+        The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
+    boundary_condition:
+        Optional DiscreteBoundaryCondition; when supplied, ghost cells are
+        applied in __call__.
     """
 
     def __init__(
         self,
-        numerical_flux: NumericalFlux[sympy.Expr],
-        bc: DiscreteBoundaryCondition | None = None,
+        mesh: Mesh,
+        numerical_flux: NumericalFlux[Any],
+        boundary_condition: DiscreteBoundaryCondition | None = None,
     ) -> None:
+        super().__init__(mesh, boundary_condition)
         self._numerical_flux = numerical_flux
-        self._bc = bc
 
     @property
     def order(self) -> int:
@@ -104,10 +112,10 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
         return _DivergenceComposition(self._numerical_flux.continuous_operator)
 
     def __call__(self, U: DiscreteField[sympy.Expr]) -> DiscreteField[sympy.Expr]:
-        """Apply the assembled operator; return cell residuals as DiscreteField."""
+        """Apply the discrete divergence operator; return cell residuals."""
         mesh = cast(CartesianMesh, U.mesh)
-        if self._bc is not None:
-            U = self._bc.extend(U, mesh)
+        if self._boundary_condition is not None:
+            U = self._boundary_condition.extend(U, mesh)
         else:
             U = _apply_zero_ghosts(U, mesh)
         face_fluxes = self._numerical_flux(U)
@@ -148,43 +156,6 @@ class _AssembledFVMOperator(DiscreteOperator[sympy.Expr]):
             return residuals_frozen[flat]
 
         return _CallableDiscreteField(mesh, lookup)
-
-
-class FVMDiscretization(Discretization):
-    """Finite-volume discretization of a divergence-form equation on a CartesianMesh.
-
-    FVMDiscretization(mesh, numerical_flux) assembles the discrete operator Lₕ
-    that makes the commutation diagram
-
-        Lₕ Rₕ φ ≈ Rₕ L φ   (to O(hᵖ))
-
-    hold at convergence order p = numerical_flux.order.  Calling it produces an
-    _AssembledFVMOperator whose continuous_operator is auto-derived as
-    ∇·(numerical_flux.continuous_operator).
-
-    Parameters
-    ----------
-    mesh:
-        The CartesianMesh on which the scheme is defined.
-    numerical_flux:
-        The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
-    boundary_condition:
-        Optional DiscreteBoundaryCondition; when supplied, ghost cells are
-        applied in __call__.
-    """
-
-    def __init__(
-        self,
-        mesh: Mesh,
-        numerical_flux: NumericalFlux[Any],
-        boundary_condition: DiscreteBoundaryCondition | None = None,
-    ) -> None:
-        super().__init__(mesh, boundary_condition)
-        self._numerical_flux = numerical_flux
-
-    def __call__(self) -> _AssembledFVMOperator:
-        """Produce the assembled discrete operator."""
-        return _AssembledFVMOperator(self._numerical_flux, self._boundary_condition)
 
 
 __all__ = ["FVMDiscretization"]

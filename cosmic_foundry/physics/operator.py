@@ -32,7 +32,7 @@ class Operator:
     and is done once; subsequent apply() calls are O(nnz) sparse matrix-vector
     products.
 
-        op = Operator(disc(), mesh)
+        op = Operator(disc, mesh)
         residual  = op(state)       # symbolic path: O(N) stencil evaluation
         u         = solver.solve(op, b)  # solver uses op.apply() internally
 

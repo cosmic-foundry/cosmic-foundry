@@ -56,12 +56,12 @@ def _time_solve_at(solver_class: type, n: int) -> float:
     disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
     b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
-    op = Operator(disc(), mesh)
+    op = Operator(disc, mesh)
     solver.solve(op, b_cal)  # warm-up
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        op = Operator(disc(), mesh)
+        op = Operator(disc, mesh)
         solver.solve(op, b_cal)
         best = min(best, time.perf_counter() - t0)
     return best
