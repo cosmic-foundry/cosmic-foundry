@@ -61,6 +61,7 @@ from cosmic_foundry.theory.discrete import (
     RestrictionOperator,
     StructuredMesh,
     VolumeField,
+    ZeroGhostCells,
 )
 from cosmic_foundry.theory.foundation import (
     Function,
@@ -124,6 +125,7 @@ __all__ = [
     "RestrictionOperator",
     "StructuredMesh",
     "VolumeField",
+    "ZeroGhostCells",
     # foundation
     "Function",
     "Homeomorphism",

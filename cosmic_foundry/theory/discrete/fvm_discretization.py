@@ -16,7 +16,6 @@ from cosmic_foundry.theory.continuous.differential_operator import (
 )
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DiscreteBoundaryCondition,
-    _apply_zero_ghosts,
 )
 from cosmic_foundry.theory.discrete.discrete_field import (
     DiscreteField,
@@ -40,9 +39,8 @@ class FVMDiscretization(Discretization[sympy.Expr]):
     U is assumed to hold cell-average values; NumericalFlux stencils operate on
     averages directly.
 
-    When a DiscreteBoundaryCondition is supplied, ghost cells are applied via
-    bc.extend(U, mesh) before face fluxes are evaluated.  When no BC is supplied,
-    zero-valued ghost cells are used.
+    Ghost cells are applied via boundary_condition.extend(U, mesh) before face
+    fluxes are evaluated.  Defaults to ZeroGhostCells() when no BC is supplied.
 
     continuous_operator is auto-derived as ∇·(numerical_flux.continuous_operator).
 
@@ -51,8 +49,7 @@ class FVMDiscretization(Discretization[sympy.Expr]):
     numerical_flux:
         The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
     boundary_condition:
-        Optional DiscreteBoundaryCondition; when supplied, ghost cells are
-        applied in __call__.
+        DiscreteBoundaryCondition; defaults to ZeroGhostCells() (absorbing).
     """
 
     def __init__(
@@ -74,10 +71,7 @@ class FVMDiscretization(Discretization[sympy.Expr]):
     def __call__(self, U: DiscreteField[sympy.Expr]) -> DiscreteField[sympy.Expr]:
         """Apply the discrete divergence operator; return cell residuals."""
         mesh = cast(CartesianMesh, U.mesh)
-        if self._boundary_condition is not None:
-            U = self._boundary_condition.extend(U, mesh)
-        else:
-            U = _apply_zero_ghosts(U, mesh)
+        U = self._boundary_condition.extend(U, mesh)
         face_fluxes = self._numerical_flux(U)
         vol = mesh.cell_volume
         div = CartesianExteriorDerivative(mesh, degree=2)(face_fluxes)
