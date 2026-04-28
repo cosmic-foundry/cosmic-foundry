@@ -75,7 +75,7 @@ def _make_jit_op() -> Operator:
         shape=(_JIT_N,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
-    return Operator(FVMDiscretization(mesh, flux, DirichletGhostCells()), mesh)
+    return Operator(FVMDiscretization(flux, DirichletGhostCells()), mesh)
 
 
 _JIT_OP = _make_jit_op()

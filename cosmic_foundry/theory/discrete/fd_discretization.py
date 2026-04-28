@@ -65,8 +65,6 @@ class FDDiscretization(Discretization[sympy.Expr]):
 
     Parameters
     ----------
-    mesh:
-        CartesianMesh defining the domain geometry and cell spacing.
     order:
         Even integer ≥ 2.  Stencil is accurate to O(h^order) at interior cells.
     continuous_operator:
@@ -82,7 +80,6 @@ class FDDiscretization(Discretization[sympy.Expr]):
 
     def __init__(
         self,
-        mesh: CartesianMesh,
         order: int,
         continuous_operator: DifferentialOperator,
         boundary_condition: DiscreteBoundaryCondition | None = None,
@@ -91,7 +88,7 @@ class FDDiscretization(Discretization[sympy.Expr]):
             raise ValueError(
                 f"FDDiscretization requires even order ≥ {self.min_order}, got {order}"
             )
-        super().__init__(mesh, boundary_condition)
+        super().__init__(boundary_condition)
         self._order = order
         self._continuous_operator = continuous_operator
         self._coeffs = _fd_laplacian_coeffs(order)

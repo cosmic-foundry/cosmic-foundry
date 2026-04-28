@@ -20,7 +20,6 @@ from cosmic_foundry.theory.discrete.discrete_field import (
     _CallableDiscreteField,
 )
 from cosmic_foundry.theory.discrete.discretization import Discretization
-from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 
 
@@ -46,8 +45,6 @@ class FVMDiscretization(Discretization[sympy.Expr]):
 
     Parameters
     ----------
-    mesh:
-        The CartesianMesh on which the scheme is defined.
     numerical_flux:
         The NumericalFlux approximating the face-averaged flux F·n̂·|A|.
     boundary_condition:
@@ -57,11 +54,10 @@ class FVMDiscretization(Discretization[sympy.Expr]):
 
     def __init__(
         self,
-        mesh: Mesh,
         numerical_flux: NumericalFlux[Any],
         boundary_condition: DiscreteBoundaryCondition | None = None,
     ) -> None:
-        super().__init__(mesh, boundary_condition)
+        super().__init__(boundary_condition)
         self._numerical_flux = numerical_flux
 
     @property

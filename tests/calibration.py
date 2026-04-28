@@ -53,7 +53,7 @@ def _time_solve_at(solver_class: type, n: int) -> float:
         shape=(n,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _manifold)
-    disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
+    disc = FVMDiscretization(flux, DirichletGhostCells())
     b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
     op = Operator(disc, mesh)

@@ -54,7 +54,7 @@ def _op_factory(n: int, backend: Backend) -> tuple[LinearOperator, Tensor]:
         shape=(n,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, _MANIFOLD)
-    disc = FVMDiscretization(mesh, flux, DirichletGhostCells())
+    disc = FVMDiscretization(flux, DirichletGhostCells())
     op: LinearOperator = Operator(disc, mesh)
     b = Tensor([1.0] * n, backend=backend)
     return op, b

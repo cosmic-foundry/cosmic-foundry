@@ -155,7 +155,7 @@ class _OrderClaim(CalibratedClaim[float]):
 
 
 class _SolverClaim(CalibratedClaim[float]):
-    """Claim: solver converges on FVMDiscretization(mesh, flux, DirichletGhostCells).
+    """Claim: solver converges on FVMDiscretization(flux, DirichletGhostCells).
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.
     """
@@ -179,7 +179,7 @@ class _SolverClaim(CalibratedClaim[float]):
         )
 
     def check(self, fma_rate: float) -> None:
-        disc = FVMDiscretization(self._mesh, self._flux, DirichletGhostCells())
+        disc = FVMDiscretization(self._flux, DirichletGhostCells())
         n = math.prod(self._mesh.shape)
         op = Operator(disc, self._mesh)
         b = Tensor([1.0] * n)
@@ -226,7 +226,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
 
     def check(self, fma_rate: float) -> None:
         bc = self._bc_type()
-        disc = FVMDiscretization(self._mesh, self._flux, bc)
+        disc = FVMDiscretization(self._flux, bc)
         n = math.prod(self._mesh.shape)
         op = Operator(disc, self._mesh)
         if self._bc_type is PeriodicGhostCells:
@@ -312,7 +312,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
             vol = float(mesh.cell_volume)
             orig = float(mesh.coordinate((0,))[0]) - 0.5 * vol
             n_cells = mesh.shape[0]
-            op_m = Operator(FVMDiscretization(mesh, self._flux, bc), mesh)
+            op_m = Operator(FVMDiscretization(self._flux, bc), mesh)
             a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
             decomp = SVDFactorization().factorize(a_m)
             s_vec = decomp.s
@@ -479,7 +479,7 @@ class _FDOrderClaim(CalibratedClaim[float]):
 
 
 class _FDSolverClaim(CalibratedClaim[float]):
-    """Claim: solver converges on FDDiscretization(mesh, order, DirichletGhostCells).
+    """Claim: solver converges on FDDiscretization(order, DirichletGhostCells).
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.
     """
@@ -501,9 +501,7 @@ class _FDSolverClaim(CalibratedClaim[float]):
         )
 
     def check(self, fma_rate: float) -> None:
-        disc = FDDiscretization(
-            self._mesh, self._order, self._cont_op, DirichletGhostCells()
-        )
+        disc = FDDiscretization(self._order, self._cont_op, DirichletGhostCells())
         op = Operator(disc, self._mesh)
         n = math.prod(self._mesh.shape)
         b = Tensor([1.0] * n, backend=_NP_BACKEND)
@@ -555,7 +553,7 @@ class _FDConvergenceRateClaim(CalibratedClaim[float]):
             orig = float(mesh._origin[0])
 
             disc = FDDiscretization(
-                mesh, self._disc_order, self._cont_op, DirichletGhostCells()
+                self._disc_order, self._cont_op, DirichletGhostCells()
             )
             op = Operator(disc, mesh)
 
@@ -616,9 +614,6 @@ def _as_n_form(f: ZeroForm, ndim: int) -> DifferentialForm:
 
 _manifold = EuclideanManifold(1)
 _fd_cont_op = DivergenceComposition(DiffusionOperator(_manifold))
-_dummy_mesh = CartesianMesh(
-    origin=(sympy.Integer(0),), spacing=(sympy.Integer(1),), shape=(4,)
-)
 _mesh_n8 = CartesianMesh(
     origin=(sympy.Rational(0),),
     spacing=(sympy.Rational(1, 8),),
@@ -658,7 +653,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 _CLAIMS: list[CalibratedClaim[float]] = [
     *[_OrderClaim(f) for f in _FLUXES],
-    *[_OrderClaim(FVMDiscretization(_dummy_mesh, f)) for f in _FLUXES],
+    *[_OrderClaim(FVMDiscretization(f)) for f in _FLUXES],
     # Diffusive (SPD, DirichletBC): all solvers including CG
     *[
         _SolverClaim(s, f, _mesh_n8)
@@ -703,8 +698,8 @@ _CLAIMS: list[CalibratedClaim[float]] = [
         for f in _ADVECTION_DIFFUSION_FLUXES
     ],
     # FD order claims: verify interior truncation error is O(h^p) for point-value DOFs.
-    _FDOrderClaim(FDDiscretization(_dummy_mesh, 2, _fd_cont_op)),
-    _FDOrderClaim(FDDiscretization(_dummy_mesh, 4, _fd_cont_op)),
+    _FDOrderClaim(FDDiscretization(2, _fd_cont_op)),
+    _FDOrderClaim(FDDiscretization(4, _fd_cont_op)),
     # FD solver claims: order=2 yields an SPD matrix under DirichletGhostCells.
     *[_FDSolverClaim(s, 2, _mesh_n8, _fd_cont_op) for s in [*_SOLVERS, *_SPD_SOLVERS]],
     *[_FDSolverClaim(s, 2, _mesh_n8, _fd_cont_op) for s in _DIRECT_SOLVERS],
