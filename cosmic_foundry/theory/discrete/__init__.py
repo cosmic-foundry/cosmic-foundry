@@ -6,7 +6,12 @@ cosmic_foundry, or the approved symbolic-reasoning packages {sympy}.
 
 from __future__ import annotations
 
+from cosmic_foundry.theory.discrete.advection_diffusion_flux import (
+    AdvectionDiffusionFlux,
+)
+from cosmic_foundry.theory.discrete.advective_flux import AdvectiveFlux
 from cosmic_foundry.theory.discrete.cell_complex import CellComplex
+from cosmic_foundry.theory.discrete.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
     DirichletGhostCells,
     DiscreteBoundaryCondition,
@@ -34,7 +39,10 @@ from cosmic_foundry.theory.discrete.structured_mesh import StructuredMesh
 from cosmic_foundry.theory.discrete.volume_field import VolumeField
 
 __all__ = [
+    "AdvectionDiffusionFlux",
+    "AdvectiveFlux",
     "CellComplex",
+    "DiffusiveFlux",
     "DirichletGhostCells",
     "DiscreteBoundaryCondition",
     "DiscreteExteriorDerivative",

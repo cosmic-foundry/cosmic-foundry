@@ -71,15 +71,15 @@ from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianFaceRestriction,
 )
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
-from cosmic_foundry.physics.advection_diffusion_flux import AdvectionDiffusionFlux
-from cosmic_foundry.physics.advective_flux import AdvectiveFlux
-from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.continuous.differential_form import (
     DifferentialForm,
     OneForm,
     ZeroForm,
 )
 from cosmic_foundry.theory.discrete import (
+    AdvectionDiffusionFlux,
+    AdvectiveFlux,
+    DiffusiveFlux,
     DirichletGhostCells,
     DivergenceFormDiscretization,
     PeriodicGhostCells,

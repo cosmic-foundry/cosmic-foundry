@@ -7,13 +7,13 @@ from typing import ClassVar, cast
 import sympy
 
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.physics.advective_flux import AdvectiveFlux
-from cosmic_foundry.physics.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.continuous.advection_diffusion_operator import (
     AdvectionDiffusionOperator,
 )
 from cosmic_foundry.theory.continuous.differential_operator import DifferentialOperator
 from cosmic_foundry.theory.continuous.manifold import Manifold
+from cosmic_foundry.theory.discrete.advective_flux import AdvectiveFlux
+from cosmic_foundry.theory.discrete.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.discrete.discrete_field import DiscreteField
 from cosmic_foundry.theory.discrete.face_field import FaceField, _CallableFaceField
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
