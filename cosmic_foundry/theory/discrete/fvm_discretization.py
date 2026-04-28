@@ -6,6 +6,9 @@ from typing import Any, cast
 
 import sympy
 
+from cosmic_foundry.geometry.cartesian_exterior_derivative import (
+    CartesianExteriorDerivative,
+)
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.theory.continuous.differential_operator import (
     DifferentialOperator,
@@ -76,43 +79,9 @@ class FVMDiscretization(Discretization[sympy.Expr]):
         else:
             U = _apply_zero_ghosts(U, mesh)
         face_fluxes = self._numerical_flux(U)
-        ndim = len(mesh._shape)
-        shape = mesh.shape
-
-        def _to_multi(flat: int) -> tuple[int, ...]:
-            idx = []
-            for a in range(ndim):
-                idx.append(flat % shape[a])
-                flat //= shape[a]
-            return tuple(idx)
-
         vol = mesh.cell_volume
-        residuals: list[sympy.Expr] = []
-        for flat_i in range(mesh.n_cells):
-            idx = _to_multi(flat_i)
-            total: sympy.Expr = sympy.Integer(0)
-            for axis in range(ndim):
-                idx_low: tuple[int, ...] = (
-                    idx[:axis] + (idx[axis] - 1,) + idx[axis + 1 :]
-                )
-                total = (
-                    total
-                    + face_fluxes((axis, idx))  # type: ignore[arg-type]
-                    - face_fluxes((axis, idx_low))  # type: ignore[arg-type]
-                )
-            residuals.append(total / vol)
-
-        residuals_frozen = tuple(residuals)
-
-        def lookup(idx: tuple[int, ...]) -> sympy.Expr:
-            flat = 0
-            stride = 1
-            for a, i in enumerate(idx):
-                flat += i * stride
-                stride *= shape[a]
-            return residuals_frozen[flat]
-
-        return _CallableDiscreteField(mesh, lookup)
+        div = CartesianExteriorDerivative(mesh, degree=2)(face_fluxes)
+        return _CallableDiscreteField(mesh, lambda idx: div(idx) / vol)
 
 
 __all__ = ["FVMDiscretization"]
