@@ -457,8 +457,7 @@ ABC, `RungeKuttaIntegrator`, `TimeStepper`, `Autotuner` extension; structured
 RHS protocols (`HamiltonianSplit`, `WithJacobian`, `Additive`,
 `LinearPlusNonlinear`, `OperatorSplit`) and additional integrator families
 introduced phase-by-phase per the [Epoch 4
-sprint](#current-work-epoch-4--time-integration-layer). HDF5 checkpoint/restart
-deferred pending integrator-state stabilization (see open questions).
+sprint](#current-work-epoch-4--time-integration-layer).
 
 ### Cross-cutting
 
@@ -585,35 +584,25 @@ multi-physics enabler.
 
 **Open questions — Epoch 4 design points:**
 
-1. **HDF5 checkpoint/restart placement.** The deliverable originally
-   scheduled inside the computation epoch (write/read time-stepping state
-   with provenance sidecars; GPU-written checkpoints readable on CPU-only
-   machines) requires understanding integrator state to be useful for
-   time-stepping workflows.  Options: fold into Phase 7 once `NordsieckState`
-   stabilizes the most demanding state shape, or stand up a separate
-   persistence epoch after Epoch 4 lands.  Decision deferred until Phase 4
-   establishes whether `WithFactoredOperatorState` carries non-serializable
-   data.
-
-2. **Coefficient-algebra typing for Phase 8.** Whether to parameterize
+1. **Coefficient-algebra typing for Phase 8.** Whether to parameterize
    `RungeKuttaIntegrator` over a `Coefficient` type variable (uniform
    surface, every method has the same class) or to introduce
    `ExponentialRKIntegrator` as a sibling class (more readable for the
    common case where coefficients are rationals).  Decision deferred until
    Phase 4 / 5 stabilize the implicit/explicit type story.
 
-3. **Autotuner generalization.** Does the static autotuner from Phase 0
+2. **Autotuner generalization.** Does the static autotuner from Phase 0
    (`Constant` controller + descriptor-driven `recommended_dt`) survive
    once VODE-style controllers exist in Phase 7, or does Phase 7 subsume
    the static autotuner as the trivial constant-policy case?  Resolves in
    Phase 7.
 
-4. **Stiffness detector reuse.** Phase 7 needs an online ρ(J) estimate;
+3. **Stiffness detector reuse.** Phase 7 needs an online ρ(J) estimate;
    Phase 8 may benefit from the same machinery (deciding when `‖hL‖` is
    large enough to justify exponential treatment over fully-explicit).
    Factor into a shared `StiffnessDiagnostic` from Phase 7 onward.
 
-5. **`set_default_backend` vs. solver-level override.** Carried forward
+4. **`set_default_backend` vs. solver-level override.** Carried forward
    from the prior epoch.  Time-integrator code must inherit whichever
    resolution lands; a per-`TimeStepper` backend override is the natural
    API extension if process-wide defaults turn out to be insufficient.
@@ -628,6 +617,22 @@ multi-physics enabler.
 - Temporal convergence verification across spatial dimensions: spatial
   framework now covers 1D / 2D / 3D; temporal claims should likewise
   verify across problem dimensions where applicable.
+
+---
+
+## Cross-cutting open questions
+
+Items that are not scoped to any specific epoch.  They surface here so they
+are not lost; the decision of when and how to schedule them is made when
+the implementation lane becomes clear.
+
+**HDF5 checkpoint/restart.** Persistent serialization of simulation state
+(time-stepper state, mesh fields, parameters) with provenance sidecars
+(git hash, timestamp, parameter record).  GPU-written checkpoints must be
+readable on CPU-only machines.  Not assigned to an epoch; the right time
+to schedule depends on which integrator state types end up carrying
+non-serializable data and on whether checkpointing arrives as part of a
+broader persistence layer or as a standalone capability.
 
 ---
 
