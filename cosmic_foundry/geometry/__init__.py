@@ -7,16 +7,17 @@ live in physics/.
 
 Exported objects
 ----------------
-CartesianChart               — identity coordinate chart on EuclideanManifold
-CartesianEdgeRestriction     — analytic Rₕ¹: OneForm → EdgeField on CartesianMesh
-CartesianExteriorDerivative  — exact discrete exterior derivative on CartesianMesh
-CartesianFaceRestriction     — analytic Rₕⁿ⁻¹: OneForm → FaceField on CartesianMesh
-CartesianMesh                — uniform Cartesian mesh on flat Euclidean space
-CartesianPointRestriction    — analytic Rₕ⁰: ZeroForm → PointField on CartesianMesh
-CartesianVolumeRestriction   — analytic Rₕⁿ: n-Form → VolumeField on CartesianMesh
-EuclideanManifold            — flat Euclidean ℝⁿ with g = I
-SchwarzschildManifold        — Schwarzschild vacuum solution; static spherically
-                               symmetric spacetime with Lorentzian signature
+CartesianChart                — identity coordinate chart on EuclideanManifold
+CartesianEdgeRestriction      — analytic Rₕ¹: OneForm → EdgeField on CartesianMesh
+CartesianExteriorDerivative   — exact discrete exterior derivative on CartesianMesh
+CartesianFaceRestriction      — Rₕⁿ⁻¹: DifferentialForm → FaceField on CartesianMesh
+CartesianMesh                 — uniform Cartesian mesh on flat Euclidean space
+CartesianPointRestriction     — analytic Rₕ⁰: ZeroForm → PointField on CartesianMesh
+CartesianRestrictionOperator  — abstract base for all Cartesian Rₕᵏ operators
+CartesianVolumeRestriction    — analytic Rₕⁿ: n-Form → VolumeField on CartesianMesh
+EuclideanManifold             — flat Euclidean ℝⁿ with g = I
+SchwarzschildManifold         — Schwarzschild vacuum solution; static spherically
+                                symmetric spacetime with Lorentzian signature
 """
 
 from cosmic_foundry.geometry.cartesian_exterior_derivative import (
@@ -27,6 +28,7 @@ from cosmic_foundry.geometry.cartesian_restriction_operator import (
     CartesianEdgeRestriction,
     CartesianFaceRestriction,
     CartesianPointRestriction,
+    CartesianRestrictionOperator,
     CartesianVolumeRestriction,
 )
 from cosmic_foundry.geometry.euclidean_manifold import CartesianChart, EuclideanManifold
@@ -39,6 +41,7 @@ __all__ = [
     "CartesianFaceRestriction",
     "CartesianMesh",
     "CartesianPointRestriction",
+    "CartesianRestrictionOperator",
     "CartesianVolumeRestriction",
     "EuclideanManifold",
     "SchwarzschildManifold",

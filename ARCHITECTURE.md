@@ -325,18 +325,32 @@ CartesianMesh(StructuredMesh)          — free: origin, spacing, shape;
                                                   face area = ∏_{k≠j} Δxₖ  (face ⊥ axis j)
                                                   face normal = ê_j
 
-CartesianVolumeRestriction(RestrictionOperator[DifferentialForm, sympy.Expr])
-                                       — Rₕⁿ: n-Form → VolumeField (∫_Ωᵢ f dV, total)
-                                         (ThreeForm in 3-D, OneForm in 1-D)
-                                         FV restriction: cell-average DOF choice.
-CartesianFaceRestriction(RestrictionOperator[OneForm, sympy.Expr])
-                                       — Rₕⁿ⁻¹: OneForm → FaceField (face-normal flux ∫ F_a dA_⊥)
-                                         OneForm used as Cartesian (n-1)-Form proxy:
-                                         F.component(a) stands for *(F)_a dA_⊥
-CartesianEdgeRestriction(RestrictionOperator[OneForm, sympy.Expr])
-                                       — Rₕ¹: OneForm → EdgeField (edge line integral)
-CartesianPointRestriction(RestrictionOperator[ZeroForm, sympy.Expr])
-                                       — Rₕ⁰: ZeroForm → PointField (cell-center evaluation)
+CartesianRestrictionOperator(RestrictionOperator[F, sympy.Expr])
+                                       — abstract base for all Rₕᵏ on CartesianMesh.
+                                         Encodes the two Cartesian invariants: mesh is
+                                         CartesianMesh; output value type is sympy.Expr.
+                                         A future non-Cartesian geometry provides a
+                                         parallel abstract base (same structure, different
+                                         mesh type and value type).
+├── CartesianVolumeRestriction(CartesianRestrictionOperator[DifferentialForm])
+│                                      — Rₕⁿ: n-Form → VolumeField (∫_Ωᵢ f dV, total)
+│                                        (ThreeForm in 3-D, OneForm in 1-D)
+│                                        FV restriction: cell-average DOF choice.
+├── CartesianFaceRestriction(CartesianRestrictionOperator[DifferentialForm])
+│                                      — Rₕⁿ⁻¹: DifferentialForm → FaceField
+│                                        Abstract input is the (n-1)-form; the Cartesian
+│                                        representation uses OneForm as proxy (Hodge
+│                                        isomorphism in flat space): F.component(a)
+│                                        gives the face-normal flux density at all dims.
+│                                        ∫_{transverse} F.component(a)|_{x_a=face} dx_⊥
+├── CartesianEdgeRestriction(CartesianRestrictionOperator[OneForm])
+│                                      — Rₕ¹: OneForm → EdgeField (edge line integral)
+│                                        OneForm is dimension-independent here: Rₕ¹
+│                                        always integrates a 1-form along 1-D edges.
+└── CartesianPointRestriction(CartesianRestrictionOperator[ZeroForm])
+                                       — Rₕ⁰: ZeroForm → PointField (cell-center eval)
+                                         ZeroForm is dimension-independent: Rₕ⁰ always
+                                         evaluates a scalar at points.
                                          FD restriction: point-value DOF choice.
                                          Commutation: Dₖ ∘ Rₕᵏ = Rₕᵏ⁺¹ ∘ dₖ holds exactly
                                          for all k (FTC for k=0; Stokes for k=1)
