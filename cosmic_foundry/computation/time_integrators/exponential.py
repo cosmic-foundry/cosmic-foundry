@@ -125,6 +125,65 @@ class ETDRK2Integrator:
         return RKState(t + dt, u_new, dt, 0.0)
 
 
+class CoxMatthewsETDRK4Integrator:
+    """Fourth-order Cox-Matthews exponential Runge-Kutta integrator."""
+
+    @property
+    def order(self) -> int:
+        """Declared convergence order."""
+        return 4
+
+    def step(
+        self,
+        rhs: LinearPlusNonlinearRHSProtocol,
+        state: RKState,
+        dt: float,
+    ) -> RKState:
+        A = rhs.linear_operator * dt
+        A_half = A * 0.5
+        t, u = state.t, state.u
+
+        phi0 = PhiFunction(0)
+        phi1 = PhiFunction(1)
+
+        Nu = rhs.nonlinear(t, u)
+        e_half_u = phi0.apply(A_half, u)
+        a = e_half_u + (0.5 * dt) * phi1.apply(A_half, Nu)
+        Na = rhs.nonlinear(t + 0.5 * dt, a)
+
+        b = e_half_u + (0.5 * dt) * phi1.apply(A_half, Na)
+        Nb = rhs.nonlinear(t + 0.5 * dt, b)
+
+        c = phi0.apply(A_half, a) + (0.5 * dt) * phi1.apply(A_half, 2.0 * Nb - Nu)
+        Nc = rhs.nonlinear(t + dt, c)
+
+        b1 = _phi_combination(A, Nu, c1=1.0, c2=-3.0, c3=4.0)
+        b2 = _phi_combination(A, Na + Nb, c2=2.0, c3=-4.0)
+        b4 = _phi_combination(A, Nc, c2=-1.0, c3=4.0)
+        u_new = phi0.apply(A, u) + dt * (b1 + b2 + b4)
+        return RKState(t + dt, u_new, dt, 0.0)
+
+
+def _phi_combination(
+    A: Tensor,
+    v: Tensor,
+    *,
+    c1: float = 0.0,
+    c2: float = 0.0,
+    c3: float = 0.0,
+) -> Tensor:
+    """Return ``(c1 phi1(A) + c2 phi2(A) + c3 phi3(A)) v``."""
+    zero = Tensor.zeros(*v.shape, backend=v.backend)
+    result = zero
+    if c1 != 0.0:
+        result = result + c1 * PhiFunction(1).apply(A, v)
+    if c2 != 0.0:
+        result = result + c2 * PhiFunction(2).apply(A, v)
+    if c3 != 0.0:
+        result = result + c3 * PhiFunction(3).apply(A, v)
+    return result
+
+
 def _matrix_exp_action(A: Tensor, v: Tensor) -> Tensor:
     """Return ``exp(A) v`` by a small dense Taylor action."""
     term = v
@@ -146,14 +205,17 @@ def _factorial(n: int) -> int:
 
 etd_euler = ExponentialEulerIntegrator()
 etdrk2 = ETDRK2Integrator()
+cox_matthews_etdrk4 = CoxMatthewsETDRK4Integrator()
 
 
 __all__ = [
+    "CoxMatthewsETDRK4Integrator",
     "ETDRK2Integrator",
     "ExponentialEulerIntegrator",
     "LinearPlusNonlinearRHS",
     "LinearPlusNonlinearRHSProtocol",
     "PhiFunction",
+    "cox_matthews_etdrk4",
     "etd_euler",
     "etdrk2",
 ]
