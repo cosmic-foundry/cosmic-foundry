@@ -38,15 +38,18 @@ from cosmic_foundry.computation.time_integrators import (
     JacobianRHS,
     NordsieckIntegrator,
     NordsieckState,
+    OrderSelector,
     PartitionedState,
     PIController,
     RKState,
     RungeKuttaIntegrator,
     SymplecticSplittingIntegrator,
     TimeStepper,
+    VariableOrderNordsieckIntegrator,
     ab2,
     ab3,
     ab4,
+    adams_family,
     adams_moulton1,
     adams_moulton2,
     adams_moulton3,
@@ -1593,4 +1596,99 @@ def test_nordsieck_round_trip(claim: _NordsieckRoundTripClaim) -> None:
 def test_nordsieck_rescaled_accuracy(
     claim: _NordsieckRescaledAccuracyClaim,
 ) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 claims — variable-order Nordsieck integrators
+# ---------------------------------------------------------------------------
+
+
+def _sharpening_decay_f(t: float, u: Tensor) -> Tensor:
+    k2 = 1.0 if t < 0.5 else 10.0
+    x0, x1 = float(u[0]), float(u[1])
+    return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
+
+
+class _VariableOrderClimbClaim(Claim):
+    """Verify variable-order Adams climbs on a smooth non-stiff network."""
+
+    @property
+    def description(self) -> str:
+        return "variable_order/climbs_on_smooth_network"
+
+    def check(self) -> None:
+        selector = OrderSelector(q_min=2, q_max=4, atol=1e-4, rtol=1e-4)
+        inst = VariableOrderNordsieckIntegrator(adams_family, selector)
+        state = inst.advance(
+            BlackBoxRHS(_decay_f),
+            Tensor([1.0, 0.0, 0.0]),
+            t0=0.0,
+            t_end=1.5,
+            dt0=0.025,
+        )
+
+        assert max(inst.accepted_orders) == 4
+        assert inst.accepted_orders[-1] == 4
+
+        x0_ex, x1_ex, x2_ex = _decay_exact(state.t)
+        err = max(
+            abs(float(state.u[0]) - x0_ex),
+            abs(float(state.u[1]) - x1_ex),
+            abs(float(state.u[2]) - x2_ex),
+        )
+        assert err < 5e-4
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert abs(total - 1.0) < 1e-12
+
+
+class _VariableOrderDropClaim(Claim):
+    """Verify variable-order Adams lowers order when the network sharpens."""
+
+    @property
+    def description(self) -> str:
+        return "variable_order/drops_on_sharpening_network"
+
+    def check(self) -> None:
+        selector = OrderSelector(q_min=2, q_max=4, atol=1e-4, rtol=1e-4)
+        inst = VariableOrderNordsieckIntegrator(
+            adams_family,
+            selector,
+            q_initial=4,
+        )
+        state = inst.advance(
+            BlackBoxRHS(_sharpening_decay_f),
+            Tensor([1.0, 0.0, 0.0]),
+            t0=0.0,
+            t_end=1.0,
+            dt0=0.02,
+        )
+
+        post_sharpen_orders = [
+            q
+            for t, q in zip(inst.accepted_times, inst.accepted_orders, strict=True)
+            if t > 0.55
+        ]
+        assert post_sharpen_orders
+        assert min(post_sharpen_orders) == 2
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert abs(total - 1.0) < 1e-12
+        for i in range(3):
+            assert float(state.u[i]) >= -1e-10
+
+
+_VARIABLE_ORDER_CLAIMS: list[Claim] = [
+    _VariableOrderClimbClaim(),
+    _VariableOrderDropClaim(),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _VARIABLE_ORDER_CLAIMS,
+    ids=[c.description for c in _VARIABLE_ORDER_CLAIMS],
+)
+def test_variable_order_nordsieck(claim: Claim) -> None:
     claim.check()

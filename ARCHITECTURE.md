@@ -493,16 +493,6 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 10 — Variable-order within a family.** `OrderSelector` estimating
-truncation error at orders `q−1`, `q`, `q+1` from the corrector residual
-and Nordsieck history differences, selecting `q_next` to minimize work per
-unit accuracy; `VariableOrderNordsieckIntegrator` wrapping a fixed family
-and applying the Phase 9 order-change rescaling when `q` shifts;
-step-size rescaling on rejection using the LTE estimate at current `q`.
-Verification: order-selection claim on a non-stiff 3-species network
-(λ_stiff/λ_slow ~ 10); confirm `q` climbs to the expected ceiling on
-smooth data and drops when the solution sharpens.
-
 **Phase 11 — Stiffness detection + family-switch transformation.**
 `StiffnessSwitcher` carrying a streaming spectral-radius estimate from the
 Newton Jacobian (Gershgorin bound on the last accepted `hJ`), triggering

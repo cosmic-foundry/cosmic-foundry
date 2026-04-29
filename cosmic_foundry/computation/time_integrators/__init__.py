@@ -81,6 +81,11 @@ from cosmic_foundry.computation.time_integrators.symplectic import (
     yoshida_6,
     yoshida_8,
 )
+from cosmic_foundry.computation.time_integrators.variable_order import (
+    OrderDecision,
+    OrderSelector,
+    VariableOrderNordsieckIntegrator,
+)
 
 __all__ = [
     "Tree",
@@ -146,4 +151,7 @@ __all__ = [
     "bdf3",
     "bdf4",
     "bdf_family",
+    "OrderDecision",
+    "OrderSelector",
+    "VariableOrderNordsieckIntegrator",
 ]
