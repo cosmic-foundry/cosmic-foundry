@@ -31,13 +31,13 @@ from typing import Protocol, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
-from cosmic_foundry.computation.tensor import Tensor, norm
-from cosmic_foundry.computation.time_integrators.integrator import RKState
-
-_LU = LUFactorization()
-_NEWTON_MAX_ITER = 50
-_NEWTON_TOL = 1e-12
+from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators._newton import newton_solve
+from cosmic_foundry.computation.time_integrators.integrator import (
+    RHSProtocol,
+    RKState,
+    TimeIntegrator,
+)
 
 
 @runtime_checkable
@@ -124,7 +124,7 @@ class FiniteDiffJacobianRHS:
         return Tensor(rows, backend=backend)
 
 
-class DIRKIntegrator:
+class DIRKIntegrator(TimeIntegrator):
     """Diagonally Implicit Runge-Kutta method defined by a Butcher tableau.
 
     Each stage of a DIRK step is solved by Newton iteration using the
@@ -185,18 +185,21 @@ class DIRKIntegrator:
 
     def step(
         self,
-        rhs: WithJacobianRHSProtocol,
+        rhs: RHSProtocol,
         state: RKState,
         dt: float,
     ) -> RKState:
         """Advance state by one step of size dt via DIRK Newton iteration.
 
+        ``rhs`` must satisfy ``WithJacobianRHSProtocol`` (expose ``.jacobian``).
         Returns a new RKState with t = state.t + dt and updated u.
         The err field is set to 0.0 (no embedded pair in this base class).
         """
+        if not isinstance(rhs, WithJacobianRHSProtocol):
+            raise TypeError(
+                f"DIRKIntegrator requires a WithJacobianRHSProtocol; got {type(rhs)}"
+            )
         t, u = state.t, state.u
-        n = u.shape[0]
-        backend = u.backend
         k: list[Tensor] = []
 
         for i in range(self._s):
@@ -207,20 +210,12 @@ class DIRKIntegrator:
             for j in range(i):
                 y_exp = y_exp + (self._A_f[i][j] * dt) * k[j]
 
-            # Newton iteration: solve y - gamma_i*dt*f(t_i, y) = y_exp.
-            y = y_exp
-            for _ in range(_NEWTON_MAX_ITER):
-                fy = rhs(t_i, y)
-                r = y - (gamma_i * dt) * fy - y_exp
-                if float(norm(r)) < _NEWTON_TOL * (1.0 + float(norm(y))):
-                    break
-                J = rhs.jacobian(t_i, y)
-                M = Tensor.eye(n, backend=backend) - (gamma_i * dt) * J
-                delta = _LU.factorize(M).solve(Tensor.zeros(n, backend=backend) - r)
-                y = y + delta
-                if float(norm(delta)) < _NEWTON_TOL * (1.0 + float(norm(y))):
-                    break
-
+            y = newton_solve(
+                y_exp,
+                gamma_i * dt,
+                f=lambda y, _t=t_i: rhs(_t, y),  # type: ignore[misc]
+                jac=lambda y, _t=t_i: rhs.jacobian(_t, y),  # type: ignore[misc]
+            )
             k.append(rhs(t_i, y))
 
         u_new = u
