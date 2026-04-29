@@ -211,10 +211,10 @@ class PIController:
 class TimeIntegrator(ABC):
     """Abstract base for all time integrators.
 
-    Defines the interface shared by every Phase-0–9 integrator.  The three
-    typed slots — rhs (RHSProtocol), state type (RKState), and controller
-    (Controller) — are DSL-ready: each subsequent phase replaces exactly one
-    slot with a richer variant without changing this interface.
+    Defines the Phase-0 Runge-Kutta stepping interface.  Later integrator
+    families keep the same conceptual slots — RHS, state, step program,
+    controller — but may narrow them to richer protocols such as Jacobian,
+    additive, Hamiltonian, or Nordsieck state types.
 
     Required:
         order — declared convergence order

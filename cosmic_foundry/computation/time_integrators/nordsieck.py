@@ -103,6 +103,44 @@ class NordsieckState:
         """Current solution vector (z[0])."""
         return self.z[0]
 
+    def rescale_step(self, h_new: float) -> NordsieckState:
+        """Return this state with its Nordsieck vector rescaled to ``h_new``.
+
+        The Nordsieck slots store ``h^j y^(j) / j!``.  Changing the step size
+        from ``h`` to ``h_new`` therefore multiplies slot ``j`` by
+        ``(h_new / h)^j`` while leaving ``z[0]`` unchanged.
+        """
+        if h_new <= 0.0:
+            raise ValueError("Nordsieck step size must be positive.")
+        if h_new == self.h:
+            return self
+        r = h_new / self.h
+        return NordsieckState(
+            self.t,
+            h_new,
+            tuple(self.z[j] * (r**j) for j in range(self.q + 1)),
+        )
+
+    def change_order(self, q_new: int) -> NordsieckState:
+        """Return this state represented at order ``q_new``.
+
+        Lowering order truncates the highest derivative slots.  Raising order
+        pads the new derivative slots with zero, preserving the represented
+        solution ``z[0]`` exactly while admitting that no higher-order history
+        has been earned yet.
+        """
+        if q_new < 0:
+            raise ValueError("Nordsieck order must be non-negative.")
+        q_old = self.q
+        if q_new == q_old:
+            return self
+        if q_new < q_old:
+            return NordsieckState(self.t, self.h, self.z[: q_new + 1])
+
+        zero = Tensor.zeros(*self.u.shape, backend=self.u.backend)
+        padding = tuple(zero for _ in range(q_new - q_old))
+        return NordsieckState(self.t, self.h, self.z + padding)
+
 
 def _pascal_predict(z: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
     """Advance Nordsieck vector by one step via Pascal-triangle multiply.
@@ -481,15 +519,16 @@ class NordsieckIntegrator:
         state: NordsieckState,
         dt: float,
     ) -> NordsieckState:
+        if state.q != self._q:
+            raise ValueError(
+                f"Nordsieck state order {state.q} does not match integrator "
+                f"order {self._q}."
+            )
+        state = state.rescale_step(dt)
         t, h, z = state.t, state.h, state.z
         q = state.q
         n = z[0].shape[0]
         backend = z[0].backend
-
-        if dt != h:
-            r = dt / h
-            z = tuple(z[j] * (r**j) for j in range(q + 1))
-            h = dt
 
         z_pred = _pascal_predict(z)
         t_new = t + h
@@ -521,13 +560,14 @@ class NordsieckIntegrator:
         state: NordsieckState,
         dt: float,
     ) -> NordsieckState:
+        if state.q != self._q:
+            raise ValueError(
+                f"Nordsieck state order {state.q} does not match integrator "
+                f"order {self._q}."
+            )
+        state = state.rescale_step(dt)
         t, h, z = state.t, state.h, state.z
         q = state.q
-
-        if dt != h:
-            r = dt / h
-            z = tuple(z[j] * (r**j) for j in range(q + 1))
-            h = dt
 
         z_pred = _pascal_predict(z)
         t_new = t + h
