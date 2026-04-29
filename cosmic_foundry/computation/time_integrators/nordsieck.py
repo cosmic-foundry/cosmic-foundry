@@ -364,11 +364,17 @@ class NordsieckIntegrator:
         z[j] = dt^j/j! · J^{j-1} · f evaluated at (t_q, y_q).  Requires
         WithJacobianRHSProtocol; raises AttributeError at runtime otherwise.
 
-        For AdamsFamily: initializes z[j] via backward differences of the
-        bootstrap function values:
+        For AdamsFamily: initializes z[j] via a corrected backward-difference
+        formula using the bootstrap function values:
 
-            z[j] = (dt / j!) · ∇^{j-1} f_q
+            z[j] = (dt / j!) · (∇^{j-1} f_q + (j−1)/2 · ∇^j f_q)
             ∇^k f_q = Σ_{i=0}^{k} (−1)^i C(k,i) f_{q−i}
+
+        The plain ∇^{j-1} f_q approximates h^{j-1} y^{(j)} with error
+        O(h^j); adding (j−1)/2 · ∇^j f_q cancels the leading error term,
+        reducing the initialization error from O(h^{j+1}) to O(h^{j+2}).
+        This keeps the bootstrap error one order below the method's global
+        error for all q, enabling AM1–AM4 to achieve their declared orders.
 
         Both paths take q RK4 steps from (t0, u0) and arrive at (t_q, y_q)
         with t_q = t0 + q·dt.
@@ -436,6 +442,16 @@ class NordsieckIntegrator:
             nabla: Tensor = f_vals[q]
             for i in range(1, j):
                 nabla = nabla + ((-1) ** i * comb(j - 1, i)) * f_vals[q - i]
+            # One-order accuracy improvement: nabla^{j-1} approximates h^{j-1}y^{(j)}
+            # with error -(j-1)/2 * h^j y^{(j+1)} + O(h^{j+1}).  Adding (j-1)/2 times
+            # the next backward difference nabla^j (which approximates h^j y^{(j+1)})
+            # cancels the leading error term, reducing init error from O(h^{j+1}) to
+            # O(h^{j+2}).  nabla^j f_q requires f_{q-j} = f_vals[q-j], which is always
+            # available since j <= q and the bootstrap provides f_0,...,f_q.
+            nabla_j: Tensor = f_vals[q]
+            for i in range(1, j + 1):
+                nabla_j = nabla_j + ((-1) ** i * comb(j, i)) * f_vals[q - i]
+            nabla = nabla + ((j - 1) / 2) * nabla_j
             z.append(nabla * (dt / factorial(j)))
 
         return NordsieckState(t_q, dt, tuple(z))
