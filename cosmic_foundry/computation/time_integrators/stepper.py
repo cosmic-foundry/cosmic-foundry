@@ -45,17 +45,19 @@ class IntegratorSelectionResult(NamedTuple):
 class TimeStepper:
     """Drives a TimeIntegrator forward in time from t0 to t_end.
 
-    Calls integrator.step() at each time level using the controller's
-    suggested step size.  The last step is shortened so that the final
-    time is exactly t_end.
+    At each time level the controller suggests a step size, the integrator
+    takes the step, and the controller decides whether to accept it.  On
+    rejection the step is retried with the controller's suggested smaller
+    step size; the time and state are not advanced.  The last accepted step
+    is shortened so that the final time is exactly t_end.
 
     Parameters
     ----------
     integrator:
         A TimeIntegrator instance.
     controller:
-        A Controller that suggests the step size.  Defaults to
-        ConstantStep(dt) when dt is provided.
+        A Controller that suggests the step size and accepts/rejects steps.
+        Defaults to ConstantStep(dt) when dt is provided.
     dt:
         Convenience shorthand: if supplied and controller is None, wraps
         dt in a ConstantStep.  Exactly one of controller or dt must be given.
@@ -95,13 +97,18 @@ class TimeStepper:
         t0:
             Initial time.
         t_end:
-            Final time.  The last step is shortened so that t = t_end exactly.
+            Final time.  The last accepted step is shortened so that
+            t = t_end exactly.
         """
         state = RKState(t0, u0)
+        dt = self._controller.suggest(state, accepted=True)
         while state.t < t_end:
-            dt = self._controller.suggest(state)
-            dt = min(dt, t_end - state.t)
-            state = self._integrator.step(rhs, state, dt)
+            dt_try = min(dt, t_end - state.t)
+            candidate = self._integrator.step(rhs, state, dt_try)
+            accepted = self._controller.accept(candidate)
+            dt = self._controller.suggest(candidate, accepted=accepted)
+            if accepted:
+                state = candidate
         return state
 
 

@@ -27,6 +27,7 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
     BlackBoxRHS,
     ConstantStep,
+    PIController,
     RKState,
     RungeKuttaIntegrator,
     TimeStepper,
@@ -286,6 +287,121 @@ class _StepperClaim(Claim):
 
 
 # ---------------------------------------------------------------------------
+# Phase 1 claims — PIController
+# ---------------------------------------------------------------------------
+
+# Default PI exponents (Hairer Vol. II recommendation): α = 0.7/p, β = 0.4/p.
+# These give a well-damped response for explicit RK methods on smooth problems.
+_PI_ALPHA = 0.7
+_PI_BETA = 0.4
+
+
+class _PIAccuracyClaim(Claim):
+    """Verify that PIController achieves error ≤ c_rel · tol on dy/dt = λy.
+
+    Integrates dy/dt = λy from 0 to t_end with a PIController and checks
+    that the global error satisfies |y_h(t_end) - exp(λ t_end)| ≤ c_rel · tol.
+    The c_rel factor absorbs pre-asymptotic constants; 10 is generous but
+    distinguishes correct control from uncontrolled growth.
+    """
+
+    def __init__(
+        self,
+        instance: RungeKuttaIntegrator,
+        label: str,
+        tol: float = 1e-4,
+        lam: float = -1.0,
+        t_end: float = 1.0,
+        c_rel: float = 10.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._tol = tol
+        self._lam = lam
+        self._t_end = t_end
+        self._c_rel = c_rel
+
+    @property
+    def description(self) -> str:
+        return f"pi_accuracy/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        p = inst.order
+        rhs = BlackBoxRHS(lambda t, u, _lam=lam: u * _lam)
+        pi = PIController(
+            alpha=_PI_ALPHA / p,
+            beta=_PI_BETA / p,
+            tol=self._tol,
+            dt0=0.1,
+        )
+        stepper = TimeStepper(inst, controller=pi)
+        final = stepper.advance(rhs, Tensor([1.0]), 0.0, self._t_end)
+        exact = math.exp(lam * self._t_end)
+        err = abs(float(final.u[0]) - exact)
+        assert (
+            err <= self._c_rel * self._tol
+        ), f"{self._label}: error {err:.2e} > {self._c_rel} × tol {self._tol:.2e}"
+
+
+class _PIWorkPrecisionClaim(Claim):
+    """Verify that error decreases as tol decreases (adaptive convergence).
+
+    Runs the integrator at two tolerances differing by a factor of 10 and
+    checks that the error at the tighter tolerance is smaller.  This is the
+    minimal falsifiable claim that adaptive control is working: if the
+    controller were ignoring tol, both runs would give the same error.
+    """
+
+    def __init__(
+        self,
+        instance: RungeKuttaIntegrator,
+        label: str,
+        tol_coarse: float = 1e-3,
+        tol_fine: float = 1e-5,
+        lam: float = -1.0,
+        t_end: float = 1.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._tol_coarse = tol_coarse
+        self._tol_fine = tol_fine
+        self._lam = lam
+        self._t_end = t_end
+
+    @property
+    def description(self) -> str:
+        return f"pi_work_precision/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        p = inst.order
+        rhs = BlackBoxRHS(lambda t, u, _lam=lam: u * _lam)
+        exact = math.exp(lam * self._t_end)
+
+        def _run(tol: float) -> float:
+            pi = PIController(
+                alpha=_PI_ALPHA / p,
+                beta=_PI_BETA / p,
+                tol=tol,
+                dt0=0.1,
+            )
+            final = TimeStepper(inst, controller=pi).advance(
+                rhs, Tensor([1.0]), 0.0, self._t_end
+            )
+            return abs(float(final.u[0]) - exact)
+
+        err_coarse = _run(self._tol_coarse)
+        err_fine = _run(self._tol_fine)
+        assert err_fine < err_coarse, (
+            f"{self._label}: tighter tol did not reduce error "
+            f"(coarse={err_coarse:.2e}, fine={err_fine:.2e})"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Claim registries
 # ---------------------------------------------------------------------------
 
@@ -315,6 +431,18 @@ _STEPPER_CLAIMS: list[_StepperClaim] = [
     _StepperClaim(dormand_prince, "dormand_prince", dt=1e-2),
 ]
 
+_PI_ACCURACY_CLAIMS: list[_PIAccuracyClaim] = [
+    _PIAccuracyClaim(heun, "heun"),
+    _PIAccuracyClaim(bogacki_shampine, "bogacki_shampine"),
+    _PIAccuracyClaim(dormand_prince, "dormand_prince"),
+]
+
+_PI_WORK_PRECISION_CLAIMS: list[_PIWorkPrecisionClaim] = [
+    _PIWorkPrecisionClaim(heun, "heun"),
+    _PIWorkPrecisionClaim(bogacki_shampine, "bogacki_shampine"),
+    _PIWorkPrecisionClaim(dormand_prince, "dormand_prince"),
+]
+
 # ---------------------------------------------------------------------------
 # Parametric tests — one statement each, dispatching to claim.check()
 # ---------------------------------------------------------------------------
@@ -335,6 +463,24 @@ def test_rk_order_conditions(claim: _RKOrderClaim) -> None:
     ids=[c.description for c in _CONVERGENCE_CLAIMS],
 )
 def test_rk_convergence_rate(claim: _ConvergenceClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _PI_ACCURACY_CLAIMS,
+    ids=[c.description for c in _PI_ACCURACY_CLAIMS],
+)
+def test_pi_accuracy(claim: _PIAccuracyClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _PI_WORK_PRECISION_CLAIMS,
+    ids=[c.description for c in _PI_WORK_PRECISION_CLAIMS],
+)
+def test_pi_work_precision(claim: _PIWorkPrecisionClaim) -> None:
     claim.check()
 
 
