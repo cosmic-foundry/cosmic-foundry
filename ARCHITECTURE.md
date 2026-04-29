@@ -493,25 +493,17 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 3 — Symplectic / Hamiltonian splitting.** `HamiltonianSplit(T_of_p,
-V_of_q)` RHS protocol; `PartitionedState(t, q, p)` state;
-`SymplecticSplittingIntegrator(c, d)` parameterized by composition
-coefficients; named instances: symplectic Euler, Verlet/leapfrog,
-Forest-Ruth, Yoshida-6, Yoshida-8.  Verification framework extends to
-P-series (partitioned trees with two colors); symplecticity check via
-canonical 2-form preservation; modified-Hamiltonian conservation over long
-integrations.  First non-RK family.  Epoch 8 self-gravity / particle
-enabler.
-
-**Phase 4 — Implicit RK (DIRK / SDIRK).** `WithJacobianRHS(f, J)` protocol
-(`J` analytical or finite-difference); stage-solver injection through the
-existing `IterativeSolver` infrastructure; `WithFactoredOperatorState`
-caching `(I − γhJ)` factorizations across stages; named instances: backward
-Euler, implicit midpoint, SDIRK4, ESDIRK methods.  Verification: B-series
-unchanged (DIRK is RK with non-strictly-lower-triangular `A`); symbolic
-extraction of stability function `R(z)`; A-stability and L-stability
-claims; convergence on Van der Pol / Robertson / HIRES.  First phase that
-relaxes "finite arithmetic."  Epoch 9 microphysics enabler.
+**Phase 4 — Implicit RK (DIRK / SDIRK).** `WithJacobianRHSProtocol` with
+`JacobianRHS(f, jac)` (analytical) and `FiniteDiffJacobianRHS(f, eps)`
+(forward-difference) wrappers; `DIRKIntegrator(A, b, c, order)` with
+per-stage Newton iteration using `LUFactorization`; named instances:
+`backward_euler` (order 1, L-stable), `implicit_midpoint` (order 2,
+A-stable, energy-conserving), `crouzeix_3` (order 3, A-stable, Crouzeix
+1979).  `stability_function(A, b)` extracts `R(z)` symbolically via sympy.
+Verification: B-series order conditions extended to DIRK tableaux with
+irrational entries (sympy `simplify` for algebraic comparison); A-stability
+sampled on the imaginary axis; L-stability from `|R(−∞)| → 0`; convergence
+on dy/dt = λy via `JacobianRHS`.  Epoch 9 microphysics enabler.
 
 **Phase 5 — IMEX additive RK.** `AdditiveRHS(f_E, f_I)` protocol;
 `IMEXIntegrator(A_E, b_E, c_E, A_I, b_I, c_I, order)` consuming both
