@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-import numpy as np
-
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     ConstantStep,
     Controller,
@@ -81,7 +80,7 @@ class TimeStepper:
     def advance(
         self,
         rhs: RHSProtocol,
-        u0: np.ndarray,
+        u0: Tensor,
         t0: float,
         t_end: float,
     ) -> RKState:
@@ -92,13 +91,13 @@ class TimeStepper:
         rhs:
             The ODE right-hand side.
         u0:
-            Initial state vector.
+            Initial state vector as a Tensor.
         t0:
             Initial time.
         t_end:
             Final time.  The last step is shortened so that t = t_end exactly.
         """
-        state = RKState(t0, np.asarray(u0, dtype=float))
+        state = RKState(t0, u0)
         while state.t < t_end:
             dt = self._controller.suggest(state)
             dt = min(dt, t_end - state.t)

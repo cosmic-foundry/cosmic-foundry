@@ -18,11 +18,12 @@ verification hierarchy), so this file is independent of test_convergence.py.
 from __future__ import annotations
 
 import math
+import sys
 
-import numpy as np
 import pytest
 import sympy
 
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
     BlackBoxRHS,
     ConstantStep,
@@ -216,13 +217,13 @@ class _ConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, np.array([1.0]))
+            state = RKState(0.0, Tensor([1.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
             exact = math.exp(lam * state.t)
             errors.append(abs(float(state.u[0]) - exact))
 
-        eps = np.finfo(float).eps * 10
+        eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
         assert (
             len(valid) >= 3
@@ -272,7 +273,7 @@ class _StepperClaim(Claim):
         rhs = BlackBoxRHS(lambda t, u, _lam=lam: _lam * u)
         stepper = TimeStepper(inst, controller=ConstantStep(self._dt))
 
-        final = stepper.advance(rhs, np.array([1.0]), 0.0, self._t_end)
+        final = stepper.advance(rhs, Tensor([1.0]), 0.0, self._t_end)
 
         assert (
             abs(final.t - self._t_end) < 1e-12

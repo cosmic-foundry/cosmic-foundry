@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
-import numpy as np
+from cosmic_foundry.computation.tensor import Tensor
 
 
 @runtime_checkable
@@ -15,13 +15,9 @@ class RHSProtocol(Protocol):
     f : ℝ × ℝⁿ → ℝⁿ.  Every concrete RHS that integrators accept must
     satisfy this protocol.  Phase 0 provides BlackBoxRHS; later phases add
     structured variants (WithJacobianRHS, AdditiveRHS, HamiltonianSplit).
-
-    The state vector u is a plain numpy ndarray so that the protocol is
-    backend-agnostic at the ABC level.  Integrators that target JAX arrays
-    accept RHSProtocol and document the array type in their own docstring.
     """
 
-    def __call__(self, t: float, u: np.ndarray) -> np.ndarray:
+    def __call__(self, t: float, u: Tensor) -> Tensor:
         """Evaluate du/dt at time t given state vector u."""
         ...
 
@@ -37,14 +33,15 @@ class BlackBoxRHS:
     Parameters
     ----------
     f:
-        Callable with signature (t: float, u: ndarray) → ndarray.
+        Callable with signature (t: float, u: Tensor) → Tensor.
     """
 
     def __init__(self, f: Any) -> None:
         self._f = f
 
-    def __call__(self, t: float, u: np.ndarray) -> np.ndarray:
-        return np.asarray(self._f(t, u))
+    def __call__(self, t: float, u: Tensor) -> Tensor:
+        result: Tensor = self._f(t, u)
+        return result
 
 
 class RKState(NamedTuple):
@@ -59,11 +56,11 @@ class RKState(NamedTuple):
     t:
         Current time.
     u:
-        Current state vector, shape (n,).
+        Current state vector as a Tensor.
     """
 
     t: float
-    u: np.ndarray
+    u: Tensor
 
 
 class Controller(Protocol):

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
 import sympy
 
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     RHSProtocol,
     RKState,
@@ -25,9 +25,9 @@ class RungeKuttaIntegrator(TimeIntegrator):
     class; verification is the responsibility of the test framework in
     tests/test_time_integrators.py via symbolic order-condition checks.
 
-    Coefficients may be supplied as Python numbers, numpy arrays, or sympy
-    Rationals.  Internally they are stored as sympy objects (for the order
-    check framework) and evaluated to float64 numpy arrays for numerical use.
+    Coefficients may be supplied as Python numbers or strings parseable by
+    sympy.Rational (e.g. "1/2").  They are stored as sympy.Rational for the
+    order-check framework and as Python floats for numerical stepping.
 
     Parameters
     ----------
@@ -53,11 +53,10 @@ class RungeKuttaIntegrator(TimeIntegrator):
         self._c_sym = [sympy.Rational(ci) for ci in c]
         self._order = order
 
-        s = len(b)
-        self._A = np.array([[float(a) for a in row] for row in self._A_sym])
-        self._b = np.array([float(bi) for bi in self._b_sym])
-        self._c = np.array([float(ci) for ci in self._c_sym])
-        self._s = s
+        self._A_f = [[float(a) for a in row] for row in self._A_sym]
+        self._b_f = [float(bi) for bi in self._b_sym]
+        self._c_f = [float(ci) for ci in self._c_sym]
+        self._s = len(b)
 
     @property
     def order(self) -> int:
@@ -80,12 +79,15 @@ class RungeKuttaIntegrator(TimeIntegrator):
 
     def step(self, rhs: RHSProtocol, state: RKState, dt: float) -> RKState:
         t, u = state.t, state.u
-        k: list[np.ndarray] = []
+        k: list[Tensor] = []
         for i in range(self._s):
-            u_stage = u + dt * sum(self._A[i, j] * k[j] for j in range(i))
-            k.append(rhs(t + self._c[i] * dt, u_stage))
-        k_arr = np.stack(k, axis=0)
-        u_new = u + dt * (self._b @ k_arr)
+            u_stage = u
+            for j in range(i):
+                u_stage = u_stage + self._A_f[i][j] * k[j] * dt
+            k.append(rhs(t + self._c_f[i] * dt, u_stage))
+        u_new = u
+        for i in range(self._s):
+            u_new = u_new + self._b_f[i] * k[i] * dt
         return RKState(t + dt, u_new)
 
 
