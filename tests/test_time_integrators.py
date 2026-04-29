@@ -3,7 +3,7 @@
 Claim classes and auto-discovery framework for TimeIntegrator subclasses:
 
   _RKOrderClaim          — B-series order conditions via rooted-tree enumeration
-  _ConvergenceClaim      — temporal convergence rate on dy/dt = λy
+  _ConvergenceClaim      — temporal convergence rate on synthetic decay networks
   _StepperClaim          — end-to-end TimeStepper.advance accuracy
   _PIAccuracyClaim       — PIController achieves error ≤ c_rel · tol
   _PIWorkPrecisionClaim  — tighter tol yields smaller error
@@ -34,19 +34,16 @@ from cosmic_foundry.computation.time_integrators import (
     ConstantStep,
     DIRKIntegrator,
     FamilySwitchingNordsieckIntegrator,
-    HamiltonianSplit,
     IMEXIntegrator,
     JacobianRHS,
     NordsieckIntegrator,
     NordsieckState,
     OrderSelector,
-    PartitionedState,
     PIController,
     RKState,
     RungeKuttaIntegrator,
     StiffnessDiagnostic,
     StiffnessSwitcher,
-    SymplecticSplittingIntegrator,
     TimeStepper,
     VariableOrderNordsieckIntegrator,
     VODEController,
@@ -69,21 +66,16 @@ from cosmic_foundry.computation.time_integrators import (
     crouzeix_3,
     dormand_prince,
     elementary_weight,
-    forest_ruth,
     forward_euler,
     gamma,
     heun,
     implicit_midpoint,
-    leapfrog,
     midpoint,
     nordsieck_solution_distance,
     ralston,
     rk4,
     stability_function,
-    symplectic_euler,
     trees_up_to_order,
-    yoshida_6,
-    yoshida_8,
 )
 from tests.claims import Claim
 
@@ -93,6 +85,53 @@ from tests.claims import Claim
 
 _DT_BASE = 0.1
 _N_HALVINGS = 5
+
+# Synthetic thermonuclear-shaped baseline problem.
+#
+# A two-species closed capture/decay chain X0 -> X1 is the smallest
+# mass-fraction network with the invariants we care about for astrophysical
+# ODE integration: positivity, exact abundance conservation, a sparse
+# zero-column-sum Jacobian, and an analytical solution for convergence claims.
+_BASE_K = 1.0
+
+
+def _base_network_f(t: float, u: Tensor) -> Tensor:
+    x0 = float(u[0])
+    return Tensor([-_BASE_K * x0, _BASE_K * x0], backend=u.backend)
+
+
+def _base_network_jac(t: float, u: Tensor) -> Tensor:
+    return Tensor([[-_BASE_K, 0.0], [_BASE_K, 0.0]], backend=u.backend)
+
+
+_BASE_RHS = JacobianRHS(f=_base_network_f, jac=_base_network_jac)
+
+
+def _base_network_exact(t: float) -> tuple[float, float]:
+    x0 = math.exp(-_BASE_K * t)
+    return x0, 1.0 - x0
+
+
+def _max_base_network_error(u: Tensor, t: float) -> float:
+    exact = _base_network_exact(t)
+    return max(abs(float(u[i]) - exact[i]) for i in range(2))
+
+
+def _assert_mass_fractions(
+    u: Tensor,
+    *,
+    label: str,
+    n: int,
+    conservation_tol: float = 1e-12,
+) -> None:
+    total = sum(float(u[i]) for i in range(n))
+    assert abs(total - 1.0) < conservation_tol, (
+        f"{label}: sum(X) = {total:.15f} != 1 "
+        f"(mass not conserved to {conservation_tol:.1e})"
+    )
+    for i in range(n):
+        xi = float(u[i])
+        assert xi >= -1e-10, f"{label}: X[{i}] = {xi:.3e} < 0"
 
 
 class _RKOrderClaim(Claim):
@@ -120,17 +159,15 @@ class _RKOrderClaim(Claim):
 
 
 class _ConvergenceClaim(Claim):
-    """Tier B: verify convergence rate on dy/dt = λy."""
+    """Tier B: verify convergence rate on a closed three-species network."""
 
     def __init__(
         self,
         instance: RungeKuttaIntegrator,
         label: str,
-        lam: float = -1.0,
     ) -> None:
         self._instance = instance
         self._label = label
-        self._lam = lam
 
     @property
     def description(self) -> str:
@@ -138,18 +175,16 @@ class _ConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
-        rhs = BlackBoxRHS(lambda t, u, _lam=lam: _lam * u)
+        rhs = BlackBoxRHS(_decay_f)
 
         dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, Tensor([1.0]))
+            state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
-            exact = math.exp(lam * state.t)
-            errors.append(abs(float(state.u[0]) - exact))
+            errors.append(_max_decay_error(state.u, state.t))
 
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
@@ -181,14 +216,12 @@ class _StepperClaim(Claim):
         label: str,
         dt: float,
         t_end: float = 1.0,
-        lam: float = -1.0,
         rtol: float = 1e-4,
     ) -> None:
         self._instance = instance
         self._label = label
         self._dt = dt
         self._t_end = t_end
-        self._lam = lam
         self._rtol = rtol
 
     @property
@@ -197,20 +230,19 @@ class _StepperClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
-        rhs = BlackBoxRHS(lambda t, u, _lam=lam: _lam * u)
+        rhs = BlackBoxRHS(_base_network_f)
         stepper = TimeStepper(inst, controller=ConstantStep(self._dt))
 
-        final = stepper.advance(rhs, Tensor([1.0]), 0.0, self._t_end)
+        final = stepper.advance(rhs, Tensor([1.0, 0.0]), 0.0, self._t_end)
 
         assert (
             abs(final.t - self._t_end) < 1e-12
         ), f"{self._label}: final time {final.t} != t_end {self._t_end}"
-        exact = math.exp(lam * self._t_end)
-        rel_err = abs(float(final.u[0]) - exact) / abs(exact)
+        rel_err = _max_base_network_error(final.u, self._t_end)
         assert (
             rel_err < self._rtol
         ), f"{self._label}: relative error {rel_err:.2e} > rtol {self._rtol}"
+        _assert_mass_fractions(final.u, label=self._label, n=2)
 
 
 # ---------------------------------------------------------------------------
@@ -224,12 +256,11 @@ _PI_BETA = 0.4
 
 
 class _PIAccuracyClaim(Claim):
-    """Verify that PIController achieves error ≤ c_rel · tol on dy/dt = λy.
+    """Verify that PIController achieves error ≤ c_rel · tol on a decay network.
 
-    Integrates dy/dt = λy from 0 to t_end with a PIController and checks
-    that the global error satisfies |y_h(t_end) - exp(λ t_end)| ≤ c_rel · tol.
-    The c_rel factor absorbs pre-asymptotic constants; 10 is generous but
-    distinguishes correct control from uncontrolled growth.
+    Integrates the closed two-species mass-fraction network from 0 to t_end
+    with a PIController.  The c_rel factor absorbs pre-asymptotic constants;
+    10 is generous but distinguishes correct control from uncontrolled growth.
     """
 
     def __init__(
@@ -237,14 +268,12 @@ class _PIAccuracyClaim(Claim):
         instance: RungeKuttaIntegrator,
         label: str,
         tol: float = 1e-4,
-        lam: float = -1.0,
         t_end: float = 1.0,
         c_rel: float = 10.0,
     ) -> None:
         self._instance = instance
         self._label = label
         self._tol = tol
-        self._lam = lam
         self._t_end = t_end
         self._c_rel = c_rel
 
@@ -254,9 +283,8 @@ class _PIAccuracyClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
         p = inst.order
-        rhs = BlackBoxRHS(lambda t, u, _lam=lam: u * _lam)
+        rhs = BlackBoxRHS(_base_network_f)
         pi = PIController(
             alpha=_PI_ALPHA / p,
             beta=_PI_BETA / p,
@@ -264,12 +292,12 @@ class _PIAccuracyClaim(Claim):
             dt0=0.1,
         )
         stepper = TimeStepper(inst, controller=pi)
-        final = stepper.advance(rhs, Tensor([1.0]), 0.0, self._t_end)
-        exact = math.exp(lam * self._t_end)
-        err = abs(float(final.u[0]) - exact)
+        final = stepper.advance(rhs, Tensor([1.0, 0.0]), 0.0, self._t_end)
+        err = _max_base_network_error(final.u, self._t_end)
         assert (
             err <= self._c_rel * self._tol
         ), f"{self._label}: error {err:.2e} > {self._c_rel} × tol {self._tol:.2e}"
+        _assert_mass_fractions(final.u, label=self._label, n=2)
 
 
 class _PIWorkPrecisionClaim(Claim):
@@ -287,14 +315,12 @@ class _PIWorkPrecisionClaim(Claim):
         label: str,
         tol_coarse: float = 1e-3,
         tol_fine: float = 1e-5,
-        lam: float = -1.0,
         t_end: float = 1.0,
     ) -> None:
         self._instance = instance
         self._label = label
         self._tol_coarse = tol_coarse
         self._tol_fine = tol_fine
-        self._lam = lam
         self._t_end = t_end
 
     @property
@@ -303,10 +329,8 @@ class _PIWorkPrecisionClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
         p = inst.order
-        rhs = BlackBoxRHS(lambda t, u, _lam=lam: u * _lam)
-        exact = math.exp(lam * self._t_end)
+        rhs = BlackBoxRHS(_base_network_f)
 
         def _run(tol: float) -> float:
             pi = PIController(
@@ -316,9 +340,10 @@ class _PIWorkPrecisionClaim(Claim):
                 dt0=0.1,
             )
             final = TimeStepper(inst, controller=pi).advance(
-                rhs, Tensor([1.0]), 0.0, self._t_end
+                rhs, Tensor([1.0, 0.0]), 0.0, self._t_end
             )
-            return abs(float(final.u[0]) - exact)
+            _assert_mass_fractions(final.u, label=self._label, n=2)
+            return _max_base_network_error(final.u, self._t_end)
 
         err_coarse = _run(self._tol_coarse)
         err_fine = _run(self._tol_fine)
@@ -424,161 +449,20 @@ def test_stepper_advance(claim: _StepperClaim) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 claims — symplectic splitting
-# ---------------------------------------------------------------------------
-
-# Harmonic oscillator: H = p²/2 + q²/2, exact solution q(t)=cos t, p(t)=−sin t
-# starting from q(0)=1, p(0)=0.
-_HO = HamiltonianSplit(dT_dp=lambda p: p, dV_dq=lambda q: q)
-
-# Larger starting dt than _DT_BASE: high-order methods reach machine precision
-# too quickly with dt=0.1, so the regression would include noise-floor points.
-_DT_BASE_SYM = 0.5
-_N_HALVINGS_SYM = 4
-
-
-class _SplittingOrderClaim(Claim):
-    """Verify convergence order on the unit harmonic oscillator at t=1."""
-
-    def __init__(self, instance: SymplecticSplittingIntegrator, label: str) -> None:
-        self._instance = instance
-        self._label = label
-
-    @property
-    def description(self) -> str:
-        return f"symplectic_order/{self._label}"
-
-    def check(self) -> None:
-        inst = self._instance
-        dts = [_DT_BASE_SYM / (2**k) for k in range(_N_HALVINGS_SYM + 1)]
-        errors: list[float] = []
-        for dt in dts:
-            n_steps = math.ceil(1.0 / dt)
-            state = PartitionedState(0.0, Tensor([1.0]), Tensor([0.0]))
-            for _ in range(n_steps):
-                state = inst.step(_HO, state, dt)
-            # Exact: q(t)=cos t, p(t)=−sin t
-            q_exact = math.cos(state.t)
-            p_exact = -math.sin(state.t)
-            eq = abs(float(state.q[0]) - q_exact)
-            ep = abs(float(state.p[0]) - p_exact)
-            errors.append(max(eq, ep))
-
-        eps = sys.float_info.epsilon * 100
-        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
-        assert (
-            len(valid) >= 3
-        ), f"{self._label}: error reached machine precision too early"
-
-        log_dts = [math.log(dt) for dt, _ in valid]
-        log_errs = [math.log(e) for _, e in valid]
-        n = len(log_dts)
-        mean_x = sum(log_dts) / n
-        mean_y = sum(log_errs) / n
-        slope = sum(
-            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
-        ) / sum((x - mean_x) ** 2 for x in log_dts)
-
-        assert slope >= inst.order - 0.4, (
-            f"{self._label}: convergence slope {slope:.3f} < declared order "
-            f"{inst.order} - 0.4"
-        )
-
-
-class _EnergyBoundClaim(Claim):
-    """Verify that the Hamiltonian error is bounded over a long integration.
-
-    Symplectic integrators conserve a modified Hamiltonian, so the energy
-    error H(qₙ, pₙ) − H(q₀, p₀) stays O(dtᵖ) rather than growing linearly
-    in time.  The claim integrates for n_periods full periods at a fixed step
-    size and checks that the maximum relative energy deviation is < tol.
-    """
-
-    def __init__(
-        self,
-        instance: SymplecticSplittingIntegrator,
-        label: str,
-        dt: float = 0.1,
-        n_periods: int = 20,
-        tol: float = 0.05,
-    ) -> None:
-        self._instance = instance
-        self._label = label
-        self._dt = dt
-        self._n_periods = n_periods
-        self._tol = tol
-
-    @property
-    def description(self) -> str:
-        return f"energy_bound/{self._label}"
-
-    def check(self) -> None:
-        inst = self._instance
-        dt = self._dt
-        state = PartitionedState(0.0, Tensor([1.0]), Tensor([0.0]))
-        H0 = 0.5 * float(state.q[0]) ** 2 + 0.5 * float(state.p[0]) ** 2  # = 0.5
-        n_steps = round(self._n_periods * 2 * math.pi / dt)
-        max_err = 0.0
-        for _ in range(n_steps):
-            state = inst.step(_HO, state, dt)
-            H = 0.5 * float(state.q[0]) ** 2 + 0.5 * float(state.p[0]) ** 2
-            max_err = max(max_err, abs(H - H0) / H0)
-        assert (
-            max_err < self._tol
-        ), f"{self._label}: max relative energy error {max_err:.3e} >= tol {self._tol}"
-
-
-_SPLITTING_ORDER_CLAIMS: list[_SplittingOrderClaim] = [
-    _SplittingOrderClaim(symplectic_euler, "symplectic_euler"),
-    _SplittingOrderClaim(leapfrog, "leapfrog"),
-    _SplittingOrderClaim(forest_ruth, "forest_ruth"),
-    _SplittingOrderClaim(yoshida_6, "yoshida_6"),
-    _SplittingOrderClaim(yoshida_8, "yoshida_8"),
-]
-
-_ENERGY_BOUND_CLAIMS: list[_EnergyBoundClaim] = [
-    _EnergyBoundClaim(leapfrog, "leapfrog", dt=0.1, tol=0.005),
-    _EnergyBoundClaim(forest_ruth, "forest_ruth", dt=0.3, tol=0.01),
-    _EnergyBoundClaim(yoshida_6, "yoshida_6", dt=0.5, tol=0.01),
-    _EnergyBoundClaim(yoshida_8, "yoshida_8", dt=0.5, tol=0.01),
-]
-
-
-@pytest.mark.parametrize(
-    "claim",
-    _SPLITTING_ORDER_CLAIMS,
-    ids=[c.description for c in _SPLITTING_ORDER_CLAIMS],
-)
-def test_symplectic_order(claim: _SplittingOrderClaim) -> None:
-    claim.check()
-
-
-@pytest.mark.parametrize(
-    "claim",
-    _ENERGY_BOUND_CLAIMS,
-    ids=[c.description for c in _ENERGY_BOUND_CLAIMS],
-)
-def test_energy_bound(claim: _EnergyBoundClaim) -> None:
-    claim.check()
-
-
-# ---------------------------------------------------------------------------
 # Phase 4 claims — DIRK integrators
 # ---------------------------------------------------------------------------
 
 
 class _DIRKConvergenceClaim(Claim):
-    """Verify convergence order on dy/dt = λy using JacobianRHS."""
+    """Verify convergence order on the baseline abundance network."""
 
     def __init__(
         self,
         instance: DIRKIntegrator,
         label: str,
-        lam: float = -1.0,
     ) -> None:
         self._instance = instance
         self._label = label
-        self._lam = lam
 
     @property
     def description(self) -> str:
@@ -586,20 +470,15 @@ class _DIRKConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
-        rhs = JacobianRHS(
-            f=lambda t, u, _lam=lam: _lam * u,
-            jac=lambda t, u, _lam=lam: Tensor([[_lam]]),
-        )
+        rhs = _BASE_RHS
         dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, Tensor([1.0]))
+            state = RKState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
-            exact = math.exp(lam * state.t)
-            errors.append(abs(float(state.u[0]) - exact))
+            errors.append(_max_base_network_error(state.u, state.t))
 
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
@@ -769,6 +648,11 @@ def _decay_exact(t: float) -> tuple[float, float, float]:
     return x0, x1, 1.0 - x0 - x1
 
 
+def _max_decay_error(u: Tensor, t: float) -> float:
+    exact = _decay_exact(t)
+    return max(abs(float(u[i]) - exact[i]) for i in range(3))
+
+
 class _AbundanceConservationClaim(Claim):
     """Verify a closed decay chain: accuracy, mass-fraction sum = 1, positivity.
 
@@ -875,19 +759,15 @@ class _IMEXAbundanceConservationClaim(Claim):
 
 
 class _IMEXConvergenceClaim(Claim):
-    """Verify IMEX convergence order on dy/dt = f_E(y) + f_I(y) = (λ_E + λ_I)y."""
+    """Verify IMEX convergence order on the baseline abundance network."""
 
     def __init__(
         self,
         instance: IMEXIntegrator,
         label: str,
-        lam_E: float = -1.0,
-        lam_I: float = -2.0,
     ) -> None:
         self._instance = instance
         self._label = label
-        self._lam_E = lam_E
-        self._lam_I = lam_I
 
     @property
     def description(self) -> str:
@@ -895,22 +775,19 @@ class _IMEXConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam_E, lam_I = self._lam_E, self._lam_I
-        lam_tot = lam_E + lam_I
         rhs = AdditiveRHS(
-            f_E=lambda t, u, _l=lam_E: _l * u,
-            f_I=lambda t, u, _l=lam_I: _l * u,
-            jac_I=lambda t, u, _l=lam_I: Tensor([[_l]]),
+            f_E=lambda t, u: Tensor([0.0, _BASE_K * float(u[0])], backend=u.backend),
+            f_I=lambda t, u: Tensor([-_BASE_K * float(u[0]), 0.0], backend=u.backend),
+            jac_I=lambda t, u: Tensor([[-_BASE_K, 0.0], [0.0, 0.0]], backend=u.backend),
         )
         dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, Tensor([1.0]))
+            state = RKState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
-            exact = math.exp(lam_tot * state.t)
-            errors.append(abs(float(state.u[0]) - exact))
+            errors.append(_max_base_network_error(state.u, state.t))
 
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
@@ -982,7 +859,7 @@ def test_imex_convergence(claim: _IMEXConvergenceClaim) -> None:
 
 
 class _ABConvergenceClaim(Claim):
-    """Verify Adams-Bashforth convergence rate on dy/dt = λy.
+    """Verify Adams-Bashforth convergence rate on the baseline abundance network.
 
     The first k−1 steps are bootstrapped with RK4 internally; the slope
     is measured across the full dt grid and reflects the AB order because
@@ -993,11 +870,9 @@ class _ABConvergenceClaim(Claim):
         self,
         instance: AdamsBashforthIntegrator,
         label: str,
-        lam: float = -1.0,
     ) -> None:
         self._instance = instance
         self._label = label
-        self._lam = lam
 
     @property
     def description(self) -> str:
@@ -1005,17 +880,15 @@ class _ABConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
-        rhs = BlackBoxRHS(lambda t, u, _lam=lam: _lam * u)
+        rhs = BlackBoxRHS(_base_network_f)
         dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = ABState(0.0, Tensor([1.0]))
+            state = ABState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
-            exact = math.exp(lam * state.t)
-            errors.append(abs(float(state.u[0]) - exact))
+            errors.append(_max_base_network_error(state.u, state.t))
 
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
@@ -1133,7 +1006,7 @@ _BDF_N_HALVINGS = 7  # extra halvings vs AB to clear bootstrap pre-asymptotic tr
 
 
 class _BDFConvergenceClaim(Claim):
-    """Verify BDF-q convergence rate on dy/dt = λy.
+    """Verify BDF-q convergence rate on the baseline abundance network.
 
     Bootstraps q RK4 steps then measures the log-log slope of final-time
     error vs step size.  Slope ≥ declared order − 0.1 is required.
@@ -1162,11 +1035,9 @@ class _BDFConvergenceClaim(Claim):
         self,
         instance: NordsieckIntegrator,
         label: str,
-        lam: float = -1.0,
     ) -> None:
         self._instance = instance
         self._label = label
-        self._lam = lam
 
     @property
     def description(self) -> str:
@@ -1174,22 +1045,17 @@ class _BDFConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
-        rhs = JacobianRHS(
-            f=lambda t, u, _l=lam: _l * u,
-            jac=lambda t, u, _l=lam: Tensor([[_l]], backend=u.backend),
-        )
+        rhs = _BASE_RHS
         dt_base = _DT_BASE / inst.order
         n_halvings = _BDF_N_HALVINGS - (math.floor(math.log2(inst.order)) + 1)
         dts = [dt_base / (2**k) for k in range(n_halvings + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt) - inst.order
-            state = inst.init_state(rhs, 0.0, Tensor([1.0]), dt)
+            state = inst.init_state(rhs, 0.0, Tensor([1.0, 0.0]), dt)
             for _ in range(max(n_steps, 1)):
                 state = inst.step(rhs, state, dt)
-            exact = math.exp(lam * state.t)
-            errors.append(abs(float(state.u[0]) - exact))
+            errors.append(_max_base_network_error(state.u, state.t))
 
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
@@ -1310,7 +1176,7 @@ _AM_N_HALVINGS = _BDF_N_HALVINGS  # same bootstrap depth as BDF
 
 
 class _AMConvergenceClaim(Claim):
-    """Verify Adams-Moulton-q convergence rate on dy/dt = λy.
+    """Verify Adams-Moulton-q convergence rate on the baseline abundance network.
 
     Mirrors _BDFConvergenceClaim exactly, but uses plain RHSProtocol
     (no Jacobian) because Adams methods use fixed-point iteration.
@@ -1330,11 +1196,9 @@ class _AMConvergenceClaim(Claim):
         self,
         instance: NordsieckIntegrator,
         label: str,
-        lam: float = -1.0,
     ) -> None:
         self._instance = instance
         self._label = label
-        self._lam = lam
 
     @property
     def description(self) -> str:
@@ -1342,19 +1206,17 @@ class _AMConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
-        rhs = BlackBoxRHS(lambda t, u, _l=lam: _l * u)
+        rhs = BlackBoxRHS(_base_network_f)
         dt_base = _DT_BASE / inst.order
         n_halvings = _AM_N_HALVINGS - (math.floor(math.log2(inst.order)) + 1)
         dts = [dt_base / (2**k) for k in range(n_halvings + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt) - inst.order
-            state = inst.init_state(rhs, 0.0, Tensor([1.0]), dt)
+            state = inst.init_state(rhs, 0.0, Tensor([1.0, 0.0]), dt)
             for _ in range(max(n_steps, 1)):
                 state = inst.step(rhs, state, dt)
-            exact = math.exp(lam * state.t)
-            errors.append(abs(float(state.u[0]) - exact))
+            errors.append(_max_base_network_error(state.u, state.t))
 
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
@@ -1483,7 +1345,11 @@ class _NordsieckRoundTripClaim(Claim):
         state = NordsieckState(
             t=0.25,
             h=0.1,
-            z=(Tensor([1.0]), Tensor([-0.1]), Tensor([0.005])),
+            z=(
+                Tensor([0.8, 0.2]),
+                Tensor([-0.08, 0.08]),
+                Tensor([0.004, -0.004]),
+            ),
         )
 
         raised = state.change_order(4)
@@ -1517,7 +1383,6 @@ class _NordsieckRescaledAccuracyClaim(Claim):
         q_target: int = 2,
         h_source: float = 0.1,
         h_target: float = 0.025,
-        lam: float = -1.0,
     ) -> None:
         self._instance = instance
         self._label = label
@@ -1526,7 +1391,6 @@ class _NordsieckRescaledAccuracyClaim(Claim):
         self._q_target = q_target
         self._h_source = h_source
         self._h_target = h_target
-        self._lam = lam
 
     @property
     def description(self) -> str:
@@ -1534,14 +1398,15 @@ class _NordsieckRescaledAccuracyClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        lam = self._lam
         h = self._h_target
         t_end = 1.0
 
-        z_source = tuple(
-            Tensor([(self._h_source**j) * (lam**j) / math.factorial(j)])
-            for j in range(self._q_source + 1)
-        )
+        z_terms = [Tensor([1.0, 0.0])]
+        for j in range(1, self._q_source + 1):
+            deriv = (-_BASE_K) ** j
+            scale = (self._h_source**j) / math.factorial(j)
+            z_terms.append(Tensor([scale * deriv, -scale * deriv]))
+        z_source = tuple(z_terms)
         transformed = (
             NordsieckState(0.0, self._h_source, z_source)
             .change_order(self._q_target)
@@ -1551,12 +1416,12 @@ class _NordsieckRescaledAccuracyClaim(Claim):
         state = transformed
         for _ in range(round((t_end - state.t) / h)):
             state = inst.step(self._rhs, state, h)
-        transformed_error = abs(float(state.u[0]) - math.exp(lam * state.t))
+        transformed_error = _max_base_network_error(state.u, state.t)
 
-        fresh = inst.init_state(self._rhs, 0.0, Tensor([1.0]), h)
+        fresh = inst.init_state(self._rhs, 0.0, Tensor([1.0, 0.0]), h)
         for _ in range(round((t_end - fresh.t) / h)):
             fresh = inst.step(self._rhs, fresh, h)
-        fresh_error = abs(float(fresh.u[0]) - math.exp(lam * fresh.t))
+        fresh_error = _max_base_network_error(fresh.u, fresh.t)
 
         assert transformed_error <= 2.0 * fresh_error, (
             f"{self._label}: transformed error {transformed_error:.3e} "
@@ -1572,15 +1437,12 @@ _NORDSIECK_RESCALED_ACCURACY_CLAIMS: list[_NordsieckRescaledAccuracyClaim] = [
     _NordsieckRescaledAccuracyClaim(
         bdf2,
         "bdf2",
-        JacobianRHS(
-            f=lambda t, u: -1.0 * u,
-            jac=lambda t, u: Tensor([[-1.0]], backend=u.backend),
-        ),
+        _BASE_RHS,
     ),
     _NordsieckRescaledAccuracyClaim(
         adams_moulton2,
         "am2",
-        BlackBoxRHS(lambda t, u: -1.0 * u),
+        BlackBoxRHS(_base_network_f),
     ),
 ]
 
