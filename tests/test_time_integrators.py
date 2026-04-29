@@ -1,10 +1,12 @@
 """Verification for the time-integration layer.
 
-Three-tier auto-discovery framework for TimeIntegrator subclasses:
+Claim classes and auto-discovery framework for TimeIntegrator subclasses:
 
-  _RKOrderClaim     — symbolic Butcher order conditions (Tier A)
-  _ConvergenceClaim — temporal convergence rate on dy/dt = λy (Tier B)
-  _StepperClaim     — end-to-end TimeStepper.advance accuracy (Tier C)
+  _RKOrderClaim          — B-series order conditions via rooted-tree enumeration
+  _ConvergenceClaim      — temporal convergence rate on dy/dt = λy
+  _StepperClaim          — end-to-end TimeStepper.advance accuracy
+  _PIAccuracyClaim       — PIController achieves error ≤ c_rel · tol
+  _PIWorkPrecisionClaim  — tighter tol yields smaller error
 
 Each claim encodes both what is being verified and how to verify it.
 Adding a new claim requires only appending to the relevant registry list;
@@ -33,135 +35,16 @@ from cosmic_foundry.computation.time_integrators import (
     TimeStepper,
     bogacki_shampine,
     dormand_prince,
+    elementary_weight,
     forward_euler,
+    gamma,
     heun,
     midpoint,
     ralston,
     rk4,
+    trees_up_to_order,
 )
 from tests.claims import Claim
-
-# ---------------------------------------------------------------------------
-# Symbolic Butcher order-condition machinery
-# ---------------------------------------------------------------------------
-
-
-def _butcher_conditions(
-    A: list[list[sympy.Rational]],
-    b: list[sympy.Rational],
-    c: list[sympy.Rational],
-    order: int,
-) -> list[tuple[str, sympy.Expr]]:
-    """Return (label, residual) pairs for all Butcher conditions up to order p.
-
-    A residual of zero means the condition holds.  All arithmetic is exact
-    when the inputs are sympy.Rational.
-
-    Conditions up to p=5 are enumerated explicitly.  Phase 2 will replace
-    these with the universal B-series framework (rooted-tree enumeration).
-    """
-    s = len(b)
-    conditions: list[tuple[str, sympy.Expr]] = []
-
-    conditions.append(("sum(b)=1", sum(b) - 1))
-
-    if order >= 2:
-        conditions.append(
-            ("sum(b*c)=1/2", sum(b[i] * c[i] for i in range(s)) - sympy.Rational(1, 2))
-        )
-
-    if order >= 3:
-        conditions.append(
-            (
-                "sum(b*c^2)=1/3",
-                sum(b[i] * c[i] ** 2 for i in range(s)) - sympy.Rational(1, 3),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*A*c)=1/6",
-                sum(b[i] * sum(A[i][j] * c[j] for j in range(s)) for i in range(s))
-                - sympy.Rational(1, 6),
-            )
-        )
-
-    if order >= 4:
-        conditions.append(
-            (
-                "sum(b*c^3)=1/4",
-                sum(b[i] * c[i] ** 3 for i in range(s)) - sympy.Rational(1, 4),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*c*A*c)=1/8",
-                sum(
-                    b[i] * c[i] * sum(A[i][j] * c[j] for j in range(s))
-                    for i in range(s)
-                )
-                - sympy.Rational(1, 8),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*A*c^2)=1/12",
-                sum(b[i] * sum(A[i][j] * c[j] ** 2 for j in range(s)) for i in range(s))
-                - sympy.Rational(1, 12),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*A*A*c)=1/24",
-                sum(
-                    b[i]
-                    * sum(
-                        A[i][j] * sum(A[j][k] * c[k] for k in range(s))
-                        for j in range(s)
-                    )
-                    for i in range(s)
-                )
-                - sympy.Rational(1, 24),
-            )
-        )
-
-    if order >= 5:
-        # 4 of the 17 p=5 conditions; Phase 2 adds the full set via B-series.
-        conditions.append(
-            (
-                "sum(b*c^4)=1/5",
-                sum(b[i] * c[i] ** 4 for i in range(s)) - sympy.Rational(1, 5),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*c^2*A*c)=1/10",
-                sum(
-                    b[i] * c[i] ** 2 * sum(A[i][j] * c[j] for j in range(s))
-                    for i in range(s)
-                )
-                - sympy.Rational(1, 10),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*(A*c)^2)=1/20",
-                sum(b[i] * sum(A[i][j] * c[j] for j in range(s)) ** 2 for i in range(s))
-                - sympy.Rational(1, 20),
-            )
-        )
-        conditions.append(
-            (
-                "sum(b*c*A*c^2)=1/15",
-                sum(
-                    b[i] * c[i] * sum(A[i][j] * c[j] ** 2 for j in range(s))
-                    for i in range(s)
-                )
-                - sympy.Rational(1, 15),
-            )
-        )
-
-    return conditions
-
 
 # ---------------------------------------------------------------------------
 # Claim classes
@@ -172,7 +55,7 @@ _N_HALVINGS = 5
 
 
 class _RKOrderClaim(Claim):
-    """Tier A: verify Butcher order conditions hold symbolically."""
+    """Verify B-series order conditions: α(τ) = 1/γ(τ) for all trees with |τ| ≤ p."""
 
     def __init__(self, instance: RungeKuttaIntegrator, label: str) -> None:
         self._instance = instance
@@ -184,11 +67,12 @@ class _RKOrderClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        conditions = _butcher_conditions(inst.A_sym, inst.b_sym, inst.c_sym, inst.order)
-        for cond_label, residual in conditions:
-            assert residual == 0, (
-                f"{self._label}: Butcher condition '{cond_label}' failed; "
-                f"residual = {residual}"
+        for t in trees_up_to_order(inst.order):
+            alpha = elementary_weight(t, inst.A_sym, inst.b_sym)
+            expected = sympy.Rational(1) / gamma(t)
+            assert alpha == expected, (
+                f"{self._label}: B-series condition failed for tree {t}; "
+                f"α(τ)={alpha}, 1/γ(τ)={expected}"
             )
 
 

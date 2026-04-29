@@ -1,5 +1,13 @@
-"""Time-integration layer: integrators, steppers, and controllers."""
+"""Time-integration layer: integrators, steppers, controllers, and B-series."""
 
+from cosmic_foundry.computation.time_integrators.bseries import (
+    Tree,
+    elementary_weight,
+    gamma,
+    order,
+    sigma,
+    trees_up_to_order,
+)
 from cosmic_foundry.computation.time_integrators.integrator import (
     BlackBoxRHS,
     ConstantStep,
@@ -25,6 +33,7 @@ from cosmic_foundry.computation.time_integrators.stepper import (
 )
 
 __all__ = [
+    "Tree",
     "BlackBoxRHS",
     "ConstantStep",
     "Controller",
@@ -37,9 +46,14 @@ __all__ = [
     "TimeStepper",
     "bogacki_shampine",
     "dormand_prince",
+    "elementary_weight",
     "forward_euler",
+    "gamma",
     "heun",
     "midpoint",
+    "order",
     "ralston",
     "rk4",
+    "sigma",
+    "trees_up_to_order",
 ]

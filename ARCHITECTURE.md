@@ -493,12 +493,6 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 1 — Adaptive step control.** `PIController(α, β)` over the embedded
-`b_hat` error estimate; step rejection on `err > tol`; `dt_suggest` carried
-in integrator state.  Activates the controller axis.  Verification: PI
-stability claim on the linear test problem; convergence under adaptive
-stepping; work-precision claims on a benchmark suite.
-
 **Phase 2 — B-series order verification framework.** `RootedTree`
 enumeration through user-specified order; symbolic `γ(τ)` (tree integral)
 and `σ(τ)` (symmetry factor); `α(τ)` extraction from any RK program via the
