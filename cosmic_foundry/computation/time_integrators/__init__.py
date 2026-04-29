@@ -15,6 +15,15 @@ from cosmic_foundry.computation.time_integrators.bseries import (
     sigma,
     trees_up_to_order,
 )
+from cosmic_foundry.computation.time_integrators.exponential import (
+    ETDRK2Integrator,
+    ExponentialEulerIntegrator,
+    LinearPlusNonlinearRHS,
+    LinearPlusNonlinearRHSProtocol,
+    PhiFunction,
+    etd_euler,
+    etdrk2,
+)
 from cosmic_foundry.computation.time_integrators.imex import (
     AdditiveRHS,
     AdditiveRHSProtocol,
@@ -120,6 +129,13 @@ __all__ = [
     "rk4",
     "sigma",
     "trees_up_to_order",
+    "ETDRK2Integrator",
+    "ExponentialEulerIntegrator",
+    "LinearPlusNonlinearRHS",
+    "LinearPlusNonlinearRHSProtocol",
+    "PhiFunction",
+    "etd_euler",
+    "etdrk2",
     "HamiltonianSplit",
     "HamiltonianSplitProtocol",
     "PartitionedState",
