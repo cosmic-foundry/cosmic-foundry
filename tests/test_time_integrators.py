@@ -37,6 +37,7 @@ from cosmic_foundry.computation.time_integrators import (
     ExplicitMultistepIntegrator,
     ExponentialEulerIntegrator,
     FamilySwitchingNordsieckIntegrator,
+    HamiltonianSplit,
     IMEXIntegrator,
     JacobianRHS,
     KrogstadETDRK4Integrator,
@@ -54,6 +55,7 @@ from cosmic_foundry.computation.time_integrators import (
     StiffnessDiagnostic,
     StiffnessSwitcher,
     StrangSplittingIntegrator,
+    SymplecticCompositionIntegrator,
     TimeStepper,
     VariableOrderNordsieckIntegrator,
     VODEController,
@@ -79,11 +81,13 @@ from cosmic_foundry.computation.time_integrators import (
     elementary_weight,
     etd_euler,
     etdrk2,
+    forest_ruth,
     forward_euler,
     gamma,
     heun,
     implicit_midpoint,
     krogstad_etdrk4,
+    leapfrog,
     lie_steps,
     midpoint,
     nordsieck_solution_distance,
@@ -91,7 +95,10 @@ from cosmic_foundry.computation.time_integrators import (
     rk4,
     stability_function,
     strang_steps,
+    symplectic_euler,
     trees_up_to_order,
+    yoshida_6,
+    yoshida_8,
     yoshida_steps,
 )
 from cosmic_foundry.computation.time_integrators._newton import newton_solve
@@ -2077,6 +2084,97 @@ def test_splitting_integrators(claim: Claim) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase C claims — symplectic composition integrators
+# ---------------------------------------------------------------------------
+
+# Test problem: harmonic oscillator H = p²/2 + q²/2.
+# dT/dp = p,  dV/dq = q.  Exact from (q0, p0) = (1, 0): q(t)=cos(t), p(t)=−sin(t).
+
+
+class _SymplecticConvergenceClaim(Claim):
+    """Verify symplectic convergence order on the unit harmonic oscillator.
+
+    dt_base controls the coarsest step size.  High-order methods (order ≥ 6)
+    need a larger dt_base to stay comfortably above machine-precision noise
+    at the fine end of the regression window.
+    """
+
+    def __init__(
+        self,
+        instance: SymplecticCompositionIntegrator,
+        label: str,
+        dt_base: float = 0.1,
+        n_halvings: int = 4,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt_base = dt_base
+        self._n_halvings = n_halvings
+
+    @property
+    def description(self) -> str:
+        return f"symplectic/convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        backend = Tensor([0.0]).backend
+        H = HamiltonianSplit(
+            dT_dp=lambda p: p,
+            dV_dq=lambda q: q,
+            split_index=1,
+        )
+        t_end = 1.0
+        dts = [self._dt_base / (2**k) for k in range(self._n_halvings + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = round(t_end / dt)
+            state = RKState(0.0, Tensor([1.0, 0.0], backend=backend))
+            for _ in range(n_steps):
+                state = inst.step(H, state, dt)
+            q_err = float(state.u[0]) - math.cos(state.t)
+            p_err = float(state.u[1]) - (-math.sin(state.t))
+            errors.append(math.sqrt(q_err**2 + p_err**2))
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} - 0.1"
+        )
+
+
+_SYMPLECTIC_CLAIMS: list[_SymplecticConvergenceClaim] = [
+    _SymplecticConvergenceClaim(symplectic_euler, "symplectic_euler"),
+    _SymplecticConvergenceClaim(leapfrog, "leapfrog"),
+    _SymplecticConvergenceClaim(forest_ruth, "forest_ruth"),
+    _SymplecticConvergenceClaim(yoshida_6, "yoshida_6", dt_base=0.25),
+    _SymplecticConvergenceClaim(yoshida_8, "yoshida_8", dt_base=0.25, n_halvings=3),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _SYMPLECTIC_CLAIMS,
+    ids=[c.description for c in _SYMPLECTIC_CLAIMS],
+)
+def test_symplectic_integrators(claim: _SymplecticConvergenceClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
 # Phase A — type-coherence and shared Newton kernel
 # ---------------------------------------------------------------------------
 
@@ -2163,6 +2261,21 @@ _TYPE_COHERENCE_CLAIMS: list[_TypeCoherenceClaim] = [
         IMEXIntegrator,
         [ars222],
         "IMEXIntegrator",
+    ),
+    _TypeCoherenceClaim(
+        ExplicitMultistepIntegrator,
+        [ab2, ab3, ab4],
+        "ExplicitMultistepIntegrator",
+    ),
+    _TypeCoherenceClaim(
+        SymplecticCompositionIntegrator,
+        [symplectic_euler, leapfrog, forest_ruth, yoshida_6, yoshida_8],
+        "SymplecticCompositionIntegrator",
+    ),
+    _TypeCoherenceClaim(
+        StrangSplittingIntegrator,
+        [StrangSplittingIntegrator([rk4, rk4], strang_steps(), order=2)],
+        "StrangSplittingIntegrator",
     ),
 ]
 

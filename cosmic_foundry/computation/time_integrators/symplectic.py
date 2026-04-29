@@ -17,6 +17,11 @@ Higher-order methods come from the Suzuki-Yoshida triple-jump composition:
 applying a base method at scales (α₁, α₀, α₁) where α₁ = 1/(2−2^e) and
 α₀ = 1−2α₁, with e = 1/(2k+1) to increase order from 2k to 2k+2.
 
+The state is an RKState where u = concat([q, p]) and HamiltonianSplitProtocol
+carries split_index to indicate how many leading components are position (q);
+the remaining components are momentum (p).  This makes SymplecticCompositionIntegrator
+a TimeIntegrator that interoperates with TimeStepper.
+
 Named instances (all ABA-form, d[-1] = 0):
     symplectic_euler — order 1 (non-palindromic, for comparison)
     leapfrog         — order 2 (Störmer-Verlet)
@@ -31,15 +36,25 @@ from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
 from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators.integrator import (
+    RKState,
+    TimeIntegrator,
+)
 
 
 @runtime_checkable
 class HamiltonianSplitProtocol(Protocol):
     """Protocol for separable Hamiltonians H(q, p) = T(p) + V(q).
 
-    Implementers supply the two gradient maps needed by the drift/kick split:
-    the velocity ∂T/∂p and the force −∂V/∂q.
+    Implementers supply the two gradient maps needed by the drift/kick split
+    and the split_index that partitions the concatenated state vector u into
+    position q = u[:split_index] and momentum p = u[split_index:].
     """
+
+    @property
+    def split_index(self) -> int:
+        """Number of position (q) components; momentum starts at u[split_index:]."""
+        ...
 
     def dT_dp(self, p: Tensor) -> Tensor:
         """Velocity q̇ = ∂T/∂p evaluated at momentum p."""
@@ -61,15 +76,25 @@ class HamiltonianSplit:
         Callable (q: Tensor) → Tensor returning the potential gradient ∂V/∂q.
         The kick applies −dV_dq to p, so a harmonic potential V = q²/2 gives
         dV_dq = q and the kick is p ← p − d·dt·q.
+    split_index:
+        Number of position components in the concatenated state vector u.
+        Positions occupy u[:split_index]; momenta occupy u[split_index:].
     """
 
     def __init__(
         self,
         dT_dp: Callable[[Tensor], Tensor],
         dV_dq: Callable[[Tensor], Tensor],
+        split_index: int,
     ) -> None:
         self._dT_dp = dT_dp
         self._dV_dq = dV_dq
+        self._split_index = split_index
+
+    @property
+    def split_index(self) -> int:
+        """Number of position (q) components."""
+        return self._split_index
 
     def dT_dp(self, p: Tensor) -> Tensor:
         result: Tensor = self._dT_dp(p)
@@ -80,35 +105,16 @@ class HamiltonianSplit:
         return result
 
 
-class PartitionedState:
-    """Integrator state for symplectic methods.
-
-    Carries the current time and the canonical coordinates (position q,
-    momentum p) of the Hamiltonian system.
-
-    Parameters
-    ----------
-    t:
-        Current time.
-    q:
-        Position (generalized coordinates) as a Tensor.
-    p:
-        Momentum (conjugate to q) as a Tensor.
-    """
-
-    __slots__ = ("t", "q", "p")
-
-    def __init__(self, t: float, q: Tensor, p: Tensor) -> None:
-        self.t = t
-        self.q = q
-        self.p = p
-
-
-class SymplecticSplittingIntegrator:
+class SymplecticCompositionIntegrator(TimeIntegrator):
     """Explicit symplectic integrator parameterized by drift/kick coefficients.
 
-    Advances a partitioned Hamiltonian system (q, p) by one step of size dt
-    using alternating drift and kick sub-steps with weights c[i] and d[i].
+    A specialization of the composition integrator family for separable
+    Hamiltonian systems.  Advances the state one step by alternating drift
+    and kick sub-steps with weights c[i] and d[i].
+
+    The state is an RKState where u = concat([q, p]).  The HamiltonianSplitProtocol
+    carries split_index so that q = u[:split_index] and p = u[split_index:].
+    This makes the integrator fully compatible with TimeStepper.advance().
 
     Parameters
     ----------
@@ -124,7 +130,6 @@ class SymplecticSplittingIntegrator:
         self._c = list(c)
         self._d = list(d)
         self._order = order
-        self._s = len(c)
 
     @property
     def order(self) -> int:
@@ -134,21 +139,27 @@ class SymplecticSplittingIntegrator:
     def step(
         self,
         H: HamiltonianSplitProtocol,
-        state: PartitionedState,
+        state: RKState,
         dt: float,
-    ) -> PartitionedState:
+    ) -> RKState:
         """Advance state by one step of size dt.
 
-        Returns a new PartitionedState with t = state.t + dt and updated
-        (q, p) from the alternating drift/kick sequence.
+        Unpacks q = state.u[:split_index] and p = state.u[split_index:],
+        applies the alternating drift/kick sequence, then returns a new RKState
+        with u = concat([q_new, p_new]) and t = state.t + dt.
         """
-        q, p = state.q, state.p
+        n = H.split_index
+        q = state.u[:n]
+        p = state.u[n:]
         for ci, di in zip(self._c, self._d, strict=True):
             if ci != 0.0:
                 q = q + (ci * dt) * H.dT_dp(p)
             if di != 0.0:
                 p = p - (di * dt) * H.dV_dq(q)
-        return PartitionedState(state.t + dt, q, p)
+        q_list: list[float] = q.to_list()
+        p_list: list[float] = p.to_list()
+        u_new: Tensor = Tensor(q_list + p_list, backend=state.u.backend)
+        return RKState(state.t + dt, u_new)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +196,7 @@ def _triple_jump(
 # Named instances
 # ---------------------------------------------------------------------------
 
-symplectic_euler = SymplecticSplittingIntegrator(
+symplectic_euler = SymplecticCompositionIntegrator(
     c=[1.0],
     d=[1.0],
     order=1,
@@ -193,23 +204,22 @@ symplectic_euler = SymplecticSplittingIntegrator(
 
 _c_lf = [0.5, 0.5]
 _d_lf = [1.0, 0.0]
-leapfrog = SymplecticSplittingIntegrator(c=_c_lf, d=_d_lf, order=2)
+leapfrog = SymplecticCompositionIntegrator(c=_c_lf, d=_d_lf, order=2)
 
 _c_fr, _d_fr = _triple_jump(_c_lf, _d_lf, exponent=1 / 3)
-forest_ruth = SymplecticSplittingIntegrator(c=_c_fr, d=_d_fr, order=4)
+forest_ruth = SymplecticCompositionIntegrator(c=_c_fr, d=_d_fr, order=4)
 
 _c_y6, _d_y6 = _triple_jump(_c_fr, _d_fr, exponent=1 / 5)
-yoshida_6 = SymplecticSplittingIntegrator(c=_c_y6, d=_d_y6, order=6)
+yoshida_6 = SymplecticCompositionIntegrator(c=_c_y6, d=_d_y6, order=6)
 
 _c_y8, _d_y8 = _triple_jump(_c_y6, _d_y6, exponent=1 / 7)
-yoshida_8 = SymplecticSplittingIntegrator(c=_c_y8, d=_d_y8, order=8)
+yoshida_8 = SymplecticCompositionIntegrator(c=_c_y8, d=_d_y8, order=8)
 
 
 __all__ = [
     "HamiltonianSplit",
     "HamiltonianSplitProtocol",
-    "PartitionedState",
-    "SymplecticSplittingIntegrator",
+    "SymplecticCompositionIntegrator",
     "forest_ruth",
     "leapfrog",
     "symplectic_euler",

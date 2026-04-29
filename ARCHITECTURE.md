@@ -478,7 +478,6 @@ RKState(NamedTuple)              — (t, u, dt, err); used by RK, exponential,
 MultistepState(NamedTuple)       — (t, u, dt, err, history); used by explicit
                                    multistep integrators
 NordsieckState                   — Nordsieck history vector for multistep methods
-PartitionedState                 — (q, p) for symplectic integrators
 
 Integrators:
 
@@ -503,10 +502,12 @@ ExponentialEulerIntegrator       — ETD-Euler, order 1; instance: etd_euler
 ETDRK2Integrator                 — order 2; instance: etdrk2
 CoxMatthewsETDRK4Integrator      — order 4 (classical); instance: cox_matthews_etdrk4
 KrogstadETDRK4Integrator         — order 4 (stiff-order-correct); instance: krogstad_etdrk4
-SymplecticSplittingIntegrator    — position-Verlet family for Hamiltonian systems
+SymplecticCompositionIntegrator  — position-Verlet family for separable Hamiltonian
+                                   systems; inherits TimeIntegrator; accepts
+                                   HamiltonianSplit with split_index
                                    instances: symplectic_euler(1), leapfrog(2),
                                    forest_ruth(4), yoshida_6(6), yoshida_8(8)
-StrangSplittingIntegrator        — meta-integrator composing sub-integrators
+StrangSplittingIntegrator        — meta-integrator composing sub-integrators;
                                    factories: lie_steps()(1), strang_steps()(2),
                                    yoshida_steps()(4, negative substep weights)
 
@@ -562,12 +563,12 @@ name.  The migration is breaking; it happens in phases (see below).
 |---|---|---|
 | `RKState` | `ODEState` | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). The name should not imply method family. |
 | `NordsieckState` | `MultistepState` | The Nordsieck encoding is an implementation detail; the concept is a multistep history of past solution data. |
-| `PartitionedState` | *(eliminated)* | Folds into `ODEState` with a structured `u` field (see Axis B). |
+| `PartitionedState` | *(eliminated — done)* | Folded into `RKState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianSplit.split_index`. |
 | `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` | DIRK is one implementation strategy for implicit RK; the public name should say "implicit Runge-Kutta". |
 | `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
 | `NordsieckIntegrator` | `MultistepIntegrator` | Same reasoning as `NordsieckState`. |
 | `StrangSplittingIntegrator` | `CompositionIntegrator` | Strang is one composition scheme; the class is the general composition meta-integrator. |
-| `SymplecticSplittingIntegrator` | `SymplecticCompositionIntegrator` | Specializes `CompositionIntegrator` with symplecticity constraint. |
+| `SymplecticSplittingIntegrator` | `SymplecticCompositionIntegrator` *(done)* | Specializes `CompositionIntegrator` with symplecticity constraint. |
 | `LinearPlusNonlinearRHS` | `SemilinearRHS` | du/dt = Lu + N(t,u) is a semilinear ODE; the name should say so. |
 | `AdditiveRHS` | `SplitRHS` | Carries an explicit/implicit split; "additive" is the ARK term, "split" is the mathematical concept. |
 | `HamiltonianSplit` | `HamiltonianRHS` | The protocol describes a Hamiltonian RHS; "split" implies an algorithmic choice. |
@@ -648,12 +649,6 @@ ODEState:
   `MultistepIntegrator` reads/writes `history`; single-step integrators
   pass through `state.history = None`.
 
-- `PartitionedState(q, p)` → `ODEState` with `u = Tensor.stack([q, p])`.
-  `SymplecticCompositionIntegrator` unpacks `(q, p) = u[:n], u[n:]`
-  using a fixed split point that travels with `HamiltonianRHS.split_index`
-  (new property on `HamiltonianRHS`).  `TimeStepper.advance` receives the
-  initial `ODEState`; helper `hamiltonian_state(q, p)` constructs it.
-
 - `MultistepState(t, u, dt, err, history)` → `ODEState` with `history =
   MultistepHistory(history_list)`.  `ExplicitMultistepIntegrator` stores
   past `f` evaluations in `history.derivatives`; the Nordsieck form stores
@@ -674,13 +669,11 @@ at least one new test for the structural change.
 
 | Phase | Title | Scope |
 |---|---|---|
-| C | **Fold symplectic** | `SymplecticCompositionIntegrator` (née `SymplecticSplittingIntegrator`) becomes a specialization of `CompositionIntegrator`; `PartitionedState` removed from the public API; `HamiltonianRHS.split_index` added. |
-| D | **Unified state** | Rename `RKState → ODEState`; merge `NordsieckState` into `ODEState` with `history` slot; `TimeStepper.advance` returns `ODEState`; delete `PartitionedState`. |
+| D | **Unified state** | Rename `RKState → ODEState`; merge `NordsieckState` into `ODEState` with `history` slot; `TimeStepper.advance` returns `ODEState`. |
 | E | **Rename sweep** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
 | F | **`AutoIntegrator`** | Implement dispatch chain; add integration test that passes each RHS type through `AutoIntegrator` and verifies correct order. |
 
-Phase C can proceed immediately.  Phase D requires C.  Phases E and F
-require D.
+Phase D can proceed immediately.  Phases E and F require D.
 
 ---
 

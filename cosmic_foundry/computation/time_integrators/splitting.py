@@ -54,7 +54,7 @@ class SplittingStep:
     weight: float
 
 
-class StrangSplittingIntegrator:
+class StrangSplittingIntegrator(TimeIntegrator):
     """Meta-integrator that composes sub-integrators via a splitting sequence.
 
     Each ``SplittingStep`` in ``sequence`` advances
