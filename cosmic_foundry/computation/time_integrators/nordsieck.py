@@ -30,12 +30,11 @@ is solved by Newton iteration using the Jacobian from WithJacobianRHSProtocol.
 Adams-Moulton family (non-stiff problems)
 -----------------------------------------
     β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
-    l[j] = C(q, j) / (q−j+1)   for j = 1, …, q
+    l[j] = coefficient of ξ^j in ∫₀^ξ ∏_{k=1}^{q−1} (s+k) / (q−1)! ds
 
-The l-vector derivation: δ = h^{q+1}/q! · y^{(q+1)} + O(h^{q+2}), and
-requiring z_new[j] = h^j/j! · y^{(j)}(t_{n+1}) + O(h^{q+2}) for j ≥ 1
-gives l[j] = q! / (j! · (q−j+1)!) = C(q,j)/(q−j+1).  The implicit equation
-is solved by fixed-point iteration, so no Jacobian is required; this family
+giving l = [β₀, 1, 1/2], [β₀, 1, 3/4, 1/6], [β₀, 1, 11/12, 1/3, 1/24], …
+(Gear 1971 Table 11.2; l[q] = 1/q! always).  The implicit equation is
+solved by fixed-point iteration, so no Jacobian is required; this family
 satisfies plain RHSProtocol and is preferred for non-stiff problems.
 
 Named instances
@@ -211,18 +210,21 @@ class AdamsFamily:
 
     which evaluates to 1, 1/2, 5/12, 3/8, 251/720, … for q = 1, 2, 3, 4, 5, …
 
-    The l-vector satisfies l[1] = 1 (always) and:
+    The l-vector satisfies l[0] = β₀, l[1] = 1 (always), and:
 
-        l[j] = C(q, j) / (q−j+1)   for j = 1, …, q
-        l[0] = β₀
+        l[j] = coefficient of ξ^j in ∫₀^ξ ∏_{k=1}^{q−1} (s+k) / (q−1)! ds
 
-    Derivation: δ = h·f_{n+1} − z_pred[1] = h^{q+1}/q! · y^{(q+1)} + O(h^{q+2}).
-    Requiring z_new[j] = h^j/j! · y^{(j)}(t_{n+1}) + O(h^{q+2}) for j = 1, …, q
-    gives l[j] · (h^{q+1}/q!) = h^{q+1}/(j!(q−j+1)!), hence l[j] = C(q,j)/(q−j+1).
+    for j = 1, …, q.  This integral polynomial generates l[j] = 1, 1/2, 3/4,
+    1/6, 11/12, 1/3, 1/24, … for increasing q and j, matching Gear (1971)
+    Table 11.2.  Explicitly: l[q] = 1/q! always, and l[2] = H_{q−1}/2 where
+    H_k is the k-th harmonic number.
 
-    In plain terms: the prediction step (Pascal multiply) is exact for
-    polynomials of degree ≤ q; the correction l·δ patches the O(h^{q+1})
-    error introduced by the leading-order Taylor term that the predictor misses.
+    In plain terms: the l-vector encodes both the one-step prediction-error
+    correction (l[1]=1 always) and the inter-step consistency requirement —
+    after the correction, the Nordsieck history must correctly seed the
+    Pascal prediction for the next step.  The integral formula accounts for
+    both constraints; using only the prediction error gives wrong values for
+    j ≥ 2 that make the higher Nordsieck slots unstable.
 
     Use this family for non-stiff problems.  The implicit equation is solved
     by fixed-point iteration — no Jacobian is required (plain RHSProtocol).
@@ -252,19 +254,35 @@ class AdamsFamily:
         β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
 
         l[0] = β₀
-        l[j] = C(q, j) / (q−j+1)   for j = 1, …, q
+        l[j] = coefficient of ξ^j in ∫₀^ξ ∏_{k=1}^{q−1} (s+k) / (q−1)! ds,
+               for j = 1, …, q
+
+        The generating integral uses roots at s = −1, …, −(q−1), one shifted
+        relative to the β₀ integrand (roots at 0, …, −(q−2)).  The shift
+        ensures l[q] = 1/q! and satisfies the inter-step consistency
+        condition that the l-vector corrector in Nordsieck form produces.
         """
         s = sympy.Symbol("s")
-        integrand = sympy.Integer(1)
+        xi = sympy.Symbol("xi")
+
+        # beta0: ∫₀¹ s(s+1)⋯(s+q−2) / (q−1)! ds
+        integrand_beta = sympy.Integer(1)
         for k in range(q - 1):
-            integrand *= s + k
-        beta0: sympy.Rational = sympy.integrate(integrand, (s, 0, 1)) / sympy.factorial(
-            q - 1
-        )
+            integrand_beta *= s + k
+        beta0: sympy.Rational = sympy.integrate(
+            integrand_beta, (s, 0, 1)
+        ) / sympy.factorial(q - 1)
+
+        # l[1..q]: from ∫₀^ξ (s+1)(s+2)⋯(s+q−1) / (q−1)! ds
+        integrand_l = sympy.Integer(1)
+        for k in range(1, q):
+            integrand_l *= s + k
+        integrand_l = sympy.expand(integrand_l) / sympy.factorial(q - 1)
+        L_poly = sympy.expand(sympy.integrate(integrand_l, (s, 0, xi)))
 
         lvec: list[sympy.Rational] = [beta0]
         for j in range(1, q + 1):
-            lvec.append(sympy.binomial(q, j) / sympy.Integer(q - j + 1))
+            lvec.append(L_poly.coeff(xi, j))
         return lvec, beta0
 
     def l_vector(self, q: int) -> list[float]:
