@@ -29,24 +29,30 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
     BlackBoxRHS,
     ConstantStep,
+    DIRKIntegrator,
     HamiltonianSplit,
+    JacobianRHS,
     PartitionedState,
     PIController,
     RKState,
     RungeKuttaIntegrator,
     SymplecticSplittingIntegrator,
     TimeStepper,
+    backward_euler,
     bogacki_shampine,
+    crouzeix_3,
     dormand_prince,
     elementary_weight,
     forest_ruth,
     forward_euler,
     gamma,
     heun,
+    implicit_midpoint,
     leapfrog,
     midpoint,
     ralston,
     rk4,
+    stability_function,
     symplectic_euler,
     trees_up_to_order,
     yoshida_6,
@@ -65,7 +71,9 @@ _N_HALVINGS = 5
 class _RKOrderClaim(Claim):
     """Verify B-series order conditions: α(τ) = 1/γ(τ) for all trees with |τ| ≤ p."""
 
-    def __init__(self, instance: RungeKuttaIntegrator, label: str) -> None:
+    def __init__(
+        self, instance: RungeKuttaIntegrator | DIRKIntegrator, label: str
+    ) -> None:
         self._instance = instance
         self._label = label
 
@@ -78,7 +86,7 @@ class _RKOrderClaim(Claim):
         for t in trees_up_to_order(inst.order):
             alpha = elementary_weight(t, inst.A_sym, inst.b_sym)
             expected = sympy.Rational(1) / gamma(t)
-            assert alpha == expected, (
+            assert sympy.simplify(alpha - expected) == 0, (
                 f"{self._label}: B-series condition failed for tree {t}; "
                 f"α(τ)={alpha}, 1/γ(τ)={expected}"
             )
@@ -305,6 +313,9 @@ _ORDER_CLAIMS: list[_RKOrderClaim] = [
     _RKOrderClaim(rk4, "rk4"),
     _RKOrderClaim(dormand_prince, "dormand_prince"),
     _RKOrderClaim(bogacki_shampine, "bogacki_shampine"),
+    _RKOrderClaim(backward_euler, "backward_euler"),
+    _RKOrderClaim(implicit_midpoint, "implicit_midpoint"),
+    _RKOrderClaim(crouzeix_3, "crouzeix_3"),
 ]
 
 _CONVERGENCE_CLAIMS: list[_ConvergenceClaim] = [
@@ -521,4 +532,153 @@ def test_symplectic_order(claim: _SplittingOrderClaim) -> None:
     ids=[c.description for c in _ENERGY_BOUND_CLAIMS],
 )
 def test_energy_bound(claim: _EnergyBoundClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 claims — DIRK integrators
+# ---------------------------------------------------------------------------
+
+
+class _DIRKConvergenceClaim(Claim):
+    """Verify convergence order on dy/dt = λy using JacobianRHS."""
+
+    def __init__(
+        self,
+        instance: DIRKIntegrator,
+        label: str,
+        lam: float = -1.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._lam = lam
+
+    @property
+    def description(self) -> str:
+        return f"dirk_convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        rhs = JacobianRHS(
+            f=lambda t, u, _lam=lam: _lam * u,
+            jac=lambda t, u, _lam=lam: Tensor([[_lam]]),
+        )
+        dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt)
+            state = RKState(0.0, Tensor([1.0]))
+            for _ in range(n_steps):
+                state = inst.step(rhs, state, dt)
+            exact = math.exp(lam * state.t)
+            errors.append(abs(float(state.u[0]) - exact))
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} - 0.1"
+        )
+
+
+class _AStabilityClaim(Claim):
+    """Verify A-stability: |R(iω)| ≤ 1 for sampled imaginary-axis points."""
+
+    def __init__(self, instance: DIRKIntegrator, label: str) -> None:
+        self._instance = instance
+        self._label = label
+
+    @property
+    def description(self) -> str:
+        return f"a_stability/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        R_expr = stability_function(inst.A_sym, inst.b_sym)
+        z = sympy.Symbol("z")
+        R_func = sympy.lambdify(z, R_expr, modules="cmath")
+        for omega in [0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0]:
+            R_val = abs(R_func(complex(0.0, omega)))
+            assert (
+                R_val <= 1.0 + 1e-10
+            ), f"{self._label}: |R(i·{omega})| = {R_val:.8f} > 1 (A-stability violated)"
+
+
+class _LStabilityClaim(Claim):
+    """Verify L-stability: |R(z)| → 0 as Re(z) → −∞."""
+
+    def __init__(self, instance: DIRKIntegrator, label: str) -> None:
+        self._instance = instance
+        self._label = label
+
+    @property
+    def description(self) -> str:
+        return f"l_stability/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        R_expr = stability_function(inst.A_sym, inst.b_sym)
+        z = sympy.Symbol("z")
+        R_func = sympy.lambdify(z, R_expr, modules="cmath")
+        R_inf = abs(R_func(-1e6))
+        assert (
+            R_inf < 1e-4
+        ), f"{self._label}: |R(-1e6)| = {R_inf:.2e}; method is not L-stable"
+
+
+_DIRK_CONVERGENCE_CLAIMS: list[_DIRKConvergenceClaim] = [
+    _DIRKConvergenceClaim(backward_euler, "backward_euler"),
+    _DIRKConvergenceClaim(implicit_midpoint, "implicit_midpoint"),
+    _DIRKConvergenceClaim(crouzeix_3, "crouzeix_3"),
+]
+
+_A_STABILITY_CLAIMS: list[_AStabilityClaim] = [
+    _AStabilityClaim(backward_euler, "backward_euler"),
+    _AStabilityClaim(implicit_midpoint, "implicit_midpoint"),
+    _AStabilityClaim(crouzeix_3, "crouzeix_3"),
+]
+
+_L_STABILITY_CLAIMS: list[_LStabilityClaim] = [
+    _LStabilityClaim(backward_euler, "backward_euler"),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _DIRK_CONVERGENCE_CLAIMS,
+    ids=[c.description for c in _DIRK_CONVERGENCE_CLAIMS],
+)
+def test_dirk_convergence(claim: _DIRKConvergenceClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _A_STABILITY_CLAIMS,
+    ids=[c.description for c in _A_STABILITY_CLAIMS],
+)
+def test_a_stability(claim: _AStabilityClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _L_STABILITY_CLAIMS,
+    ids=[c.description for c in _L_STABILITY_CLAIMS],
+)
+def test_l_stability(claim: _LStabilityClaim) -> None:
     claim.check()

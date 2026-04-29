@@ -8,6 +8,16 @@ from cosmic_foundry.computation.time_integrators.bseries import (
     sigma,
     trees_up_to_order,
 )
+from cosmic_foundry.computation.time_integrators.implicit import (
+    DIRKIntegrator,
+    FiniteDiffJacobianRHS,
+    JacobianRHS,
+    WithJacobianRHSProtocol,
+    backward_euler,
+    crouzeix_3,
+    implicit_midpoint,
+    stability_function,
+)
 from cosmic_foundry.computation.time_integrators.integrator import (
     BlackBoxRHS,
     ConstantStep,
@@ -76,4 +86,12 @@ __all__ = [
     "symplectic_euler",
     "yoshida_6",
     "yoshida_8",
+    "DIRKIntegrator",
+    "FiniteDiffJacobianRHS",
+    "JacobianRHS",
+    "WithJacobianRHSProtocol",
+    "backward_euler",
+    "crouzeix_3",
+    "implicit_midpoint",
+    "stability_function",
 ]
