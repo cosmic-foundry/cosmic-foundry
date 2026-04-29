@@ -1,4 +1,4 @@
-"""Time-integration layer: integrators, steppers, controllers, and B-series."""
+"""Time-integration layer: integrators, steppers, controllers, B-series, symplectic."""
 
 from cosmic_foundry.computation.time_integrators.bseries import (
     Tree,
@@ -31,6 +31,17 @@ from cosmic_foundry.computation.time_integrators.stepper import (
     IntegratorSelectionResult,
     TimeStepper,
 )
+from cosmic_foundry.computation.time_integrators.symplectic import (
+    HamiltonianSplit,
+    HamiltonianSplitProtocol,
+    PartitionedState,
+    SymplecticSplittingIntegrator,
+    forest_ruth,
+    leapfrog,
+    symplectic_euler,
+    yoshida_6,
+    yoshida_8,
+)
 
 __all__ = [
     "Tree",
@@ -56,4 +67,13 @@ __all__ = [
     "rk4",
     "sigma",
     "trees_up_to_order",
+    "HamiltonianSplit",
+    "HamiltonianSplitProtocol",
+    "PartitionedState",
+    "SymplecticSplittingIntegrator",
+    "forest_ruth",
+    "leapfrog",
+    "symplectic_euler",
+    "yoshida_6",
+    "yoshida_8",
 ]

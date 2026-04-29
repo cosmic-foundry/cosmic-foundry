@@ -29,20 +29,28 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
     BlackBoxRHS,
     ConstantStep,
+    HamiltonianSplit,
+    PartitionedState,
     PIController,
     RKState,
     RungeKuttaIntegrator,
+    SymplecticSplittingIntegrator,
     TimeStepper,
     bogacki_shampine,
     dormand_prince,
     elementary_weight,
+    forest_ruth,
     forward_euler,
     gamma,
     heun,
+    leapfrog,
     midpoint,
     ralston,
     rk4,
+    symplectic_euler,
     trees_up_to_order,
+    yoshida_6,
+    yoshida_8,
 )
 from tests.claims import Claim
 
@@ -374,4 +382,143 @@ def test_pi_work_precision(claim: _PIWorkPrecisionClaim) -> None:
     ids=[c.description for c in _STEPPER_CLAIMS],
 )
 def test_stepper_advance(claim: _StepperClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 claims — symplectic splitting
+# ---------------------------------------------------------------------------
+
+# Harmonic oscillator: H = p²/2 + q²/2, exact solution q(t)=cos t, p(t)=−sin t
+# starting from q(0)=1, p(0)=0.
+_HO = HamiltonianSplit(dT_dp=lambda p: p, dV_dq=lambda q: q)
+
+# Larger starting dt than _DT_BASE: high-order methods reach machine precision
+# too quickly with dt=0.1, so the regression would include noise-floor points.
+_DT_BASE_SYM = 0.5
+_N_HALVINGS_SYM = 4
+
+
+class _SplittingOrderClaim(Claim):
+    """Verify convergence order on the unit harmonic oscillator at t=1."""
+
+    def __init__(self, instance: SymplecticSplittingIntegrator, label: str) -> None:
+        self._instance = instance
+        self._label = label
+
+    @property
+    def description(self) -> str:
+        return f"symplectic_order/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        dts = [_DT_BASE_SYM / (2**k) for k in range(_N_HALVINGS_SYM + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt)
+            state = PartitionedState(0.0, Tensor([1.0]), Tensor([0.0]))
+            for _ in range(n_steps):
+                state = inst.step(_HO, state, dt)
+            # Exact: q(t)=cos t, p(t)=−sin t
+            q_exact = math.cos(state.t)
+            p_exact = -math.sin(state.t)
+            eq = abs(float(state.q[0]) - q_exact)
+            ep = abs(float(state.p[0]) - p_exact)
+            errors.append(max(eq, ep))
+
+        eps = sys.float_info.epsilon * 100
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.4, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} - 0.4"
+        )
+
+
+class _EnergyBoundClaim(Claim):
+    """Verify that the Hamiltonian error is bounded over a long integration.
+
+    Symplectic integrators conserve a modified Hamiltonian, so the energy
+    error H(qₙ, pₙ) − H(q₀, p₀) stays O(dtᵖ) rather than growing linearly
+    in time.  The claim integrates for n_periods full periods at a fixed step
+    size and checks that the maximum relative energy deviation is < tol.
+    """
+
+    def __init__(
+        self,
+        instance: SymplecticSplittingIntegrator,
+        label: str,
+        dt: float = 0.1,
+        n_periods: int = 20,
+        tol: float = 0.05,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt = dt
+        self._n_periods = n_periods
+        self._tol = tol
+
+    @property
+    def description(self) -> str:
+        return f"energy_bound/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        dt = self._dt
+        state = PartitionedState(0.0, Tensor([1.0]), Tensor([0.0]))
+        H0 = 0.5 * float(state.q[0]) ** 2 + 0.5 * float(state.p[0]) ** 2  # = 0.5
+        n_steps = round(self._n_periods * 2 * math.pi / dt)
+        max_err = 0.0
+        for _ in range(n_steps):
+            state = inst.step(_HO, state, dt)
+            H = 0.5 * float(state.q[0]) ** 2 + 0.5 * float(state.p[0]) ** 2
+            max_err = max(max_err, abs(H - H0) / H0)
+        assert (
+            max_err < self._tol
+        ), f"{self._label}: max relative energy error {max_err:.3e} >= tol {self._tol}"
+
+
+_SPLITTING_ORDER_CLAIMS: list[_SplittingOrderClaim] = [
+    _SplittingOrderClaim(symplectic_euler, "symplectic_euler"),
+    _SplittingOrderClaim(leapfrog, "leapfrog"),
+    _SplittingOrderClaim(forest_ruth, "forest_ruth"),
+    _SplittingOrderClaim(yoshida_6, "yoshida_6"),
+    _SplittingOrderClaim(yoshida_8, "yoshida_8"),
+]
+
+_ENERGY_BOUND_CLAIMS: list[_EnergyBoundClaim] = [
+    _EnergyBoundClaim(leapfrog, "leapfrog", dt=0.1, tol=0.005),
+    _EnergyBoundClaim(forest_ruth, "forest_ruth", dt=0.3, tol=0.01),
+    _EnergyBoundClaim(yoshida_6, "yoshida_6", dt=0.5, tol=0.01),
+    _EnergyBoundClaim(yoshida_8, "yoshida_8", dt=0.5, tol=0.01),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _SPLITTING_ORDER_CLAIMS,
+    ids=[c.description for c in _SPLITTING_ORDER_CLAIMS],
+)
+def test_symplectic_order(claim: _SplittingOrderClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _ENERGY_BOUND_CLAIMS,
+    ids=[c.description for c in _ENERGY_BOUND_CLAIMS],
+)
+def test_energy_bound(claim: _EnergyBoundClaim) -> None:
     claim.check()
