@@ -494,15 +494,23 @@ adopts the typed slot shape (`RHSProtocol`, integrator-specific `State`,
 
 **Phase 0 — Explicit RK MVP.** `TimeIntegrator` ABC; `RungeKuttaIntegrator(A,
 b, c, order)` with named instances (Forward Euler, Midpoint, Heun, Ralston,
-RK4, Dormand-Prince, Bogacki-Shampine); `TimeStepper`; three-tier testing
-(symbolic order conditions on `sympy.Rational` tableaux, temporal convergence
-on `dy/dt = λy`, end-to-end through `TimeStepper.advance`); `Autotuner`
+RK4, Dormand-Prince, Bogacki-Shampine); `TimeStepper`; three-tier testing in
+a dedicated `tests/test_time_integrators.py` — symbolic order conditions on
+`sympy.Rational` tableaux, temporal convergence on `dy/dt = λy` against the
+analytical exponential, end-to-end through `TimeStepper.advance`; `Autotuner`
 extension producing `IntegratorSelectionResult(integrator, recommended_dt,
 predicted_cost)` from the descriptor's `t_span`, `epsilon`, and
 `spectral_radius`.  Interfaces are DSL-ready: typed `RHSProtocol` slot
 populated only by `BlackBoxRHS`; typed integrator state populated only by
 `RKState(t, y)`; typed `Controller` slot populated only by `ConstantStep`.
-Epoch 5 / 6 nonstiff baseline.
+Time-integrator verification has its own auto-discovery framework parallel
+to but independent of the spatial-operator `_INSTANCES` in
+`tests/test_convergence_order.py`; this is intentional — temporal order
+verification is structurally distinct from spatial.  Phase 0 satisfies the
+per-epoch verification standard: the symbolic order-condition claim is the
+Lane-C SymPy derivation check, and the temporal-convergence claim against
+the analytical exponential is the externally-grounded test.  Epoch 5 / 6
+nonstiff baseline.
 
 **Phase 1 — Adaptive step control.** `PIController(α, β)` over the embedded
 `b_hat` error estimate; step rejection on `err > tol`; `dt_suggest` carried
@@ -654,15 +662,15 @@ accepted and rejected step counts; conservation drift
 for Tier C, runtime scaling exponent in `n`.
 
 *Harness.* Lives in `tests/benchmarks/`, separate from the
-correctness claims in `tests/test_convergence_order.py`.
-Auto-discovers `BenchmarkProblem` instances and runs each
-`TimeIntegrator` from `_INSTANCES` against every compatible problem
-(compatibility = problem's `RHSProtocol` satisfies the integrator's
-`requires_rhs`).  Emits a JSON report.  Run under an opt-in
-`@pytest.mark.benchmark` so day-to-day CI is unaffected; a dedicated
-GitHub Actions workflow runs the suite on a schedule and surfaces
-regressions by comparing each run against the prior workflow run's
-report.
+correctness claims in `tests/test_time_integrators.py`.  Auto-discovers
+`BenchmarkProblem` instances and runs each `TimeIntegrator` from the
+`_INSTANCES` registry in `tests/test_time_integrators.py` against every
+compatible problem (compatibility = problem's `RHSProtocol` satisfies
+the integrator's `requires_rhs`).  Emits a JSON report.  Run under an
+opt-in `@pytest.mark.benchmark` so day-to-day CI is unaffected; a
+dedicated GitHub Actions workflow runs the suite on a schedule and
+surfaces regressions by comparing each run against the prior workflow
+run's report.
 
 *Reference solutions are computed inline.*  Where an analytical
 solution exists (linear, two-body, etc.), it is the reference.  Where
