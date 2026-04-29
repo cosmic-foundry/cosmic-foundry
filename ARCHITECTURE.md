@@ -493,22 +493,40 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 13 — Exponential integrators.** `LinearPlusNonlinearRHS(L, N)`
-protocol; φ-function evaluation (scaling-and-squaring on dense `hL` for
-small problems, Krylov / Arnoldi projection for large problems);
-`PhiFunction(k)` coefficient algebra (operator-valued tableau entries);
-named instances: ETD-Euler, ETDRK2, ETDRK4 (Cox-Matthews), Krogstad's
-method.  Verification: stiff-order conditions (Hochbruck-Ostermann) on
-`a_ij(z), b_j(z)` as functions of `z`; convergence on Allen-Cahn /
-Gray-Scott / 2D Burgers.  Activates the coefficient-algebra axis.
-Epoch 11 radiation enabler.
+**Phase 14 — Operator splitting (Strang / Lie).**
 
-**Phase 14 — Operator splitting (Strang / Lie).** `OperatorSplitRHS([f_1, …,
-f_k])` protocol; `StrangSplittingIntegrator(sub_integrators, sequence)` as
-a meta-integrator delegating each substep to a peer `TimeIntegrator`.
-Verification: combined order from commutator analysis (Lie 1st order;
-Strang 2nd order; Yoshida-style triple-jump for higher even orders).
-Activates compositionality of the integrator stack itself.  Epoch 10 MHD /
+*Interfaces.*
+`OperatorSplitRHSProtocol` — a protocol exposing `.components: Sequence[RHSProtocol]`;
+`OperatorSplitRHS` — concrete implementation wrapping a list of sub-RHS objects.
+`SplittingStep` — frozen dataclass `(component_index: int, weight: float)` describing
+one substep: advance `components[component_index]` by `weight * dt`.  `weight` is
+signed; negative values are legal and occur in Yoshida composition.
+
+*Integrator.*
+`StrangSplittingIntegrator(sub_integrators, sequence, order)` — meta-integrator
+that loops over `sequence`, calling
+`sub_integrators[s.component_index].step(rhs.components[s.component_index], state, s.weight * dt)`
+for each `SplittingStep s`.  `sub_integrators[i]` is the integrator dedicated to
+`rhs.components[i]`; passing the same integrator at multiple positions is allowed.
+Sub-integrators must accept and return `RKState`.  `order` is declared at
+construction by the factory function, not derived from the sequence.
+
+*Factory functions.*
+- `lie_steps()` — `[(0, 1.0), (1, 1.0)]`, order 1.
+- `strang_steps()` — `[(0, 0.5), (1, 1.0), (0, 0.5)]`, order 2.
+- `yoshida_steps()` — 7-step sequence with weights
+  `w₁ = 1/(2 − 2^{1/3})`, `w₀ = 1 − 2w₁`
+  (triple-jump Strang, flattened and collapsed at internal half-steps), order 4.
+  Requires reversible sub-integrators; `w₀ < 0` so negative `dt` substeps appear.
+
+*Verification.*
+Convergence claims on a 2D split oscillator: `du/dt = A u + B u` where
+`A = [[0, −ω], [0, 0]]`, `B = [[0, 0], [ω, 0]]`, exact solution is rotation at
+frequency `ω`.  `[A, B] ≠ 0`, so splitting error is nonzero and measurable.
+Sub-integrators are `rk4` (order 4) so sub-integrator error is negligible at
+test scales.  Three claims: Lie → order 1; Strang → order 2; Yoshida → order 4.
+
+*Activates* compositionality of the integrator stack itself.  Epoch 10 MHD /
 multi-physics enabler.
 
 **Cross-phase deliverable: integrator benchmark library.** A growing
