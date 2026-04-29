@@ -27,6 +27,8 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
+    ABState,
+    AdamsBashforthIntegrator,
     AdditiveRHS,
     BlackBoxRHS,
     ConstantStep,
@@ -40,6 +42,9 @@ from cosmic_foundry.computation.time_integrators import (
     RungeKuttaIntegrator,
     SymplecticSplittingIntegrator,
     TimeStepper,
+    ab2,
+    ab3,
+    ab4,
     ars222,
     backward_euler,
     bogacki_shampine,
@@ -949,4 +954,152 @@ def test_imex_abundance_conservation(claim: _IMEXAbundanceConservationClaim) -> 
     ids=[c.description for c in _IMEX_CONVERGENCE_CLAIMS],
 )
 def test_imex_convergence(claim: _IMEXConvergenceClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 claims — Adams-Bashforth multistep
+# ---------------------------------------------------------------------------
+
+
+class _ABConvergenceClaim(Claim):
+    """Verify Adams-Bashforth convergence rate on dy/dt = λy.
+
+    The first k−1 steps are bootstrapped with RK4 internally; the slope
+    is measured across the full dt grid and reflects the AB order because
+    the RK4 bootstrap error is the same order as AB4 and higher for AB2/AB3.
+    """
+
+    def __init__(
+        self,
+        instance: AdamsBashforthIntegrator,
+        label: str,
+        lam: float = -1.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._lam = lam
+
+    @property
+    def description(self) -> str:
+        return f"ab_convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        rhs = BlackBoxRHS(lambda t, u, _lam=lam: _lam * u)
+        dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt)
+            state = ABState(0.0, Tensor([1.0]))
+            for _ in range(n_steps):
+                state = inst.step(rhs, state, dt)
+            exact = math.exp(lam * state.t)
+            errors.append(abs(float(state.u[0]) - exact))
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} - 0.1"
+        )
+
+
+class _ABAbundanceConservationClaim(Claim):
+    """Decay-chain abundance checks for Adams-Bashforth integrators.
+
+    Uses the same 3-species A→B→C problem as the DIRK/IMEX abundance claims.
+    JacobianRHS satisfies RHSProtocol (plain __call__), so it works with the
+    AB interface without exposing the Jacobian to the integrator.
+    """
+
+    def __init__(
+        self,
+        instance: AdamsBashforthIntegrator,
+        label: str,
+        dt: float = 0.05,
+        t_end: float = 2.0,
+        acc_tol: float = 1e-3,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt = dt
+        self._t_end = t_end
+        self._acc_tol = acc_tol
+
+    @property
+    def description(self) -> str:
+        return f"ab_abundance_conservation/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        n_steps = round(self._t_end / self._dt)
+        state = ABState(0.0, Tensor([1.0, 0.0, 0.0]))
+        for _ in range(n_steps):
+            state = inst.step(_DECAY_RHS, state, self._dt)
+
+        x0_ex, x1_ex, x2_ex = _decay_exact(state.t)
+        err = max(
+            abs(float(state.u[0]) - x0_ex),
+            abs(float(state.u[1]) - x1_ex),
+            abs(float(state.u[2]) - x2_ex),
+        )
+        assert (
+            err < self._acc_tol
+        ), f"{self._label}: max abundance error {err:.2e} > {self._acc_tol:.2e}"
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert (
+            abs(total - 1.0) < 1e-12
+        ), f"{self._label}: sum(X) = {total:.15f} ≠ 1 (mass not conserved)"
+
+        for i in range(3):
+            xi = float(state.u[i])
+            assert (
+                xi >= -1e-10
+            ), f"{self._label}: X[{i}] = {xi:.3e} < 0 (positivity violated)"
+
+
+_AB_CONVERGENCE_CLAIMS: list[_ABConvergenceClaim] = [
+    _ABConvergenceClaim(ab2, "ab2"),
+    _ABConvergenceClaim(ab3, "ab3"),
+    _ABConvergenceClaim(ab4, "ab4"),
+]
+
+_AB_ABUNDANCE_CONSERVATION_CLAIMS: list[_ABAbundanceConservationClaim] = [
+    _ABAbundanceConservationClaim(ab2, "ab2", acc_tol=5e-4),
+    _ABAbundanceConservationClaim(ab3, "ab3", acc_tol=5e-5),
+    _ABAbundanceConservationClaim(ab4, "ab4", acc_tol=5e-6),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _AB_CONVERGENCE_CLAIMS,
+    ids=[c.description for c in _AB_CONVERGENCE_CLAIMS],
+)
+def test_ab_convergence(claim: _ABConvergenceClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _AB_ABUNDANCE_CONSERVATION_CLAIMS,
+    ids=[c.description for c in _AB_ABUNDANCE_CONSERVATION_CLAIMS],
+)
+def test_ab_abundance_conservation(claim: _ABAbundanceConservationClaim) -> None:
     claim.check()
