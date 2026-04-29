@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 import sys
+from collections.abc import Callable
 
 import pytest
 import sympy
@@ -2080,90 +2081,124 @@ def test_splitting_integrators(claim: Claim) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_dirk_inherits_time_integrator() -> None:
-    """DIRKIntegrator must be a TimeIntegrator subclass.
+class _TypeCoherenceClaim(Claim):
+    """Verify that a specialist integrator class inherits TimeIntegrator."""
 
-    This is the type-coherence requirement from the Epoch 4 unification
-    roadmap: every specialist integrator must pass isinstance(inst, TimeIntegrator)
-    so that AutoIntegrator dispatch and typed collections work uniformly.
+    def __init__(self, cls: type, instances: list[TimeIntegrator], label: str) -> None:
+        self._cls = cls
+        self._instances = instances
+        self._label = label
+
+    @property
+    def description(self) -> str:
+        return f"type_coherence/{self._label}"
+
+    def check(self) -> None:
+        assert issubclass(
+            self._cls, TimeIntegrator
+        ), f"{self._label}: {self._cls.__name__} must inherit TimeIntegrator"
+        for inst in self._instances:
+            assert isinstance(
+                inst, TimeIntegrator
+            ), f"{self._label}: {inst!r} must be an instance of TimeIntegrator"
+
+
+class _NewtonSolveClaim(Claim):
+    """Verify newton_solve converges to the exact root on a specific problem.
+
+    Checks y − gamma_dt·f(y) = y_exp and compares the result to the known
+    exact solution y_star.
     """
-    assert isinstance(
-        backward_euler, TimeIntegrator
-    ), "backward_euler (DIRKIntegrator) must satisfy isinstance(..., TimeIntegrator)"
-    assert isinstance(implicit_midpoint, TimeIntegrator)
-    assert isinstance(crouzeix_3, TimeIntegrator)
-    # Verify it is not merely structural — the class must actually inherit.
-    assert issubclass(DIRKIntegrator, TimeIntegrator)
+
+    def __init__(
+        self,
+        label: str,
+        y_exp_vals: list[float],
+        gamma_dt: float,
+        f_vals: Callable[[list[float]], list[float]],
+        jac_vals: Callable[[list[float]], list[list[float]]],
+        y_star: list[float],
+        tol: float = 1e-11,
+    ) -> None:
+        self._label = label
+        self._y_exp_vals = y_exp_vals
+        self._gamma_dt = gamma_dt
+        self._f_vals = f_vals
+        self._jac_vals = jac_vals
+        self._y_star = y_star
+        self._tol = tol
+
+    @property
+    def description(self) -> str:
+        return f"newton_solve/{self._label}"
+
+    def check(self) -> None:
+        backend = Tensor([0.0]).backend
+        n = len(self._y_exp_vals)
+
+        def f(y: Tensor) -> Tensor:
+            vals = [float(y[i]) for i in range(n)]
+            return Tensor(self._f_vals(vals), backend=backend)
+
+        def jac(y: Tensor) -> Tensor:
+            vals = [float(y[i]) for i in range(n)]
+            return Tensor(self._jac_vals(vals), backend=backend)
+
+        y_exp = Tensor(self._y_exp_vals, backend=backend)
+        y_sol = newton_solve(y_exp, gamma_dt=self._gamma_dt, f=f, jac=jac)
+        for i, expected in enumerate(self._y_star):
+            actual = float(y_sol[i])
+            assert (
+                abs(actual - expected) < self._tol
+            ), f"{self._label}: y[{i}] = {actual:.15f}; expected {expected:.15f}"
 
 
-def test_imex_inherits_time_integrator() -> None:
-    """IMEXIntegrator must be a TimeIntegrator subclass.
+_TYPE_COHERENCE_CLAIMS: list[_TypeCoherenceClaim] = [
+    _TypeCoherenceClaim(
+        DIRKIntegrator,
+        [backward_euler, implicit_midpoint, crouzeix_3],
+        "DIRKIntegrator",
+    ),
+    _TypeCoherenceClaim(
+        IMEXIntegrator,
+        [ars222],
+        "IMEXIntegrator",
+    ),
+]
 
-    Same requirement as DIRKIntegrator: part of the Epoch 4 type-coherence
-    fix that allows the unified dispatch surface to treat all integrators
-    through a common interface without special-casing.
-    """
-    assert isinstance(
-        ars222, TimeIntegrator
-    ), "ars222 (IMEXIntegrator) must satisfy isinstance(..., TimeIntegrator)"
-    assert issubclass(IMEXIntegrator, TimeIntegrator)
-
-
-def test_newton_solve_nonlinear_scalar() -> None:
-    """newton_solve must converge to the exact root on a scalar nonlinear problem.
-
-    Solves  y − 0.1·y² = 0.9  whose positive root is y = 1.
-    The Jacobian is  ∂/∂y (y − 0.1·y²) → for the Newton formulation the
-    residual is  r = y − gamma_dt·f(y) − y_exp  with f(y) = y² and
-    gamma_dt = 0.1, y_exp = 0.9.  This is genuinely nonlinear; Newton
-    requires at least two iterations to converge.
-    """
-    backend = Tensor([0.0]).backend
-
-    # f(y) = y², jac(y) = diag(2y) — scalar wrapped in 1-vector for Tensor API.
-    def f(y: Tensor) -> Tensor:
-        v = float(y[0])
-        return Tensor([v * v], backend=backend)
-
-    def jac(y: Tensor) -> Tensor:
-        v = float(y[0])
-        return Tensor([[2.0 * v]], backend=backend)
-
-    y_exp = Tensor([0.9], backend=backend)
-    y_sol = newton_solve(y_exp, gamma_dt=0.1, f=f, jac=jac)
-
-    assert (
-        abs(float(y_sol[0]) - 1.0) < 1e-11
-    ), f"newton_solve returned {float(y_sol[0]):.15f}; expected 1.0"
+_NEWTON_SOLVE_CLAIMS: list[_NewtonSolveClaim] = [
+    _NewtonSolveClaim(
+        label="nonlinear_scalar",
+        y_exp_vals=[0.9],
+        gamma_dt=0.1,
+        f_vals=lambda v: [v[0] * v[0]],
+        jac_vals=lambda v: [[2.0 * v[0]]],
+        y_star=[1.0],
+    ),
+    _NewtonSolveClaim(
+        label="linear_system",
+        y_exp_vals=[1.0, 2.0],
+        gamma_dt=0.25,
+        f_vals=lambda v: [v[0], 2.0 * v[1]],
+        jac_vals=lambda v: [[1.0, 0.0], [0.0, 2.0]],
+        y_star=[4.0 / 3.0, 4.0],
+    ),
+]
 
 
-def test_newton_solve_linear_system() -> None:
-    """newton_solve on a linear problem recovers the exact solution.
+@pytest.mark.parametrize(
+    "claim",
+    _TYPE_COHERENCE_CLAIMS,
+    ids=[c.description for c in _TYPE_COHERENCE_CLAIMS],
+)
+def test_type_coherence(claim: _TypeCoherenceClaim) -> None:
+    claim.check()
 
-    For f(y) = A·y (linear), the Newton update at the first iteration is exact
-    (the residual vanishes after a single linear solve).  This verifies the
-    kernel's fallback behavior and the LU solve path independently of the
-    nonlinear convergence loop.
 
-    With A = diag(1,2), gamma_dt=0.25, y_exp=[1,2]:
-      y − 0.25·diag(1,2)·y = [1,2]
-      diag(0.75, 0.5)·y = [1,2]
-      y* = [4/3, 4]
-    """
-    backend = Tensor([0.0]).backend
-
-    def f(y: Tensor) -> Tensor:
-        return Tensor([float(y[0]), 2.0 * float(y[1])], backend=backend)
-
-    def jac(y: Tensor) -> Tensor:
-        return Tensor([[1.0, 0.0], [0.0, 2.0]], backend=backend)
-
-    y_exp = Tensor([1.0, 2.0], backend=backend)
-    y_sol = newton_solve(y_exp, gamma_dt=0.25, f=f, jac=jac)
-
-    assert (
-        abs(float(y_sol[0]) - 4.0 / 3.0) < 1e-11
-    ), f"y[0] = {float(y_sol[0]):.15f}; expected {4/3:.15f}"
-    assert (
-        abs(float(y_sol[1]) - 4.0) < 1e-11
-    ), f"y[1] = {float(y_sol[1]):.15f}; expected 4.0"
+@pytest.mark.parametrize(
+    "claim",
+    _NEWTON_SOLVE_CLAIMS,
+    ids=[c.description for c in _NEWTON_SOLVE_CLAIMS],
+)
+def test_newton_solve(claim: _NewtonSolveClaim) -> None:
+    claim.check()
