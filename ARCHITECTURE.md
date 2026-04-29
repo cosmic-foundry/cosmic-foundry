@@ -488,29 +488,10 @@ RHS" is provably the Butcher group (B-series): every richer family —
 exponential, IMEX, Rosenbrock, multistep, variable-order, symplectic —
 relaxes a specific structural constraint.  Each phase below relaxes exactly
 one or two of those constraints with concrete physics motivation, so the
-DSL is earned axis-by-axis rather than designed up-front.  Phase 0 already
-adopts the typed slot shape (`RHSProtocol`, integrator-specific `State`,
-`Controller`) so subsequent phases extend without breaking interfaces.
-
-**Phase 0 — Explicit RK MVP.** `TimeIntegrator` ABC; `RungeKuttaIntegrator(A,
-b, c, order)` with named instances (Forward Euler, Midpoint, Heun, Ralston,
-RK4, Dormand-Prince, Bogacki-Shampine); `TimeStepper`; three-tier testing in
-a dedicated `tests/test_time_integrators.py` — symbolic order conditions on
-`sympy.Rational` tableaux, temporal convergence on `dy/dt = λy` against the
-analytical exponential, end-to-end through `TimeStepper.advance`; `Autotuner`
-extension producing `IntegratorSelectionResult(integrator, recommended_dt,
-predicted_cost)` from the descriptor's `t_span`, `epsilon`, and
-`spectral_radius`.  Interfaces are DSL-ready: typed `RHSProtocol` slot
-populated only by `BlackBoxRHS`; typed integrator state populated only by
-`RKState(t, y)`; typed `Controller` slot populated only by `ConstantStep`.
-Time-integrator verification has its own auto-discovery framework parallel
-to but independent of the spatial-operator `_INSTANCES` in
-`tests/test_convergence.py`; this is intentional — temporal order
-verification is structurally distinct from spatial.  Phase 0 satisfies the
-per-epoch verification standard: the symbolic order-condition claim is the
-Lane-C SymPy derivation check, and the temporal-convergence claim against
-the analytical exponential is the externally-grounded test.  Epoch 5 / 6
-nonstiff baseline.
+DSL is earned axis-by-axis rather than designed up-front.  The typed slot
+shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
+established in `computation/time_integrators/`; subsequent phases extend
+without breaking interfaces.
 
 **Phase 1 — Adaptive step control.** `PIController(α, β)` over the embedded
 `b_hat` error estimate; step rejection on `err > tol`; `dt_suggest` carried
