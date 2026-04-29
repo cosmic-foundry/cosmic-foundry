@@ -32,6 +32,7 @@ from cosmic_foundry.computation.time_integrators import (
     AdditiveRHS,
     BlackBoxRHS,
     ConstantStep,
+    CoxMatthewsETDRK4Integrator,
     DIRKIntegrator,
     ETDRK2Integrator,
     ExponentialEulerIntegrator,
@@ -67,6 +68,7 @@ from cosmic_foundry.computation.time_integrators import (
     bdf4,
     bdf_family,
     bogacki_shampine,
+    cox_matthews_etdrk4,
     crouzeix_3,
     dormand_prince,
     elementary_weight,
@@ -1826,7 +1828,7 @@ def _etd_split_rhs() -> LinearPlusNonlinearRHS:
 
 
 def _integrate_etd(
-    inst: ExponentialEulerIntegrator | ETDRK2Integrator,
+    inst: ExponentialEulerIntegrator | ETDRK2Integrator | CoxMatthewsETDRK4Integrator,
     dt: float,
     t_end: float = 0.5,
 ) -> RKState:
@@ -1852,10 +1854,12 @@ class _PhiFunctionClaim(Claim):
         phi0 = PhiFunction(0).apply(A, v)
         phi1 = PhiFunction(1).apply(A, v)
         phi2 = PhiFunction(2).apply(A, v)
+        phi3 = PhiFunction(3).apply(A, v)
 
         assert float(norm(phi0 - Tensor([1.0, 1.0]))) < 1e-14
         assert float(norm(phi1 - Tensor([0.5, 1.0]))) < 1e-14
         assert float(norm(phi2 - Tensor([1.0 / 6.0, 0.5]))) < 1e-14
+        assert float(norm(phi3 - Tensor([1.0 / 24.0, 1.0 / 6.0]))) < 1e-14
 
 
 class _ETDConvergenceClaim(Claim):
@@ -1863,7 +1867,9 @@ class _ETDConvergenceClaim(Claim):
 
     def __init__(
         self,
-        instance: ExponentialEulerIntegrator | ETDRK2Integrator,
+        instance: (
+            ExponentialEulerIntegrator | ETDRK2Integrator | CoxMatthewsETDRK4Integrator
+        ),
         label: str,
         order: int,
     ) -> None:
@@ -1903,6 +1909,7 @@ _EXPONENTIAL_CLAIMS: list[Claim] = [
     _PhiFunctionClaim(),
     _ETDConvergenceClaim(etd_euler, "etd_euler", order=1),
     _ETDConvergenceClaim(etdrk2, "etdrk2", order=2),
+    _ETDConvergenceClaim(cox_matthews_etdrk4, "cox_matthews_etdrk4", order=4),
 ]
 
 
