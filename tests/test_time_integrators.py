@@ -33,12 +33,16 @@ from cosmic_foundry.computation.time_integrators import (
     BlackBoxRHS,
     ConstantStep,
     DIRKIntegrator,
+    ETDRK2Integrator,
+    ExponentialEulerIntegrator,
     FamilySwitchingNordsieckIntegrator,
     IMEXIntegrator,
     JacobianRHS,
+    LinearPlusNonlinearRHS,
     NordsieckIntegrator,
     NordsieckState,
     OrderSelector,
+    PhiFunction,
     PIController,
     RKState,
     RungeKuttaIntegrator,
@@ -66,6 +70,8 @@ from cosmic_foundry.computation.time_integrators import (
     crouzeix_3,
     dormand_prince,
     elementary_weight,
+    etd_euler,
+    etdrk2,
     forward_euler,
     gamma,
     heun,
@@ -1797,4 +1803,113 @@ _VODE_CONTROLLER_CLAIMS: list[Claim] = [
     ids=[c.description for c in _VODE_CONTROLLER_CLAIMS],
 )
 def test_vode_controller(claim: Claim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 13 claims — exponential integrators
+# ---------------------------------------------------------------------------
+
+
+def _etd_split_rhs() -> LinearPlusNonlinearRHS:
+    linear = Tensor([[-8.0, 0.0, 0.0], [8.0, -0.5, 0.0], [0.0, 0.5, 0.0]])
+
+    def residual(t: float, u: Tensor) -> Tensor:
+        # Additional slow production path X0 -> X2.  This keeps the total
+        # Jacobian column sums zero when combined with the diagonal-linear
+        # capture chain above, so mass fractions remain conserved.
+        x0 = float(u[0])
+        rate = 0.25 + 0.1 * math.sin(2.0 * t)
+        return Tensor([-rate * x0, 0.0, rate * x0], backend=u.backend)
+
+    return LinearPlusNonlinearRHS(linear, residual)
+
+
+def _integrate_etd(
+    inst: ExponentialEulerIntegrator | ETDRK2Integrator,
+    dt: float,
+    t_end: float = 0.5,
+) -> RKState:
+    rhs = _etd_split_rhs()
+    state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+    n_steps = round(t_end / dt)
+    for _ in range(n_steps):
+        state = inst.step(rhs, state, dt)
+    return state
+
+
+class _PhiFunctionClaim(Claim):
+    """Verify phi-function coefficient algebra on a nilpotent matrix."""
+
+    @property
+    def description(self) -> str:
+        return "exponential/phi_function_coefficients"
+
+    def check(self) -> None:
+        A = Tensor([[0.0, 1.0], [0.0, 0.0]])
+        v = Tensor([0.0, 1.0])
+
+        phi0 = PhiFunction(0).apply(A, v)
+        phi1 = PhiFunction(1).apply(A, v)
+        phi2 = PhiFunction(2).apply(A, v)
+
+        assert float(norm(phi0 - Tensor([1.0, 1.0]))) < 1e-14
+        assert float(norm(phi1 - Tensor([0.5, 1.0]))) < 1e-14
+        assert float(norm(phi2 - Tensor([1.0 / 6.0, 0.5]))) < 1e-14
+
+
+class _ETDConvergenceClaim(Claim):
+    """Verify ETD convergence on a mass-conserving synthetic abundance split."""
+
+    def __init__(
+        self,
+        instance: ExponentialEulerIntegrator | ETDRK2Integrator,
+        label: str,
+        order: int,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._order = order
+
+    @property
+    def description(self) -> str:
+        return f"exponential/convergence/{self._label}"
+
+    def check(self) -> None:
+        dts = [0.025, 0.0125, 0.00625]
+        reference = _integrate_etd(self._instance, dt=0.0015625)
+        errors = [
+            float(norm(_integrate_etd(self._instance, dt).u - reference.u))
+            for dt in dts
+        ]
+        log_dts = [math.log(dt) for dt in dts]
+        log_errs = [math.log(err) for err in errors]
+        mean_x = sum(log_dts) / len(log_dts)
+        mean_y = sum(log_errs) / len(log_errs)
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=True)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= self._order - 0.25, (
+            f"{self._label}: convergence slope {slope:.3f} < "
+            f"declared order {self._order}"
+        )
+
+        final = _integrate_etd(self._instance, dts[-1])
+        _assert_mass_fractions(final.u, label=self._label, n=3, conservation_tol=1e-10)
+
+
+_EXPONENTIAL_CLAIMS: list[Claim] = [
+    _PhiFunctionClaim(),
+    _ETDConvergenceClaim(etd_euler, "etd_euler", order=1),
+    _ETDConvergenceClaim(etdrk2, "etdrk2", order=2),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _EXPONENTIAL_CLAIMS,
+    ids=[c.description for c in _EXPONENTIAL_CLAIMS],
+)
+def test_exponential_integrators(claim: Claim) -> None:
     claim.check()
