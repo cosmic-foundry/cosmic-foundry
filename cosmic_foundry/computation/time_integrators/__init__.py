@@ -79,6 +79,14 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
     ralston,
     rk4,
 )
+from cosmic_foundry.computation.time_integrators.splitting import (
+    OperatorSplitRHS,
+    OperatorSplitRHSProtocol,
+    SplittingStep,
+    StrangSplittingIntegrator,
+    lie_steps,
+    strang_steps,
+)
 from cosmic_foundry.computation.time_integrators.stepper import (
     IntegratorSelectionResult,
     TimeStepper,
@@ -194,4 +202,10 @@ __all__ = [
     "StiffnessSwitcher",
     "nordsieck_solution_distance",
     "VODEController",
+    "OperatorSplitRHS",
+    "OperatorSplitRHSProtocol",
+    "SplittingStep",
+    "StrangSplittingIntegrator",
+    "lie_steps",
+    "strang_steps",
 ]

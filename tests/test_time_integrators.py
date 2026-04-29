@@ -43,13 +43,16 @@ from cosmic_foundry.computation.time_integrators import (
     LinearPlusNonlinearRHS,
     NordsieckIntegrator,
     NordsieckState,
+    OperatorSplitRHS,
     OrderSelector,
     PhiFunction,
     PIController,
     RKState,
     RungeKuttaIntegrator,
+    SplittingStep,
     StiffnessDiagnostic,
     StiffnessSwitcher,
+    StrangSplittingIntegrator,
     TimeStepper,
     VariableOrderNordsieckIntegrator,
     VODEController,
@@ -80,11 +83,13 @@ from cosmic_foundry.computation.time_integrators import (
     heun,
     implicit_midpoint,
     krogstad_etdrk4,
+    lie_steps,
     midpoint,
     nordsieck_solution_distance,
     ralston,
     rk4,
     stability_function,
+    strang_steps,
     trees_up_to_order,
 )
 from tests.claims import Claim
@@ -1930,4 +1935,124 @@ _EXPONENTIAL_CLAIMS: list[Claim] = [
     ids=[c.description for c in _EXPONENTIAL_CLAIMS],
 )
 def test_exponential_integrators(claim: Claim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 claims — operator splitting
+# ---------------------------------------------------------------------------
+
+# Test problem: 2D split oscillator.
+#
+# Full system: du/dt = (A + B) u  with  A = [[0, -w], [0, 0]],
+#                                        B = [[0,  0], [w, 0]],  w = 1.
+#
+# [A, B] = AB - BA = [[w², 0], [0, 0]] ≠ 0, so splitting introduces a
+# nonzero commutator error that reveals the order of the splitting scheme.
+#
+# Exact solution of the full system: rotation by angle w*t, i.e.
+#   u(t) = [[cos(wt), -sin(wt)], [sin(wt), cos(wt)]] @ u0.
+#
+# Sub-integrators are rk4 (order 4) so sub-integrator error is O(h⁴),
+# well below the splitting error at the test step sizes.
+
+_SPLIT_OMEGA = 1.0
+
+
+def _split_component_a(t: float, u: Tensor) -> Tensor:
+    """Component A: du1/dt = -w*u2, du2/dt = 0."""
+    return Tensor([-_SPLIT_OMEGA * float(u[1]), 0.0], backend=u.backend)
+
+
+def _split_component_b(t: float, u: Tensor) -> Tensor:
+    """Component B: du1/dt = 0, du2/dt = +w*u1."""
+    return Tensor([0.0, _SPLIT_OMEGA * float(u[0])], backend=u.backend)
+
+
+def _split_rhs() -> OperatorSplitRHS:
+    from cosmic_foundry.computation.time_integrators import BlackBoxRHS
+
+    return OperatorSplitRHS(
+        [BlackBoxRHS(_split_component_a), BlackBoxRHS(_split_component_b)]
+    )
+
+
+def _split_exact(t: float, u0: Tensor) -> Tensor:
+    """Exact solution of the full oscillator at time t."""
+    c, s = math.cos(_SPLIT_OMEGA * t), math.sin(_SPLIT_OMEGA * t)
+    u0_0, u0_1 = float(u0[0]), float(u0[1])
+    return Tensor([c * u0_0 - s * u0_1, s * u0_0 + c * u0_1], backend=u0.backend)
+
+
+def _integrate_split(
+    integrator: StrangSplittingIntegrator,
+    dt: float,
+    t_end: float = 1.0,
+) -> RKState:
+    rhs = _split_rhs()
+    u0 = Tensor([1.0, 0.0])
+    state = RKState(0.0, u0)
+    n_steps = round(t_end / dt)
+    for _ in range(n_steps):
+        state = integrator.step(rhs, state, dt)
+    return state
+
+
+class _SplittingConvergenceClaim(Claim):
+    """Verify splitting convergence order on the 2D split oscillator."""
+
+    def __init__(
+        self,
+        sequence: list[SplittingStep],
+        label: str,
+        order: int,
+    ) -> None:
+        self._sequence = sequence
+        self._label = label
+        self._order = order
+
+    @property
+    def description(self) -> str:
+        return f"splitting/convergence/{self._label}"
+
+    def check(self) -> None:
+        integrator = StrangSplittingIntegrator(
+            [rk4, rk4], self._sequence, order=self._order
+        )
+        u0 = Tensor([1.0, 0.0])
+        t_end = 1.0
+        dts = [0.1, 0.05, 0.025]
+        errors = [
+            float(
+                norm(
+                    _integrate_split(integrator, dt, t_end).u - _split_exact(t_end, u0)
+                )
+            )
+            for dt in dts
+        ]
+        log_dts = [math.log(dt) for dt in dts]
+        log_errs = [math.log(e) for e in errors]
+        mean_x = sum(log_dts) / len(log_dts)
+        mean_y = sum(log_errs) / len(log_errs)
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=True)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+        assert slope >= self._order - 0.25, (
+            f"{self._label}: convergence slope {slope:.3f} < "
+            f"declared order {self._order}"
+        )
+
+
+_SPLITTING_CLAIMS: list[Claim] = [
+    _SplittingConvergenceClaim(lie_steps(), "lie", order=1),
+    _SplittingConvergenceClaim(strang_steps(), "strang", order=2),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _SPLITTING_CLAIMS,
+    ids=[c.description for c in _SPLITTING_CLAIMS],
+)
+def test_splitting_integrators(claim: Claim) -> None:
     claim.check()
