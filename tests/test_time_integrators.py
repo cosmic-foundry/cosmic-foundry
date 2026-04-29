@@ -1123,9 +1123,22 @@ class _BDFConvergenceClaim(Claim):
 
     Bootstraps q RK4 steps then measures the log-log slope of final-time
     error vs step size.  Slope ≥ declared order − 0.1 is required.
-    Uses 7 halvings (vs 5 for AB) so the regression is dominated by the
-    asymptotic tail rather than the pre-asymptotic region where BDF methods
-    take a few steps to leave the bootstrap transient.
+
+    Step-size range is chosen to keep the regression entirely in the
+    asymptotic convergence regime:
+
+    - Base step _DT_BASE / q: the bootstrap takes q RK4 steps, and the
+      Nordsieck correction needs roughly q more BDF steps to propagate
+      through all history slots, so the number of post-bootstrap steps
+      must grow with q.  Dividing the base by q guarantees ~9q steps at
+      the coarsest dt, which is sufficient for any order tested here.
+
+    - Halvings _BDF_N_HALVINGS − round(log₂ q): reducing dt_base by q
+      also moves the fine end q times closer to machine precision.  Since
+      the error scales as dt^q, each halving buys a factor 2^q in
+      accuracy, so the maximum useful halvings before hitting the noise
+      floor decreases by log₂ q.
+
     The RHS is a JacobianRHS so both the BDF Newton corrector and the
     plain __call__ are exercised.
     """
@@ -1151,7 +1164,9 @@ class _BDFConvergenceClaim(Claim):
             f=lambda t, u, _l=lam: _l * u,
             jac=lambda t, u, _l=lam: Tensor([[_l]], backend=u.backend),
         )
-        dts = [_DT_BASE / (2**k) for k in range(_BDF_N_HALVINGS + 1)]
+        dt_base = _DT_BASE / inst.order
+        n_halvings = _BDF_N_HALVINGS - round(math.log2(inst.order))
+        dts = [dt_base / (2**k) for k in range(n_halvings + 1)]
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt) - inst.order
@@ -1164,11 +1179,8 @@ class _BDFConvergenceClaim(Claim):
         eps = sys.float_info.epsilon * 10
         valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
         assert (
-            len(valid) >= 6
+            len(valid) >= 3
         ), f"{self._label}: error reached machine precision too early"
-        # Use only the asymptotic tail (finest half) to avoid pre-asymptotic
-        # bootstrap transient that suppresses the measured slope for q ≥ 4.
-        valid = valid[len(valid) // 2 :]
 
         log_dts = [math.log(dt) for dt, _ in valid]
         log_errs = [math.log(e) for _, e in valid]
