@@ -39,6 +39,7 @@ from cosmic_foundry.computation.time_integrators import (
     FamilySwitchingNordsieckIntegrator,
     IMEXIntegrator,
     JacobianRHS,
+    KrogstadETDRK4Integrator,
     LinearPlusNonlinearRHS,
     NordsieckIntegrator,
     NordsieckState,
@@ -78,6 +79,7 @@ from cosmic_foundry.computation.time_integrators import (
     gamma,
     heun,
     implicit_midpoint,
+    krogstad_etdrk4,
     midpoint,
     nordsieck_solution_distance,
     ralston,
@@ -1828,7 +1830,12 @@ def _etd_split_rhs() -> LinearPlusNonlinearRHS:
 
 
 def _integrate_etd(
-    inst: ExponentialEulerIntegrator | ETDRK2Integrator | CoxMatthewsETDRK4Integrator,
+    inst: (
+        ExponentialEulerIntegrator
+        | ETDRK2Integrator
+        | CoxMatthewsETDRK4Integrator
+        | KrogstadETDRK4Integrator
+    ),
     dt: float,
     t_end: float = 0.5,
 ) -> RKState:
@@ -1868,7 +1875,10 @@ class _ETDConvergenceClaim(Claim):
     def __init__(
         self,
         instance: (
-            ExponentialEulerIntegrator | ETDRK2Integrator | CoxMatthewsETDRK4Integrator
+            ExponentialEulerIntegrator
+            | ETDRK2Integrator
+            | CoxMatthewsETDRK4Integrator
+            | KrogstadETDRK4Integrator
         ),
         label: str,
         order: int,
@@ -1910,6 +1920,7 @@ _EXPONENTIAL_CLAIMS: list[Claim] = [
     _ETDConvergenceClaim(etd_euler, "etd_euler", order=1),
     _ETDConvergenceClaim(etdrk2, "etdrk2", order=2),
     _ETDConvergenceClaim(cox_matthews_etdrk4, "cox_matthews_etdrk4", order=4),
+    _ETDConvergenceClaim(krogstad_etdrk4, "krogstad_etdrk4", order=4),
 ]
 
 
