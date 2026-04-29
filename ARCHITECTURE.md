@@ -493,36 +493,32 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 5 — IMEX additive RK + abundance conservation.** `AdditiveRHSProtocol`
-with `AdditiveRHS(f_E, f_I, jac_I)` concrete wrapper; `IMEXIntegrator(A_E,
-b_E, c_E, A_I, b_I, c_I, order)` with per-stage Newton iteration reusing the
-Phase 4 LUFactorization pattern; named instance `ars222` (Ascher-Ruuth-Spiteri
-1997, order 2, γ = (2−√2)/2, A-stable implicit tableau).  Verification:
-convergence on the split scalar ODE dy/dt = λ_E·y + λ_I·y; 3-species closed
-decay chain A→B→C as the canonical abundance test problem — state X = [X₀,X₁,X₂]
-with Xᵢ ∈ [0,1] and Σ Xᵢ = 1; conservation check `|Σ Xᵢ − 1| < 1e-12` (exact
-for any RK-family method on a system with zero column-sum rate matrix); positivity
-check Xᵢ ≥ 0; applied to all DIRK methods and rk4 (plain RHS split) and ars222
-(production/decay IMEX split).  Epoch 10 MHD enabler; abundance structure
-previews the nuclear microphysics ODE shape.
-
-**Phase 6 — Explicit Adams-Bashforth.** `WithFHistoryState(t, y, [f_{n−1},
-…, f_{n−k+1}])`; `LinearMultistepIntegrator(ρ, σ)` parameterized by
-characteristic polynomials; RK4 bootstrap for the first `k − 1` steps;
-named instances: AB2, AB3, AB4.  Verification: LMM order conditions slot
-into the Phase 2 framework as a sibling tree calculus (NB-series).  First
-phase with non-trivial typed state.  Mostly groundwork for Phase 7.
+**Phase 6 — Explicit Adams-Bashforth.** `ABState(t, u, history)` carries the
+current solution and the function-value history as an immutable tuple, most
+recent first; `AdamsBashforthIntegrator(beta, order)` applies the AB weights
+and bootstraps the first k−1 steps with RK4.  Named instances: `ab2` (order 2),
+`ab3` (order 3), `ab4` (order 4).  Verification: convergence slope on dy/dt = λy;
+abundance conservation on the A→B→C decay chain — `JacobianRHS` satisfies
+`RHSProtocol`, so the same problem object is shared with the DIRK claims without
+exposing the Jacobian to the AB integrator; hard conservation check
+`|Σ Xᵢ − 1| < 1e-12` passes because zero column-sum rate matrices are conserved
+by any linear combination of past function values.  First phase with non-trivial
+typed state.  Mostly groundwork for Phase 7.
 
 **Phase 7 — BDF + VODE-style variable-order controller.** `NordsieckState`
 representation; `BDFFamily(q_max=6)` and `AdamsFamily(q_max=12)` as
 parametric families producing tableaux for any order `q`; `OrderSelector`
 choosing `q_next ∈ {q − 1, q, q + 1}` from cross-order error estimates;
 `StiffnessSwitcher` flipping Adams ↔ BDF based on a streaming spectral-
-radius estimate; `VODEController` composing all three.  Verification: order
-verification across `q ∈ {1, …, q_max}` for both families; family-switch
-correctness on a stiffness-step problem.  Activates the "method family +
-policy" axis — the integrator's identity becomes a function of run-time
-diagnostics, not a fixed tableau.
+radius estimate; `VODEController` composing all three.  Verification: all
+test cases use the abundance-vector form (X ∈ [0,1]^n, Σ Xᵢ = 1) rather
+than the scalar Dahlquist equation; stiffness ratio and species count vary
+to span easy (λ_stiff/λ_slow ~ 10, 3 species) through hard (~ 10³, 5+
+species) regimes — not all tests are equally demanding: order-selector
+correctness uses a non-stiff network and family-switch correctness uses a
+network with a deliberate fast/slow species pair.  Activates the "method
+family + policy" axis — the integrator's identity becomes a function of
+run-time diagnostics, not a fixed tableau.
 
 **Phase 8 — Exponential integrators.** `LinearPlusNonlinearRHS(L, N)`
 protocol; φ-function evaluation (scaling-and-squaring on dense `hL` for
