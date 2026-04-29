@@ -1133,11 +1133,12 @@ class _BDFConvergenceClaim(Claim):
       must grow with q.  Dividing the base by q guarantees ~9q steps at
       the coarsest dt, which is sufficient for any order tested here.
 
-    - Halvings _BDF_N_HALVINGS − round(log₂ q): reducing dt_base by q
-      also moves the fine end q times closer to machine precision.  Since
+    - Halvings _BDF_N_HALVINGS − (floor(log₂ q) + 1): reducing dt_base
+      by q moves the fine end q times closer to machine precision.  Since
       the error scales as dt^q, each halving buys a factor 2^q in
-      accuracy, so the maximum useful halvings before hitting the noise
-      floor decreases by log₂ q.
+      accuracy, so the useful range shrinks by log₂ q halvings.  The
+      extra −1 keeps the finest error safely above the noise floor
+      (roughly 2000× machine epsilon rather than ~15×).
 
     The RHS is a JacobianRHS so both the BDF Newton corrector and the
     plain __call__ are exercised.
@@ -1165,7 +1166,7 @@ class _BDFConvergenceClaim(Claim):
             jac=lambda t, u, _l=lam: Tensor([[_l]], backend=u.backend),
         )
         dt_base = _DT_BASE / inst.order
-        n_halvings = _BDF_N_HALVINGS - round(math.log2(inst.order))
+        n_halvings = _BDF_N_HALVINGS - (math.floor(math.log2(inst.order)) + 1)
         dts = [dt_base / (2**k) for k in range(n_halvings + 1)]
         errors: list[float] = []
         for dt in dts:
