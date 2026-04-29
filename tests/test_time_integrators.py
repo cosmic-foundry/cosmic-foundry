@@ -33,6 +33,7 @@ from cosmic_foundry.computation.time_integrators import (
     BlackBoxRHS,
     ConstantStep,
     DIRKIntegrator,
+    FamilySwitchingNordsieckIntegrator,
     HamiltonianSplit,
     IMEXIntegrator,
     JacobianRHS,
@@ -43,6 +44,8 @@ from cosmic_foundry.computation.time_integrators import (
     PIController,
     RKState,
     RungeKuttaIntegrator,
+    StiffnessDiagnostic,
+    StiffnessSwitcher,
     SymplecticSplittingIntegrator,
     TimeStepper,
     VariableOrderNordsieckIntegrator,
@@ -60,6 +63,7 @@ from cosmic_foundry.computation.time_integrators import (
     bdf2,
     bdf3,
     bdf4,
+    bdf_family,
     bogacki_shampine,
     crouzeix_3,
     dormand_prince,
@@ -71,6 +75,7 @@ from cosmic_foundry.computation.time_integrators import (
     implicit_midpoint,
     leapfrog,
     midpoint,
+    nordsieck_solution_distance,
     ralston,
     rk4,
     stability_function,
@@ -1691,4 +1696,142 @@ _VARIABLE_ORDER_CLAIMS: list[Claim] = [
     ids=[c.description for c in _VARIABLE_ORDER_CLAIMS],
 )
 def test_variable_order_nordsieck(claim: Claim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 11 claims — stiffness detection and family switching
+# ---------------------------------------------------------------------------
+
+
+def _stiffening_decay_f(t: float, u: Tensor) -> Tensor:
+    k2 = 1.0 if t < 0.5 else 80.0
+    x0, x1 = float(u[0]), float(u[1])
+    return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
+
+
+def _stiffening_decay_jac(t: float, u: Tensor) -> Tensor:
+    k2 = 1.0 if t < 0.5 else 80.0
+    return Tensor([[-1.0, 0.0, 0.0], [1.0, -k2, 0.0], [0.0, k2, 0.0]])
+
+
+_STIFFENING_RHS = JacobianRHS(f=_stiffening_decay_f, jac=_stiffening_decay_jac)
+
+
+class _StiffnessDiagnosticClaim(Claim):
+    """Verify the Gershgorin stiffness estimate crosses the expected threshold."""
+
+    @property
+    def description(self) -> str:
+        return "stiffness/diagnostic_threshold"
+
+    def check(self) -> None:
+        diagnostic = StiffnessDiagnostic()
+        jac = Tensor([[-3.0, 1.0], [0.5, -2.0]])
+
+        below = diagnostic.update(jac, h=0.1)
+        above = diagnostic.update(jac, h=0.3)
+
+        assert abs(below - 0.4) < 1e-15
+        assert abs(above - 1.2) < 1e-15
+        assert below < 1.0 < above
+
+
+class _FamilySwitchRoundTripClaim(Claim):
+    """Verify Adams → BDF → Adams preserves the represented solution."""
+
+    @property
+    def description(self) -> str:
+        return "stiffness/family_switch_round_trip"
+
+    def check(self) -> None:
+        inst = FamilySwitchingNordsieckIntegrator(
+            adams_family=adams_family,
+            bdf_family=bdf_family,
+            switcher=StiffnessSwitcher(),
+            q=2,
+            initial_family="adams",
+        )
+        state = NordsieckState(
+            0.25,
+            0.05,
+            (
+                Tensor([0.8, 0.15, 0.05]),
+                Tensor([-0.02, 0.01, 0.01]),
+                Tensor([0.0, 0.0, 0.0]),
+            ),
+        )
+
+        bdf_state = inst.transform_family(state, "bdf")
+        round_trip = inst.transform_family(bdf_state, "adams")
+
+        assert nordsieck_solution_distance(state, round_trip) == 0.0
+        assert round_trip.h == state.h
+        assert round_trip.q == state.q
+
+
+class _StiffeningNetworkSwitchClaim(Claim):
+    """Verify the switcher chooses BDF after a synthetic network stiffens."""
+
+    @property
+    def description(self) -> str:
+        return "stiffness/switcher_fires_on_stiffening_network"
+
+    def check(self) -> None:
+        inst = FamilySwitchingNordsieckIntegrator(
+            adams_family=adams_family,
+            bdf_family=bdf_family,
+            switcher=StiffnessSwitcher(stiff_threshold=1.0, nonstiff_threshold=0.4),
+            q=2,
+            initial_family="adams",
+        )
+        state = inst.advance(
+            _STIFFENING_RHS,
+            Tensor([1.0, 0.0, 0.0]),
+            t0=0.0,
+            t_end=0.8,
+            dt=0.02,
+        )
+
+        pre_families = [
+            family
+            for t, family in zip(
+                inst.accepted_times, inst.accepted_families, strict=True
+            )
+            if t < 0.45
+        ]
+        post_families = [
+            family
+            for t, family in zip(
+                inst.accepted_times, inst.accepted_families, strict=True
+            )
+            if t > 0.55
+        ]
+
+        assert pre_families
+        assert post_families
+        assert set(pre_families) == {"adams"}
+        assert "bdf" in post_families
+        assert inst.switch_count >= 1
+        assert max(inst.accepted_stiffness) > 1.0
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert abs(total - 1.0) < 1e-12
+        for i in range(3):
+            assert float(state.u[i]) >= -1e-10
+
+
+_STIFFNESS_CLAIMS: list[Claim] = [
+    _StiffnessDiagnosticClaim(),
+    _FamilySwitchRoundTripClaim(),
+    _StiffeningNetworkSwitchClaim(),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _STIFFNESS_CLAIMS,
+    ids=[c.description for c in _STIFFNESS_CLAIMS],
+)
+def test_stiffness_switching(claim: Claim) -> None:
     claim.check()

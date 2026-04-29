@@ -493,16 +493,6 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 11 — Stiffness detection + family-switch transformation.**
-`StiffnessSwitcher` carrying a streaming spectral-radius estimate from the
-Newton Jacobian (Gershgorin bound on the last accepted `hJ`), triggering
-Adams→BDF when the dominant eigenvalue magnitude exceeds a threshold and
-BDF→Adams when it falls back; family-switch Nordsieck transformation
-remapping the history vector between BDF and Adams `α`/`l` bases.
-No full controller yet.  Verification: invertibility test (`Adams → BDF →
-Adams` restores `z[0]` to round-trip accuracy); stiffness detector fires
-at the correct eigenvalue magnitude threshold.
-
 **Phase 12 — VODEController.** `VODEController` composing `OrderSelector`
 (Phase 10) and `StiffnessSwitcher` (Phase 11) into a full VODE-style
 adaptive controller.  Verification: claim on a network with a deliberate

@@ -1,0 +1,213 @@
+"""Stiffness diagnostics and Adams/BDF family switching for Nordsieck states."""
+
+from __future__ import annotations
+
+from typing import Literal, NamedTuple
+
+from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
+from cosmic_foundry.computation.time_integrators.nordsieck import (
+    AdamsFamily,
+    BDFFamily,
+    NordsieckIntegrator,
+    NordsieckState,
+)
+
+FamilyName = Literal["adams", "bdf"]
+
+
+class FamilySwitch(NamedTuple):
+    """Family-switch decision for one accepted Nordsieck state."""
+
+    family: FamilyName
+    stiffness: float
+    switched: bool
+
+
+class StiffnessDiagnostic:
+    """Streaming Gershgorin stiffness estimate from ``hJ``.
+
+    For a dense Jacobian ``J``, the Gershgorin row-sum bound
+    ``max_i Σ_j |h J_ij|`` upper-bounds the spectral radius of ``hJ``.  This
+    diagnostic stores the latest bound so the switcher can apply hysteresis
+    without owning the RHS or the integrator state.
+    """
+
+    def __init__(self) -> None:
+        self.last: float = 0.0
+
+    def update(self, jacobian: Tensor, h: float) -> float:
+        """Update and return the Gershgorin bound for ``h * jacobian``."""
+        n_rows = jacobian.shape[0]
+        n_cols = jacobian.shape[1]
+        max_row = 0.0
+        for i in range(n_rows):
+            row_sum = 0.0
+            for j in range(n_cols):
+                row_sum += abs(float(jacobian[i, j]))
+            max_row = max(max_row, abs(h) * row_sum)
+        self.last = max_row
+        return max_row
+
+
+class StiffnessSwitcher:
+    """Hysteresis policy for Adams/BDF family selection.
+
+    The policy switches Adams to BDF when the latest stiffness estimate exceeds
+    ``stiff_threshold`` and switches BDF back to Adams only after it falls below
+    ``nonstiff_threshold``.  The gap prevents method chatter near the boundary.
+    """
+
+    def __init__(
+        self,
+        *,
+        stiff_threshold: float = 1.0,
+        nonstiff_threshold: float = 0.5,
+    ) -> None:
+        if nonstiff_threshold >= stiff_threshold:
+            raise ValueError("nonstiff_threshold must be below stiff_threshold.")
+        self.stiff_threshold = stiff_threshold
+        self.nonstiff_threshold = nonstiff_threshold
+
+    def decide(self, current: FamilyName, stiffness: float) -> FamilySwitch:
+        """Return the selected family for the latest stiffness estimate."""
+        if current == "adams" and stiffness > self.stiff_threshold:
+            return FamilySwitch("bdf", stiffness, True)
+        if current == "bdf" and stiffness < self.nonstiff_threshold:
+            return FamilySwitch("adams", stiffness, True)
+        return FamilySwitch(current, stiffness, False)
+
+
+class FamilySwitchingNordsieckIntegrator:
+    """Nordsieck integrator that switches between Adams and BDF families.
+
+    Phase 11 deliberately stops short of a full VODE-style controller.  The
+    current order and step size are fixed by the caller; this wrapper only
+    monitors the accepted Jacobian stiffness and changes the corrector family
+    when the hysteresis policy says to do so.
+
+    The stored Nordsieck vector is family-neutral: ``z[j] = h^j y^(j) / j!``.
+    Switching families therefore preserves the vector directly, with ``z[0]``
+    unchanged exactly.  The corrector coefficients live in the fixed-order
+    `NordsieckIntegrator` selected for the next step.
+    """
+
+    def __init__(
+        self,
+        *,
+        adams_family: AdamsFamily,
+        bdf_family: BDFFamily,
+        switcher: StiffnessSwitcher,
+        diagnostic: StiffnessDiagnostic | None = None,
+        q: int = 2,
+        initial_family: FamilyName = "adams",
+    ) -> None:
+        if q < 1:
+            raise ValueError("q must be at least 1.")
+        if q > adams_family.q_max or q > bdf_family.q_max:
+            raise ValueError("q must be supported by both families.")
+        self._adams_family = adams_family
+        self._bdf_family = bdf_family
+        self._switcher = switcher
+        self._diagnostic = diagnostic or StiffnessDiagnostic()
+        self._q = q
+        self._family: FamilyName = initial_family
+        self.accepted_families: list[FamilyName] = []
+        self.accepted_stiffness: list[float] = []
+        self.accepted_times: list[float] = []
+        self.switch_count = 0
+
+    @property
+    def family(self) -> FamilyName:
+        """Family selected for the next step."""
+        return self._family
+
+    @property
+    def order(self) -> int:
+        """Fixed order used by the Phase-11 switcher."""
+        return self._q
+
+    @property
+    def diagnostic(self) -> StiffnessDiagnostic:
+        """Streaming stiffness diagnostic."""
+        return self._diagnostic
+
+    def transform_family(
+        self,
+        state: NordsieckState,
+        target: FamilyName,
+    ) -> NordsieckState:
+        """Return ``state`` represented for ``target`` family.
+
+        The current Nordsieck representation is already scaled-derivative
+        based, so this transformation is identity on the history vector except
+        for enforcing the wrapper's fixed order.
+        """
+        if target not in ("adams", "bdf"):
+            raise ValueError(f"unknown Nordsieck family {target!r}.")
+        return state.change_order(self._q)
+
+    def init_state(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        t0: float,
+        u0: Tensor,
+        dt: float,
+    ) -> NordsieckState:
+        """Initialize using the currently selected family."""
+        return self._integrator().init_state(rhs, t0, u0, dt)
+
+    def step(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        state: NordsieckState,
+        dt: float,
+    ) -> NordsieckState:
+        """Advance one step, update stiffness, and switch family if needed."""
+        state = self.transform_family(state, self._family).rescale_step(dt)
+        candidate = self._integrator().step(rhs, state, dt)
+        stiffness = self._diagnostic.update(rhs.jacobian(candidate.t, candidate.u), dt)
+        decision = self._switcher.decide(self._family, stiffness)
+        if decision.switched:
+            self.switch_count += 1
+            candidate = self.transform_family(candidate, decision.family)
+        self._family = decision.family
+        self.accepted_families.append(self._family)
+        self.accepted_stiffness.append(stiffness)
+        self.accepted_times.append(candidate.t)
+        return candidate
+
+    def advance(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        u0: Tensor,
+        t0: float,
+        t_end: float,
+        dt: float,
+    ) -> NordsieckState:
+        """Advance from ``t0`` to ``t_end`` with fixed order and step size."""
+        state = self.init_state(rhs, t0, u0, dt)
+        while state.t < t_end:
+            dt_step = min(dt, t_end - state.t)
+            state = self.step(rhs, state, dt_step)
+        return state
+
+    def _integrator(self) -> NordsieckIntegrator:
+        if self._family == "adams":
+            return NordsieckIntegrator(self._adams_family, self._q)
+        return NordsieckIntegrator(self._bdf_family, self._q)
+
+
+def nordsieck_solution_distance(lhs: NordsieckState, rhs: NordsieckState) -> float:
+    """Return ``||lhs.z[0] - rhs.z[0]||`` for family-transform checks."""
+    return float(norm(lhs.u - rhs.u))
+
+
+__all__ = [
+    "FamilyName",
+    "FamilySwitch",
+    "FamilySwitchingNordsieckIntegrator",
+    "StiffnessDiagnostic",
+    "StiffnessSwitcher",
+    "nordsieck_solution_distance",
+]

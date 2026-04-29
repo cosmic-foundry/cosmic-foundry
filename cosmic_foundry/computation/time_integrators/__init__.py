@@ -70,6 +70,14 @@ from cosmic_foundry.computation.time_integrators.stepper import (
     IntegratorSelectionResult,
     TimeStepper,
 )
+from cosmic_foundry.computation.time_integrators.stiffness import (
+    FamilyName,
+    FamilySwitch,
+    FamilySwitchingNordsieckIntegrator,
+    StiffnessDiagnostic,
+    StiffnessSwitcher,
+    nordsieck_solution_distance,
+)
 from cosmic_foundry.computation.time_integrators.symplectic import (
     HamiltonianSplit,
     HamiltonianSplitProtocol,
@@ -154,4 +162,10 @@ __all__ = [
     "OrderDecision",
     "OrderSelector",
     "VariableOrderNordsieckIntegrator",
+    "FamilyName",
+    "FamilySwitch",
+    "FamilySwitchingNordsieckIntegrator",
+    "StiffnessDiagnostic",
+    "StiffnessSwitcher",
+    "nordsieck_solution_distance",
 ]
