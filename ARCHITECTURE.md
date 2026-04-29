@@ -493,14 +493,6 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 2 — B-series order verification framework.** `RootedTree`
-enumeration through user-specified order; symbolic `γ(τ)` (tree integral)
-and `σ(τ)` (symmetry factor); `α(τ)` extraction from any RK program via the
-recursion `α(τ) = bᵀ Φ(τ)`.  Replaces the per-instance hardcoded order
-check with the universal "for all `τ` with `|τ| ≤ p`, `α(τ) = 1/γ(τ)`."
-Activates the verification axis.  Foundation for every subsequent phase's
-order proof.
-
 **Phase 3 — Symplectic / Hamiltonian splitting.** `HamiltonianSplit(T_of_p,
 V_of_q)` RHS protocol; `PartitionedState(t, q, p)` state;
 `SymplecticSplittingIntegrator(c, d)` parameterized by composition
