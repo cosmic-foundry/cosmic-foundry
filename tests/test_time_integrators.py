@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 import sys
+from collections.abc import Callable
 
 import pytest
 import sympy
@@ -93,6 +94,8 @@ from cosmic_foundry.computation.time_integrators import (
     trees_up_to_order,
     yoshida_steps,
 )
+from cosmic_foundry.computation.time_integrators._newton import newton_solve
+from cosmic_foundry.computation.time_integrators.integrator import TimeIntegrator
 from tests.claims import Claim
 
 # ---------------------------------------------------------------------------
@@ -2070,4 +2073,132 @@ _SPLITTING_CLAIMS: list[Claim] = [
     ids=[c.description for c in _SPLITTING_CLAIMS],
 )
 def test_splitting_integrators(claim: Claim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase A — type-coherence and shared Newton kernel
+# ---------------------------------------------------------------------------
+
+
+class _TypeCoherenceClaim(Claim):
+    """Verify that a specialist integrator class inherits TimeIntegrator."""
+
+    def __init__(self, cls: type, instances: list[TimeIntegrator], label: str) -> None:
+        self._cls = cls
+        self._instances = instances
+        self._label = label
+
+    @property
+    def description(self) -> str:
+        return f"type_coherence/{self._label}"
+
+    def check(self) -> None:
+        assert issubclass(
+            self._cls, TimeIntegrator
+        ), f"{self._label}: {self._cls.__name__} must inherit TimeIntegrator"
+        for inst in self._instances:
+            assert isinstance(
+                inst, TimeIntegrator
+            ), f"{self._label}: {inst!r} must be an instance of TimeIntegrator"
+
+
+class _NewtonSolveClaim(Claim):
+    """Verify newton_solve converges to the exact root on a specific problem.
+
+    Checks y − gamma_dt·f(y) = y_exp and compares the result to the known
+    exact solution y_star.
+    """
+
+    def __init__(
+        self,
+        label: str,
+        y_exp_vals: list[float],
+        gamma_dt: float,
+        f_vals: Callable[[list[float]], list[float]],
+        jac_vals: Callable[[list[float]], list[list[float]]],
+        y_star: list[float],
+        tol: float = 1e-11,
+    ) -> None:
+        self._label = label
+        self._y_exp_vals = y_exp_vals
+        self._gamma_dt = gamma_dt
+        self._f_vals = f_vals
+        self._jac_vals = jac_vals
+        self._y_star = y_star
+        self._tol = tol
+
+    @property
+    def description(self) -> str:
+        return f"newton_solve/{self._label}"
+
+    def check(self) -> None:
+        backend = Tensor([0.0]).backend
+        n = len(self._y_exp_vals)
+
+        def f(y: Tensor) -> Tensor:
+            vals = [float(y[i]) for i in range(n)]
+            return Tensor(self._f_vals(vals), backend=backend)
+
+        def jac(y: Tensor) -> Tensor:
+            vals = [float(y[i]) for i in range(n)]
+            return Tensor(self._jac_vals(vals), backend=backend)
+
+        y_exp = Tensor(self._y_exp_vals, backend=backend)
+        y_sol = newton_solve(y_exp, gamma_dt=self._gamma_dt, f=f, jac=jac)
+        for i, expected in enumerate(self._y_star):
+            actual = float(y_sol[i])
+            assert (
+                abs(actual - expected) < self._tol
+            ), f"{self._label}: y[{i}] = {actual:.15f}; expected {expected:.15f}"
+
+
+_TYPE_COHERENCE_CLAIMS: list[_TypeCoherenceClaim] = [
+    _TypeCoherenceClaim(
+        DIRKIntegrator,
+        [backward_euler, implicit_midpoint, crouzeix_3],
+        "DIRKIntegrator",
+    ),
+    _TypeCoherenceClaim(
+        IMEXIntegrator,
+        [ars222],
+        "IMEXIntegrator",
+    ),
+]
+
+_NEWTON_SOLVE_CLAIMS: list[_NewtonSolveClaim] = [
+    _NewtonSolveClaim(
+        label="nonlinear_scalar",
+        y_exp_vals=[0.9],
+        gamma_dt=0.1,
+        f_vals=lambda v: [v[0] * v[0]],
+        jac_vals=lambda v: [[2.0 * v[0]]],
+        y_star=[1.0],
+    ),
+    _NewtonSolveClaim(
+        label="linear_system",
+        y_exp_vals=[1.0, 2.0],
+        gamma_dt=0.25,
+        f_vals=lambda v: [v[0], 2.0 * v[1]],
+        jac_vals=lambda v: [[1.0, 0.0], [0.0, 2.0]],
+        y_star=[4.0 / 3.0, 4.0],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _TYPE_COHERENCE_CLAIMS,
+    ids=[c.description for c in _TYPE_COHERENCE_CLAIMS],
+)
+def test_type_coherence(claim: _TypeCoherenceClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _NEWTON_SOLVE_CLAIMS,
+    ids=[c.description for c in _NEWTON_SOLVE_CLAIMS],
+)
+def test_newton_solve(claim: _NewtonSolveClaim) -> None:
     claim.check()

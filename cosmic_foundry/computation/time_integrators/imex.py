@@ -25,13 +25,13 @@ from typing import Protocol, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
-from cosmic_foundry.computation.tensor import Tensor, norm
-from cosmic_foundry.computation.time_integrators.integrator import RKState
-
-_LU = LUFactorization()
-_NEWTON_MAX_ITER = 50
-_NEWTON_TOL = 1e-12
+from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators._newton import newton_solve
+from cosmic_foundry.computation.time_integrators.integrator import (
+    RHSProtocol,
+    RKState,
+    TimeIntegrator,
+)
 
 
 @runtime_checkable
@@ -92,7 +92,7 @@ class AdditiveRHS:
         return result
 
 
-class IMEXIntegrator:
+class IMEXIntegrator(TimeIntegrator):
     """IMEX additive Runge-Kutta method defined by two Butcher tableaux.
 
     Uses an explicit tableau (A_E, b_E, c_E) for the non-stiff component
@@ -144,18 +144,22 @@ class IMEXIntegrator:
 
     def step(
         self,
-        rhs: AdditiveRHSProtocol,
+        rhs: RHSProtocol,
         state: RKState,
         dt: float,
     ) -> RKState:
         """Advance state by one IMEX step of size dt.
 
+        ``rhs`` must satisfy ``AdditiveRHSProtocol`` (expose ``.explicit``,
+        ``.implicit``, ``.jacobian_implicit``).
         Returns a new RKState with t = state.t + dt and updated u.
         The err field is 0.0 (no embedded pair in this base class).
         """
+        if not isinstance(rhs, AdditiveRHSProtocol):
+            raise TypeError(
+                f"IMEXIntegrator requires an AdditiveRHSProtocol; got {type(rhs)}"
+            )
         t, u = state.t, state.u
-        n = u.shape[0]
-        backend = u.backend
         k_E: list[Tensor] = []
         k_I: list[Tensor] = []
 
@@ -173,18 +177,12 @@ class IMEXIntegrator:
             if abs(gamma_i) < 1e-14:
                 y = y_exp
             else:
-                y = y_exp
-                for _ in range(_NEWTON_MAX_ITER):
-                    f_I_val = rhs.implicit(t_i, y)
-                    r = y - (gamma_i * dt) * f_I_val - y_exp
-                    if float(norm(r)) < _NEWTON_TOL * (1.0 + float(norm(y))):
-                        break
-                    J = rhs.jacobian_implicit(t_i, y)
-                    M = Tensor.eye(n, backend=backend) - (gamma_i * dt) * J
-                    delta = _LU.factorize(M).solve(Tensor.zeros(n, backend=backend) - r)
-                    y = y + delta
-                    if float(norm(delta)) < _NEWTON_TOL * (1.0 + float(norm(y))):
-                        break
+                y = newton_solve(
+                    y_exp,
+                    gamma_i * dt,
+                    f=lambda y, _t=t_i: rhs.implicit(_t, y),  # type: ignore[misc]
+                    jac=lambda y, _t=t_i: rhs.jacobian_implicit(_t, y),  # type: ignore[misc]
+                )
 
             k_E.append(rhs.explicit(t_i, y))
             k_I.append(rhs.implicit(t_i, y))
