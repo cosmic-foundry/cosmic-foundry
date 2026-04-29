@@ -560,7 +560,7 @@ bdf2 = NordsieckIntegrator(bdf_family, q=2)
 bdf3 = NordsieckIntegrator(bdf_family, q=3)
 bdf4 = NordsieckIntegrator(bdf_family, q=4)
 
-adams_family = AdamsFamily(q_max=12)
+adams_family = AdamsFamily(q_max=6)
 
 adams_moulton1 = NordsieckIntegrator(adams_family, q=1)
 adams_moulton2 = NordsieckIntegrator(adams_family, q=2)
