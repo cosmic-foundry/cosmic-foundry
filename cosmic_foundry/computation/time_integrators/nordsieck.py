@@ -53,12 +53,14 @@ import sympy
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
-from cosmic_foundry.computation.time_integrators.integrator import RKState
+from cosmic_foundry.computation.time_integrators.integrator import RHSProtocol, RKState
 from cosmic_foundry.computation.time_integrators.runge_kutta import rk4 as _rk4
 
 _LU = LUFactorization()
 _NEWTON_MAX_ITER = 50
 _NEWTON_TOL = 1e-12
+_FP_MAX_ITER = 50
+_FP_TOL = 1e-12
 
 
 class NordsieckState:
@@ -284,34 +286,41 @@ class AdamsFamily:
 
 
 class NordsieckIntegrator:
-    """Fixed-order BDF integrator in Nordsieck form.
+    """Fixed-order linear multistep integrator in Nordsieck form.
 
-    Each step predicts via the Pascal matrix then corrects by Newton
-    iteration on the BDF implicit equation.  The correction vector l
-    updates the full Nordsieck history after convergence so that z[1]
-    equals h · f(t_{n+1}, y_{n+1}) exactly.
+    Supports two corrector families selected by the family argument:
 
-    A Jacobian is required (WithJacobianRHSProtocol) because BDF is
-    unconditionally implicit; every stage inverts (I − β₀ h J).
+    BDFFamily (stiff problems)
+        Each step solves y − β₀ h f(t_{n+1}, y) = z_pred[0] − β₀ z_pred[1]
+        via Newton iteration, requiring WithJacobianRHSProtocol.
 
-    In plain terms: each BDF step first extrapolates the current
-    polynomial history to t_{n+1} (the prediction), then corrects the
-    predicted y by iterating until the BDF implicit equation is satisfied,
-    and finally updates all higher derivative slots so the history stays
-    consistent.
+    AdamsFamily (non-stiff problems)
+        Each step solves the same equation via fixed-point iteration,
+        requiring only plain RHSProtocol (no Jacobian).
 
-    Use init_state() to create the initial NordsieckState from (t₀, y₀, h)
-    by bootstrapping q RK4 steps.
+    Both paths share the same prediction (Pascal matrix) and history update
+    (l-vector correction).  The corrector family alone determines whether
+    Newton or fixed-point iteration is used; no other interface changes.
+
+    In plain terms: the prediction step extrapolates the polynomial history
+    to t_{n+1}; the correction step adjusts y_{n+1} until the implicit
+    equation is satisfied; the l-vector distributes that adjustment across
+    all Nordsieck slots so the history stays self-consistent.
+
+    Use init_state() to create the initial NordsieckState by bootstrapping
+    q RK4 steps.  BDF init uses one Jacobian evaluation to fill higher
+    Nordsieck slots; Adams init uses backward differences of the bootstrap
+    function values (no Jacobian required).
 
     Parameters
     ----------
     family:
-        BDFFamily instance supplying l and β₀ coefficients.
+        BDFFamily or AdamsFamily instance supplying l and β₀ coefficients.
     q:
         Method order (1 ≤ q ≤ family.q_max).
     """
 
-    def __init__(self, family: BDFFamily, q: int) -> None:
+    def __init__(self, family: BDFFamily | AdamsFamily, q: int) -> None:
         if not 1 <= q <= family.q_max:
             raise ValueError(f"q={q} outside [1, {family.q_max}]")
         self._family = family
@@ -326,30 +335,31 @@ class NordsieckIntegrator:
 
     def init_state(
         self,
-        rhs: WithJacobianRHSProtocol,
+        rhs: RHSProtocol,
         t0: float,
         u0: Tensor,
         dt: float,
     ) -> NordsieckState:
         """Bootstrap q RK4 steps and initialize the Nordsieck vector.
 
-        Takes q RK4 steps from (t0, u0) with step size dt, arriving at
-        (t_q, y_q) with t_q = t0 + q*dt.  Then initializes z[j] using
-        the J-based Taylor recursion:
+        For BDFFamily: initializes z[j] via the Jacobian-based Taylor recursion
+        z[j] = dt^j/j! · J^{j-1} · f evaluated at (t_q, y_q).  Requires
+        WithJacobianRHSProtocol; raises AttributeError at runtime otherwise.
 
-            z[0] = y_q
-            z[1] = dt * f(t_q, y_q)
-            z[j] = dt^j / j! * J^{j-1} * f   for j = 2, ..., q
+        For AdamsFamily: initializes z[j] via backward differences of the
+        bootstrap function values:
 
-        where J = df/dy(t_q, y_q).  For autonomous linear ODEs this is
-        exact; for nonlinear problems the error in z[j] is O(dt^{j+1})
-        from missing Hessian terms, which is O(dt^{q+1}) overall and does
-        not degrade the BDF-q convergence rate.
+            z[j] = (dt / j!) · ∇^{j-1} f_q
+            ∇^k f_q = Σ_{i=0}^{k} (−1)^i C(k,i) f_{q−i}
+
+        Both paths take q RK4 steps from (t0, u0) and arrive at (t_q, y_q)
+        with t_q = t0 + q·dt.
 
         Parameters
         ----------
         rhs:
-            ODE right-hand side; Jacobian evaluated once at (t_q, y_q).
+            ODE right-hand side.  Must satisfy WithJacobianRHSProtocol for
+            BDFFamily; plain RHSProtocol suffices for AdamsFamily.
         t0:
             Initial time.
         u0:
@@ -357,6 +367,17 @@ class NordsieckIntegrator:
         dt:
             Step size for the bootstrap and all subsequent steps.
         """
+        if isinstance(self._family, BDFFamily):
+            return self._init_state_bdf(rhs, t0, u0, dt)  # type: ignore[arg-type]
+        return self._init_state_adams(rhs, t0, u0, dt)
+
+    def _init_state_bdf(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        t0: float,
+        u0: Tensor,
+        dt: float,
+    ) -> NordsieckState:
         q = self._q
         rk_state = RKState(t0, u0)
         for _ in range(q):
@@ -374,21 +395,58 @@ class NordsieckIntegrator:
 
         return NordsieckState(t_q, dt, tuple(z))
 
+    def _init_state_adams(
+        self,
+        rhs: RHSProtocol,
+        t0: float,
+        u0: Tensor,
+        dt: float,
+    ) -> NordsieckState:
+        q = self._q
+        rk_states = [RKState(t0, u0)]
+        for _ in range(q):
+            rk_states.append(_rk4.step(rhs, rk_states[-1], dt))
+        t_q = rk_states[-1].t
+        y_q = rk_states[-1].u
+
+        # Function values at t0, t1, ..., tq for backward-difference init.
+        f_vals = [rhs(s.t, s.u) for s in rk_states]
+        f_q = f_vals[q]
+        z: list[Tensor] = [y_q, dt * f_q]
+        for j in range(2, q + 1):
+            # nabla^{j-1} f_q = sum_{i=0}^{j-1} (-1)^i C(j-1, i) f_{q-i}
+            nabla: Tensor = f_vals[q]
+            for i in range(1, j):
+                nabla = nabla + ((-1) ** i * comb(j - 1, i)) * f_vals[q - i]
+            z.append(nabla * (dt / factorial(j)))
+
+        return NordsieckState(t_q, dt, tuple(z))
+
     def step(
         self,
-        rhs: WithJacobianRHSProtocol,
+        rhs: RHSProtocol,
         state: NordsieckState,
         dt: float,
     ) -> NordsieckState:
         """Advance state by one step of size dt.
 
-        Rescales z if dt ≠ state.h, predicts via Pascal, then corrects via
-        Newton iteration on y − β₀ h f(t_{n+1}, y) = z^(0)[0] − β₀ z^(0)[1].
-        After convergence updates the full Nordsieck vector with l · f_delta,
-        where f_delta = h · f(t_{n+1}, y_{n+1}) − z^(0)[1].
+        Rescales z if dt ≠ state.h, predicts via Pascal, corrects via Newton
+        (BDFFamily) or fixed-point iteration (AdamsFamily), then updates the
+        full Nordsieck vector with l · f_delta where
+        f_delta = h · f(t_{n+1}, y_{n+1}) − z_pred[1].
 
         Returns a new NordsieckState at t + dt.
         """
+        if isinstance(self._family, BDFFamily):
+            return self._step_bdf(rhs, state, dt)  # type: ignore[arg-type]
+        return self._step_adams(rhs, state, dt)
+
+    def _step_bdf(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        state: NordsieckState,
+        dt: float,
+    ) -> NordsieckState:
         t, h, z = state.t, state.h, state.z
         q = state.q
         n = z[0].shape[0]
@@ -423,6 +481,39 @@ class NordsieckIntegrator:
         z_new = tuple(z_pred[i] + lvec[i] * f_delta for i in range(q + 1))
         return NordsieckState(t_new, h, z_new)
 
+    def _step_adams(
+        self,
+        rhs: RHSProtocol,
+        state: NordsieckState,
+        dt: float,
+    ) -> NordsieckState:
+        t, h, z = state.t, state.h, state.z
+        q = state.q
+
+        if dt != h:
+            r = dt / h
+            z = tuple(z[j] * (r**j) for j in range(q + 1))
+            h = dt
+
+        z_pred = _pascal_predict(z)
+        t_new = t + h
+        beta0 = self._beta0
+
+        y = z_pred[0]
+        for _ in range(_FP_MAX_ITER):
+            fy = rhs(t_new, y)
+            y_new = z_pred[0] + beta0 * (h * fy - z_pred[1])
+            delta_norm = float(norm(y_new - y))
+            y = y_new
+            if delta_norm < _FP_TOL * (1.0 + float(norm(y))):
+                break
+
+        fy = rhs(t_new, y)
+        f_delta = h * fy - z_pred[1]
+        lvec = self._l
+        z_new = tuple(z_pred[i] + lvec[i] * f_delta for i in range(q + 1))
+        return NordsieckState(t_new, h, z_new)
+
 
 # ---------------------------------------------------------------------------
 # Named instances
@@ -435,12 +526,24 @@ bdf2 = NordsieckIntegrator(bdf_family, q=2)
 bdf3 = NordsieckIntegrator(bdf_family, q=3)
 bdf4 = NordsieckIntegrator(bdf_family, q=4)
 
+adams_family = AdamsFamily(q_max=12)
+
+adams_moulton1 = NordsieckIntegrator(adams_family, q=1)
+adams_moulton2 = NordsieckIntegrator(adams_family, q=2)
+adams_moulton3 = NordsieckIntegrator(adams_family, q=3)
+adams_moulton4 = NordsieckIntegrator(adams_family, q=4)
+
 
 __all__ = [
     "AdamsFamily",
     "BDFFamily",
     "NordsieckIntegrator",
     "NordsieckState",
+    "adams_family",
+    "adams_moulton1",
+    "adams_moulton2",
+    "adams_moulton3",
+    "adams_moulton4",
     "bdf1",
     "bdf2",
     "bdf3",
