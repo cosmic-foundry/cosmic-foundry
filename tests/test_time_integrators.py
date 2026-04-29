@@ -36,6 +36,7 @@ from cosmic_foundry.computation.time_integrators import (
     HamiltonianSplit,
     IMEXIntegrator,
     JacobianRHS,
+    NordsieckIntegrator,
     PartitionedState,
     PIController,
     RKState,
@@ -47,6 +48,10 @@ from cosmic_foundry.computation.time_integrators import (
     ab4,
     ars222,
     backward_euler,
+    bdf1,
+    bdf2,
+    bdf3,
+    bdf4,
     bogacki_shampine,
     crouzeix_3,
     dormand_prince,
@@ -1102,4 +1107,169 @@ def test_ab_convergence(claim: _ABConvergenceClaim) -> None:
     ids=[c.description for c in _AB_ABUNDANCE_CONSERVATION_CLAIMS],
 )
 def test_ab_abundance_conservation(claim: _ABAbundanceConservationClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 7a claims — Nordsieck BDF fixed-order integrators
+# ---------------------------------------------------------------------------
+
+
+_BDF_N_HALVINGS = 7  # extra halvings vs AB to clear bootstrap pre-asymptotic transient
+
+
+class _BDFConvergenceClaim(Claim):
+    """Verify BDF-q convergence rate on dy/dt = λy.
+
+    Bootstraps q RK4 steps then measures the log-log slope of final-time
+    error vs step size.  Slope ≥ declared order − 0.1 is required.
+    Uses 7 halvings (vs 5 for AB) so the regression is dominated by the
+    asymptotic tail rather than the pre-asymptotic region where BDF methods
+    take a few steps to leave the bootstrap transient.
+    The RHS is a JacobianRHS so both the BDF Newton corrector and the
+    plain __call__ are exercised.
+    """
+
+    def __init__(
+        self,
+        instance: NordsieckIntegrator,
+        label: str,
+        lam: float = -1.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._lam = lam
+
+    @property
+    def description(self) -> str:
+        return f"bdf_convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        rhs = JacobianRHS(
+            f=lambda t, u, _l=lam: _l * u,
+            jac=lambda t, u, _l=lam: Tensor([[_l]], backend=u.backend),
+        )
+        dts = [_DT_BASE / (2**k) for k in range(_BDF_N_HALVINGS + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt) - inst.order
+            state = inst.init_state(rhs, 0.0, Tensor([1.0]), dt)
+            for _ in range(max(n_steps, 1)):
+                state = inst.step(rhs, state, dt)
+            exact = math.exp(lam * state.t)
+            errors.append(abs(float(state.u[0]) - exact))
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 6
+        ), f"{self._label}: error reached machine precision too early"
+        # Use only the asymptotic tail (finest half) to avoid pre-asymptotic
+        # bootstrap transient that suppresses the measured slope for q ≥ 4.
+        valid = valid[len(valid) // 2 :]
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} − 0.1"
+        )
+
+
+class _BDFConservationClaim(Claim):
+    """Verify BDF-q on the 3-species A→B→C decay chain.
+
+    Uses the same _DECAY_RHS as the DIRK and IMEX conservation claims.
+    Checks accuracy against the analytical solution, exact mass conservation
+    |ΣXᵢ − 1| < 1e-12, and positivity.  Conservation is exact because
+    f has zero column sums and Newton converges in one step for linear f.
+    """
+
+    def __init__(
+        self,
+        instance: NordsieckIntegrator,
+        label: str,
+        dt: float = 0.05,
+        t_end: float = 2.0,
+        acc_tol: float = 1e-3,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt = dt
+        self._t_end = t_end
+        self._acc_tol = acc_tol
+
+    @property
+    def description(self) -> str:
+        return f"bdf_conservation/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        dt = self._dt
+        n_steps = round(self._t_end / dt) - inst.order
+        state = inst.init_state(_DECAY_RHS, 0.0, Tensor([1.0, 0.0, 0.0]), dt)
+        for _ in range(max(n_steps, 1)):
+            state = inst.step(_DECAY_RHS, state, dt)
+
+        x0_ex, x1_ex, x2_ex = _decay_exact(state.t)
+        err = max(
+            abs(float(state.u[0]) - x0_ex),
+            abs(float(state.u[1]) - x1_ex),
+            abs(float(state.u[2]) - x2_ex),
+        )
+        assert (
+            err < self._acc_tol
+        ), f"{self._label}: max abundance error {err:.2e} > {self._acc_tol:.2e}"
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert (
+            abs(total - 1.0) < 1e-12
+        ), f"{self._label}: sum(X) = {total:.15f} ≠ 1 (mass not conserved)"
+
+        for i in range(3):
+            xi = float(state.u[i])
+            assert (
+                xi >= -1e-10
+            ), f"{self._label}: X[{i}] = {xi:.3e} < 0 (positivity violated)"
+
+
+_BDF_CONVERGENCE_CLAIMS: list[_BDFConvergenceClaim] = [
+    _BDFConvergenceClaim(bdf1, "bdf1"),
+    _BDFConvergenceClaim(bdf2, "bdf2"),
+    _BDFConvergenceClaim(bdf3, "bdf3"),
+    _BDFConvergenceClaim(bdf4, "bdf4"),
+]
+
+_BDF_CONSERVATION_CLAIMS: list[_BDFConservationClaim] = [
+    _BDFConservationClaim(bdf1, "bdf1", acc_tol=0.1),
+    _BDFConservationClaim(bdf2, "bdf2", acc_tol=5e-3),
+    _BDFConservationClaim(bdf3, "bdf3", acc_tol=5e-4),
+    _BDFConservationClaim(bdf4, "bdf4", acc_tol=5e-5),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _BDF_CONVERGENCE_CLAIMS,
+    ids=[c.description for c in _BDF_CONVERGENCE_CLAIMS],
+)
+def test_bdf_convergence(claim: _BDFConvergenceClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _BDF_CONSERVATION_CLAIMS,
+    ids=[c.description for c in _BDF_CONSERVATION_CLAIMS],
+)
+def test_bdf_conservation(claim: _BDFConservationClaim) -> None:
     claim.check()

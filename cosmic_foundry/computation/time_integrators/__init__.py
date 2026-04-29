@@ -40,6 +40,16 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     RKState,
     TimeIntegrator,
 )
+from cosmic_foundry.computation.time_integrators.nordsieck import (
+    BDFFamily,
+    NordsieckIntegrator,
+    NordsieckState,
+    bdf1,
+    bdf2,
+    bdf3,
+    bdf4,
+    bdf_family,
+)
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
     bogacki_shampine,
@@ -116,4 +126,12 @@ __all__ = [
     "ab2",
     "ab3",
     "ab4",
+    "BDFFamily",
+    "NordsieckIntegrator",
+    "NordsieckState",
+    "bdf1",
+    "bdf2",
+    "bdf3",
+    "bdf4",
+    "bdf_family",
 ]
