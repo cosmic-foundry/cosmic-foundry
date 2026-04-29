@@ -505,7 +505,7 @@ populated only by `BlackBoxRHS`; typed integrator state populated only by
 `RKState(t, y)`; typed `Controller` slot populated only by `ConstantStep`.
 Time-integrator verification has its own auto-discovery framework parallel
 to but independent of the spatial-operator `_INSTANCES` in
-`tests/test_convergence_order.py`; this is intentional — temporal order
+`tests/test_convergence.py`; this is intentional — temporal order
 verification is structurally distinct from spatial.  Phase 0 satisfies the
 per-epoch verification standard: the symbolic order-condition claim is the
 Lane-C SymPy derivation check, and the temporal-convergence claim against
