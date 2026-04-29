@@ -493,52 +493,6 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 6 — Explicit Adams-Bashforth.** `ABState(t, u, history)` carries the
-current solution and the function-value history as an immutable tuple, most
-recent first; `AdamsBashforthIntegrator(beta, order)` applies the AB weights
-and bootstraps the first k−1 steps with RK4.  Named instances: `ab2` (order 2),
-`ab3` (order 3), `ab4` (order 4).  Verification: convergence slope on dy/dt = λy;
-abundance conservation on the A→B→C decay chain — `JacobianRHS` satisfies
-`RHSProtocol`, so the same problem object is shared with the DIRK claims without
-exposing the Jacobian to the AB integrator; hard conservation check
-`|Σ Xᵢ − 1| < 1e-12` passes because zero column-sum rate matrices are conserved
-by any linear combination of past function values.  First phase with non-trivial
-typed state.  Mostly groundwork for Phases 7a–12.
-
-**Phase 7a — Nordsieck state + BDF fixed-order integrators.**
-`NordsieckState(t, h, z)` carrying the Nordsieck vector
-`z = [y, hy', h²y''/2!, …, hᵍy⁽ᵍ⁾/q!]` with step size `h` baked in so
-prediction is a pure Pascal-matrix multiply; `BDFFamily(q_max=6)` as a
-parametric coefficient provider producing the BDF `α`/`l` vectors for any
-order `q`; `NordsieckIntegrator(family, q)` with a Newton corrector
-(BDF is implicit, requires `WithJacobianRHSProtocol`); bootstrap via RK4
-for the first `q` steps followed by Nordsieck vector initialization; named
-instances `bdf1`–`bdf4`.  Verification: convergence claims for BDF orders
-1–4 on the A→B→C abundance network; hard conservation check
-`|ΣXᵢ − 1| < 1e-12`.
-
-**Phase 8 — Adams family + fixed-order Adams integrators.**
-`AdamsFamily(q_max=6)` as a parametric coefficient provider whose l-vector
-is derived from `∫₀^ξ ∏_{k=1}^{q−1}(s+k)/(q−1)! ds` (Gear 1971 Table 11.2);
-Adams correction mode added to `NordsieckIntegrator` using fixed-point
-iteration (no Jacobian required, satisfies plain `RHSProtocol`);
-initialization via a corrected backward-difference formula
-`z[j] = (h/j!)·(∇^{j−1} + (j−1)/2·∇^j)f_q` that reduces the bootstrap
-error from O(h^{j+1}) to O(h^{j+2}), enabling all four named instances
-`adams_moulton1`–`adams_moulton4` to achieve their declared convergence orders.
-Verification: convergence-slope and abundance-conservation claims for Adams
-orders 1–4; hard conservation check `|ΣXᵢ − 1| < 1e-12`.
-
-**Phase 9 — Nordsieck order-change rescaling.** The pure mathematical
-primitive for changing order within a fixed family: a function (or method
-on `NordsieckState`) that remaps the history vector when `q` shifts —
-padding with zero when raising, truncating when lowering — together with
-the accompanying step-size rescaling formula derived from the Nordsieck
-representation.  Verification: round-trip property test (raise order then
-immediately lower it and confirm `z[0]` is unchanged to round-trip
-accuracy); confirm that a rescaled state integrates with the same accuracy
-as a fresh `init_state` at the new `q`.
-
 **Phase 10 — Variable-order within a family.** `OrderSelector` estimating
 truncation error at orders `q−1`, `q`, `q+1` from the corrector residual
 and Nordsieck history differences, selecting `q_next` to minimize work per

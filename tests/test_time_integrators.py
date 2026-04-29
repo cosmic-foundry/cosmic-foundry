@@ -25,7 +25,7 @@ import sys
 import pytest
 import sympy
 
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators import (
     ABState,
     AdamsBashforthIntegrator,
@@ -37,6 +37,7 @@ from cosmic_foundry.computation.time_integrators import (
     IMEXIntegrator,
     JacobianRHS,
     NordsieckIntegrator,
+    NordsieckState,
     PartitionedState,
     PIController,
     RKState,
@@ -1454,4 +1455,142 @@ def test_am_convergence(claim: _AMConvergenceClaim) -> None:
     ids=[c.description for c in _AM_CONSERVATION_CLAIMS],
 )
 def test_am_conservation(claim: _AMConservationClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 claims — Nordsieck order-change and step-size rescaling
+# ---------------------------------------------------------------------------
+
+
+class _NordsieckRoundTripClaim(Claim):
+    """Verify that pure Nordsieck transformations preserve the represented state."""
+
+    @property
+    def description(self) -> str:
+        return "nordsieck_round_trip/order_and_step_size"
+
+    def check(self) -> None:
+        state = NordsieckState(
+            t=0.25,
+            h=0.1,
+            z=(Tensor([1.0]), Tensor([-0.1]), Tensor([0.005])),
+        )
+
+        raised = state.change_order(4)
+        lowered = raised.change_order(2)
+        assert lowered.q == state.q
+        assert lowered.t == state.t
+        assert lowered.h == state.h
+        for lhs, rhs in zip(lowered.z, state.z, strict=True):
+            assert float(norm(lhs - rhs)) == 0.0
+
+        assert raised.q == 4
+        assert float(norm(raised.z[0] - state.z[0])) == 0.0
+        assert float(norm(raised.z[3])) == 0.0
+        assert float(norm(raised.z[4])) == 0.0
+
+        rescaled = state.rescale_step(0.05).rescale_step(0.1)
+        assert rescaled.h == state.h
+        for lhs, rhs in zip(rescaled.z, state.z, strict=True):
+            assert float(norm(lhs - rhs)) < 1e-16
+
+
+class _NordsieckRescaledAccuracyClaim(Claim):
+    """Verify transformed Nordsieck states retain fixed-order accuracy."""
+
+    def __init__(
+        self,
+        instance: NordsieckIntegrator,
+        label: str,
+        rhs: BlackBoxRHS | JacobianRHS,
+        q_source: int = 4,
+        q_target: int = 2,
+        h_source: float = 0.1,
+        h_target: float = 0.025,
+        lam: float = -1.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._rhs = rhs
+        self._q_source = q_source
+        self._q_target = q_target
+        self._h_source = h_source
+        self._h_target = h_target
+        self._lam = lam
+
+    @property
+    def description(self) -> str:
+        return f"nordsieck_rescaled_accuracy/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        h = self._h_target
+        t_end = 1.0
+
+        z_source = tuple(
+            Tensor([(self._h_source**j) * (lam**j) / math.factorial(j)])
+            for j in range(self._q_source + 1)
+        )
+        transformed = (
+            NordsieckState(0.0, self._h_source, z_source)
+            .change_order(self._q_target)
+            .rescale_step(h)
+        )
+
+        state = transformed
+        for _ in range(round((t_end - state.t) / h)):
+            state = inst.step(self._rhs, state, h)
+        transformed_error = abs(float(state.u[0]) - math.exp(lam * state.t))
+
+        fresh = inst.init_state(self._rhs, 0.0, Tensor([1.0]), h)
+        for _ in range(round((t_end - fresh.t) / h)):
+            fresh = inst.step(self._rhs, fresh, h)
+        fresh_error = abs(float(fresh.u[0]) - math.exp(lam * fresh.t))
+
+        assert transformed_error <= 2.0 * fresh_error, (
+            f"{self._label}: transformed error {transformed_error:.3e} "
+            f"> 2x fresh-init error {fresh_error:.3e}"
+        )
+
+
+_NORDSIECK_ROUND_TRIP_CLAIMS: list[_NordsieckRoundTripClaim] = [
+    _NordsieckRoundTripClaim(),
+]
+
+_NORDSIECK_RESCALED_ACCURACY_CLAIMS: list[_NordsieckRescaledAccuracyClaim] = [
+    _NordsieckRescaledAccuracyClaim(
+        bdf2,
+        "bdf2",
+        JacobianRHS(
+            f=lambda t, u: -1.0 * u,
+            jac=lambda t, u: Tensor([[-1.0]], backend=u.backend),
+        ),
+    ),
+    _NordsieckRescaledAccuracyClaim(
+        adams_moulton2,
+        "am2",
+        BlackBoxRHS(lambda t, u: -1.0 * u),
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _NORDSIECK_ROUND_TRIP_CLAIMS,
+    ids=[c.description for c in _NORDSIECK_ROUND_TRIP_CLAIMS],
+)
+def test_nordsieck_round_trip(claim: _NordsieckRoundTripClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _NORDSIECK_RESCALED_ACCURACY_CLAIMS,
+    ids=[c.description for c in _NORDSIECK_RESCALED_ACCURACY_CLAIMS],
+)
+def test_nordsieck_rescaled_accuracy(
+    claim: _NordsieckRescaledAccuracyClaim,
+) -> None:
     claim.check()
