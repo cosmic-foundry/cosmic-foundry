@@ -493,15 +493,6 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 12 — VODEController.** `VODEController` composing `OrderSelector`
-(Phase 10) and `StiffnessSwitcher` (Phase 11) into a full VODE-style
-adaptive controller.  Verification: claim on a network with a deliberate
-fast/slow species pair (λ_stiff/λ_slow ~ 10³); Adams must be active
-during the slow early transient and BDF must engage once the fast
-timescale dominates.  Activates the "method family + policy" axis — the
-integrator's identity becomes a function of run-time diagnostics, not a
-fixed tableau.
-
 **Phase 13 — Exponential integrators.** `LinearPlusNonlinearRHS(L, N)`
 protocol; φ-function evaluation (scaling-and-squaring on dense `hL` for
 small problems, Krylov / Arnoldi projection for large problems);
