@@ -8,6 +8,12 @@ from cosmic_foundry.computation.time_integrators.bseries import (
     sigma,
     trees_up_to_order,
 )
+from cosmic_foundry.computation.time_integrators.imex import (
+    AdditiveRHS,
+    AdditiveRHSProtocol,
+    IMEXIntegrator,
+    ars222,
+)
 from cosmic_foundry.computation.time_integrators.implicit import (
     DIRKIntegrator,
     FiniteDiffJacobianRHS,
@@ -94,4 +100,8 @@ __all__ = [
     "crouzeix_3",
     "implicit_midpoint",
     "stability_function",
+    "AdditiveRHS",
+    "AdditiveRHSProtocol",
+    "IMEXIntegrator",
+    "ars222",
 ]

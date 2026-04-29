@@ -493,25 +493,18 @@ shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
 established in `computation/time_integrators/`; subsequent phases extend
 without breaking interfaces.
 
-**Phase 4 — Implicit RK (DIRK / SDIRK).** `WithJacobianRHSProtocol` with
-`JacobianRHS(f, jac)` (analytical) and `FiniteDiffJacobianRHS(f, eps)`
-(forward-difference) wrappers; `DIRKIntegrator(A, b, c, order)` with
-per-stage Newton iteration using `LUFactorization`; named instances:
-`backward_euler` (order 1, L-stable), `implicit_midpoint` (order 2,
-A-stable, energy-conserving), `crouzeix_3` (order 3, A-stable, Crouzeix
-1979).  `stability_function(A, b)` extracts `R(z)` symbolically via sympy.
-Verification: B-series order conditions extended to DIRK tableaux with
-irrational entries (sympy `simplify` for algebraic comparison); A-stability
-sampled on the imaginary axis; L-stability from `|R(−∞)| → 0`; convergence
-on dy/dt = λy via `JacobianRHS`.  Epoch 9 microphysics enabler.
-
-**Phase 5 — IMEX additive RK.** `AdditiveRHS(f_E, f_I)` protocol;
-`IMEXIntegrator(A_E, b_E, c_E, A_I, b_I, c_I, order)` consuming both
-tableaux and reusing the Phase 4 stage-solver for the implicit pieces;
-named instances: ARS222, ARS443, ARK4(3)6L (Kennedy-Carpenter).
-Verification: combined-method order conditions; convergence on advection-
-diffusion with stiff diffusion + nonstiff advection.  Epoch 10 MHD
-enabler.
+**Phase 5 — IMEX additive RK + abundance conservation.** `AdditiveRHSProtocol`
+with `AdditiveRHS(f_E, f_I, jac_I)` concrete wrapper; `IMEXIntegrator(A_E,
+b_E, c_E, A_I, b_I, c_I, order)` with per-stage Newton iteration reusing the
+Phase 4 LUFactorization pattern; named instance `ars222` (Ascher-Ruuth-Spiteri
+1997, order 2, γ = (2−√2)/2, A-stable implicit tableau).  Verification:
+convergence on the split scalar ODE dy/dt = λ_E·y + λ_I·y; 3-species closed
+decay chain A→B→C as the canonical abundance test problem — state X = [X₀,X₁,X₂]
+with Xᵢ ∈ [0,1] and Σ Xᵢ = 1; conservation check `|Σ Xᵢ − 1| < 1e-12` (exact
+for any RK-family method on a system with zero column-sum rate matrix); positivity
+check Xᵢ ≥ 0; applied to all DIRK methods and rk4 (plain RHS split) and ars222
+(production/decay IMEX split).  Epoch 10 MHD enabler; abundance structure
+previews the nuclear microphysics ODE shape.
 
 **Phase 6 — Explicit Adams-Bashforth.** `WithFHistoryState(t, y, [f_{n−1},
 …, f_{n−k+1}])`; `LinearMultistepIntegrator(ρ, σ)` parameterized by

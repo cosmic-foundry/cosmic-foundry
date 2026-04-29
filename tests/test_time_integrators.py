@@ -27,10 +27,12 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
+    AdditiveRHS,
     BlackBoxRHS,
     ConstantStep,
     DIRKIntegrator,
     HamiltonianSplit,
+    IMEXIntegrator,
     JacobianRHS,
     PartitionedState,
     PIController,
@@ -38,6 +40,7 @@ from cosmic_foundry.computation.time_integrators import (
     RungeKuttaIntegrator,
     SymplecticSplittingIntegrator,
     TimeStepper,
+    ars222,
     backward_euler,
     bogacki_shampine,
     crouzeix_3,
@@ -681,4 +684,269 @@ def test_a_stability(claim: _AStabilityClaim) -> None:
     ids=[c.description for c in _L_STABILITY_CLAIMS],
 )
 def test_l_stability(claim: _LStabilityClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 claims — IMEX + abundance conservation
+# ---------------------------------------------------------------------------
+
+# Canonical test problem: 3-species closed decay chain A→B→C with rates k1=1, k2=2.
+#
+# This is the minimal nuclear-astrophysics-shaped ODE: the state vector X = [X0,X1,X2]
+# represents mass fractions with X_i ∈ [0,1] and sum(X_i) = 1.  The rate matrix
+# has zero column sums, so any Runge-Kutta method (explicit or DIRK or IMEX) preserves
+# sum(X) exactly in floating point — making conservation a hard check, not a tolerance.
+#
+# Exact solution starting from X(0) = [1, 0, 0]:
+#   X0(t) = exp(−t)
+#   X1(t) = exp(−t) − exp(−2t)
+#   X2(t) = 1 − X0 − X1
+#
+# IMEX split: f_I handles self-decay (diagonal, stiff in principle), f_E handles
+# inter-species production (off-diagonal, always non-stiff).  This mirrors the
+# standard operator split in nuclear burning codes.
+
+_K1 = 1.0
+_K2 = 2.0
+
+# Total RHS for explicit/DIRK use (via JacobianRHS which also satisfies RHSProtocol).
+_DECAY_JAC = [[-_K1, 0.0, 0.0], [_K1, -_K2, 0.0], [0.0, _K2, 0.0]]
+
+
+def _decay_f(t: float, u: Tensor) -> Tensor:
+    x0, x1 = float(u[0]), float(u[1])
+    return Tensor([-_K1 * x0, _K1 * x0 - _K2 * x1, _K2 * x1], backend=u.backend)
+
+
+def _decay_jac(t: float, u: Tensor) -> Tensor:
+    return Tensor(_DECAY_JAC, backend=u.backend)
+
+
+_DECAY_RHS = JacobianRHS(f=_decay_f, jac=_decay_jac)
+
+# IMEX split: f_I = diagonal decay, f_E = off-diagonal production.
+_DECAY_RHS_IMEX = AdditiveRHS(
+    f_E=lambda t, u: Tensor(
+        [0.0, _K1 * float(u[0]), _K2 * float(u[1])], backend=u.backend
+    ),
+    f_I=lambda t, u: Tensor(
+        [-_K1 * float(u[0]), -_K2 * float(u[1]), 0.0], backend=u.backend
+    ),
+    jac_I=lambda t, u: Tensor(
+        [[-_K1, 0.0, 0.0], [0.0, -_K2, 0.0], [0.0, 0.0, 0.0]], backend=u.backend
+    ),
+)
+
+
+def _decay_exact(t: float) -> tuple[float, float, float]:
+    x0 = math.exp(-_K1 * t)
+    x1 = math.exp(-_K1 * t) - math.exp(-_K2 * t)
+    return x0, x1, 1.0 - x0 - x1
+
+
+class _AbundanceConservationClaim(Claim):
+    """Verify a closed decay chain: accuracy, mass-fraction sum = 1, positivity.
+
+    Applies to any integrator whose step(rhs, state, dt) → RKState interface
+    accepts a JacobianRHS (which also satisfies the plain RHSProtocol, so
+    explicit RK methods work too).
+    """
+
+    def __init__(
+        self,
+        instance: RungeKuttaIntegrator | DIRKIntegrator,
+        label: str,
+        dt: float = 0.05,
+        t_end: float = 2.0,
+        acc_tol: float = 1e-3,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt = dt
+        self._t_end = t_end
+        self._acc_tol = acc_tol
+
+    @property
+    def description(self) -> str:
+        return f"abundance_conservation/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        n_steps = round(self._t_end / self._dt)
+        state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+        for _ in range(n_steps):
+            state = inst.step(_DECAY_RHS, state, self._dt)
+
+        x0_ex, x1_ex, x2_ex = _decay_exact(state.t)
+        err = max(
+            abs(float(state.u[0]) - x0_ex),
+            abs(float(state.u[1]) - x1_ex),
+            abs(float(state.u[2]) - x2_ex),
+        )
+        assert (
+            err < self._acc_tol
+        ), f"{self._label}: max abundance error {err:.2e} > {self._acc_tol:.2e}"
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert (
+            abs(total - 1.0) < 1e-12
+        ), f"{self._label}: sum(X) = {total:.15f} ≠ 1 (mass not conserved)"
+
+        for i in range(3):
+            xi = float(state.u[i])
+            assert (
+                xi >= -1e-10
+            ), f"{self._label}: X[{i}] = {xi:.3e} < 0 (positivity violated)"
+
+
+class _IMEXAbundanceConservationClaim(Claim):
+    """Same decay-chain checks for an IMEXIntegrator with the production/decay split."""
+
+    def __init__(
+        self,
+        instance: IMEXIntegrator,
+        label: str,
+        dt: float = 0.05,
+        t_end: float = 2.0,
+        acc_tol: float = 1e-3,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt = dt
+        self._t_end = t_end
+        self._acc_tol = acc_tol
+
+    @property
+    def description(self) -> str:
+        return f"imex_abundance_conservation/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        n_steps = round(self._t_end / self._dt)
+        state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+        for _ in range(n_steps):
+            state = inst.step(_DECAY_RHS_IMEX, state, self._dt)
+
+        x0_ex, x1_ex, x2_ex = _decay_exact(state.t)
+        err = max(
+            abs(float(state.u[0]) - x0_ex),
+            abs(float(state.u[1]) - x1_ex),
+            abs(float(state.u[2]) - x2_ex),
+        )
+        assert (
+            err < self._acc_tol
+        ), f"{self._label}: max abundance error {err:.2e} > {self._acc_tol:.2e}"
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert (
+            abs(total - 1.0) < 1e-12
+        ), f"{self._label}: sum(X) = {total:.15f} ≠ 1 (mass not conserved)"
+
+        for i in range(3):
+            xi = float(state.u[i])
+            assert (
+                xi >= -1e-10
+            ), f"{self._label}: X[{i}] = {xi:.3e} < 0 (positivity violated)"
+
+
+class _IMEXConvergenceClaim(Claim):
+    """Verify IMEX convergence order on dy/dt = f_E(y) + f_I(y) = (λ_E + λ_I)y."""
+
+    def __init__(
+        self,
+        instance: IMEXIntegrator,
+        label: str,
+        lam_E: float = -1.0,
+        lam_I: float = -2.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._lam_E = lam_E
+        self._lam_I = lam_I
+
+    @property
+    def description(self) -> str:
+        return f"imex_convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam_E, lam_I = self._lam_E, self._lam_I
+        lam_tot = lam_E + lam_I
+        rhs = AdditiveRHS(
+            f_E=lambda t, u, _l=lam_E: _l * u,
+            f_I=lambda t, u, _l=lam_I: _l * u,
+            jac_I=lambda t, u, _l=lam_I: Tensor([[_l]]),
+        )
+        dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt)
+            state = RKState(0.0, Tensor([1.0]))
+            for _ in range(n_steps):
+                state = inst.step(rhs, state, dt)
+            exact = math.exp(lam_tot * state.t)
+            errors.append(abs(float(state.u[0]) - exact))
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} - 0.1"
+        )
+
+
+_ABUNDANCE_CONSERVATION_CLAIMS: list[_AbundanceConservationClaim] = [
+    _AbundanceConservationClaim(rk4, "rk4", acc_tol=1e-4),
+    _AbundanceConservationClaim(backward_euler, "backward_euler", acc_tol=2e-2),
+    _AbundanceConservationClaim(implicit_midpoint, "implicit_midpoint", acc_tol=1e-3),
+    _AbundanceConservationClaim(crouzeix_3, "crouzeix_3", acc_tol=5e-4),
+]
+
+_IMEX_ABUNDANCE_CONSERVATION_CLAIMS: list[_IMEXAbundanceConservationClaim] = [
+    _IMEXAbundanceConservationClaim(ars222, "ars222"),
+]
+
+_IMEX_CONVERGENCE_CLAIMS: list[_IMEXConvergenceClaim] = [
+    _IMEXConvergenceClaim(ars222, "ars222"),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _ABUNDANCE_CONSERVATION_CLAIMS,
+    ids=[c.description for c in _ABUNDANCE_CONSERVATION_CLAIMS],
+)
+def test_abundance_conservation(claim: _AbundanceConservationClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _IMEX_ABUNDANCE_CONSERVATION_CLAIMS,
+    ids=[c.description for c in _IMEX_ABUNDANCE_CONSERVATION_CLAIMS],
+)
+def test_imex_abundance_conservation(claim: _IMEXAbundanceConservationClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _IMEX_CONVERGENCE_CLAIMS,
+    ids=[c.description for c in _IMEX_CONVERGENCE_CLAIMS],
+)
+def test_imex_convergence(claim: _IMEXConvergenceClaim) -> None:
     claim.check()
