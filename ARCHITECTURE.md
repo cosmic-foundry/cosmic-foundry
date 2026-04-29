@@ -505,20 +505,48 @@ exposing the Jacobian to the AB integrator; hard conservation check
 by any linear combination of past function values.  First phase with non-trivial
 typed state.  Mostly groundwork for Phase 7.
 
-**Phase 7 — BDF + VODE-style variable-order controller.** `NordsieckState`
-representation; `BDFFamily(q_max=6)` and `AdamsFamily(q_max=12)` as
-parametric families producing tableaux for any order `q`; `OrderSelector`
-choosing `q_next ∈ {q − 1, q, q + 1}` from cross-order error estimates;
-`StiffnessSwitcher` flipping Adams ↔ BDF based on a streaming spectral-
-radius estimate; `VODEController` composing all three.  Verification: all
-test cases use the abundance-vector form (X ∈ [0,1]^n, Σ Xᵢ = 1) rather
-than the scalar Dahlquist equation; stiffness ratio and species count vary
-to span easy (λ_stiff/λ_slow ~ 10, 3 species) through hard (~ 10³, 5+
-species) regimes — not all tests are equally demanding: order-selector
-correctness uses a non-stiff network and family-switch correctness uses a
-network with a deliberate fast/slow species pair.  Activates the "method
-family + policy" axis — the integrator's identity becomes a function of
-run-time diagnostics, not a fixed tableau.
+**Phase 7a — Nordsieck state + BDF fixed-order integrators.**
+`NordsieckState(t, h, z)` carrying the Nordsieck vector
+`z = [y, hy', h²y''/2!, …, hᵍy⁽ᵍ⁾/q!]` with step size `h` baked in so
+prediction is a pure Pascal-matrix multiply; `BDFFamily(q_max=6)` as a
+parametric coefficient provider producing the BDF `α`/`l` vectors for any
+order `q`; `NordsieckIntegrator(family, q)` with a Newton corrector
+(BDF is implicit, requires `WithJacobianRHSProtocol`); bootstrap via RK4
+for the first `q` steps followed by Nordsieck vector initialization; named
+instances `bdf1`–`bdf4`.  Verification: convergence claims for BDF orders
+1–4 on the A→B→C abundance network; hard conservation check
+`|ΣXᵢ − 1| < 1e-12`.
+
+**Phase 7b — Adams family + fixed-order Adams integrators.**
+`AdamsFamily(q_max=12)` as a parametric coefficient provider for
+Adams-Moulton orders 1–12; Adams correction mode added to
+`NordsieckIntegrator` using fixed-point iteration (no Jacobian required,
+satisfies plain `RHSProtocol`); named instances `adams_moulton1`–
+`adams_moulton4`.  Verification: convergence claims for Adams orders 1–4
+on the same abundance network; same conservation check.
+
+**Phase 7c — Variable-order within a family.** `OrderSelector` estimating
+truncation error at orders `q−1`, `q`, `q+1` from the corrector residual
+and Nordsieck history differences, selecting `q_next` to minimize work per
+unit accuracy; `VariableOrderNordsieckIntegrator` wrapping a fixed family
+and applying the Nordsieck order-change rescaling (lengthen or truncate the
+history vector) when `q` shifts; step-size rescaling on rejection using the
+LTE estimate at current `q`.  Verification: order-selection claim on a
+non-stiff 3-species network (λ_stiff/λ_slow ~ 10); confirm `q` climbs to
+the expected ceiling on smooth data and drops when the solution sharpens.
+
+**Phase 7d — Stiffness detection + VODEController.** `StiffnessSwitcher`
+carrying a streaming spectral-radius estimate from the Newton Jacobian
+(Gershgorin bound on the last accepted `hJ`), triggering Adams→BDF when
+the dominant eigenvalue magnitude exceeds a threshold and BDF→Adams when it
+falls back; `VODEController` composing `OrderSelector` (Phase 7c) and
+`StiffnessSwitcher`; family-switch Nordsieck transformation remapping the
+history vector between BDF and Adams `α`/`l` bases.  Verification: claim
+on a network with a deliberate fast/slow species pair
+(λ_stiff/λ_slow ~ 10³); Adams must be active during the slow early
+transient and BDF must engage once the fast timescale dominates.  Activates
+the "method family + policy" axis — the integrator's identity becomes a
+function of run-time diagnostics, not a fixed tableau.
 
 **Phase 8 — Exponential integrators.** `LinearPlusNonlinearRHS(L, N)`
 protocol; φ-function evaluation (scaling-and-squaring on dense `hL` for
@@ -575,7 +603,7 @@ present:
 - Stiff nonlinear oscillator `du/dt = v, dv/dt = -ω² u − α(u² − 1) v`
   with `α ∈ {1, 10², 10³, 10⁵}` as a fixed-problem stiffness sweep.
 
-*Tier C — Network-scale, nuclear-resembling (with Phase 7).* The
+*Tier C — Network-scale, nuclear-resembling (with Phase 7a–7d).* The
 user-facing payload.  Synthetic networks designed to numerically
 resemble thermonuclear reaction networks: dozens to hundreds of
 species, rate coefficients spanning ~10 orders of magnitude, sparse
@@ -649,14 +677,14 @@ a family-wide bug invisible to self-reference.
 
 2. **Autotuner generalization.** Does the static autotuner from Phase 0
    (`Constant` controller + descriptor-driven `recommended_dt`) survive
-   once VODE-style controllers exist in Phase 7, or does Phase 7 subsume
+   once VODE-style controllers exist in Phase 7d, or does Phase 7d subsume
    the static autotuner as the trivial constant-policy case?  Resolves in
-   Phase 7.
+   Phase 7d.
 
-3. **Stiffness detector reuse.** Phase 7 needs an online ρ(J) estimate;
+3. **Stiffness detector reuse.** Phase 7d needs an online ρ(J) estimate;
    Phase 8 may benefit from the same machinery (deciding when `‖hL‖` is
    large enough to justify exponential treatment over fully-explicit).
-   Factor into a shared `StiffnessDiagnostic` from Phase 7 onward.
+   Factor into a shared `StiffnessDiagnostic` from Phase 7d onward.
 
 4. **`set_default_backend` vs. solver-level override.** Carried forward
    from the prior epoch.  Time-integrator code must inherit whichever
