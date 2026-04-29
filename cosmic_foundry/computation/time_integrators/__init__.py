@@ -94,6 +94,7 @@ from cosmic_foundry.computation.time_integrators.variable_order import (
     OrderSelector,
     VariableOrderNordsieckIntegrator,
 )
+from cosmic_foundry.computation.time_integrators.vode import VODEController
 
 __all__ = [
     "Tree",
@@ -168,4 +169,5 @@ __all__ = [
     "StiffnessDiagnostic",
     "StiffnessSwitcher",
     "nordsieck_solution_distance",
+    "VODEController",
 ]

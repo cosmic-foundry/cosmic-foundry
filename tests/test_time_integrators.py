@@ -49,6 +49,7 @@ from cosmic_foundry.computation.time_integrators import (
     SymplecticSplittingIntegrator,
     TimeStepper,
     VariableOrderNordsieckIntegrator,
+    VODEController,
     ab2,
     ab3,
     ab4,
@@ -1834,4 +1835,104 @@ _STIFFNESS_CLAIMS: list[Claim] = [
     ids=[c.description for c in _STIFFNESS_CLAIMS],
 )
 def test_stiffness_switching(claim: Claim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 12 claims — VODE-style adaptive controller
+# ---------------------------------------------------------------------------
+
+
+def _vode_fast_slow_f(t: float, u: Tensor) -> Tensor:
+    k2 = 1.0 if t < 0.45 else 1000.0
+    x0, x1 = float(u[0]), float(u[1])
+    return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
+
+
+def _vode_fast_slow_jac(t: float, u: Tensor) -> Tensor:
+    k2 = 1.0 if t < 0.45 else 1000.0
+    return Tensor([[-1.0, 0.0, 0.0], [1.0, -k2, 0.0], [0.0, k2, 0.0]])
+
+
+_VODE_RHS = JacobianRHS(f=_vode_fast_slow_f, jac=_vode_fast_slow_jac)
+
+
+class _VODEControllerSwitchClaim(Claim):
+    """Verify VODE policy composes order selection with stiffness switching."""
+
+    @property
+    def description(self) -> str:
+        return "vode_controller/fast_slow_family_policy"
+
+    def check(self) -> None:
+        controller = VODEController(
+            adams_family=adams_family,
+            bdf_family=bdf_family,
+            order_selector=OrderSelector(
+                q_min=2,
+                q_max=4,
+                atol=5e-4,
+                rtol=5e-4,
+                factor_min=0.25,
+                factor_max=1.15,
+            ),
+            stiffness_switcher=StiffnessSwitcher(
+                stiff_threshold=1.0,
+                nonstiff_threshold=0.4,
+            ),
+            q_initial=2,
+            initial_family="adams",
+        )
+        state = controller.advance(
+            _VODE_RHS,
+            Tensor([1.0, 0.0, 0.0]),
+            t0=0.0,
+            t_end=0.7,
+            dt0=0.005,
+        )
+
+        early_families = [
+            family
+            for t, family in zip(
+                controller.accepted_times,
+                controller.accepted_families,
+                strict=True,
+            )
+            if t < 0.35
+        ]
+        late_families = [
+            family
+            for t, family in zip(
+                controller.accepted_times,
+                controller.accepted_families,
+                strict=True,
+            )
+            if t > 0.5
+        ]
+
+        assert early_families
+        assert late_families
+        assert set(early_families) == {"adams"}
+        assert "bdf" in late_families
+        assert controller.family_switches >= 1
+        assert max(controller.accepted_stiffness) > 1.0
+        assert max(controller.accepted_orders) > 2
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert abs(total - 1.0) < 1e-12
+        for i in range(3):
+            assert float(state.u[i]) >= -1e-10
+
+
+_VODE_CONTROLLER_CLAIMS: list[Claim] = [
+    _VODEControllerSwitchClaim(),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _VODE_CONTROLLER_CLAIMS,
+    ids=[c.description for c in _VODE_CONTROLLER_CLAIMS],
+)
+def test_vode_controller(claim: Claim) -> None:
     claim.check()
