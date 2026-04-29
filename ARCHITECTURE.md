@@ -518,12 +518,16 @@ instances `bdf1`–`bdf4`.  Verification: convergence claims for BDF orders
 `|ΣXᵢ − 1| < 1e-12`.
 
 **Phase 8 — Adams family + fixed-order Adams integrators.**
-`AdamsFamily(q_max=12)` as a parametric coefficient provider for
-Adams-Moulton orders 1–12; Adams correction mode added to
-`NordsieckIntegrator` using fixed-point iteration (no Jacobian required,
-satisfies plain `RHSProtocol`); named instances `adams_moulton1`–
-`adams_moulton4`.  Verification: convergence claims for Adams orders 1–4
-on the same abundance network; same conservation check.
+`AdamsFamily(q_max=6)` as a parametric coefficient provider whose l-vector
+is derived from `∫₀^ξ ∏_{k=1}^{q−1}(s+k)/(q−1)! ds` (Gear 1971 Table 11.2);
+Adams correction mode added to `NordsieckIntegrator` using fixed-point
+iteration (no Jacobian required, satisfies plain `RHSProtocol`);
+initialization via a corrected backward-difference formula
+`z[j] = (h/j!)·(∇^{j−1} + (j−1)/2·∇^j)f_q` that reduces the bootstrap
+error from O(h^{j+1}) to O(h^{j+2}), enabling all four named instances
+`adams_moulton1`–`adams_moulton4` to achieve their declared convergence orders.
+Verification: convergence-slope and abundance-conservation claims for Adams
+orders 1–4; hard conservation check `|ΣXᵢ − 1| < 1e-12`.
 
 **Phase 9 — Nordsieck order-change rescaling.** The pure mathematical
 primitive for changing order within a fixed family: a function (or method

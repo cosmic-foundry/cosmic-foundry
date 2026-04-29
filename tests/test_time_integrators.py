@@ -46,6 +46,10 @@ from cosmic_foundry.computation.time_integrators import (
     ab2,
     ab3,
     ab4,
+    adams_moulton1,
+    adams_moulton2,
+    adams_moulton3,
+    adams_moulton4,
     ars222,
     backward_euler,
     bdf1,
@@ -1285,4 +1289,169 @@ def test_bdf_convergence(claim: _BDFConvergenceClaim) -> None:
     ids=[c.description for c in _BDF_CONSERVATION_CLAIMS],
 )
 def test_bdf_conservation(claim: _BDFConservationClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 claims — Adams-Moulton (Nordsieck form, fixed-point corrector)
+# ---------------------------------------------------------------------------
+
+_AM_N_HALVINGS = _BDF_N_HALVINGS  # same bootstrap depth as BDF
+
+
+class _AMConvergenceClaim(Claim):
+    """Verify Adams-Moulton-q convergence rate on dy/dt = λy.
+
+    Mirrors _BDFConvergenceClaim exactly, but uses plain RHSProtocol
+    (no Jacobian) because Adams methods use fixed-point iteration.
+
+    Step-size calibration follows the same logic as BDF:
+
+    - Base step _DT_BASE / q: the bootstrap takes q RK4 steps, and the
+      Nordsieck correction needs roughly q more AM steps to propagate
+      through all history slots, so the coarsest dt must give ~9q steps.
+
+    - Halvings _AM_N_HALVINGS − (floor(log₂ q) + 1): same argument as
+      BDF — reducing dt_base by q moves the fine end closer to machine
+      precision by log₂ q halvings.
+    """
+
+    def __init__(
+        self,
+        instance: NordsieckIntegrator,
+        label: str,
+        lam: float = -1.0,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._lam = lam
+
+    @property
+    def description(self) -> str:
+        return f"am_convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        lam = self._lam
+        rhs = BlackBoxRHS(lambda t, u, _l=lam: _l * u)
+        dt_base = _DT_BASE / inst.order
+        n_halvings = _AM_N_HALVINGS - (math.floor(math.log2(inst.order)) + 1)
+        dts = [dt_base / (2**k) for k in range(n_halvings + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt) - inst.order
+            state = inst.init_state(rhs, 0.0, Tensor([1.0]), dt)
+            for _ in range(max(n_steps, 1)):
+                state = inst.step(rhs, state, dt)
+            exact = math.exp(lam * state.t)
+            errors.append(abs(float(state.u[0]) - exact))
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} < declared order "
+            f"{inst.order} − 0.1"
+        )
+
+
+class _AMConservationClaim(Claim):
+    """Verify Adams-Moulton-q on the 3-species A→B→C decay chain.
+
+    Uses _decay_f directly (plain RHSProtocol — no Jacobian required).
+    The rate matrix has zero column sums, so fixed-point iteration
+    preserves sum(X) to machine precision.  Checks accuracy against the
+    analytical solution, |ΣXᵢ − 1| < 1e-12, and positivity.
+    """
+
+    def __init__(
+        self,
+        instance: NordsieckIntegrator,
+        label: str,
+        dt: float = 0.05,
+        t_end: float = 2.0,
+        acc_tol: float = 1e-3,
+    ) -> None:
+        self._instance = instance
+        self._label = label
+        self._dt = dt
+        self._t_end = t_end
+        self._acc_tol = acc_tol
+
+    @property
+    def description(self) -> str:
+        return f"am_conservation/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        dt = self._dt
+        n_steps = round(self._t_end / dt) - inst.order
+        state = inst.init_state(_decay_f, 0.0, Tensor([1.0, 0.0, 0.0]), dt)
+        for _ in range(max(n_steps, 1)):
+            state = inst.step(_decay_f, state, dt)
+
+        x0_ex, x1_ex, x2_ex = _decay_exact(state.t)
+        err = max(
+            abs(float(state.u[0]) - x0_ex),
+            abs(float(state.u[1]) - x1_ex),
+            abs(float(state.u[2]) - x2_ex),
+        )
+        assert (
+            err < self._acc_tol
+        ), f"{self._label}: max abundance error {err:.2e} > {self._acc_tol:.2e}"
+
+        total = sum(float(state.u[i]) for i in range(3))
+        assert (
+            abs(total - 1.0) < 1e-12
+        ), f"{self._label}: sum(X) = {total:.15f} ≠ 1 (mass not conserved)"
+
+        for i in range(3):
+            xi = float(state.u[i])
+            assert (
+                xi >= -1e-10
+            ), f"{self._label}: X[{i}] = {xi:.3e} < 0 (positivity violated)"
+
+
+_AM_CONVERGENCE_CLAIMS: list[_AMConvergenceClaim] = [
+    _AMConvergenceClaim(adams_moulton1, "am1"),
+    _AMConvergenceClaim(adams_moulton2, "am2"),
+    _AMConvergenceClaim(adams_moulton3, "am3"),
+    _AMConvergenceClaim(adams_moulton4, "am4"),
+]
+
+_AM_CONSERVATION_CLAIMS: list[_AMConservationClaim] = [
+    _AMConservationClaim(adams_moulton1, "am1", acc_tol=0.05),
+    _AMConservationClaim(adams_moulton2, "am2", acc_tol=5e-4),
+    _AMConservationClaim(adams_moulton3, "am3", acc_tol=1e-5),
+    _AMConservationClaim(adams_moulton4, "am4", acc_tol=1e-6),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _AM_CONVERGENCE_CLAIMS,
+    ids=[c.description for c in _AM_CONVERGENCE_CLAIMS],
+)
+def test_am_convergence(claim: _AMConvergenceClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _AM_CONSERVATION_CLAIMS,
+    ids=[c.description for c in _AM_CONSERVATION_CLAIMS],
+)
+def test_am_conservation(claim: _AMConservationClaim) -> None:
     claim.check()

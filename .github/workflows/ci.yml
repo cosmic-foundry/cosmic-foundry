@@ -70,7 +70,7 @@ jobs:
         run: pip install -e .[dev]
       - name: Run pytest
         env:
-          COSMIC_FOUNDRY_TEST_BUDGET_S: "30"
+          COSMIC_FOUNDRY_TEST_BUDGET_S: "60"
         run: bash run_tests.sh -q
 
   docs:

@@ -1,4 +1,4 @@
-"""Nordsieck-form BDF integrators.
+"""Nordsieck-form linear multistep integrators: BDF and Adams-Moulton families.
 
 The Nordsieck vector z_n stores the scaled Taylor expansion of y at t_n:
 
@@ -6,30 +6,41 @@ The Nordsieck vector z_n stores the scaled Taylor expansion of y at t_n:
 
 where h is the step size baked into the state.  Prediction advances z_n to
 t_{n+1} via the (q+1) × (q+1) Pascal matrix P[i,j] = C(j,i) for j ≥ i.
-The BDF corrector then solves one implicit equation and applies the
-correction vector l component-wise.
+The corrector then applies the correction vector l component-wise to the
+predicted Nordsieck vector after solving one implicit equation.
 
-For BDF-q the l-vector and β₀ are:
+Both families share the same correction structure:
 
+    z_new[i] = z_pred[i] + l[i] · δ,   δ = h·f(t_{n+1}, y_{n+1}) − z_pred[1]
+
+The implicit equation for y_{n+1} is:
+
+    y − β₀ h f(t_{n+1}, y) = z_pred[0] − β₀ z_pred[1]
+
+and l[1] = 1 always (the derivative slot is updated to h·f exactly).
+
+BDF family (stiff problems)
+---------------------------
     β₀ = 1 / H_q,   H_q = Σ_{k=1}^{q} 1/k
     l[j] = β₀ · e_{q−j}(1, …, q) / q!   for j = 0, …, q
 
-where e_k denotes the k-th elementary symmetric polynomial.  This yields
-l[1] = 1 exactly (the derivative slot always receives h·f(t_{n+1}, y_{n+1}))
-and l[0] = β₀ (the leading coefficient that governs the implicit step).
+where e_k is the k-th elementary symmetric polynomial.  The implicit equation
+is solved by Newton iteration using the Jacobian from WithJacobianRHSProtocol.
 
-The corrector implicit equation is then:
+Adams-Moulton family (non-stiff problems)
+-----------------------------------------
+    β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
+    l[j] = coefficient of ξ^j in ∫₀^ξ ∏_{k=1}^{q−1} (s+k) / (q−1)! ds
 
-    y − β₀ h f(t_{n+1}, y) = z^(0)[0] − β₀ z^(0)[1]
-
-solved by Newton iteration with the Jacobian from WithJacobianRHSProtocol.
+giving l = [β₀, 1, 1/2], [β₀, 1, 3/4, 1/6], [β₀, 1, 11/12, 1/3, 1/24], …
+(Gear 1971 Table 11.2; l[q] = 1/q! always).  The implicit equation is
+solved by fixed-point iteration, so no Jacobian is required; this family
+satisfies plain RHSProtocol and is preferred for non-stiff problems.
 
 Named instances
 ---------------
-bdf1  —  order 1, L-stable (backward Euler in Nordsieck form)
-bdf2  —  order 2, A-stable
-bdf3  —  order 3, A(α)-stable
-bdf4  —  order 4, A(α)-stable
+bdf1–bdf4          —  BDF orders 1–4 (L/A/A(α)-stable)
+adams_moulton1–am4 —  Adams-Moulton orders 1–4 (non-stiff, no Jacobian)
 """
 
 from __future__ import annotations
@@ -41,12 +52,14 @@ import sympy
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
-from cosmic_foundry.computation.time_integrators.integrator import RKState
+from cosmic_foundry.computation.time_integrators.integrator import RHSProtocol, RKState
 from cosmic_foundry.computation.time_integrators.runge_kutta import rk4 as _rk4
 
 _LU = LUFactorization()
 _NEWTON_MAX_ITER = 50
 _NEWTON_TOL = 1e-12
+_FP_MAX_ITER = 50
+_FP_TOL = 1e-12
 
 
 class NordsieckState:
@@ -181,35 +194,151 @@ class BDFFamily:
         return self._q_max
 
 
+class AdamsFamily:
+    """Parametric Adams-Moulton coefficient provider for orders 1 through q_max.
+
+    Adams-Moulton of order q is the implicit corrector:
+
+        y_{n+1} = y_n + h · (β₀ f_{n+1} + β₁ f_n + … + β_{q-1} f_{n-q+2})
+
+    In Nordsieck form the only per-step quantities needed are β₀ and the
+    correction vector l, both precomputed as exact rationals.
+
+    β₀ is the leading Adams-Moulton coefficient:
+
+        β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
+
+    which evaluates to 1, 1/2, 5/12, 3/8, 251/720, … for q = 1, 2, 3, 4, 5, …
+
+    The l-vector satisfies l[0] = β₀, l[1] = 1 (always), and:
+
+        l[j] = coefficient of ξ^j in ∫₀^ξ ∏_{k=1}^{q−1} (s+k) / (q−1)! ds
+
+    for j = 1, …, q.  This integral polynomial generates l[j] = 1, 1/2, 3/4,
+    1/6, 11/12, 1/3, 1/24, … for increasing q and j, matching Gear (1971)
+    Table 11.2.  Explicitly: l[q] = 1/q! always, and l[2] = H_{q−1}/2 where
+    H_k is the k-th harmonic number.
+
+    In plain terms: the l-vector encodes both the one-step prediction-error
+    correction (l[1]=1 always) and the inter-step consistency requirement —
+    after the correction, the Nordsieck history must correctly seed the
+    Pascal prediction for the next step.  The integral formula accounts for
+    both constraints; using only the prediction error gives wrong values for
+    j ≥ 2 that make the higher Nordsieck slots unstable.
+
+    Use this family for non-stiff problems.  The implicit equation is solved
+    by fixed-point iteration — no Jacobian is required (plain RHSProtocol).
+    For stiff problems use BDFFamily, which solves via Newton iteration.
+
+    Parameters
+    ----------
+    q_max:
+        Maximum supported order.  Default 12 (AM1–AM12).
+    """
+
+    def __init__(self, q_max: int = 12) -> None:
+        self._q_max = q_max
+        self._l_sym: dict[int, list[sympy.Rational]] = {}
+        self._l_f: dict[int, list[float]] = {}
+        self._beta0_f: dict[int, float] = {}
+        for q in range(1, q_max + 1):
+            l_sym, beta0_sym = self._compute_l(q)
+            self._l_sym[q] = l_sym
+            self._l_f[q] = [float(v) for v in l_sym]
+            self._beta0_f[q] = float(beta0_sym)
+
+    @staticmethod
+    def _compute_l(q: int) -> tuple[list[sympy.Rational], sympy.Rational]:
+        """Return the Adams-Moulton-q l-vector and β₀ as exact sympy rationals.
+
+        β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
+
+        l[0] = β₀
+        l[j] = coefficient of ξ^j in ∫₀^ξ ∏_{k=1}^{q−1} (s+k) / (q−1)! ds,
+               for j = 1, …, q
+
+        The generating integral uses roots at s = −1, …, −(q−1), one shifted
+        relative to the β₀ integrand (roots at 0, …, −(q−2)).  The shift
+        ensures l[q] = 1/q! and satisfies the inter-step consistency
+        condition that the l-vector corrector in Nordsieck form produces.
+        """
+        s = sympy.Symbol("s")
+        xi = sympy.Symbol("xi")
+
+        # beta0: ∫₀¹ s(s+1)⋯(s+q−2) / (q−1)! ds
+        integrand_beta = sympy.Integer(1)
+        for k in range(q - 1):
+            integrand_beta *= s + k
+        beta0: sympy.Rational = sympy.integrate(
+            integrand_beta, (s, 0, 1)
+        ) / sympy.factorial(q - 1)
+
+        # l[1..q]: from ∫₀^ξ (s+1)(s+2)⋯(s+q−1) / (q−1)! ds
+        integrand_l = sympy.Integer(1)
+        for k in range(1, q):
+            integrand_l *= s + k
+        integrand_l = sympy.expand(integrand_l) / sympy.factorial(q - 1)
+        L_poly = sympy.expand(sympy.integrate(integrand_l, (s, 0, xi)))
+
+        lvec: list[sympy.Rational] = [beta0]
+        for j in range(1, q + 1):
+            lvec.append(L_poly.coeff(xi, j))
+        return lvec, beta0
+
+    def l_vector(self, q: int) -> list[float]:
+        """Adams-Moulton-q correction vector as Python floats."""
+        return self._l_f[q]
+
+    def l_vector_sym(self, q: int) -> list[sympy.Rational]:
+        """Adams-Moulton-q correction vector as exact sympy rationals."""
+        return self._l_sym[q]
+
+    def beta0(self, q: int) -> float:
+        """β₀ for Adams-Moulton-q as a Python float."""
+        return self._beta0_f[q]
+
+    @property
+    def q_max(self) -> int:
+        """Maximum supported order."""
+        return self._q_max
+
+
 class NordsieckIntegrator:
-    """Fixed-order BDF integrator in Nordsieck form.
+    """Fixed-order linear multistep integrator in Nordsieck form.
 
-    Each step predicts via the Pascal matrix then corrects by Newton
-    iteration on the BDF implicit equation.  The correction vector l
-    updates the full Nordsieck history after convergence so that z[1]
-    equals h · f(t_{n+1}, y_{n+1}) exactly.
+    Supports two corrector families selected by the family argument:
 
-    A Jacobian is required (WithJacobianRHSProtocol) because BDF is
-    unconditionally implicit; every stage inverts (I − β₀ h J).
+    BDFFamily (stiff problems)
+        Each step solves y − β₀ h f(t_{n+1}, y) = z_pred[0] − β₀ z_pred[1]
+        via Newton iteration, requiring WithJacobianRHSProtocol.
 
-    In plain terms: each BDF step first extrapolates the current
-    polynomial history to t_{n+1} (the prediction), then corrects the
-    predicted y by iterating until the BDF implicit equation is satisfied,
-    and finally updates all higher derivative slots so the history stays
-    consistent.
+    AdamsFamily (non-stiff problems)
+        Each step solves the same equation via fixed-point iteration,
+        requiring only plain RHSProtocol (no Jacobian).
 
-    Use init_state() to create the initial NordsieckState from (t₀, y₀, h)
-    by bootstrapping q RK4 steps.
+    Both paths share the same prediction (Pascal matrix) and history update
+    (l-vector correction).  The corrector family alone determines whether
+    Newton or fixed-point iteration is used; no other interface changes.
+
+    In plain terms: the prediction step extrapolates the polynomial history
+    to t_{n+1}; the correction step adjusts y_{n+1} until the implicit
+    equation is satisfied; the l-vector distributes that adjustment across
+    all Nordsieck slots so the history stays self-consistent.
+
+    Use init_state() to create the initial NordsieckState by bootstrapping
+    q RK4 steps.  BDF init uses one Jacobian evaluation to fill higher
+    Nordsieck slots; Adams init uses backward differences of the bootstrap
+    function values (no Jacobian required).
 
     Parameters
     ----------
     family:
-        BDFFamily instance supplying l and β₀ coefficients.
+        BDFFamily or AdamsFamily instance supplying l and β₀ coefficients.
     q:
         Method order (1 ≤ q ≤ family.q_max).
     """
 
-    def __init__(self, family: BDFFamily, q: int) -> None:
+    def __init__(self, family: BDFFamily | AdamsFamily, q: int) -> None:
         if not 1 <= q <= family.q_max:
             raise ValueError(f"q={q} outside [1, {family.q_max}]")
         self._family = family
@@ -224,30 +353,37 @@ class NordsieckIntegrator:
 
     def init_state(
         self,
-        rhs: WithJacobianRHSProtocol,
+        rhs: RHSProtocol,
         t0: float,
         u0: Tensor,
         dt: float,
     ) -> NordsieckState:
         """Bootstrap q RK4 steps and initialize the Nordsieck vector.
 
-        Takes q RK4 steps from (t0, u0) with step size dt, arriving at
-        (t_q, y_q) with t_q = t0 + q*dt.  Then initializes z[j] using
-        the J-based Taylor recursion:
+        For BDFFamily: initializes z[j] via the Jacobian-based Taylor recursion
+        z[j] = dt^j/j! · J^{j-1} · f evaluated at (t_q, y_q).  Requires
+        WithJacobianRHSProtocol; raises AttributeError at runtime otherwise.
 
-            z[0] = y_q
-            z[1] = dt * f(t_q, y_q)
-            z[j] = dt^j / j! * J^{j-1} * f   for j = 2, ..., q
+        For AdamsFamily: initializes z[j] via a corrected backward-difference
+        formula using the bootstrap function values:
 
-        where J = df/dy(t_q, y_q).  For autonomous linear ODEs this is
-        exact; for nonlinear problems the error in z[j] is O(dt^{j+1})
-        from missing Hessian terms, which is O(dt^{q+1}) overall and does
-        not degrade the BDF-q convergence rate.
+            z[j] = (dt / j!) · (∇^{j-1} f_q + (j−1)/2 · ∇^j f_q)
+            ∇^k f_q = Σ_{i=0}^{k} (−1)^i C(k,i) f_{q−i}
+
+        The plain ∇^{j-1} f_q approximates h^{j-1} y^{(j)} with error
+        O(h^j); adding (j−1)/2 · ∇^j f_q cancels the leading error term,
+        reducing the initialization error from O(h^{j+1}) to O(h^{j+2}).
+        This keeps the bootstrap error one order below the method's global
+        error for all q, enabling AM1–AM4 to achieve their declared orders.
+
+        Both paths take q RK4 steps from (t0, u0) and arrive at (t_q, y_q)
+        with t_q = t0 + q·dt.
 
         Parameters
         ----------
         rhs:
-            ODE right-hand side; Jacobian evaluated once at (t_q, y_q).
+            ODE right-hand side.  Must satisfy WithJacobianRHSProtocol for
+            BDFFamily; plain RHSProtocol suffices for AdamsFamily.
         t0:
             Initial time.
         u0:
@@ -255,6 +391,17 @@ class NordsieckIntegrator:
         dt:
             Step size for the bootstrap and all subsequent steps.
         """
+        if isinstance(self._family, BDFFamily):
+            return self._init_state_bdf(rhs, t0, u0, dt)  # type: ignore[arg-type]
+        return self._init_state_adams(rhs, t0, u0, dt)
+
+    def _init_state_bdf(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        t0: float,
+        u0: Tensor,
+        dt: float,
+    ) -> NordsieckState:
         q = self._q
         rk_state = RKState(t0, u0)
         for _ in range(q):
@@ -272,21 +419,68 @@ class NordsieckIntegrator:
 
         return NordsieckState(t_q, dt, tuple(z))
 
+    def _init_state_adams(
+        self,
+        rhs: RHSProtocol,
+        t0: float,
+        u0: Tensor,
+        dt: float,
+    ) -> NordsieckState:
+        q = self._q
+        rk_states = [RKState(t0, u0)]
+        for _ in range(q):
+            rk_states.append(_rk4.step(rhs, rk_states[-1], dt))
+        t_q = rk_states[-1].t
+        y_q = rk_states[-1].u
+
+        # Function values at t0, t1, ..., tq for backward-difference init.
+        f_vals = [rhs(s.t, s.u) for s in rk_states]
+        f_q = f_vals[q]
+        z: list[Tensor] = [y_q, dt * f_q]
+        for j in range(2, q + 1):
+            # nabla^{j-1} f_q = sum_{i=0}^{j-1} (-1)^i C(j-1, i) f_{q-i}
+            nabla: Tensor = f_vals[q]
+            for i in range(1, j):
+                nabla = nabla + ((-1) ** i * comb(j - 1, i)) * f_vals[q - i]
+            # One-order accuracy improvement: nabla^{j-1} approximates h^{j-1}y^{(j)}
+            # with error -(j-1)/2 * h^j y^{(j+1)} + O(h^{j+1}).  Adding (j-1)/2 times
+            # the next backward difference nabla^j (which approximates h^j y^{(j+1)})
+            # cancels the leading error term, reducing init error from O(h^{j+1}) to
+            # O(h^{j+2}).  nabla^j f_q requires f_{q-j} = f_vals[q-j], which is always
+            # available since j <= q and the bootstrap provides f_0,...,f_q.
+            nabla_j: Tensor = f_vals[q]
+            for i in range(1, j + 1):
+                nabla_j = nabla_j + ((-1) ** i * comb(j, i)) * f_vals[q - i]
+            nabla = nabla + ((j - 1) / 2) * nabla_j
+            z.append(nabla * (dt / factorial(j)))
+
+        return NordsieckState(t_q, dt, tuple(z))
+
     def step(
         self,
-        rhs: WithJacobianRHSProtocol,
+        rhs: RHSProtocol,
         state: NordsieckState,
         dt: float,
     ) -> NordsieckState:
         """Advance state by one step of size dt.
 
-        Rescales z if dt ≠ state.h, predicts via Pascal, then corrects via
-        Newton iteration on y − β₀ h f(t_{n+1}, y) = z^(0)[0] − β₀ z^(0)[1].
-        After convergence updates the full Nordsieck vector with l · f_delta,
-        where f_delta = h · f(t_{n+1}, y_{n+1}) − z^(0)[1].
+        Rescales z if dt ≠ state.h, predicts via Pascal, corrects via Newton
+        (BDFFamily) or fixed-point iteration (AdamsFamily), then updates the
+        full Nordsieck vector with l · f_delta where
+        f_delta = h · f(t_{n+1}, y_{n+1}) − z_pred[1].
 
         Returns a new NordsieckState at t + dt.
         """
+        if isinstance(self._family, BDFFamily):
+            return self._step_bdf(rhs, state, dt)  # type: ignore[arg-type]
+        return self._step_adams(rhs, state, dt)
+
+    def _step_bdf(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        state: NordsieckState,
+        dt: float,
+    ) -> NordsieckState:
         t, h, z = state.t, state.h, state.z
         q = state.q
         n = z[0].shape[0]
@@ -321,6 +515,39 @@ class NordsieckIntegrator:
         z_new = tuple(z_pred[i] + lvec[i] * f_delta for i in range(q + 1))
         return NordsieckState(t_new, h, z_new)
 
+    def _step_adams(
+        self,
+        rhs: RHSProtocol,
+        state: NordsieckState,
+        dt: float,
+    ) -> NordsieckState:
+        t, h, z = state.t, state.h, state.z
+        q = state.q
+
+        if dt != h:
+            r = dt / h
+            z = tuple(z[j] * (r**j) for j in range(q + 1))
+            h = dt
+
+        z_pred = _pascal_predict(z)
+        t_new = t + h
+        beta0 = self._beta0
+
+        y = z_pred[0]
+        for _ in range(_FP_MAX_ITER):
+            fy = rhs(t_new, y)
+            y_new = z_pred[0] + beta0 * (h * fy - z_pred[1])
+            delta_norm = float(norm(y_new - y))
+            y = y_new
+            if delta_norm < _FP_TOL * (1.0 + float(norm(y))):
+                break
+
+        fy = rhs(t_new, y)
+        f_delta = h * fy - z_pred[1]
+        lvec = self._l
+        z_new = tuple(z_pred[i] + lvec[i] * f_delta for i in range(q + 1))
+        return NordsieckState(t_new, h, z_new)
+
 
 # ---------------------------------------------------------------------------
 # Named instances
@@ -333,11 +560,24 @@ bdf2 = NordsieckIntegrator(bdf_family, q=2)
 bdf3 = NordsieckIntegrator(bdf_family, q=3)
 bdf4 = NordsieckIntegrator(bdf_family, q=4)
 
+adams_family = AdamsFamily(q_max=6)
+
+adams_moulton1 = NordsieckIntegrator(adams_family, q=1)
+adams_moulton2 = NordsieckIntegrator(adams_family, q=2)
+adams_moulton3 = NordsieckIntegrator(adams_family, q=3)
+adams_moulton4 = NordsieckIntegrator(adams_family, q=4)
+
 
 __all__ = [
+    "AdamsFamily",
     "BDFFamily",
     "NordsieckIntegrator",
     "NordsieckState",
+    "adams_family",
+    "adams_moulton1",
+    "adams_moulton2",
+    "adams_moulton3",
+    "adams_moulton4",
     "bdf1",
     "bdf2",
     "bdf3",
