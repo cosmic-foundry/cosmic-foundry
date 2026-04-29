@@ -1,12 +1,5 @@
 """Time-integration layer: integrators, steppers, controllers, B-series, symplectic."""
 
-from cosmic_foundry.computation.time_integrators.adams_bashforth import (
-    ABState,
-    AdamsBashforthIntegrator,
-    ab2,
-    ab3,
-    ab4,
-)
 from cosmic_foundry.computation.time_integrators.bseries import (
     Tree,
     elementary_weight,
@@ -14,6 +7,13 @@ from cosmic_foundry.computation.time_integrators.bseries import (
     order,
     sigma,
     trees_up_to_order,
+)
+from cosmic_foundry.computation.time_integrators.explicit_multistep import (
+    ExplicitMultistepIntegrator,
+    MultistepState,
+    ab2,
+    ab3,
+    ab4,
 )
 from cosmic_foundry.computation.time_integrators.exponential import (
     CoxMatthewsETDRK4Integrator,
@@ -174,8 +174,8 @@ __all__ = [
     "AdditiveRHSProtocol",
     "IMEXIntegrator",
     "ars222",
-    "ABState",
-    "AdamsBashforthIntegrator",
+    "ExplicitMultistepIntegrator",
+    "MultistepState",
     "ab2",
     "ab3",
     "ab4",
