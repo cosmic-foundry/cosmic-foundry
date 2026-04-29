@@ -211,10 +211,11 @@ class PIController:
 class TimeIntegrator(ABC):
     """Abstract base for all time integrators.
 
-    Defines the Phase-0 Runge-Kutta stepping interface.  Later integrator
-    families keep the same conceptual slots — RHS, state, step program,
-    controller — but may narrow them to richer protocols such as Jacobian,
-    additive, Hamiltonian, or Nordsieck state types.
+    Each integrator accepts an RHS and a state object, advances one step of
+    size dt, and returns a new state.  The state type varies by integrator
+    family: single-step methods use RKState; explicit multistep methods use
+    MultistepState; Phase D will introduce ODEState as the unified type
+    and replace the Any annotations here.
 
     Required:
         order — declared convergence order
@@ -227,12 +228,13 @@ class TimeIntegrator(ABC):
         """Declared convergence order of the method."""
 
     @abstractmethod
-    def step(self, rhs: RHSProtocol, state: RKState, dt: float) -> RKState:
+    def step(self, rhs: RHSProtocol, state: Any, dt: float) -> Any:
         """Advance state by one step of size dt.
 
-        Returns a new RKState with t = state.t + dt, updated u, dt set to
-        the step size used, and err set to the embedded error norm (0.0 if
-        no embedded pair is available).
+        Returns a new state with t = state.t + dt, updated u, dt set to the
+        step size used, and err set to the embedded error norm (0.0 if no
+        embedded pair is available).  The concrete return type depends on the
+        integrator family; all state types carry at least (t, u, dt, err).
         """
 
 

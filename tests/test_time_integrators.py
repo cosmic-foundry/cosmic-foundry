@@ -28,20 +28,20 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators import (
-    ABState,
-    AdamsBashforthIntegrator,
     AdditiveRHS,
     BlackBoxRHS,
     ConstantStep,
     CoxMatthewsETDRK4Integrator,
     DIRKIntegrator,
     ETDRK2Integrator,
+    ExplicitMultistepIntegrator,
     ExponentialEulerIntegrator,
     FamilySwitchingNordsieckIntegrator,
     IMEXIntegrator,
     JacobianRHS,
     KrogstadETDRK4Integrator,
     LinearPlusNonlinearRHS,
+    MultistepState,
     NordsieckIntegrator,
     NordsieckState,
     OperatorSplitRHS,
@@ -873,7 +873,7 @@ def test_imex_convergence(claim: _IMEXConvergenceClaim) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 6 claims — Adams-Bashforth multistep
+# Explicit multistep claims — Adams-Bashforth family
 # ---------------------------------------------------------------------------
 
 
@@ -887,7 +887,7 @@ class _ABConvergenceClaim(Claim):
 
     def __init__(
         self,
-        instance: AdamsBashforthIntegrator,
+        instance: ExplicitMultistepIntegrator,
         label: str,
     ) -> None:
         self._instance = instance
@@ -904,7 +904,7 @@ class _ABConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = ABState(0.0, Tensor([1.0, 0.0]))
+            state: MultistepState = MultistepState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
             errors.append(_max_base_network_error(state.u, state.t))
@@ -940,7 +940,7 @@ class _ABAbundanceConservationClaim(Claim):
 
     def __init__(
         self,
-        instance: AdamsBashforthIntegrator,
+        instance: ExplicitMultistepIntegrator,
         label: str,
         dt: float = 0.05,
         t_end: float = 2.0,
@@ -959,7 +959,7 @@ class _ABAbundanceConservationClaim(Claim):
     def check(self) -> None:
         inst = self._instance
         n_steps = round(self._t_end / self._dt)
-        state = ABState(0.0, Tensor([1.0, 0.0, 0.0]))
+        state: MultistepState = MultistepState(0.0, Tensor([1.0, 0.0, 0.0]))
         for _ in range(n_steps):
             state = inst.step(_DECAY_RHS, state, self._dt)
 
