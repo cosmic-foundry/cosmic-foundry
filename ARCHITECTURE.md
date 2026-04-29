@@ -541,6 +541,152 @@ or a solver-level override is needed.
 
 ## Current work: Epoch 4 — Time integration layer
 
+### Unification roadmap
+
+The current layer works but contains two forms of fragmentation that
+compound as the integrator family grows.  The roadmap below resolves
+both, producing a single coherent entry point whose algorithm selection
+is driven entirely by the mathematical structure of the problem.
+
+---
+
+#### Vocabulary — mathematically named replacements
+
+The table below replaces every name rooted in a specific algorithm or
+implementer convention with a name that describes mathematical function.
+The right column is the target name; the left column is the current
+name.  The migration is breaking; it happens in phases (see below).
+
+| Current name | Target name | Rationale |
+|---|---|---|
+| `RKState` | `ODEState` | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). The name should not imply method family. |
+| `NordsieckState` | `MultistepState` | The Nordsieck encoding is an implementation detail; the concept is a multistep history of past solution data. |
+| `PartitionedState` | *(eliminated)* | Folds into `ODEState` with a structured `u` field (see Axis B). |
+| `ABState` | *(eliminated)* | Folds into `MultistepState`; Adams-Bashforth is an explicit multistep method. |
+| `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` | DIRK is one implementation strategy for implicit RK; the public name should say "implicit Runge-Kutta". |
+| `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
+| `AdamsBashforthIntegrator` | `ExplicitMultistepIntegrator` | One representative of a class; the class name should describe the class. |
+| `NordsieckIntegrator` | `MultistepIntegrator` | Same reasoning as `NordsieckState`. |
+| `StrangSplittingIntegrator` | `CompositionIntegrator` | Strang is one composition scheme; the class is the general composition meta-integrator. |
+| `SymplecticSplittingIntegrator` | `SymplecticCompositionIntegrator` | Specializes `CompositionIntegrator` with symplecticity constraint. |
+| `LinearPlusNonlinearRHS` | `SemilinearRHS` | du/dt = Lu + N(t,u) is a semilinear ODE; the name should say so. |
+| `AdditiveRHS` | `SplitRHS` | Carries an explicit/implicit split; "additive" is the ARK term, "split" is the mathematical concept. |
+| `HamiltonianSplit` | `HamiltonianRHS` | The protocol describes a Hamiltonian RHS; "split" implies an algorithmic choice. |
+| `OperatorSplitRHS` | `CompositeRHS` | Carries k component RHS objects; "composite" names the mathematical structure. |
+
+---
+
+#### Axis A — unified dispatch surface
+
+**Goal.** A single `Integrator.step(rhs, state, dt)` entry point that
+selects the algorithm family by inspecting `rhs` against the protocol
+hierarchy.  No caller changes the integrator when they change the RHS;
+the dispatch is transparent.
+
+**Design.**
+
+```
+Integrator (ABC / Protocol)
+  step(rhs: RHSProtocol, state: ODEState, dt: float) -> ODEState
+```
+
+The concrete `AutoIntegrator` implements `step` as a dispatch chain:
+
+```python
+if isinstance(rhs, SemilinearRHS):
+    # exponential integrator family
+elif isinstance(rhs, HamiltonianRHS):
+    # symplectic composition family
+elif isinstance(rhs, CompositeRHS):
+    # general composition family
+elif isinstance(rhs, SplitRHS):
+    # additive RK (ARK) family
+elif isinstance(rhs, ImplicitRHS):   # WithJacobianRHSProtocol
+    # implicit RK family
+else:
+    # explicit RK family (default)
+```
+
+The dispatch chain is a total function: every `RHSProtocol` falls into
+exactly one branch.  Adding a new RHS type adds a new branch; existing
+callers are unaffected.
+
+**Existing specialist integrators** (`RungeKuttaIntegrator`,
+`ImplicitRungeKuttaIntegrator`, …) remain as first-class objects.
+`AutoIntegrator` is a convenience wrapper, not a replacement; users who
+know their algorithm keep using the specific class.
+
+**Type coherence requirement.** All specialist integrators must satisfy
+the `Integrator` protocol — concretely, `DIRKIntegrator` and
+`IMEXIntegrator` must inherit (or structurally match) the same
+`TimeIntegrator` ABC that `RungeKuttaIntegrator` currently inherits.
+This is the most impactful single cleanup and unblocks Axis A.
+
+---
+
+#### Axis B — unified state type
+
+**Goal.** Replace four incompatible state types with one.  The
+`ODEState` type carries optional slots for structure that only some
+methods use; methods that do not need a slot ignore it.
+
+**Target definition.**
+
+```
+ODEState:
+    t:    float          — current time
+    u:    Tensor         — current solution vector (or structured pair for Hamiltonian)
+    dt:   float          — last accepted step size
+    err:  float          — last local error estimate (0.0 if not available)
+    history: MultistepHistory | None
+               — ordered ring buffer of past (t_k, u_k, f_k) tuples;
+                 None for single-step methods
+```
+
+**Migration path per affected type.**
+
+- `NordsieckState` → `ODEState` with `history = MultistepHistory(nordsieck_vector)`.
+  `MultistepIntegrator` reads/writes `history`; single-step integrators
+  pass through `state.history = None`.
+
+- `PartitionedState(q, p)` → `ODEState` with `u = Tensor.stack([q, p])`.
+  `SymplecticCompositionIntegrator` unpacks `(q, p) = u[:n], u[n:]`
+  using a fixed split point that travels with `HamiltonianRHS.split_index`
+  (new property on `HamiltonianRHS`).  `TimeStepper.advance` receives the
+  initial `ODEState`; helper `hamiltonian_state(q, p)` constructs it.
+
+- `ABState` → `ODEState` with `history = MultistepHistory(history_list)`.
+  `ExplicitMultistepIntegrator` stores past `f` evaluations in
+  `history.derivatives`; the Nordsieck form stores scaled derivatives
+  directly — the buffer layout is method-specific but the type is shared.
+
+**Breaking change surface.** `TimeStepper.advance` return type changes
+from `RKState` to `ODEState`; field names are identical (`t`, `u`, `dt`,
+`err`), so destructuring callsites are unaffected.  Callers that type-
+annotate the return must update the annotation.
+
+---
+
+#### Phased implementation plan
+
+Each phase is a self-contained PR that leaves all tests green and adds
+at least one new test for the structural change.
+
+| Phase | Title | Scope |
+|---|---|---|
+| A | **Inheritance fixes** | `ImplicitRungeKuttaIntegrator` and `AdditiveRungeKuttaIntegrator` inherit `TimeIntegrator`; extract shared Newton iteration into `_newton_solve` in a new `_newton.py` module; add type-coherence test. |
+| B | **Fold explicit multistep** | `ExplicitMultistepIntegrator` (née `AdamsBashforthIntegrator`) stores history in `MultistepState`; `ABState` deprecated and removed; `ExplicitMultistepIntegrator` passes `TimeIntegrator` isinstance check. |
+| C | **Fold symplectic** | `SymplecticCompositionIntegrator` (née `SymplecticSplittingIntegrator`) becomes a specialization of `CompositionIntegrator`; `PartitionedState` removed from the public API; `HamiltonianRHS.split_index` added. |
+| D | **Unified state** | Rename `RKState → ODEState`; merge `NordsieckState` into `ODEState` with `history` slot; `TimeStepper.advance` returns `ODEState`; delete `PartitionedState` and `ABState`. |
+| E | **Rename sweep** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
+| F | **`AutoIntegrator`** | Implement dispatch chain; add integration test that passes each RHS type through `AutoIntegrator` and verifies correct order. |
+
+Phases A and B are independent and can proceed in parallel.  Phases C
+and B are independent.  Phase D requires A, B, and C.  Phases E and F
+require D.
+
+---
+
 **Open questions:**
 
 1. **`set_default_backend` vs. solver-level override.** Time-integrator
