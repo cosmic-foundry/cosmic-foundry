@@ -86,6 +86,7 @@ from cosmic_foundry.computation.time_integrators.splitting import (
     StrangSplittingIntegrator,
     lie_steps,
     strang_steps,
+    yoshida_steps,
 )
 from cosmic_foundry.computation.time_integrators.stepper import (
     IntegratorSelectionResult,
@@ -208,4 +209,5 @@ __all__ = [
     "StrangSplittingIntegrator",
     "lie_steps",
     "strang_steps",
+    "yoshida_steps",
 ]

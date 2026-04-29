@@ -132,6 +132,40 @@ def strang_steps() -> list[SplittingStep]:
     return [SplittingStep(0, 0.5), SplittingStep(1, 1.0), SplittingStep(0, 0.5)]
 
 
+def yoshida_steps() -> list[SplittingStep]:
+    """Yoshida 4th-order triple-jump splitting sequence for two components.
+
+    Constructs S₄(h) = S₂(w₁h) ∘ S₂(w₀h) ∘ S₂(w₁h) where S₂ is the
+    Strang splitting and the weights are
+
+        w₁ = 1 / (2 − 2^{1/3}),   w₀ = 1 − 2 w₁.
+
+    The two internal A half-steps at the junction of adjacent Strang blocks
+    collapse into single steps, giving the 7-step sequence::
+
+        A(w₁/2)  B(w₁)  A((w₁+w₀)/2)  B(w₀)  A((w₀+w₁)/2)  B(w₁)  A(w₁/2)
+
+    w₀ ≈ −1.702, so steps 3, 4, and 5 have negative weights.  Sub-integrators
+    must handle negative ``dt`` correctly; this holds for any method applied to
+    a time-reversible operator.
+
+    The sequence is 4th-order accurate; the Yoshida weights exactly cancel the
+    leading (order-3) error term of the Strang splitting.
+    """
+    w1 = 1.0 / (2.0 - 2.0 ** (1.0 / 3.0))
+    w0 = 1.0 - 2.0 * w1
+    half_sum = (w1 + w0) / 2.0  # = (1 - w1) / 2, negative
+    return [
+        SplittingStep(0, w1 / 2.0),
+        SplittingStep(1, w1),
+        SplittingStep(0, half_sum),
+        SplittingStep(1, w0),
+        SplittingStep(0, half_sum),
+        SplittingStep(1, w1),
+        SplittingStep(0, w1 / 2.0),
+    ]
+
+
 __all__ = [
     "OperatorSplitRHS",
     "OperatorSplitRHSProtocol",
@@ -139,4 +173,5 @@ __all__ = [
     "StrangSplittingIntegrator",
     "lie_steps",
     "strang_steps",
+    "yoshida_steps",
 ]
