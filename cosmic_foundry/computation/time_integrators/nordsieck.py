@@ -1,4 +1,4 @@
-"""Nordsieck-form BDF integrators.
+"""Nordsieck-form linear multistep integrators: BDF and Adams-Moulton families.
 
 The Nordsieck vector z_n stores the scaled Taylor expansion of y at t_n:
 
@@ -6,30 +6,42 @@ The Nordsieck vector z_n stores the scaled Taylor expansion of y at t_n:
 
 where h is the step size baked into the state.  Prediction advances z_n to
 t_{n+1} via the (q+1) × (q+1) Pascal matrix P[i,j] = C(j,i) for j ≥ i.
-The BDF corrector then solves one implicit equation and applies the
-correction vector l component-wise.
+The corrector then applies the correction vector l component-wise to the
+predicted Nordsieck vector after solving one implicit equation.
 
-For BDF-q the l-vector and β₀ are:
+Both families share the same correction structure:
 
+    z_new[i] = z_pred[i] + l[i] · δ,   δ = h·f(t_{n+1}, y_{n+1}) − z_pred[1]
+
+The implicit equation for y_{n+1} is:
+
+    y − β₀ h f(t_{n+1}, y) = z_pred[0] − β₀ z_pred[1]
+
+and l[1] = 1 always (the derivative slot is updated to h·f exactly).
+
+BDF family (stiff problems)
+---------------------------
     β₀ = 1 / H_q,   H_q = Σ_{k=1}^{q} 1/k
     l[j] = β₀ · e_{q−j}(1, …, q) / q!   for j = 0, …, q
 
-where e_k denotes the k-th elementary symmetric polynomial.  This yields
-l[1] = 1 exactly (the derivative slot always receives h·f(t_{n+1}, y_{n+1}))
-and l[0] = β₀ (the leading coefficient that governs the implicit step).
+where e_k is the k-th elementary symmetric polynomial.  The implicit equation
+is solved by Newton iteration using the Jacobian from WithJacobianRHSProtocol.
 
-The corrector implicit equation is then:
+Adams-Moulton family (non-stiff problems)
+-----------------------------------------
+    β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
+    l[j] = C(q, j) / (q−j+1)   for j = 1, …, q
 
-    y − β₀ h f(t_{n+1}, y) = z^(0)[0] − β₀ z^(0)[1]
-
-solved by Newton iteration with the Jacobian from WithJacobianRHSProtocol.
+The l-vector derivation: δ = h^{q+1}/q! · y^{(q+1)} + O(h^{q+2}), and
+requiring z_new[j] = h^j/j! · y^{(j)}(t_{n+1}) + O(h^{q+2}) for j ≥ 1
+gives l[j] = q! / (j! · (q−j+1)!) = C(q,j)/(q−j+1).  The implicit equation
+is solved by fixed-point iteration, so no Jacobian is required; this family
+satisfies plain RHSProtocol and is preferred for non-stiff problems.
 
 Named instances
 ---------------
-bdf1  —  order 1, L-stable (backward Euler in Nordsieck form)
-bdf2  —  order 2, A-stable
-bdf3  —  order 3, A(α)-stable
-bdf4  —  order 4, A(α)-stable
+bdf1–bdf4          —  BDF orders 1–4 (L/A/A(α)-stable)
+adams_moulton1–am4 —  Adams-Moulton orders 1–4 (non-stiff, no Jacobian)
 """
 
 from __future__ import annotations
@@ -173,6 +185,96 @@ class BDFFamily:
 
     def beta0(self, q: int) -> float:
         """β₀ for BDF-q as a Python float."""
+        return self._beta0_f[q]
+
+    @property
+    def q_max(self) -> int:
+        """Maximum supported order."""
+        return self._q_max
+
+
+class AdamsFamily:
+    """Parametric Adams-Moulton coefficient provider for orders 1 through q_max.
+
+    Adams-Moulton of order q is the implicit corrector:
+
+        y_{n+1} = y_n + h · (β₀ f_{n+1} + β₁ f_n + … + β_{q-1} f_{n-q+2})
+
+    In Nordsieck form the only per-step quantities needed are β₀ and the
+    correction vector l, both precomputed as exact rationals.
+
+    β₀ is the leading Adams-Moulton coefficient:
+
+        β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
+
+    which evaluates to 1, 1/2, 5/12, 3/8, 251/720, … for q = 1, 2, 3, 4, 5, …
+
+    The l-vector satisfies l[1] = 1 (always) and:
+
+        l[j] = C(q, j) / (q−j+1)   for j = 1, …, q
+        l[0] = β₀
+
+    Derivation: δ = h·f_{n+1} − z_pred[1] = h^{q+1}/q! · y^{(q+1)} + O(h^{q+2}).
+    Requiring z_new[j] = h^j/j! · y^{(j)}(t_{n+1}) + O(h^{q+2}) for j = 1, …, q
+    gives l[j] · (h^{q+1}/q!) = h^{q+1}/(j!(q−j+1)!), hence l[j] = C(q,j)/(q−j+1).
+
+    In plain terms: the prediction step (Pascal multiply) is exact for
+    polynomials of degree ≤ q; the correction l·δ patches the O(h^{q+1})
+    error introduced by the leading-order Taylor term that the predictor misses.
+
+    Use this family for non-stiff problems.  The implicit equation is solved
+    by fixed-point iteration — no Jacobian is required (plain RHSProtocol).
+    For stiff problems use BDFFamily, which solves via Newton iteration.
+
+    Parameters
+    ----------
+    q_max:
+        Maximum supported order.  Default 12 (AM1–AM12).
+    """
+
+    def __init__(self, q_max: int = 12) -> None:
+        self._q_max = q_max
+        self._l_sym: dict[int, list[sympy.Rational]] = {}
+        self._l_f: dict[int, list[float]] = {}
+        self._beta0_f: dict[int, float] = {}
+        for q in range(1, q_max + 1):
+            l_sym, beta0_sym = self._compute_l(q)
+            self._l_sym[q] = l_sym
+            self._l_f[q] = [float(v) for v in l_sym]
+            self._beta0_f[q] = float(beta0_sym)
+
+    @staticmethod
+    def _compute_l(q: int) -> tuple[list[sympy.Rational], sympy.Rational]:
+        """Return the Adams-Moulton-q l-vector and β₀ as exact sympy rationals.
+
+        β₀ = (1/(q−1)!) · ∫₀¹ ∏_{k=0}^{q−2} (s+k) ds
+
+        l[0] = β₀
+        l[j] = C(q, j) / (q−j+1)   for j = 1, …, q
+        """
+        s = sympy.Symbol("s")
+        integrand = sympy.Integer(1)
+        for k in range(q - 1):
+            integrand *= s + k
+        beta0: sympy.Rational = sympy.integrate(integrand, (s, 0, 1)) / sympy.factorial(
+            q - 1
+        )
+
+        lvec: list[sympy.Rational] = [beta0]
+        for j in range(1, q + 1):
+            lvec.append(sympy.binomial(q, j) / sympy.Integer(q - j + 1))
+        return lvec, beta0
+
+    def l_vector(self, q: int) -> list[float]:
+        """Adams-Moulton-q correction vector as Python floats."""
+        return self._l_f[q]
+
+    def l_vector_sym(self, q: int) -> list[sympy.Rational]:
+        """Adams-Moulton-q correction vector as exact sympy rationals."""
+        return self._l_sym[q]
+
+    def beta0(self, q: int) -> float:
+        """β₀ for Adams-Moulton-q as a Python float."""
         return self._beta0_f[q]
 
     @property
@@ -335,6 +437,7 @@ bdf4 = NordsieckIntegrator(bdf_family, q=4)
 
 
 __all__ = [
+    "AdamsFamily",
     "BDFFamily",
     "NordsieckIntegrator",
     "NordsieckState",
