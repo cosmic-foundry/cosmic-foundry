@@ -452,12 +452,78 @@ LinearSolver        — mesh-agnostic interface: solve(a: Tensor, b: Tensor) →
                       tests cap at N ≤ 32 in 2-D (≤ 1024 unknowns).
 ```
 
-**Planned additions (Epoch 4):** time-integration layer — `TimeIntegrator`
-ABC, `RungeKuttaIntegrator`, `TimeStepper`, `Autotuner` extension; structured
-RHS protocols (`HamiltonianSplit`, `WithJacobian`, `Additive`,
-`LinearPlusNonlinear`, `OperatorSplit`) and additional integrator families
-introduced phase-by-phase per the [Epoch 4
-sprint](#current-work-epoch-4--time-integration-layer).
+**Time-integration layer** (`computation/time_integrators/`).  A typed,
+modular layer supporting explicit RK, implicit DIRK, IMEX, exponential,
+multistep (Adams / BDF), variable-order, symplectic, and operator-splitting
+families through a common six-axis DSL (RHS protocol, state, step program,
+coefficient algebra, controller, verification primitives).
+
+```
+RHS protocols — each narrows RHSProtocol to expose structure the integrator exploits:
+
+RHSProtocol                      — base: __call__(t, u) → Tensor
+├── BlackBoxRHS                  — wraps any callable
+├── JacobianRHS                  — adds .jac(t, u) for Newton-based methods
+├── FiniteDiffJacobianRHS        — finite-difference Jacobian approximation
+├── AdditiveRHS                  — (explicit, implicit) split for IMEX
+├── HamiltonianSplit             — (dH_dq, dH_dp) for symplectic methods
+├── LinearPlusNonlinearRHS       — (L, N) split for exponential integrators
+└── OperatorSplitRHS             — [f_1, …, f_k] for operator splitting
+                                   (SplittingStep sequence drives substep weights)
+
+State types:
+
+RKState(NamedTuple)              — (t, u, dt, err); used by RK, exponential,
+                                   IMEX, implicit, and splitting integrators
+NordsieckState                   — Nordsieck history vector for multistep methods
+PartitionedState                 — (q, p) for symplectic integrators
+ABState                          — history buffer for Adams-Bashforth
+
+Integrators:
+
+RungeKuttaIntegrator             — Butcher-tableau explicit RK (arbitrary order)
+                                   instances: forward_euler(1), midpoint(2), heun(2),
+                                   ralston(2), rk4(4), bogacki_shampine(3,embedded),
+                                   dormand_prince(5,embedded)
+DIRKIntegrator                   — diagonally implicit RK
+                                   instances: backward_euler(1), implicit_midpoint(2),
+                                   crouzeix_3(3)
+IMEXIntegrator                   — additive RK (paired explicit + implicit tableaux)
+                                   instances: ars222(2)
+AdamsBashforthIntegrator         — explicit linear multistep
+                                   instances: ab2, ab3, ab4
+NordsieckIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
+                                   factories: bdf_family → bdf1–bdf4
+                                              adams_family → adams_moulton1–adams_moulton4
+VariableOrderNordsieckIntegrator — online order selection (OrderSelector)
+FamilySwitchingNordsieckIntegrator
+                                 — runtime BDF ↔ Adams-Moulton switching (StiffnessSwitcher)
+ExponentialEulerIntegrator       — ETD-Euler, order 1; instance: etd_euler
+ETDRK2Integrator                 — order 2; instance: etdrk2
+CoxMatthewsETDRK4Integrator      — order 4 (classical); instance: cox_matthews_etdrk4
+KrogstadETDRK4Integrator         — order 4 (stiff-order-correct); instance: krogstad_etdrk4
+SymplecticSplittingIntegrator    — position-Verlet family for Hamiltonian systems
+                                   instances: symplectic_euler(1), leapfrog(2),
+                                   forest_ruth(4), yoshida_6(6), yoshida_8(8)
+StrangSplittingIntegrator        — meta-integrator composing sub-integrators
+                                   factories: lie_steps()(1), strang_steps()(2),
+                                   yoshida_steps()(4, negative substep weights)
+
+Controllers:
+
+ConstantStep                     — fixed step size
+PIController                     — Gustafsson PI formula with accept/reject
+VODEController                   — VODE-style Nordsieck-aware step control
+
+Infrastructure:
+
+TimeStepper                      — drives integrator + controller loop;
+                                   advance(rhs, u0, t0, t_end) → RKState
+PhiFunction(k)                   — φ_k operator action for exponential methods
+StiffnessDiagnostic              — online spectral radius estimation
+Tree / elementary_weight / trees_up_to_order
+                                 — B-series order-condition verification
+```
 
 ### Cross-cutting
 
@@ -475,186 +541,14 @@ or a solver-level override is needed.
 
 ## Current work: Epoch 4 — Time integration layer
 
-**Target.** A typed, modular time-integration layer that scales from explicit
-Runge-Kutta to implicit, exponential, multistep, variable-order, splitting,
-and symplectic methods without interface redesign.  The interface is shaped
-by a six-axis DSL — RHS protocol, state representation, step program,
-coefficient algebra, controller, verification primitives — and the roadmap
-relaxes each axis from its degenerate value through nine phases tied to
-physics-epoch needs.
+**Open questions:**
 
-The DSL framing rests on the observation that "basic arithmetic + black-box
-RHS" is provably the Butcher group (B-series): every richer family —
-exponential, IMEX, Rosenbrock, multistep, variable-order, symplectic —
-relaxes a specific structural constraint.  Each phase below relaxes exactly
-one or two of those constraints with concrete physics motivation, so the
-DSL is earned axis-by-axis rather than designed up-front.  The typed slot
-shape (`RHSProtocol`, integrator-specific `State`, `Controller`) is
-established in `computation/time_integrators/`; subsequent phases extend
-without breaking interfaces.
+1. **`set_default_backend` vs. solver-level override.** Time-integrator
+   code must inherit whichever resolution lands; a per-`TimeStepper`
+   backend override is the natural API extension if process-wide defaults
+   turn out to be insufficient.
 
-**Phase 14 — Operator splitting (Strang / Lie).**
-
-*Interfaces.*
-`OperatorSplitRHSProtocol` — a protocol exposing `.components: Sequence[RHSProtocol]`;
-`OperatorSplitRHS` — concrete implementation wrapping a list of sub-RHS objects.
-`SplittingStep` — frozen dataclass `(component_index: int, weight: float)` describing
-one substep: advance `components[component_index]` by `weight * dt`.  `weight` is
-signed; negative values are legal and occur in Yoshida composition.
-
-*Integrator.*
-`StrangSplittingIntegrator(sub_integrators, sequence, order)` — meta-integrator
-that loops over `sequence`, calling
-`sub_integrators[s.component_index].step(rhs.components[s.component_index], state, s.weight * dt)`
-for each `SplittingStep s`.  `sub_integrators[i]` is the integrator dedicated to
-`rhs.components[i]`; passing the same integrator at multiple positions is allowed.
-Sub-integrators must accept and return `RKState`.  `order` is declared at
-construction by the factory function, not derived from the sequence.
-
-*Factory functions.*
-- `lie_steps()` — `[(0, 1.0), (1, 1.0)]`, order 1.
-- `strang_steps()` — `[(0, 0.5), (1, 1.0), (0, 0.5)]`, order 2.
-- `yoshida_steps()` — 7-step sequence with weights
-  `w₁ = 1/(2 − 2^{1/3})`, `w₀ = 1 − 2w₁`
-  (triple-jump Strang, flattened and collapsed at internal half-steps), order 4.
-  Requires reversible sub-integrators; `w₀ < 0` so negative `dt` substeps appear.
-
-*Verification.*
-Convergence claims on a 2D split oscillator: `du/dt = A u + B u` where
-`A = [[0, −ω], [0, 0]]`, `B = [[0, 0], [ω, 0]]`, exact solution is rotation at
-frequency `ω`.  `[A, B] ≠ 0`, so splitting error is nonzero and measurable.
-Sub-integrators are `rk4` (order 4) so sub-integrator error is negligible at
-test scales.  Three claims: Lie → order 1; Strang → order 2; Yoshida → order 4.
-
-*Activates* compositionality of the integrator stack itself.  Epoch 10 MHD /
-multi-physics enabler.
-
-**Cross-phase deliverable: integrator benchmark library.** A growing
-problem catalog and harness against which integrators are graded on
-correctness, work-per-accuracy, scaling with state dimension, and
-conservation-law fidelity.  Structured into three tiers that activate
-as the corresponding integrator families come online; the harness
-skeleton and Tier A ship alongside Phase 0 so that subsequent phases
-each land with a benchmarkable deliverable.  Everything in the library
-is Lane C: every problem RHS is coded from first-principles ODE
-definitions, every rate coefficient is generated procedurally, and
-every reference solution is computed inline by our own integrators
-at tightened tolerance.  No external code is ported, no
-rate-coefficient or trajectory tables are loaded from disk, and no
-external integrator is invoked at any point.
-
-*Tier A — Non-stiff (with Phase 0–1).* Scalar linear `dy/dt = λy`
-(promoted from the temporal-convergence claim); logistic;
-two-species predator-prey (conserved quantity, no closed form);
-three-compartment SIR; two-body gravitational (analytical orbit with
-energy and angular-momentum invariants); three-equation chaotic
-system (integrator-sensitivity probe); two-species reaction-diffusion
-oscillator.
-
-*Tier B — Stiff baselines (with Phase 4).* Parametric synthetic
-problems exercising the stiffness regimes that real applications
-present:
-
-- Stiff scalar with forcing, `dy/dt = -k · y + s(t)`, with
-  `k ∈ {10, 10², 10⁴, 10⁶}` — stability-detection probe.
-- Three-species mass-conserving stiff chemistry archetype, with
-  parameterized rate disparity (up to ~10⁹ between fast and slow
-  timescales).
-- Synthetic small-and-medium stiff networks of `n ∈ {8, 20}` species,
-  produced by the Tier C generator at small sizes and tuned for
-  stiffness contrast rather than nuclear-network resemblance.
-- Stiff nonlinear oscillator `du/dt = v, dv/dt = -ω² u − α(u² − 1) v`
-  with `α ∈ {1, 10², 10³, 10⁵}` as a fixed-problem stiffness sweep.
-
-*Tier C — Network-scale, nuclear-resembling (with Phases 7a–12).* The
-user-facing payload.  Synthetic networks designed to numerically
-resemble thermonuclear reaction networks: dozens to hundreds of
-species, rate coefficients spanning ~10 orders of magnitude, sparse
-Jacobian, exact mass conservation, positivity of every species.
-Concrete problems:
-
-- **Synthetic alpha-chain networks**, parameterized by chain length
-  `n ∈ {13, 19, 21, 51, 101, 201, 501}`.  Linear capture-chain
-  topology emulating alpha-rich nuclear burning; rate coefficients
-  drawn from a log-normal distribution to span ~10 decades.  Exact
-  invariants by construction: `Σ X_i = 1` (mass conservation) and
-  `X_i ≥ 0` (positivity).
-- **Synthetic CNO-cycle networks**, `n ∈ {6, 12, 24}`.  Cyclic
-  topology with parameterized breakout-branch ratios; tunable
-  stiffness contrast.
-- **Synthetic rp-process networks**, `n ∈ {30, 60, 120}`.  Branched
-  topology emulating proton-rich freezeout structure with multiple
-  competing timescales.
-
-*Synthetic network generator.* Small DSL for declaring
-reaction-network topologies (alpha-chain, cycle, branched, random
-sparse), parameterized by species count and rate-coefficient
-distribution.  Produces a `WithJacobianRHS` instance with sparse
-(CSR) Jacobian and a linear conservation matrix `C` such that
-`C · Y = 0` is an exact algebraic identity.  Random-rate draws are
-seeded so problem definitions are reproducible across runs.
-
-*Metrics.* Per `(integrator, problem)` cell: final-time L² and L∞
-error vs reference; RHS and Jacobian evaluation counts; wall time;
-accepted and rejected step counts; conservation drift
-`‖C · Y(t_end)‖`; minimum `X_i` over the trajectory (positivity);
-for Tier C, runtime scaling exponent in `n`.
-
-*Harness.* Lives in `tests/benchmarks/`, separate from the
-correctness claims in `tests/test_time_integrators.py`.  Auto-discovers
-`BenchmarkProblem` instances and runs each `TimeIntegrator` from the
-`_INSTANCES` registry in `tests/test_time_integrators.py` against every
-compatible problem (compatibility = problem's `RHSProtocol` satisfies
-the integrator's `requires_rhs`).  Emits a JSON report.  Run under an
-opt-in `@pytest.mark.benchmark` so day-to-day CI is unaffected; a
-dedicated GitHub Actions workflow runs the suite on a schedule and
-surfaces regressions by comparing each run against the prior workflow
-run's report.
-
-*Reference solutions are computed inline.*  Where an analytical
-solution exists (linear, two-body, etc.), it is the reference.  Where
-no analytical solution exists, the reference is computed at test time
-by running an integrator from `_INSTANCES` at very tight tolerance.
-A session-scoped pytest fixture caches the result so the cost is paid
-once per session, not once per parameterized run.  To mitigate the
-bootstrap risk of using the integrator family under test to verify
-itself, the reference integrator is chosen from a *different family
-or order* than the integrator under test wherever the integrator
-stack permits: a higher-order RK references a lower-order RK; once
-Phase 4 lands, an implicit integrator references an explicit one on
-stiff problems where both apply; once multiple families exist they
-cross-validate.  For phases where only one family is available,
-bootstrap verification is supplemented by the convergence-order
-claims from Phase 2 — a method that satisfies its symbolic order
-conditions and converges at the predicted rate is unlikely to harbor
-a family-wide bug invisible to self-reference.
-
-**Open questions — Epoch 4 design points:**
-
-1. **Coefficient-algebra typing for Phase 13.** Whether to parameterize
-   `RungeKuttaIntegrator` over a `Coefficient` type variable (uniform
-   surface, every method has the same class) or to introduce
-   `ExponentialRKIntegrator` as a sibling class (more readable for the
-   common case where coefficients are rationals).  Decision deferred until
-   Phase 4 / 5 stabilize the implicit/explicit type story.
-
-2. **Autotuner generalization.** Does the static autotuner from Phase 0
-   (`Constant` controller + descriptor-driven `recommended_dt`) survive
-   once VODE-style controllers exist in Phase 12, or does Phase 12 subsume
-   the static autotuner as the trivial constant-policy case?  Resolves in
-   Phase 12.
-
-3. **Stiffness detector reuse.** Phase 11 needs an online ρ(J) estimate;
-   Phase 13 may benefit from the same machinery (deciding when `‖hL‖` is
-   large enough to justify exponential treatment over fully-explicit).
-   Factor into a shared `StiffnessDiagnostic` from Phase 11 onward.
-
-4. **`set_default_backend` vs. solver-level override.** Carried forward
-   from the prior epoch.  Time-integrator code must inherit whichever
-   resolution lands; a per-`TimeStepper` backend override is the natural
-   API extension if process-wide defaults turn out to be insufficient.
-
-**Open questions carried forward into Epoch 4:**
+**Design decisions to revisit in later epochs:**
 
 - AMR (Epoch 12): time-stepper must accept hierarchical state once meshes
   refine; integrator state types may need a coarse-fine variant.

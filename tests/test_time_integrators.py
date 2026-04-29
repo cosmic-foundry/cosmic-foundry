@@ -91,6 +91,7 @@ from cosmic_foundry.computation.time_integrators import (
     stability_function,
     strang_steps,
     trees_up_to_order,
+    yoshida_steps,
 )
 from tests.claims import Claim
 
@@ -2006,10 +2007,14 @@ class _SplittingConvergenceClaim(Claim):
         sequence: list[SplittingStep],
         label: str,
         order: int,
+        sub_integrators: list[RungeKuttaIntegrator] | None = None,
     ) -> None:
         self._sequence = sequence
         self._label = label
         self._order = order
+        self._sub_integrators = (
+            sub_integrators if sub_integrators is not None else [rk4, rk4]
+        )
 
     @property
     def description(self) -> str:
@@ -2017,7 +2022,7 @@ class _SplittingConvergenceClaim(Claim):
 
     def check(self) -> None:
         integrator = StrangSplittingIntegrator(
-            [rk4, rk4], self._sequence, order=self._order
+            self._sub_integrators, self._sequence, order=self._order
         )
         u0 = Tensor([1.0, 0.0])
         t_end = 1.0
@@ -2046,6 +2051,16 @@ class _SplittingConvergenceClaim(Claim):
 _SPLITTING_CLAIMS: list[Claim] = [
     _SplittingConvergenceClaim(lie_steps(), "lie", order=1),
     _SplittingConvergenceClaim(strang_steps(), "strang", order=2),
+    # Yoshida uses forward_euler sub-integrators: for the split oscillator each
+    # component is linear with one stationary variable, so forward Euler is
+    # exact per substep.  This isolates the O(h^4) splitting error cleanly and
+    # exercises negative-dt substeps (w0 < 0 in the Yoshida sequence).
+    _SplittingConvergenceClaim(
+        yoshida_steps(),
+        "yoshida",
+        order=4,
+        sub_integrators=[forward_euler, forward_euler],
+    ),
 ]
 
 
