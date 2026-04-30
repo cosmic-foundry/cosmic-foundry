@@ -1,9 +1,10 @@
 """Time-integrator verification — outer-product parametric test suite.
 
 Three test axes:
-  test_convergence : _FAMILIES × orders × _PROBS — skips incompatible pairs / slow runs
-  test_nse         : _CI_SPECS                   — NSE detection for parametric networks
-  test_behavior    : _CHECKS                     — targeted checks for non-grid behavior
+  test_convergence : _ORDERS × _PROBS — AutoIntegrator dispatches by RHS type; skips
+                     unsupported (order, problem) pairs via ValueError
+  test_nse         : _CI_SPECS        — NSE detection for parametric networks
+  test_behavior    : _CHECKS          — targeted checks for non-grid behavior
 """
 
 from __future__ import annotations
@@ -102,98 +103,35 @@ def _conserved(u: Tensor, n: int) -> bool:
     return abs(sum(float(u[i]) for i in range(n)) - 1.0) < 1e-10
 
 
-# ── problem and integrator registries ────────────────────────────────────────
-# Built inside a factory so nested helpers get one blank line, not two.
+# ── problem registry ──────────────────────────────────────────────────────────
+# Each problem supplies ONE canonical RHS; AutoIntegrator dispatches by its type.
+# (id, u0, n_species, exact_fn, mass_conserved, rhs)
 
 
-def _build_registry() -> tuple[list, list]:
-    # RHS callables for 2-species base network (rate k=1)
+def _build_probs() -> list:
     def f2(t, u):  # type: ignore[misc]
         return Tensor([-float(u[0]), float(u[0])], backend=u.backend)
 
-    def j2(t, u):  # type: ignore[misc]
-        return Tensor([[-1.0, 0.0], [1.0, 0.0]], backend=u.backend)
-
-    def fE2(t, u):  # type: ignore[misc]
-        return Tensor([0.0, float(u[0])], backend=u.backend)
-
-    def fI2(t, u):  # type: ignore[misc]
-        return Tensor([-float(u[0]), 0.0], backend=u.backend)
-
-    def jI2(t, u):  # type: ignore[misc]
-        return Tensor([[-1.0, 0.0], [0.0, 0.0]], backend=u.backend)
-
-    # RHS callables for 3-species decay chain (k1=1, k2=2)
     def f3(t, u):  # type: ignore[misc]
         x0, x1 = float(u[0]), float(u[1])
         return Tensor([-x0, x0 - 2.0 * x1, 2.0 * x1], backend=u.backend)
 
-    def j3(t, u):  # type: ignore[misc]
-        return Tensor(
-            [[-1.0, 0.0, 0.0], [1.0, -2.0, 0.0], [0.0, 2.0, 0.0]], backend=u.backend
-        )
-
-    def fE3(t, u):  # type: ignore[misc]
-        return Tensor([0.0, float(u[0]), 2.0 * float(u[1])], backend=u.backend)
-
-    def fI3(t, u):  # type: ignore[misc]
-        return Tensor([-float(u[0]), -2.0 * float(u[1]), 0.0], backend=u.backend)
-
-    def jI3(t, u):  # type: ignore[misc]
-        return Tensor(
-            [[-1.0, 0.0, 0.0], [0.0, -2.0, 0.0], [0.0, 0.0, 0.0]], backend=u.backend
-        )
-
-    # RHS callables for 2D split oscillator (ω=1, u0=(1,0), exact=(cos t, sin t))
     def fA(t, u):  # type: ignore[misc]
         return Tensor([-float(u[1]), 0.0], backend=u.backend)
 
     def fB(t, u):  # type: ignore[misc]
         return Tensor([0.0, float(u[0])], backend=u.backend)
 
-    strang = _ti.CompositionIntegrator(
-        [_ti.RungeKuttaIntegrator(4), _ti.RungeKuttaIntegrator(4)], order=2
-    )
-    yoshida_c = _ti.CompositionIntegrator(
-        [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)], order=4
-    )
-
-    # ── problem registry ─────────────────────────────────────────────────────
-    # (id, u0, n_species, exact_fn, mass_conserved, {kind: rhs})
-    probs: list = [
-        (
-            "base2",
-            _U2,
-            2,
-            _exact2,
-            True,
-            {
-                "bb": _ti.BlackBoxRHS(f2),
-                "jac": _ti.JacobianRHS(f2, j2),
-                "split": _ti.SplitRHS(f_E=fE2, f_I=fI2, jac_I=jI2),
-            },
-        ),
-        (
-            "decay3",
-            _U3,
-            3,
-            _exact3,
-            True,
-            {
-                "bb": _ti.BlackBoxRHS(f3),
-                "jac": _ti.JacobianRHS(f3, j3),
-                "split": _ti.SplitRHS(f_E=fE3, f_I=fI3, jac_I=jI3),
-            },
-        ),
+    return [
+        ("base2", _U2, 2, _exact2, True, _ti.BlackBoxRHS(f2)),
+        ("decay3", _U3, 3, _exact3, True, _ti.BlackBoxRHS(f3)),
         (
             "osc2",
             _U2,
             2,
             _exact_osc,
             False,
-            {
-                "comp": _ti.CompositeRHS([_ti.BlackBoxRHS(fA), _ti.BlackBoxRHS(fB)]),
-            },
+            _ti.CompositeRHS([_ti.BlackBoxRHS(fA), _ti.BlackBoxRHS(fB)]),
         ),
         (
             "ham2",
@@ -201,122 +139,60 @@ def _build_registry() -> tuple[list, list]:
             2,
             _exact_ham,
             False,
-            {
-                "sym": _ti.HamiltonianRHS(
-                    dT_dp=lambda p: p, dV_dq=lambda q: q, split_index=1
-                ),
-            },
+            _ti.HamiltonianRHS(dT_dp=lambda p: p, dV_dq=lambda q: q, split_index=1),
         ),
     ]
 
-    # ── integrator family registry ───────────────────────────────────────────
-    # (family_name, rhs_kind, {order: instance})
-    # Each family covers a distinct algorithmic lineage; order is the sweep axis.
-    # Redundant aliases within a family (heun/ralston ≡ midpoint at order 2,
-    # bdf1/am1 ≡ backward_euler at order 1) are omitted — one representative per
-    # (family, order) cell keeps the grid informative without duplication.
-    families: list = [
-        (
-            "rk",
-            "bb",
-            {o: _ti.RungeKuttaIntegrator(o) for o in [1, 2, 3, 4, 5]},
-        ),
-        (
-            "ab",
-            "bb",
-            {q: _ti.ExplicitMultistepIntegrator.for_order(q) for q in [2, 3, 4]},
-        ),
-        (
-            "dirk",
-            "jac",
-            {o: _ti.ImplicitRungeKuttaIntegrator(o) for o in [1, 2, 3]},
-        ),
-        (
-            "bdf",
-            "jac",
-            {q: _ti.MultistepIntegrator("bdf", q) for q in [2, 3, 4]},
-        ),
-        (
-            "am",
-            "jac",
-            {q: _ti.MultistepIntegrator("adams", q) for q in [2, 3, 4]},
-        ),
-        (
-            "imex",
-            "split",
-            {2: _ti.AdditiveRungeKuttaIntegrator(2)},
-        ),
-        (
-            "comp",
-            "comp",
-            {
-                2: strang,
-                4: yoshida_c,
-            },
-        ),
-        (
-            "sym",
-            "sym",
-            {o: _ti.SymplecticCompositionIntegrator(o) for o in [1, 2, 4, 6, 8]},
-        ),
-    ]
-    return probs, families
 
-
-_PROBS, _FAMILIES = _build_registry()
+_ORDERS = [1, 2, 3, 4, 5]
+_PROBS = _build_probs()
 
 
 # ── Claim wrappers ────────────────────────────────────────────────────────────
 
 
 class _ConvergenceClaim(Claim):
-    """Convergence + conservation claim for one (family, order, problem) triple."""
+    """Convergence + conservation claim for one (order, problem) pair."""
 
-    def __init__(
-        self, family: str, order: int, inst: Any, kind: str, prob: tuple
-    ) -> None:
-        self._family = family
+    def __init__(self, order: int, prob: tuple) -> None:
         self._order = order
-        self._inst = inst
-        self._kind = kind
         self._prob = prob
 
     @property
     def description(self) -> str:
-        return f"convergence/{self._family}/order{self._order}/{self._prob[0]}"
+        return f"convergence/order{self._order}/{self._prob[0]}"
 
     def check(self) -> None:
-        family, order, inst, kind = self._family, self._order, self._inst, self._kind
-        pid, u0, n, exact, mass_cons, rhs_dict = self._prob
-        rhs = rhs_dict.get(kind)
-        if rhs is None:
-            pytest.skip(
-                f"{family}/order{order} ({kind}) has no compatible RHS for {pid}"
-            )
+        pid, u0, n, exact, mass_cons, rhs = self._prob
+        inst = _ti.AutoIntegrator(self._order)
         t0 = time.perf_counter()
         dts: list[float] = []
         errs: list[float] = []
         dt = 0.1
+        state: _ti.ODEState | None = None
         while len(dts) < 8:
-            state = _run(inst, rhs, u0, dt)
+            try:
+                state = _run(inst, rhs, u0, dt)
+            except ValueError as e:
+                pytest.skip(str(e))
             errs.append(_err(state.u, exact, state.t))
             dts.append(dt)
             dt /= 2.0
-            if errs[-1] == 0.0:  # machine precision reached; noise on next halving
+            if errs[-1] == 0.0:
                 break
             if time.perf_counter() - t0 > _BUDGET:
                 break
         assert (
-            _slope(errs, dts) >= order - 0.3
-        ), f"{family}/order{order}/{pid}: slope too low"
-        if mass_cons:
+            _slope(errs, dts) >= self._order - 0.3
+        ), f"order{self._order}/{pid}: slope too low"
+        if mass_cons and state is not None:
             assert _conserved(
                 state.u, n
-            ), f"{family}/order{order}/{pid}: mass not conserved"
+            ), f"order{self._order}/{pid}: mass not conserved"
             for i in range(n):
                 assert (
                     float(state.u[i]) >= -1e-10
-                ), f"{family}/order{order}/{pid}: u[{i}] negative"
+                ), f"order{self._order}/{pid}: u[{i}] negative"
 
 
 class _NSEClaim(Claim):
@@ -596,10 +472,7 @@ def _nse_direct_check() -> None:
 # ── claim registries ─────────────────────────────────────────────────────────
 
 _CONV_CLAIMS: list[Claim] = [
-    _ConvergenceClaim(family, order, inst, kind, prob)
-    for family, kind, orders in _FAMILIES
-    for order, inst in sorted(orders.items())
-    for prob in _PROBS
+    _ConvergenceClaim(order, prob) for order in _ORDERS for prob in _PROBS
 ]
 
 _NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS]

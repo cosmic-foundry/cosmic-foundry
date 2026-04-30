@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import TypeVar
+
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     build_constraint_gradients,
 )
@@ -37,80 +40,131 @@ from cosmic_foundry.computation.time_integrators.symplectic import (
     SymplecticCompositionIntegrator,
 )
 
-DEFAULT_EXPLICIT = RungeKuttaIntegrator(4)
-DEFAULT_SEMILINEAR = CoxMatthewsETDRK4Integrator(4)
-DEFAULT_SYMPLECTIC = SymplecticCompositionIntegrator(2)
-DEFAULT_COMPOSITION = CompositionIntegrator(
-    [RungeKuttaIntegrator(4), RungeKuttaIntegrator(4)], order=2
-)
-DEFAULT_SPLIT = AdditiveRungeKuttaIntegrator(2)
-DEFAULT_IMPLICIT = ImplicitRungeKuttaIntegrator(2)
+_T = TypeVar("_T")
+
+
+def _try(cls: Callable[[int], _T], order: int) -> _T | None:
+    try:
+        return cls(order)
+    except ValueError:
+        return None
+
+
+def _try_composition(order: int) -> CompositionIntegrator | None:
+    try:
+        sub = RungeKuttaIntegrator(1)
+        return CompositionIntegrator([sub, sub], order=order)
+    except ValueError:
+        return None
+
+
+def _require(branch: _T | None, name: str, order: int) -> _T:
+    if branch is None:
+        raise ValueError(
+            f"AutoIntegrator(order={order}) has no {name} branch at this order"
+        )
+    return branch
 
 
 class AutoIntegrator(TimeIntegrator):
     """Dispatch to the integrator family implied by the RHS structure.
 
-    The dispatcher is intentionally conservative: it chooses the first
-    matching structural protocol in the roadmap order and forwards the step
-    to the corresponding specialist integrator.  The class is a convenience
-    wrapper; callers that know the algorithm they want should keep using the
-    specialist integrators directly.
+    Selects the first matching structural protocol in dispatch order and
+    forwards the step to the corresponding specialist integrator.  All
+    branches are constructed at the requested ``order``; branches whose
+    algorithm family does not support that order are left unset and raise
+    ``ValueError`` if dispatched to at step time.
 
     Parameters
     ----------
+    order:
+        Convergence order threaded through all branches.  Branches whose
+        algorithm family does not support this order (e.g. ETD4RK only at
+        order 4, IMEX only at order 2, symplectic only at {1,2,4,6,8}) are
+        unavailable and raise ``ValueError`` on dispatch.
     explicit:
-        Fallback explicit Runge-Kutta integrator.
+        Override for the explicit RK branch.
     semilinear:
-        Exponential integrator for ``du/dt = Lu + N(t, u)``.
+        Override for the ETD exponential branch.
     symplectic:
-        Symplectic composition integrator for Hamiltonian RHS objects.
+        Override for the symplectic Hamiltonian branch.
     composition:
-        General composition integrator for operator-split RHS objects.
+        Override for the operator-splitting branch.
     split:
-        Additive Runge-Kutta integrator for explicit/implicit splits.
+        Override for the IMEX additive-RK branch.
     implicit:
-        Implicit Runge-Kutta integrator for Jacobian-bearing RHS objects.
+        Override for the DIRK implicit branch.
     """
 
     def __init__(
         self,
+        order: int,
         *,
-        explicit: RungeKuttaIntegrator = DEFAULT_EXPLICIT,
-        semilinear: CoxMatthewsETDRK4Integrator = DEFAULT_SEMILINEAR,
-        symplectic: SymplecticCompositionIntegrator = DEFAULT_SYMPLECTIC,
-        composition: CompositionIntegrator = DEFAULT_COMPOSITION,
-        split: AdditiveRungeKuttaIntegrator = DEFAULT_SPLIT,
-        implicit: ImplicitRungeKuttaIntegrator = DEFAULT_IMPLICIT,
+        explicit: RungeKuttaIntegrator | None = None,
+        semilinear: CoxMatthewsETDRK4Integrator | None = None,
+        symplectic: SymplecticCompositionIntegrator | None = None,
+        composition: CompositionIntegrator | None = None,
+        split: AdditiveRungeKuttaIntegrator | None = None,
+        implicit: ImplicitRungeKuttaIntegrator | None = None,
     ) -> None:
-        self._explicit = explicit
-        self._semilinear = semilinear
-        self._symplectic = symplectic
-        self._composition = composition
-        self._split = split
-        self._implicit = implicit
+        self._order = order
+        self._explicit: RungeKuttaIntegrator | None = (
+            explicit if explicit is not None else _try(RungeKuttaIntegrator, order)
+        )
+        self._semilinear: CoxMatthewsETDRK4Integrator | None = (
+            semilinear
+            if semilinear is not None
+            else _try(CoxMatthewsETDRK4Integrator, order)
+        )
+        self._symplectic: SymplecticCompositionIntegrator | None = (
+            symplectic
+            if symplectic is not None
+            else _try(SymplecticCompositionIntegrator, order)
+        )
+        self._composition: CompositionIntegrator | None = (
+            composition if composition is not None else _try_composition(order)
+        )
+        self._split: AdditiveRungeKuttaIntegrator | None = (
+            split if split is not None else _try(AdditiveRungeKuttaIntegrator, order)
+        )
+        self._implicit: ImplicitRungeKuttaIntegrator | None = (
+            implicit
+            if implicit is not None
+            else _try(ImplicitRungeKuttaIntegrator, order)
+        )
 
     @property
     def order(self) -> int:
-        """Declared order of the explicit fallback branch."""
-        return self._explicit.order
+        """Declared convergence order."""
+        return self._order
 
     def step(self, rhs: RHSProtocol, state: ODEState, dt: float) -> ODEState:
         """Advance one step with the branch selected by ``rhs`` structure."""
         if isinstance(rhs, SemilinearRHSProtocol):
-            return self._semilinear.step(rhs, state, dt)
+            return _require(self._semilinear, "semilinear", self._order).step(
+                rhs, state, dt
+            )
         if isinstance(rhs, HamiltonianRHSProtocol):
-            return self._symplectic.step(rhs, state, dt)
+            return _require(self._symplectic, "symplectic", self._order).step(
+                rhs, state, dt
+            )
         if isinstance(rhs, CompositeRHSProtocol):
-            return self._composition.step(rhs, state, dt)
+            return _require(self._composition, "composition", self._order).step(
+                rhs, state, dt
+            )
         if isinstance(rhs, SplitRHSProtocol):
-            return self._split.step(rhs, state, dt)
+            return _require(self._split, "split", self._order).step(rhs, state, dt)
         if isinstance(rhs, ReactionNetworkRHS):
             active = state.active_constraints or frozenset()
             cg = build_constraint_gradients(rhs, active, state.t, state.u)
-            return self._implicit.step(rhs, state, dt, constraint_gradients=cg)
+            return _require(self._implicit, "implicit", self._order).step(
+                rhs, state, dt, constraint_gradients=cg
+            )
         if isinstance(rhs, WithJacobianRHSProtocol):
-            return self._implicit.step(rhs, state, dt)
-        return self._explicit.step(rhs, state, dt)
+            return _require(self._implicit, "implicit", self._order).step(
+                rhs, state, dt
+            )
+        return _require(self._explicit, "explicit", self._order).step(rhs, state, dt)
 
 
 __all__ = ["AutoIntegrator"]
