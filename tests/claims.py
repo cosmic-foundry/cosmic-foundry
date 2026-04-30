@@ -14,19 +14,39 @@ from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 
 C = TypeVar("C")
 
-# Convergence-test walltime budget.  Controls N_max sizing only; set via
-# COSMIC_FOUNDRY_TEST_BUDGET_S env var (default 5s locally, 30s in CI).
-MAX_WALLTIME_S = float(os.environ.get("COSMIC_FOUNDRY_TEST_BUDGET_S", "5.0"))
+# ── Solver convergence budget ─────────────────────────────────────────────────
+# Controls mesh-refinement N_max sizing for test_convergence.py claims only.
+# Set via CF_SOLVER_CONVERGENCE_BUDGET_S (default 5 s locally, 60 s in CI).
+SOLVER_CONVERGENCE_BUDGET_S: float = float(
+    os.environ.get("CF_SOLVER_CONVERGENCE_BUDGET_S", "5.0")
+)
 
-# Fixed per-session overhead not covered by MAX_WALLTIME_S: performance-test
-# calibration, structure/tensor tests, convergence solver calibration (one probe
-# per solver type per session), and GPU benchmark variability.  40s gives headroom
-# for five solver types each adding up to ~4s of calibration and for GPU tests
-# that can take 20–30s under load.
-FIXED_SESSION_OVERHEAD_S = 40.0
+# ── Time-integrator test budgets ──────────────────────────────────────────────
+# INTEGRATOR_CLAIM_BUDGET_S  : per-claim wall-time cap for the halving loop in
+#                test_time_integrators.py.  Governs how many dt halvings are
+#                attempted before moving on.  Set via
+#                CF_INTEGRATOR_CLAIM_BUDGET_S (default 1 s locally and in CI).
+# INTEGRATOR_SESSION_BUDGET_S : expected total wall time for the entire
+#                test_time_integrators.py session (convergence claims +
+#                NSE claims + behavior checks).  Feeds the session-level
+#                timeout alongside SOLVER_CONVERGENCE_BUDGET_S so neither
+#                suite's budget inflates the other's.  Set via
+#                CF_INTEGRATOR_SESSION_BUDGET_S (default 30 s locally, 90 s in CI).
+INTEGRATOR_CLAIM_BUDGET_S: float = float(
+    os.environ.get("CF_INTEGRATOR_CLAIM_BUDGET_S", "1.0")
+)
+INTEGRATOR_SESSION_BUDGET_S: float = float(
+    os.environ.get("CF_INTEGRATOR_SESSION_BUDGET_S", "30.0")
+)
+
+# ── Shared fixed overhead ─────────────────────────────────────────────────────
+# Per-session overhead not covered by either convergence budget: performance-
+# test calibration, structure/tensor tests, solver calibration (one probe per
+# solver type per session), and GPU benchmark variability.
+FIXED_SESSION_OVERHEAD_S: float = 40.0
 
 # Tolerance multiplier on the total expected session time.
-BUDGET_TOLERANCE = 1.1
+BUDGET_TOLERANCE: float = 1.1
 
 
 class Claim(ABC):

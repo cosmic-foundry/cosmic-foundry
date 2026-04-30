@@ -12,7 +12,8 @@ from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import (
     BUDGET_TOLERANCE,
     FIXED_SESSION_OVERHEAD_S,
-    MAX_WALLTIME_S,
+    INTEGRATOR_SESSION_BUDGET_S,
+    SOLVER_CONVERGENCE_BUDGET_S,
     DeviceCalibration,
 )
 
@@ -20,13 +21,19 @@ from tests.claims import (
 def pytest_configure(config: pytest.Config) -> None:
     """Set the pytest-timeout session backstop from the shared budget constants.
 
-    Session timeout = (MAX_WALLTIME_S + FIXED_SESSION_OVERHEAD_S) * BUDGET_TOLERANCE.
-    FIXED_SESSION_OVERHEAD_S covers costs that don't scale with the convergence
-    budget: performance calibration, structure/tensor tests, and convergence
-    calibration (~20s total).  Changes to tests/claims.py update the timeout
+    Session timeout = (SOLVER_CONVERGENCE_BUDGET_S + INTEGRATOR_SESSION_BUDGET_S
+                       + FIXED_SESSION_OVERHEAD_S) * BUDGET_TOLERANCE.
+    Each suite contributes its own term so adjusting one does not affect the
+    other.  FIXED_SESSION_OVERHEAD_S covers costs that don't scale with either
+    convergence budget: performance calibration, structure/tensor tests, and
+    solver calibration probes.  Changes to tests/claims.py update the timeout
     automatically without requiring command-line flags.
     """
-    timeout = (MAX_WALLTIME_S + FIXED_SESSION_OVERHEAD_S) * BUDGET_TOLERANCE
+    timeout = (
+        SOLVER_CONVERGENCE_BUDGET_S
+        + INTEGRATOR_SESSION_BUDGET_S
+        + FIXED_SESSION_OVERHEAD_S
+    ) * BUDGET_TOLERANCE
     config.option.session_timeout = timeout
 
 

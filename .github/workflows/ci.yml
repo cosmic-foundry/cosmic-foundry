@@ -70,7 +70,8 @@ jobs:
         run: pip install -e .[dev]
       - name: Run pytest
         env:
-          COSMIC_FOUNDRY_TEST_BUDGET_S: "120"
+          CF_SOLVER_CONVERGENCE_BUDGET_S: "60"
+          CF_INTEGRATOR_SESSION_BUDGET_S: "90"
         run: bash run_tests.sh -q
 
   docs:
