@@ -3,7 +3,7 @@
 _NP_BACKEND and _MESH_FRACTIONS are the shared backend and mesh-refinement
 sequence used by all convergence-rate claims.  _calibrate_alpha and
 _convergence_n_max select a mesh-size ceiling (N_max) that keeps total
-convergence test time within MAX_WALLTIME_S on the current machine.
+convergence test time within SOLVER_CONVERGENCE_BUDGET_S on the current machine.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
-from tests.claims import MAX_WALLTIME_S, assemble_linear_op
+from tests.claims import SOLVER_CONVERGENCE_BUDGET_S, assemble_linear_op
 
 # NumpyBackend for all convergence claims: numpy SVD/solve are LAPACK-backed
 # and the dominant cost is the O(N²) Python-loop assembly, so the cost model
@@ -100,14 +100,14 @@ def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]
 def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) -> int:
     """N_max for the convergence mesh sequence for solver given the machine's FMA rate.
 
-    Allocates MAX_WALLTIME_S equally across all convergence-rate claims and
-    solves for the N_max each claim can afford under its solver's cost model
-    T ≈ alpha × N^p × Σ(f^p) / fma_rate.  alpha and p are calibrated once per
-    (solver type, fma_rate) pair by _calibrate_alpha.  Rounding to the nearest
-    multiple of 8 keeps all mesh sizes exact integers.
+    Allocates SOLVER_CONVERGENCE_BUDGET_S equally across all convergence-rate
+    claims and solves for the N_max each claim can afford under its solver's
+    cost model T ≈ alpha × N^p × Σ(f^p) / fma_rate.  alpha and p are
+    calibrated once per (solver type, fma_rate) pair by _calibrate_alpha.
+    Rounding to the nearest multiple of 8 keeps all mesh sizes exact integers.
     """
     alpha, p = _calibrate_alpha(type(solver), fma_rate)
     sum_fp = sum(f**p for f in _MESH_FRACTIONS)
-    budget_per_claim = MAX_WALLTIME_S / n_convergence_claims
+    budget_per_claim = SOLVER_CONVERGENCE_BUDGET_S / n_convergence_claims
     n_raw = (budget_per_claim * fma_rate / (alpha * sum_fp)) ** (1 / p)
     return max(16, round(n_raw / 8) * 8)

@@ -113,10 +113,9 @@ ignore_missing_imports = true
 testpaths = ["tests", "validation"]
 addopts = "-q"
 # Session-level timeout (backstop for runaway tests) is set programmatically
-# from MAX_WALLTIME_S × BUDGET_TOLERANCE in tests/claims.py via pytest_configure
-# in tests/conftest.py.  The per-claim contract (same factor applied to each
-# claim's slice of the budget) is enforced inside each claim's check() with a
-# precise overshoot message.
+# from (SOLVER_CONVERGENCE_BUDGET_S + INTEGRATOR_SESSION_BUDGET_S
+#        + FIXED_SESSION_OVERHEAD_S) × BUDGET_TOLERANCE in tests/claims.py via
+# pytest_configure in tests/conftest.py.  Each suite contributes its own term.
 timeout_method = "thread"
 markers = [
     "offline: opt-in stress tests that are not run by default or required in CI",

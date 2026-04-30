@@ -23,11 +23,11 @@ from cosmic_foundry.computation.backends import (
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
-from tests.claims import Claim
+from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
-_BUDGET = float(os.environ.get("CF_TEST_BUDGET_S", "1.0"))
+_BUDGET = INTEGRATOR_CLAIM_BUDGET_S
 _OFFLINE = os.environ.get("COSMIC_FOUNDRY_OFFLINE_NETWORK_STRESS") == "1"
 _U2, _U3 = Tensor([1.0, 0.0]), Tensor([1.0, 0.0, 0.0])
 
