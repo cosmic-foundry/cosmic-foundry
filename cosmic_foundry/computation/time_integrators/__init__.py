@@ -76,6 +76,9 @@ from cosmic_foundry.computation.time_integrators.nordsieck import (
     bdf4,
     bdf_family,
 )
+from cosmic_foundry.computation.time_integrators.reaction_network import (
+    ReactionNetworkRHS,
+)
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
     bogacki_shampine,
@@ -133,6 +136,7 @@ __all__ = [
     "Tree",
     "AutoIntegrator",
     "BlackBoxRHS",
+    "ReactionNetworkRHS",
     "ConstantStep",
     "Controller",
     "IntegratorSelectionResult",

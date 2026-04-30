@@ -50,6 +50,7 @@ from cosmic_foundry.computation.time_integrators import (
     OrderSelector,
     PhiFunction,
     PIController,
+    ReactionNetworkRHS,
     RungeKuttaIntegrator,
     SemilinearRHS,
     SplitRHS,
@@ -2420,4 +2421,189 @@ def test_type_coherence(claim: _TypeCoherenceClaim) -> None:
     ids=[c.description for c in _NEWTON_SOLVE_CLAIMS],
 )
 def test_newton_solve(claim: _NewtonSolveClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Reaction network RHS claims
+# ---------------------------------------------------------------------------
+
+# Minimal reversible toy: A ⇌ B with equal forward/reverse rate k.
+#
+# Stoichiometry: S = [[-1], [+1]] (one reaction column: A loses 1, B gains 1).
+# Conservation basis: null(Sᵀ) = span{[1, 1]}, i.e. X_A + X_B = const.
+# At equilibrium r⁺ = r⁻, so du/dt = S·0 = 0.
+#
+# With r⁺(t, u) = k·X_A and r⁻(t, u) = k·X_B (detailed balance with K_eq = 1):
+#   du/dt = k·(X_A − X_B)·[-1, +1]ᵀ
+# Exact solution from (X_A(0), X_B(0)) = (1, 0):
+#   X_A(t) = 0.5 + 0.5·exp(−2k·t)
+#   X_B(t) = 0.5 − 0.5·exp(−2k·t)
+
+_RN_K = 1.0
+_RN_S = Tensor([[-1.0], [1.0]])
+_RN_U0 = Tensor([1.0, 0.0])
+
+
+def _rn_r_plus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_RN_K * float(u[0])], backend=u.backend)
+
+
+def _rn_r_minus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_RN_K * float(u[1])], backend=u.backend)
+
+
+def _rn_exact(t: float) -> tuple[float, float]:
+    xa = 0.5 + 0.5 * math.exp(-2.0 * _RN_K * t)
+    return xa, 1.0 - xa
+
+
+class _NetworkInvariantsClaim(Claim):
+    """Verify structural invariants of ReactionNetworkRHS on the A⇌B toy.
+
+    Checks:
+    - stoichiometry_matrix matches the supplied S
+    - conservation_basis spans null(Sᵀ), i.e. equals [1, 1] (normalized)
+    - conservation_targets = conservation_basis @ u0 = 1.0
+    - __call__ = S·(r⁺ − r⁻), checked against hand-computed value
+    - detailed balance: at equilibrium (X_A = X_B = 0.5), __call__ returns zero
+    """
+
+    @property
+    def description(self) -> str:
+        return "reaction_network/invariants"
+
+    def check(self) -> None:
+        rhs = ReactionNetworkRHS(
+            stoichiometry_matrix=_RN_S,
+            forward_rate=_rn_r_plus,
+            reverse_rate=_rn_r_minus,
+            initial_state=_RN_U0,
+        )
+
+        # stoichiometry_matrix round-trips unchanged
+        for i in range(2):
+            assert float(rhs.stoichiometry_matrix[i, 0]) == pytest.approx(
+                float(_RN_S[i, 0])
+            ), f"S[{i},0] mismatch"
+
+        # conservation_basis has shape (1, 2) and its row is proportional to [1, 1]
+        n_conserved, n_species = rhs.conservation_basis.shape
+        assert n_conserved == 1, f"expected 1 conservation law, got {n_conserved}"
+        assert n_species == 2, f"expected n_species=2, got {n_species}"
+        row = [float(rhs.conservation_basis[0, j]) for j in range(2)]
+        ratio = row[0] / row[1] if abs(row[1]) > 1e-14 else None
+        assert (
+            ratio is not None and abs(ratio - 1.0) < 1e-12
+        ), f"conservation_basis row not proportional to [1,1]: {row}"
+
+        # conservation_targets = basis @ u0 = row[0]*1 + row[1]*0 = row[0]
+        target = float(rhs.conservation_targets[0])
+        expected_target = row[0] * float(_RN_U0[0]) + row[1] * float(_RN_U0[1])
+        assert (
+            abs(target - expected_target) < 1e-12
+        ), f"conservation_targets: {target} != {expected_target}"
+
+        # __call__ = S·(r⁺ − r⁻)
+        t0 = 0.0
+        u_test = Tensor([0.7, 0.3])
+        f_actual = rhs(t0, u_test)
+        r_net = _RN_K * (float(u_test[0]) - float(u_test[1]))
+        assert float(f_actual[0]) == pytest.approx(-r_net, abs=1e-12), "f[0] mismatch"
+        assert float(f_actual[1]) == pytest.approx(r_net, abs=1e-12), "f[1] mismatch"
+
+        # detailed balance: at equilibrium u = [0.5, 0.5], f = 0
+        u_eq = Tensor([0.5, 0.5])
+        f_eq = rhs(t0, u_eq)
+        assert (
+            abs(float(f_eq[0])) < 1e-14
+        ), f"equilibrium f[0] non-zero: {float(f_eq[0])}"
+        assert (
+            abs(float(f_eq[1])) < 1e-14
+        ), f"equilibrium f[1] non-zero: {float(f_eq[1])}"
+
+
+class _NetworkConvergenceClaim(Claim):
+    """Verify that a Runge-Kutta integrator converges on the A⇌B ReactionNetworkRHS.
+
+    The same integrator converges on the BlackBoxRHS form; this claim checks
+    that wrapping the problem as a ReactionNetworkRHS neither breaks the
+    factored evaluation path nor changes the convergence rate.
+    """
+
+    def __init__(self, instance: RungeKuttaIntegrator, label: str) -> None:
+        self._instance = instance
+        self._label = label
+
+    @property
+    def description(self) -> str:
+        return f"reaction_network/convergence/{self._label}"
+
+    def check(self) -> None:
+        inst = self._instance
+        rhs = ReactionNetworkRHS(
+            stoichiometry_matrix=_RN_S,
+            forward_rate=_rn_r_plus,
+            reverse_rate=_rn_r_minus,
+            initial_state=_RN_U0,
+        )
+
+        dts = [_DT_BASE / (2**k) for k in range(_N_HALVINGS + 1)]
+        errors: list[float] = []
+        for dt in dts:
+            n_steps = math.ceil(1.0 / dt)
+            state = ODEState(0.0, Tensor([1.0, 0.0]))
+            for _ in range(n_steps):
+                state = inst.step(rhs, state, dt)
+            xa_ex, xb_ex = _rn_exact(state.t)
+            err = max(abs(float(state.u[0]) - xa_ex), abs(float(state.u[1]) - xb_ex))
+            errors.append(err)
+
+        eps = sys.float_info.epsilon * 10
+        valid = [(dt, e) for dt, e in zip(dts, errors, strict=False) if e > eps]
+        assert (
+            len(valid) >= 3
+        ), f"{self._label}: error reached machine precision too early"
+
+        log_dts = [math.log(dt) for dt, _ in valid]
+        log_errs = [math.log(e) for _, e in valid]
+        n = len(log_dts)
+        mean_x = sum(log_dts) / n
+        mean_y = sum(log_errs) / n
+        slope = sum(
+            (x - mean_x) * (y - mean_y) for x, y in zip(log_dts, log_errs, strict=False)
+        ) / sum((x - mean_x) ** 2 for x in log_dts)
+
+        assert slope >= inst.order - 0.1, (
+            f"{self._label}: convergence slope {slope:.3f} "
+            f"< declared order {inst.order} - 0.1"
+        )
+
+
+_NETWORK_INVARIANT_CLAIMS: list[_NetworkInvariantsClaim] = [
+    _NetworkInvariantsClaim(),
+]
+
+_NETWORK_CONVERGENCE_CLAIMS: list[_NetworkConvergenceClaim] = [
+    _NetworkConvergenceClaim(forward_euler, "forward_euler"),
+    _NetworkConvergenceClaim(heun, "heun"),
+    _NetworkConvergenceClaim(rk4, "rk4"),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _NETWORK_INVARIANT_CLAIMS,
+    ids=[c.description for c in _NETWORK_INVARIANT_CLAIMS],
+)
+def test_reaction_network_invariants(claim: _NetworkInvariantsClaim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _NETWORK_CONVERGENCE_CLAIMS,
+    ids=[c.description for c in _NETWORK_CONVERGENCE_CLAIMS],
+)
+def test_reaction_network_convergence(claim: _NetworkConvergenceClaim) -> None:
     claim.check()
