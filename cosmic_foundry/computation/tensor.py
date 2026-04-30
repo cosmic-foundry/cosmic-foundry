@@ -266,11 +266,13 @@ class _DeclaredBackend:
         return (min(shape),)
 
     def svd(
-        self, raw: Any, shape: tuple[int, ...]
+        self, raw: Any, shape: tuple[int, ...], full_matrices: bool = False
     ) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
         m, n = shape
         k = min(m, n)
-        return (m, k), (k,), (k, k)
+        if full_matrices:
+            return (m, m), (k,), (n, n)
+        return (m, k), (k,), (k, n)
 
     def slice_get(self, raw: Any, idx: Any, shape: tuple[int, ...]) -> tuple[int, ...]:
         return _slice_output_shape(idx, shape)

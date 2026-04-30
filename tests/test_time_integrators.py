@@ -93,6 +93,7 @@ from cosmic_foundry.computation.time_integrators import (
     lie_steps,
     midpoint,
     nordsieck_solution_distance,
+    project_conserved,
     ralston,
     rk4,
     stability_function,
@@ -2606,4 +2607,79 @@ def test_reaction_network_invariants(claim: _NetworkInvariantsClaim) -> None:
     ids=[c.description for c in _NETWORK_CONVERGENCE_CLAIMS],
 )
 def test_reaction_network_convergence(claim: _NetworkConvergenceClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Conservation projection claims
+# ---------------------------------------------------------------------------
+
+# Synthetic test: 3-species system with one conservation law Σxᵢ = 1.
+# basis = [[1, 1, 1]], targets = [1.0].  The three properties below are the
+# minimal falsifiable claims for a correct orthogonal projection.
+#
+# Idempotence: projecting a projected point does nothing.
+# Minimum-norm: the projected point is the nearest manifold point to u.
+# Round-trip: a point already on the manifold is unchanged to ε_machine.
+
+_PROJ_BASIS = Tensor([[1.0, 1.0, 1.0]])
+_PROJ_TARGETS = Tensor([1.0])
+
+
+class _ProjectConservedClaim(Claim):
+    """Verify idempotence, minimum-norm, and round-trip of project_conserved.
+
+    All three sub-checks use the 3-species conservation law Σxᵢ = 1.
+    """
+
+    @property
+    def description(self) -> str:
+        return "project_conserved/invariants"
+
+    def check(self) -> None:
+        # Idempotence: project(project(u)) = project(u)
+        u_off = Tensor([0.4, 0.4, 0.4])  # sum = 1.2, off manifold
+        pu = project_conserved(u_off, _PROJ_BASIS, _PROJ_TARGETS)
+        ppu = project_conserved(pu, _PROJ_BASIS, _PROJ_TARGETS)
+        for i in range(3):
+            assert (
+                abs(float(ppu[i]) - float(pu[i])) < 1e-12
+            ), f"idempotence failed at component {i}: {float(ppu[i])} != {float(pu[i])}"
+
+        # Round-trip: point already on manifold is unchanged to ε_machine
+        u_on = Tensor([0.5, 0.3, 0.2])  # sum = 1.0
+        pu_on = project_conserved(u_on, _PROJ_BASIS, _PROJ_TARGETS)
+        for i in range(3):
+            assert abs(float(pu_on[i]) - float(u_on[i])) < 1e-12, (
+                f"round-trip failed at component {i}: "
+                f"{float(pu_on[i])} != {float(u_on[i])}"
+            )
+
+        # Minimum-norm: |project(u) - u| ≤ |v - u| for any v on the manifold
+        u_far = Tensor([0.5, 0.5, 0.5])  # sum = 1.5
+        pu_far = project_conserved(u_far, _PROJ_BASIS, _PROJ_TARGETS)
+        dist_proj = (
+            sum((float(pu_far[i]) - float(u_far[i])) ** 2 for i in range(3)) ** 0.5
+        )
+        v_arb = Tensor([1.0, 0.0, 0.0])  # arbitrary point on manifold
+        dist_arb = (
+            sum((float(v_arb[i]) - float(u_far[i])) ** 2 for i in range(3)) ** 0.5
+        )
+        assert dist_proj <= dist_arb, (
+            f"minimum-norm failed: projected distance {dist_proj:.3e} "
+            f"> distance to arbitrary manifold point {dist_arb:.3e}"
+        )
+
+
+_PROJECT_CONSERVED_CLAIMS: list[_ProjectConservedClaim] = [
+    _ProjectConservedClaim(),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _PROJECT_CONSERVED_CLAIMS,
+    ids=[c.description for c in _PROJECT_CONSERVED_CLAIMS],
+)
+def test_project_conserved(claim: _ProjectConservedClaim) -> None:
     claim.check()

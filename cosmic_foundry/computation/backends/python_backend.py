@@ -323,7 +323,9 @@ class PythonBackend:
                     return raw
         raise NotImplementedError(f"PythonBackend.slice_set: unsupported idx {idx!r}")
 
-    def svd(self, raw: list[Any], shape: tuple[int, ...]) -> tuple[Any, Any, Any]:
+    def svd(
+        self, raw: list[Any], shape: tuple[int, ...], full_matrices: bool = False
+    ) -> tuple[Any, Any, Any]:
         m, n = shape
         B = [[raw[i][j] for i in range(m)] for j in range(n)]
         V = [[1.0 if i == j else 0.0 for i in range(n)] for j in range(n)]
