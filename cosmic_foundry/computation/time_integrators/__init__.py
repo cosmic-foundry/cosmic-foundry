@@ -61,8 +61,8 @@ from cosmic_foundry.computation.time_integrators.splitting import (
     CompositionIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.stepper import (
+    Integrator,
     IntegratorSelectionResult,
-    TimeStepper,
 )
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
@@ -101,7 +101,7 @@ __all__ = [
     "ODEState",
     "RungeKuttaIntegrator",
     "TimeIntegrator",
-    "TimeStepper",
+    "Integrator",
     "elementary_weight",
     "gamma",
     "order",

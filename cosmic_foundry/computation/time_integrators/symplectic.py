@@ -20,7 +20,7 @@ applying a base method at scales (α₁, α₀, α₁) where α₁ = 1/(2−2^e)
 The state is an ODEState where u = concat([q, p]) and HamiltonianRHSProtocol
 carries split_index to indicate how many leading components are position (q);
 the remaining components are momentum (p).  This makes SymplecticCompositionIntegrator
-a TimeIntegrator that interoperates with TimeStepper.
+a TimeIntegrator that interoperates with Integrator.
 
 Supported orders: 1 (symplectic Euler), 2 (leapfrog/Störmer-Verlet), 4
 (Forest-Ruth), 6 (Yoshida), 8 (Yoshida).
@@ -159,7 +159,7 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
 
     The state is an ODEState where u = concat([q, p]).  The HamiltonianRHSProtocol
     carries split_index so that q = u[:split_index] and p = u[split_index:].
-    This makes the integrator fully compatible with TimeStepper.advance().
+    This makes the integrator fully compatible with Integrator.advance().
 
     Supported orders and their methods:
         1 — symplectic Euler (non-palindromic, for comparison)

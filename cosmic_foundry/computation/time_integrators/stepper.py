@@ -1,4 +1,4 @@
-"""TimeStepper and IntegratorSelectionResult."""
+"""Integrator and IntegratorSelectionResult."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ class IntegratorSelectionResult(NamedTuple):
     predicted_cost: float
 
 
-class TimeStepper:
+class Integrator:
     """Drives a TimeIntegrator forward in time from t0 to t_end.
 
     At each time level the controller suggests a step size, the integrator
@@ -112,4 +112,4 @@ class TimeStepper:
         return state
 
 
-__all__ = ["IntegratorSelectionResult", "TimeStepper"]
+__all__ = ["IntegratorSelectionResult", "Integrator"]
