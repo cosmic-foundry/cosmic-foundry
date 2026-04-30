@@ -45,7 +45,6 @@ adams_moulton2–am4 —  Adams-Moulton orders 2–4 (non-stiff, no Jacobian)
 
 from __future__ import annotations
 
-import warnings
 from math import comb, factorial  # comb used in _pascal_predict
 
 import sympy
@@ -588,18 +587,6 @@ class MultistepIntegrator:
         return ODEState(t_new, y, h, 0.0, NordsieckHistory(h, z_new))
 
 
-class NordsieckIntegrator(MultistepIntegrator):
-    """Deprecated alias for ``MultistepIntegrator``."""
-
-    def __init__(self, family: BDFFamily | AdamsFamily, q: int) -> None:
-        warnings.warn(
-            "NordsieckIntegrator is deprecated; use MultistepIntegrator.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(family, q)
-
-
 # ---------------------------------------------------------------------------
 # Named instances
 # ---------------------------------------------------------------------------
@@ -622,7 +609,6 @@ __all__ = [
     "BDFFamily",
     "MultistepIntegrator",
     "NordsieckHistory",
-    "NordsieckIntegrator",
     "adams_family",
     "adams_moulton2",
     "adams_moulton3",

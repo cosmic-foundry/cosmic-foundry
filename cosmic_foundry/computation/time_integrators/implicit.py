@@ -26,7 +26,6 @@ crouzeix_3       — order 3, L-stable (Crouzeix 1979, γ = (3+√3)/6)
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -238,24 +237,6 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         return state._replace(t=t + dt, u=u_new, dt=dt, err=0.0, history=None)
 
 
-class DIRKIntegrator(ImplicitRungeKuttaIntegrator):
-    """Deprecated alias for ``ImplicitRungeKuttaIntegrator``."""
-
-    def __init__(
-        self,
-        A: list[list],
-        b: list,
-        c: list,
-        order: int,
-    ) -> None:
-        warnings.warn(
-            "DIRKIntegrator is deprecated; use ImplicitRungeKuttaIntegrator.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(A, b, c, order)
-
-
 # ---------------------------------------------------------------------------
 # Named instances
 # ---------------------------------------------------------------------------
@@ -313,7 +294,6 @@ def stability_function(
 
 
 __all__ = [
-    "DIRKIntegrator",
     "FiniteDiffJacobianRHS",
     "JacobianRHS",
     "ImplicitRungeKuttaIntegrator",

@@ -32,7 +32,6 @@ Named instances (all ABA-form, d[-1] = 0):
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -163,23 +162,6 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
         return ODEState(state.t + dt, u_new)
 
 
-class HamiltonianSplit(HamiltonianRHS):
-    """Deprecated alias for ``HamiltonianRHS``."""
-
-    def __init__(
-        self,
-        dT_dp: Callable[[Tensor], Tensor],
-        dV_dq: Callable[[Tensor], Tensor],
-        split_index: int,
-    ) -> None:
-        warnings.warn(
-            "HamiltonianSplit is deprecated; use HamiltonianRHS.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(dT_dp, dV_dq, split_index)
-
-
 # ---------------------------------------------------------------------------
 # Coefficient construction via Suzuki-Yoshida triple-jump composition
 # ---------------------------------------------------------------------------
@@ -237,7 +219,6 @@ yoshida_8 = SymplecticCompositionIntegrator(c=_c_y8, d=_d_y8, order=8)
 __all__ = [
     "HamiltonianRHS",
     "HamiltonianRHSProtocol",
-    "HamiltonianSplit",
     "SymplecticCompositionIntegrator",
     "forest_ruth",
     "leapfrog",
@@ -245,5 +226,3 @@ __all__ = [
     "yoshida_6",
     "yoshida_8",
 ]
-
-HamiltonianSplitProtocol = HamiltonianRHSProtocol
