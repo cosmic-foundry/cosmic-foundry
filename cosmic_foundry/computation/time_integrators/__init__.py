@@ -1,5 +1,6 @@
 """Time-integration layer: integrators, steppers, controllers, B-series, symplectic."""
 
+from cosmic_foundry.computation.time_integrators.auto import AutoIntegrator
 from cosmic_foundry.computation.time_integrators.bseries import (
     Tree,
     elementary_weight,
@@ -130,6 +131,7 @@ from cosmic_foundry.computation.time_integrators.vode import VODEController
 
 __all__ = [
     "Tree",
+    "AutoIntegrator",
     "BlackBoxRHS",
     "ConstantStep",
     "Controller",

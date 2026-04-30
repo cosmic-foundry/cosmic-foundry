@@ -22,6 +22,7 @@ from __future__ import annotations
 import math
 import sys
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 import sympy
@@ -29,6 +30,7 @@ import sympy
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators import (
     AdditiveRungeKuttaIntegrator,
+    AutoIntegrator,
     BlackBoxRHS,
     CompositeRHS,
     CompositionIntegrator,
@@ -2165,6 +2167,116 @@ _SYMPLECTIC_CLAIMS: list[_SymplecticConvergenceClaim] = [
     ids=[c.description for c in _SYMPLECTIC_CLAIMS],
 )
 def test_symplectic_integrators(claim: _SymplecticConvergenceClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Phase F claims — automatic dispatch
+# ---------------------------------------------------------------------------
+
+
+class _AutoDispatchClaim(Claim):
+    """Verify AutoIntegrator dispatches to the right specialist integrator."""
+
+    def __init__(
+        self,
+        label: str,
+        rhs: Any,
+        state: ODEState,
+        dt: float,
+        direct: TimeIntegrator,
+        expected_order: int,
+    ) -> None:
+        self._label = label
+        self._rhs = rhs
+        self._state = state
+        self._dt = dt
+        self._direct = direct
+        self._expected_order = expected_order
+
+    @property
+    def description(self) -> str:
+        return f"auto_dispatch/{self._label}"
+
+    def check(self) -> None:
+        auto = AutoIntegrator()
+        expected = self._direct.step(self._rhs, self._state, self._dt)
+        actual = auto.step(self._rhs, self._state, self._dt)
+
+        assert self._direct.order == self._expected_order, (
+            f"{self._label}: direct branch order {self._direct.order} did not match "
+            f"expected order {self._expected_order}"
+        )
+        assert actual.t == expected.t
+        assert actual.dt == expected.dt
+        assert actual.err == expected.err
+        assert (
+            float(norm(actual.u - expected.u)) < 1e-15
+        ), f"{self._label}: AutoIntegrator did not match the direct branch"
+
+
+_AUTO_DISPATCH_CLAIMS: list[_AutoDispatchClaim] = [
+    _AutoDispatchClaim(
+        label="explicit",
+        rhs=BlackBoxRHS(_base_network_f),
+        state=ODEState(0.0, Tensor([1.0, 0.0, 0.0])),
+        dt=0.05,
+        direct=rk4,
+        expected_order=4,
+    ),
+    _AutoDispatchClaim(
+        label="implicit",
+        rhs=_DECAY_RHS,
+        state=ODEState(0.0, Tensor([1.0, 0.0])),
+        dt=0.05,
+        direct=implicit_midpoint,
+        expected_order=2,
+    ),
+    _AutoDispatchClaim(
+        label="split",
+        rhs=_DECAY_RHS_IMEX,
+        state=ODEState(0.0, Tensor([1.0, 0.0])),
+        dt=0.05,
+        direct=ars222,
+        expected_order=2,
+    ),
+    _AutoDispatchClaim(
+        label="semilinear",
+        rhs=_etd_split_rhs(),
+        state=ODEState(0.0, Tensor([1.0, 0.0, 0.0])),
+        dt=0.05,
+        direct=cox_matthews_etdrk4,
+        expected_order=4,
+    ),
+    _AutoDispatchClaim(
+        label="composite",
+        rhs=_split_rhs(),
+        state=ODEState(0.0, Tensor([1.0, 0.0])),
+        dt=0.05,
+        direct=CompositionIntegrator([rk4, rk4], strang_steps(), order=2),
+        expected_order=2,
+    ),
+    _AutoDispatchClaim(
+        label="symplectic",
+        rhs=HamiltonianRHS(
+            dT_dp=lambda p: p,
+            dV_dq=lambda q: q,
+            split_index=1,
+        ),
+        state=ODEState(0.0, Tensor([1.0, 0.0])),
+        dt=0.05,
+        direct=leapfrog,
+        expected_order=2,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _AUTO_DISPATCH_CLAIMS,
+    ids=[c.description for c in _AUTO_DISPATCH_CLAIMS],
+)
+def test_auto_dispatch(claim: _AutoDispatchClaim) -> None:
     claim.check()
 
 

@@ -46,6 +46,7 @@ from cosmic_foundry.computation.tensor import (  # noqa: E402
     where,
 )
 from cosmic_foundry.computation.time_integrators import (  # noqa: E402
+    AutoIntegrator,
     BlackBoxRHS,
     ConstantStep,
     Controller,
@@ -78,6 +79,7 @@ jax.tree_util.register_pytree_node(
 __all__ = [
     "Autotuner",
     "Backend",
+    "AutoIntegrator",
     "BlackBoxRHS",
     "bogacki_shampine",
     "ConstantStep",

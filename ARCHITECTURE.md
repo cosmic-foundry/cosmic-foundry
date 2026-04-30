@@ -674,9 +674,8 @@ at least one new test for the structural change.
 | D1 | **Unified state (done)** | Rename `RKState → ODEState`; fold `MultistepState` into `ODEState.history`; `TimeStepper.advance` returns `ODEState`. |
 | D2 | **Fold NordsieckState (done)** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; `change_order()` / `rescale_step()` moved to `NordsieckHistory`. |
 | E | **Rename sweep (done)** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
-| F | **`AutoIntegrator`** | Implement dispatch chain; add integration test that passes each RHS type through `AutoIntegrator` and verifies correct order. |
 
-Phase D2 can proceed immediately.  Phases E and F require D2.
+All listed phases are complete; future work will be added here when it is fully specified.
 
 ---
 
@@ -726,7 +725,7 @@ broader persistence layer or as a standalone capability.
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
 | 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 6 onward. |
 | 3 | Computation | **Backend-agnostic computation layer. ✓** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; mixed-backend arithmetic guards; AST-based numeric-import boundary; self-calibrating roofline performance gate; `LazyDiscreteField` collapsed into `FaceField` and `_BasisField`. |
-| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. In progress. |
+| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. Implementation complete; verification pending. |
 
 ### Physics epochs
 
