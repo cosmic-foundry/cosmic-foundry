@@ -475,9 +475,11 @@ State types:
 
 ODEState(NamedTuple)             — (t, u, dt, err, history); unified state type
                                    used by all integrators; history is None for
-                                   single-step methods and tuple[Tensor, ...] for
-                                   explicit multistep (Adams-Bashforth) methods
-NordsieckState                   — Nordsieck history vector for multistep methods
+                                   single-step methods, tuple[Tensor, ...] for
+                                   explicit multistep (Adams-Bashforth), and
+                                   NordsieckHistory for Nordsieck-form methods
+NordsieckHistory                 — Nordsieck vector (z, h) with rescale_step()
+                                   and change_order(); stored in ODEState.history
 
 Integrators:
 
@@ -562,7 +564,7 @@ name.  The migration is breaking; it happens in phases (see below).
 | Current name | Target name | Rationale |
 |---|---|---|
 | `RKState` | `ODEState` *(done)* | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). `MultistepState` folded in via `history` field. |
-| `NordsieckState` | `MultistepState` | The Nordsieck encoding is an implementation detail; the concept is a multistep history of past solution data. |
+| `NordsieckState` | `MultistepState` *(done — NordsieckHistory)* | Nordsieck encoding is an implementation detail; `NordsieckHistory` carries the scaled-derivative vector in `ODEState.history`. |
 | `PartitionedState` | *(eliminated — done)* | Folded into `ODEState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianSplit.split_index`. |
 | `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` | DIRK is one implementation strategy for implicit RK; the public name should say "implicit Runge-Kutta". |
 | `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
@@ -650,11 +652,11 @@ ODEState:
   first).  `None` means no history (initial step); the integrator bootstraps
   with `rk4` until enough history is available.
 
-- `NordsieckState` — replace with `ODEState` carrying
-  `history = NordsieckHistory(nordsieck_vector)`.  `NordsieckHistory` holds
-  the scaled-derivative vector and exposes `change_order()` / `rescale_step()`
-  (methods currently on `NordsieckState`).  `NordsieckIntegrator` reads/writes
-  `history`; single-step integrators pass through `state.history = None`.
+- `NordsieckState` *(done)* — replaced by `ODEState` carrying
+  `history = NordsieckHistory(h, z)`.  `NordsieckHistory` holds the
+  scaled-derivative vector and exposes `change_order()` / `rescale_step()`.
+  `NordsieckIntegrator` reads/writes `state.history`; single-step integrators
+  leave `state.history = None`.
 
 **Breaking change surface.** `TimeStepper.advance` return type changed
 from `RKState` to `ODEState` in D1; field names are identical (`t`, `u`, `dt`,
@@ -670,7 +672,7 @@ at least one new test for the structural change.
 | Phase | Title | Scope |
 |---|---|---|
 | D1 | **Unified state (done)** | Rename `RKState → ODEState`; fold `MultistepState` into `ODEState.history`; `TimeStepper.advance` returns `ODEState`. |
-| D2 | **Fold NordsieckState** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; move `change_order()` / `rescale_step()` to `NordsieckHistory`. |
+| D2 | **Fold NordsieckState (done)** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; `change_order()` / `rescale_step()` moved to `NordsieckHistory`. |
 | E | **Rename sweep** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
 | F | **`AutoIntegrator`** | Implement dispatch chain; add integration test that passes each RHS type through `AutoIntegrator` and verifies correct order. |
 
