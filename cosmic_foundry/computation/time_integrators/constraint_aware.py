@@ -17,6 +17,7 @@ manages that lifecycle between accepted steps:
 from __future__ import annotations
 
 from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
 from cosmic_foundry.computation.time_integrators.implicit import (
     ImplicitRungeKuttaIntegrator,
 )
@@ -30,6 +31,7 @@ from cosmic_foundry.computation.time_integrators.reaction_network import (
 )
 
 _RATE_FLOOR = 1e-100  # avoids 0/0 when both rates are zero
+_RATE_THRESHOLD = 1e-10  # pair is considered absent; ratio = inf → no activation
 
 
 def build_constraint_gradients(
@@ -92,14 +94,23 @@ def _equilibrium_ratios(
     u: Tensor,
     eligible: list[int],
 ) -> dict[int, float]:
-    """Return |r⁺_j − r⁻_j| / max(r⁺_j, r⁻_j) for each j in eligible."""
+    """Return |r⁺_j − r⁻_j| / max(r⁺_j, r⁻_j) for each j in eligible.
+
+    Returns ``inf`` for pairs where both rates are below ``_RATE_THRESHOLD``
+    (absent species), preventing spurious activation of empty-channel pairs.
+    """
     r_plus = rhs.forward_rate(t, u)
     r_minus = rhs.reverse_rate(t, u)
-    return {
-        j: abs(float(r_plus[j]) - float(r_minus[j]))
-        / max(abs(float(r_plus[j])), abs(float(r_minus[j])), _RATE_FLOOR)
-        for j in eligible
-    }
+    result: dict[int, float] = {}
+    for j in eligible:
+        rp = abs(float(r_plus[j]))
+        rm = abs(float(r_minus[j]))
+        denom = max(rp, rm, _RATE_FLOOR)
+        if denom < _RATE_THRESHOLD:
+            result[j] = float("inf")
+        else:
+            result[j] = abs(rp - rm) / denom
+    return result
 
 
 def _consistent_init(
@@ -188,6 +199,82 @@ def _update_active_set(
     return frozenset(new_active)
 
 
+def solve_nse(
+    rhs: ReactionNetworkRHS,
+    u: Tensor,
+    t: float = 0.0,
+    *,
+    eps: float = 1e-7,
+) -> Tensor:
+    """Solve for the Nuclear Statistical Equilibrium state.
+
+    At NSE every independent reaction pair satisfies r⁺_j = r⁻_j.  The
+    equilibrium state is determined by the combined system:
+
+    - Conservation: conservation_basis @ u = conservation_targets
+    - Equilibrium: r⁺_j(u) − r⁻_j(u) = 0 for all j in constraint_basis
+
+    When all independent constraints are active, this is a square
+    n_species × n_species system solved by Newton iteration.  The supplied
+    ``u`` is used as the initial guess.
+
+    Parameters
+    ----------
+    rhs:
+        Reaction-network RHS; provides conservation basis and rate callables.
+    u:
+        Initial guess for the NSE state, shape (n_species,).
+    t:
+        Time at which rates are evaluated (for time-dependent rate laws).
+    eps:
+        Finite-difference step size for Jacobian assembly.
+
+    Returns
+    -------
+    Tensor
+        Converged NSE state, shape (n_species,).
+    """
+    n_species = u.shape[0]
+    backend = u.backend
+    active = frozenset(
+        int(float(rhs.constraint_basis[i]))
+        for i in range(rhs.constraint_basis.shape[0])
+    )
+    indices = sorted(active)
+    n_cons = rhs.n_conserved
+
+    def F(x: Tensor) -> Tensor:
+        rows: list[float] = []
+        if n_cons > 0:
+            for i in range(n_cons):
+                val = sum(
+                    float(rhs.conservation_basis[i, s]) * float(x[s])
+                    for s in range(n_species)
+                )
+                rows.append(val - float(rhs.conservation_targets[i]))
+        r_plus = rhs.forward_rate(t, x)
+        r_minus = rhs.reverse_rate(t, x)
+        for j in indices:
+            rows.append(float(r_plus[j]) - float(r_minus[j]))
+        return Tensor(rows, backend=backend)
+
+    def J(x: Tensor) -> Tensor:
+        rows: list[list[float]] = []
+        if n_cons > 0:
+            for i in range(n_cons):
+                rows.append(
+                    [float(rhs.conservation_basis[i, s]) for s in range(n_species)]
+                )
+        cg = build_constraint_gradients(rhs, active, t, x, eps)
+        if cg is not None:
+            k = len(indices)
+            for r in range(k):
+                rows.append([float(cg[r, s]) for s in range(n_species)])
+        return Tensor(rows, backend=backend)
+
+    return nonlinear_solve(F, J, u)
+
+
 class ConstraintAwareController:
     """Wraps a PIController and adds constraint lifecycle management.
 
@@ -240,9 +327,12 @@ class ConstraintAwareController:
         self._eps_deactivate = eps_deactivate
         self._eps_grad = eps_grad
 
-        # Diagnostic event log.
+        self._n_eligible = rhs.constraint_basis.shape[0]
+
+        # Diagnostic event logs.
         self.activation_events: list[tuple[float, frozenset[int]]] = []
         self.deactivation_events: list[tuple[float, frozenset[int]]] = []
+        self.nse_events: list[tuple[float, frozenset[int]]] = []
 
     def advance(
         self,
@@ -313,11 +403,18 @@ class ConstraintAwareController:
             # Consistent initialization on newly activated constraints.
             newly_on = new_active - prev_active
             newly_off = prev_active - new_active
+            in_nse = self._n_eligible > 0 and len(new_active) == self._n_eligible
             if newly_on:
                 self.activation_events.append((candidate.t, newly_on))
-                u_proj = _consistent_init(
-                    self._rhs, u_proj, new_active, candidate.t, self._eps_grad
-                )
+                if in_nse:
+                    u_proj = solve_nse(
+                        self._rhs, u_proj, candidate.t, eps=self._eps_grad
+                    )
+                    self.nse_events.append((candidate.t, new_active))
+                else:
+                    u_proj = _consistent_init(
+                        self._rhs, u_proj, new_active, candidate.t, self._eps_grad
+                    )
             if newly_off:
                 self.deactivation_events.append((candidate.t, newly_off))
 
@@ -326,4 +423,4 @@ class ConstraintAwareController:
         return state
 
 
-__all__ = ["ConstraintAwareController", "build_constraint_gradients"]
+__all__ = ["ConstraintAwareController", "build_constraint_gradients", "solve_nse"]

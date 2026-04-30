@@ -543,23 +543,10 @@ or a solver-level override is needed.
 
 ---
 
-## Current work: Epoch 4 — Time integration verification
+## Epoch 4 — Time integration verification (complete)
 
-### Sprint: nuclear astrophysics stress tests
-
-The integrator family is structurally complete.  The outstanding Epoch 4
-work is two-pronged: build the infrastructure that lets the integrator
-exploit reaction-network structure, and verify the result against
-progressively harder synthetic nuclear astrophysics problems.  The two
-tracks are interleaved — each problem phase introduces one infrastructure
-piece alongside one harder problem.
-
-The long-horizon target is a single, unified time-integration path that
-handles dynamic, partially-equilibrated, and fully-equilibrated (NSE)
-reaction networks without mode switching.  The constraint-activation
-mechanism that handles one equilibrated reaction pair handles all of them;
-the NSE limit is the special case where all independent constraints are
-simultaneously active.  No separate NSE solver is needed.
+The nuclear astrophysics stress-test sprint (F1–F5) is complete.  The
+infrastructure below is the foundation for Epoch 9 microphysics work.
 
 #### Design principle
 
@@ -671,70 +658,19 @@ All tests register in `tests/test_time_integrators.py`.
 | F2 ✓ | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
 | F3 ✓ | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
 | F4 ✓ | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
-| F5 | α-chain + internal energy (augmented state (x₁,…,xₙ,ε); T=ε/Cᵥ; `ReactionNetworkRHS`) | NSE limit detection; full DAE path | A⇌B⇌C toy: both constraints activate simultaneously; final abundances match analytic equilibrium ratios k₋₁/k₊₁ and k₋₂/k₊₂; state and error estimate are continuous across the transition |
+| F5 ✓ | 3-species A⇌B⇌C symmetric network (`ReactionNetworkRHS`) | `nonlinear_solve` in `_newton.py`; `solve_nse` in `constraint_aware.py`; NSE limit detection and direct NSE solve in `ConstraintAwareController`; absent-species rate-threshold guard in `_equilibrium_ratios` | A⇌B⇌C toy: both constraints activate simultaneously, `solve_nse` recovers A=B=C=1/3 to machine precision; 11-species hub-and-spoke: fast and slow spoke groups activate at distinct times (staggered activation), `nse_events` logged at full NSE, final Aᵢ=1/11; rate-threshold guard prevents spurious activation of absent-species pairs in chain topology |
 
-#### Governing constraints
+#### Invariants upheld by this layer
 
-- **No microphysics EOS.**  Temperature is related to internal energy by
-  a constant specific heat (T = ε/Cᵥ).  Full T-dependent EOS belongs to
-  Epoch 9.
-- **Pure ODE/DAE systems.**  No spatial structure; spatial + temporal
-  coupling belongs to Epoch 5 and beyond.
-- **Conservation is a first-class pass criterion.**  Any integrator or
-  controller that violates conservation beyond floating-point precision is
-  a defect to fix in that PR, not a known limitation to document.
-- **Each phase is a self-contained PR** that adds the physics problem, its
-  verification test, the synthetic infrastructure unit tests, and any fixes
-  found during testing.  No fix carries forward without a test demonstrating
-  the problem it solves.
-
-#### Expected friction points
-
-- **Consistent initialization ill-conditioning (F4–F5):** projecting onto
-  a newly activated constraint manifold requires solving (CCᵀ)δ = residual.
-  If active constraint gradients are nearly parallel, CCᵀ is ill-conditioned.
-  The pre-computed constraint_basis from stoichiometry analysis should keep
-  the basis well-conditioned; record any case where it does not.
-- **Constraint chattering (F4–F5):** hysteresis thresholds ε_activate <
-  ε_deactivate prevent rapid cycling; record chosen values and rationale in
-  the PR.  F4 uses ε_activate = 0.01, ε_deactivate = 0.10 (10× ratio).  For
-  the A⇌B toy the ratio ρ ≈ 3·exp(−1.5t) decreases monotonically, so
-  chattering cannot occur regardless of threshold.  For non-monotone problems
-  the 10× gap should be widened if chattering is observed.
-- **Newton convergence at extreme stiffness (F3–F5):** the Newton iteration
-  may need tighter tolerances or a line search at stiffness ratios above ~10¹⁰.
-  Record any change and its rationale in the PR.
-- **Dense Newton scalability ceiling (F4–F5):** O(n³) is acceptable for
-  n ≤ 6.  Record the species count at which sparse factorization would pay
-  off, so Epoch 9 planning can account for it.
-
----
-
-**Open questions:**
-
-1. **`set_default_backend` vs. solver-level override.**  Time-integrator
-   code must inherit whichever resolution lands; a per-`TimeStepper`
-   backend override is the natural API extension if process-wide defaults
-   turn out to be insufficient.
-
-2. **Nonlinear system solver.**  The current Newton kernel in `_newton.py`
-   is purpose-built for the implicit-RK fixed-point `y − γh·f(y) = y_exp`.
-   A general `nonlinear_solve(F, jac, x0) → x` would benefit small systems
-   (equilibrium detection in reaction networks, consistent initialization
-   for constraint activation) just as a general linear solver benefits large
-   systems (global Poisson solve).  The right time to extract it is when a
-   second caller with a different residual structure appears.
-
-**Design decisions to revisit in later epochs:**
-
-- AMR (Epoch 12): time-stepper must accept hierarchical state once meshes
-  refine; integrator state types may need a coarse-fine variant.
-- GR (Epoch 13): integrator state and step program become coupled to a
-  dynamical 3-metric; the structured-RHS protocol may need a
-  `WithMetricRHS` variant.
-- Temporal convergence verification across spatial dimensions: spatial
-  framework now covers 1D / 2D / 3D; temporal claims should likewise
-  verify across problem dimensions where applicable.
+- **Conservation is a hard pass criterion.**  Any integrator or controller
+  that violates conservation beyond floating-point precision is a defect,
+  not a known limitation.  `project_conserved` enforces this after every
+  accepted step.
+- **Constraint chattering is prevented by hysteresis.**  ε_activate = 0.01,
+  ε_deactivate = 0.10 (10× ratio) was sufficient for all F4–F5 test
+  problems.  Widen the gap if chattering is observed on non-monotone problems.
+- **Dense Newton is O(n³).**  Acceptable for n ≤ O(100); sparse factorization
+  belongs to Epoch 9 when production-scale networks arrive.
 
 ---
 
@@ -743,6 +679,27 @@ All tests register in `tests/test_time_integrators.py`.
 Items that are not scoped to any specific epoch.  They surface here so they
 are not lost; the decision of when and how to schedule them is made when
 the implementation lane becomes clear.
+
+**`set_default_backend` vs. solver-level override (Epoch 4 carry-over).**
+Time-integrator code currently inherits the process-wide default backend set
+by `set_default_backend`.  If per-`TimeStepper` backend overrides are needed
+(e.g., a JAX backend for one integrator while the rest use NumPy), a
+keyword argument on `TimeStepper.__init__` is the natural extension point.
+Defer until a concrete use case requires it.
+
+**AMR integration state (Epoch 12 forward).**  The time-stepper must accept
+hierarchical state once meshes refine.  Integrator state types (`ODEState`,
+`NordsieckHistory`) may need coarse–fine variants that carry per-level
+sub-states.  Defer until the AMR mesh hierarchy is defined.
+
+**GR integrator coupling (Epoch 13 forward).**  Integrator state and step
+program become coupled to a dynamical 3-metric; the structured-RHS protocol
+may need a `WithMetricRHS` variant.  Defer until the GR lane begins.
+
+**Temporal convergence across spatial dimensions.**  The convergence
+framework verifies time-integration order on scalar and small-vector problems.
+Once spatial dimensions are coupled (Epoch 5+), temporal claims should be
+re-verified on 2D and 3D problems.
 
 **HDF5 checkpoint/restart.** Persistent serialization of simulation state
 (time-stepper state, mesh fields, parameters) with provenance sidecars
@@ -764,7 +721,7 @@ broader persistence layer or as a standalone capability.
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
 | 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 6 onward. |
 | 3 | Computation | **Backend-agnostic computation layer. ✓** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; mixed-backend arithmetic guards; AST-based numeric-import boundary; self-calibrating roofline performance gate; `LazyDiscreteField` collapsed into `FaceField` and `_BasisField`. |
-| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. |
+| 4 | Computation | **Time integration layer. ✓** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families; reaction-network RHS with stoichiometry analysis, constraint lifecycle management, and NSE limit detection via `solve_nse`. |
 
 ### Physics epochs
 
