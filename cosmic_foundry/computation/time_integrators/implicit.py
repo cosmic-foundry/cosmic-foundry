@@ -17,11 +17,10 @@ framework from bseries.py applies unchanged, since the algebraic order
 conditions depend only on the tableau entries (A, b, c), not on the implicit
 vs. explicit character of individual stages.
 
-Named instances
----------------
-backward_euler   — order 1, L-stable
-implicit_midpoint — order 2, A-stable (Gauss-Legendre, energy-conserving)
-crouzeix_3       — order 3, L-stable (Crouzeix 1979, γ = (3+√3)/6)
+The canonical tableau for each order is:
+    1 — backward Euler (L-stable)
+    2 — implicit midpoint (A-stable, energy-conserving; Gauss-Legendre)
+    3 — Crouzeix 1979, 2-stage L-stable SDIRK, γ = (3 + √3) / 6
 """
 
 from __future__ import annotations
@@ -124,8 +123,26 @@ class FiniteDiffJacobianRHS:
         return Tensor(rows, backend=backend)
 
 
+def _build_dirk_tableaux() -> dict:
+    # Crouzeix (1979) 2-stage order-3 L-stable DIRK.
+    # γ = (3 + √3) / 6 satisfies the order-3 Butcher conditions exactly.
+    g = sympy.Rational(3, 6) + sympy.sqrt(3) / 6
+    return {
+        1: dict(A=[[1]], b=[1], c=[1]),
+        2: dict(A=[["1/2"]], b=[1], c=["1/2"]),
+        3: dict(
+            A=[[g, 0], [1 - 2 * g, g]],
+            b=["1/2", "1/2"],
+            c=[g, 1 - g],
+        ),
+    }
+
+
+_DIRK_TABLEAUX = _build_dirk_tableaux()
+
+
 class ImplicitRungeKuttaIntegrator(TimeIntegrator):
-    """Diagonally Implicit Runge-Kutta method defined by a Butcher tableau.
+    """Diagonally Implicit Runge-Kutta method selected by convergence order.
 
     Each stage of a DIRK step is solved by Newton iteration using the
     supplied LU factorizer to resolve the linear system at each Newton step.
@@ -133,26 +150,26 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
     for irrational entries) for B-series verification, and as Python floats
     for numerical evaluation.
 
+    The canonical tableau for each order is:
+        1 — backward Euler (L-stable)
+        2 — implicit midpoint (A-stable, energy-conserving)
+        3 — Crouzeix 1979, 2-stage L-stable SDIRK
+
     Parameters
     ----------
-    A:
-        Stage interaction matrix, shape (s, s), lower-triangular (diagonal
-        entries may be non-zero).
-    b:
-        Quadrature weights, shape (s,).
-    c:
-        Abscissae, shape (s,).
     order:
-        Declared convergence order.
+        Convergence order.  Must be one of {1, 2, 3}.
     """
 
-    def __init__(
-        self,
-        A: list[list],
-        b: list,
-        c: list,
-        order: int,
-    ) -> None:
+    def __init__(self, order: int) -> None:
+        if order not in _DIRK_TABLEAUX:
+            raise ValueError(
+                f"ImplicitRungeKuttaIntegrator order must be one of "
+                f"{sorted(_DIRK_TABLEAUX)}, got {order}"
+            )
+        tab = _DIRK_TABLEAUX[order]
+        A, b, c = tab["A"], tab["b"], tab["c"]
+
         self._A_sym = [[sympy.sympify(a) for a in row] for row in A]
         self._b_sym = [sympy.sympify(bi) for bi in b]
         self._c_sym = [sympy.sympify(ci) for ci in c]
@@ -238,35 +255,6 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
 
 
 # ---------------------------------------------------------------------------
-# Named instances
-# ---------------------------------------------------------------------------
-
-backward_euler = ImplicitRungeKuttaIntegrator(
-    A=[[1]],
-    b=[1],
-    c=[1],
-    order=1,
-)
-
-implicit_midpoint = ImplicitRungeKuttaIntegrator(
-    A=[["1/2"]],
-    b=[1],
-    c=["1/2"],
-    order=2,
-)
-
-# Crouzeix (1979) 2-stage order-3 L-stable DIRK.
-# γ = (3 + √3) / 6 satisfies the order-3 Butcher conditions exactly.
-_gamma_c3 = sympy.Rational(3, 6) + sympy.sqrt(3) / 6
-crouzeix_3 = ImplicitRungeKuttaIntegrator(
-    A=[[_gamma_c3, 0], [1 - 2 * _gamma_c3, _gamma_c3]],
-    b=["1/2", "1/2"],
-    c=[_gamma_c3, 1 - _gamma_c3],
-    order=3,
-)
-
-
-# ---------------------------------------------------------------------------
 # Stability-function utilities
 # ---------------------------------------------------------------------------
 
@@ -298,8 +286,5 @@ __all__ = [
     "JacobianRHS",
     "ImplicitRungeKuttaIntegrator",
     "WithJacobianRHSProtocol",
-    "backward_euler",
-    "crouzeix_3",
-    "implicit_midpoint",
     "stability_function",
 ]

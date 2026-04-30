@@ -52,7 +52,11 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
     RHSProtocol,
 )
-from cosmic_foundry.computation.time_integrators.runge_kutta import rk4 as _rk4
+from cosmic_foundry.computation.time_integrators.runge_kutta import (
+    RungeKuttaIntegrator as _RungeKuttaIntegrator,
+)
+
+_rk4 = _RungeKuttaIntegrator(4)
 
 _LU = LUFactorization()
 _NEWTON_MAX_ITER = 50

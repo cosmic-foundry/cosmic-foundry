@@ -151,9 +151,11 @@ def _build_registry() -> tuple[list, list]:
     def fB(t, u):  # type: ignore[misc]
         return Tensor([0.0, float(u[0])], backend=u.backend)
 
-    strang = _ti.CompositionIntegrator([_ti.rk4, _ti.rk4], _ti.strang_steps(), order=2)
+    strang = _ti.CompositionIntegrator(
+        [_ti.RungeKuttaIntegrator(4), _ti.RungeKuttaIntegrator(4)], order=2
+    )
     yoshida_c = _ti.CompositionIntegrator(
-        [_ti.forward_euler, _ti.forward_euler], _ti.yoshida_steps(), order=4
+        [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)], order=4
     )
 
     # ── problem registry ─────────────────────────────────────────────────────
@@ -217,13 +219,7 @@ def _build_registry() -> tuple[list, list]:
         (
             "rk",
             "bb",
-            {
-                1: _ti.forward_euler,
-                2: _ti.midpoint,
-                3: _ti.bogacki_shampine,
-                4: _ti.rk4,
-                5: _ti.dormand_prince,
-            },
+            {o: _ti.RungeKuttaIntegrator(o) for o in [1, 2, 3, 4, 5]},
         ),
         (
             "ab",
@@ -233,11 +229,7 @@ def _build_registry() -> tuple[list, list]:
         (
             "dirk",
             "jac",
-            {
-                1: _ti.backward_euler,
-                2: _ti.implicit_midpoint,
-                3: _ti.crouzeix_3,
-            },
+            {o: _ti.ImplicitRungeKuttaIntegrator(o) for o in [1, 2, 3]},
         ),
         (
             "bdf",
@@ -252,9 +244,7 @@ def _build_registry() -> tuple[list, list]:
         (
             "imex",
             "split",
-            {
-                2: _ti.ars222,
-            },
+            {2: _ti.AdditiveRungeKuttaIntegrator(2)},
         ),
         (
             "comp",
@@ -267,13 +257,7 @@ def _build_registry() -> tuple[list, list]:
         (
             "sym",
             "sym",
-            {
-                1: _ti.symplectic_euler,
-                2: _ti.leapfrog,
-                4: _ti.forest_ruth,
-                6: _ti.yoshida_6,
-                8: _ti.yoshida_8,
-            },
+            {o: _ti.SymplecticCompositionIntegrator(o) for o in [1, 2, 4, 6, 8]},
         ),
     ]
     return probs, families
@@ -350,7 +334,7 @@ class _NSEClaim(Claim):
         rhs = spec.build_rhs()
         ctrl = _ti.ConstraintAwareController(
             rhs=rhs,
-            integrator=_ti.implicit_midpoint,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
             inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=spec.dt0()),
             eps_activate=0.01,
             eps_deactivate=0.1,
@@ -460,13 +444,13 @@ def _etd_check() -> None:
 
     rhs = _ti.SemilinearRHS(_L, _N)
     t_end = 0.5
-    ref = _run(_ti.cox_matthews_etdrk4, rhs, _U3, t_end / 128, t_end)
+    ref = _run(_ti.CoxMatthewsETDRK4Integrator(4), rhs, _U3, t_end / 128, t_end)
     t0, dts, errs = time.perf_counter(), [], []
     for i in range(1, 7):
         if time.perf_counter() - t0 > _BUDGET:
             break
         dt = t_end / 2**i
-        s = _run(_ti.cox_matthews_etdrk4, rhs, _U3, dt, t_end)
+        s = _run(_ti.CoxMatthewsETDRK4Integrator(4), rhs, _U3, dt, t_end)
         errs.append(float(norm(s.u - ref.u)))
         dts.append(dt)
     assert _slope(errs, dts) >= 3.5
@@ -575,7 +559,7 @@ def _lifecycle_check() -> None:
     def _ctrl() -> _ti.ConstraintAwareController:
         return _ti.ConstraintAwareController(
             rhs=rhs,
-            integrator=_ti.implicit_midpoint,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
             inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
             eps_activate=0.01,
             eps_deactivate=0.1,

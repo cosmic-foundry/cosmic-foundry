@@ -22,12 +22,8 @@ carries split_index to indicate how many leading components are position (q);
 the remaining components are momentum (p).  This makes SymplecticCompositionIntegrator
 a TimeIntegrator that interoperates with TimeStepper.
 
-Named instances (all ABA-form, d[-1] = 0):
-    symplectic_euler — order 1 (non-palindromic, for comparison)
-    leapfrog         — order 2 (Störmer-Verlet)
-    forest_ruth      — order 4
-    yoshida_6        — order 6
-    yoshida_8        — order 8
+Supported orders: 1 (symplectic Euler), 2 (leapfrog/Störmer-Verlet), 4
+(Forest-Ruth), 6 (Yoshida), 8 (Yoshida).
 """
 
 from __future__ import annotations
@@ -105,28 +101,86 @@ class HamiltonianRHS:
         return result
 
 
-class SymplecticCompositionIntegrator(TimeIntegrator):
-    """Explicit symplectic integrator parameterized by drift/kick coefficients.
+# ---------------------------------------------------------------------------
+# Coefficient construction via Suzuki-Yoshida triple-jump composition
+# ---------------------------------------------------------------------------
 
-    A specialization of the composition integrator family for separable
-    Hamiltonian systems.  Advances the state one step by alternating drift
-    and kick sub-steps with weights c[i] and d[i].
+
+def _triple_jump(
+    c: list[float], d: list[float], exponent: float
+) -> tuple[list[float], list[float]]:
+    """Lift the order of an ABA splitting method by 2 via triple-jump composition.
+
+    Given a method with ABA coefficients (c, d) of order 2k, returns the
+    coefficients for the order-(2k+2) method obtained by composing three
+    applications at scales (α₁, α₀, α₁) with α₁ = 1/(2 − 2^exponent)
+    and α₀ = 1 − 2α₁.  Adjacent drift half-steps at the seams are merged.
+
+    The exponent for lifting from order 2k to 2k+2 is e = 1/(2k+1).
+    """
+    a1 = 1.0 / (2.0 - 2.0**exponent)
+    a0 = 1.0 - 2.0 * a1
+    c1 = [a1 * x for x in c]
+    c0 = [a0 * x for x in c]
+    d1 = [a1 * x for x in d]
+    d0 = [a0 * x for x in d]
+    # Merge the trailing half-drift of each sub-method with the leading
+    # half-drift of the next (the d[-1]=0 null kick is absorbed implicitly).
+    c_new = c1[:-1] + [c1[-1] + c0[0]] + c0[1:-1] + [c0[-1] + c1[0]] + c1[1:]
+    d_new = d1[:-1] + d0[:-1] + d1[:-1] + [0.0]
+    return c_new, d_new
+
+
+def _build_symplectic_coefficients() -> dict[int, tuple[list[float], list[float]]]:
+    c2, d2 = [0.5, 0.5], [1.0, 0.0]
+    c4, d4 = _triple_jump(c2, d2, exponent=1 / 3)
+    c6, d6 = _triple_jump(c4, d4, exponent=1 / 5)
+    c8, d8 = _triple_jump(c6, d6, exponent=1 / 7)
+    return {
+        1: ([1.0], [1.0]),
+        2: (c2, d2),
+        4: (c4, d4),
+        6: (c6, d6),
+        8: (c8, d8),
+    }
+
+
+_SYMPLECTIC_COEFFICIENTS: dict[int, tuple[list[float], list[float]]] = (
+    _build_symplectic_coefficients()
+)
+
+
+class SymplecticCompositionIntegrator(TimeIntegrator):
+    """Explicit symplectic integrator for separable Hamiltonian systems.
+
+    Advances the state one step by alternating drift and kick sub-steps with
+    weights c[i] and d[i] derived from the Suzuki-Yoshida triple-jump
+    composition of order-2 leapfrog.  All coefficient computation is internal.
 
     The state is an ODEState where u = concat([q, p]).  The HamiltonianRHSProtocol
     carries split_index so that q = u[:split_index] and p = u[split_index:].
     This makes the integrator fully compatible with TimeStepper.advance().
 
+    Supported orders and their methods:
+        1 — symplectic Euler (non-palindromic, for comparison)
+        2 — leapfrog / Störmer-Verlet
+        4 — Forest-Ruth
+        6 — Yoshida order 6
+        8 — Yoshida order 8
+
     Parameters
     ----------
-    c:
-        Drift weights, length s.  Must sum to 1.
-    d:
-        Kick weights, length s.  Must sum to 1.  ABA-type methods set d[-1] = 0.
     order:
-        Declared convergence order.
+        Convergence order.  Must be one of {1, 2, 4, 6, 8}.
     """
 
-    def __init__(self, c: list[float], d: list[float], order: int) -> None:
+    def __init__(self, order: int) -> None:
+        if order not in _SYMPLECTIC_COEFFICIENTS:
+            raise ValueError(
+                f"SymplecticCompositionIntegrator order must be one of "
+                f"{sorted(_SYMPLECTIC_COEFFICIENTS)}, got {order}"
+            )
+        c, d = _SYMPLECTIC_COEFFICIENTS[order]
         self._c = list(c)
         self._d = list(d)
         self._order = order
@@ -162,67 +216,8 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
         return ODEState(state.t + dt, u_new)
 
 
-# ---------------------------------------------------------------------------
-# Coefficient construction via Suzuki-Yoshida triple-jump composition
-# ---------------------------------------------------------------------------
-
-
-def _triple_jump(
-    c: list[float], d: list[float], exponent: float
-) -> tuple[list[float], list[float]]:
-    """Lift the order of an ABA splitting method by 2 via triple-jump composition.
-
-    Given a method with ABA coefficients (c, d) of order 2k, returns the
-    coefficients for the order-(2k+2) method obtained by composing three
-    applications at scales (α₁, α₀, α₁) with α₁ = 1/(2 − 2^exponent)
-    and α₀ = 1 − 2α₁.  Adjacent drift half-steps at the seams are merged.
-
-    The exponent for lifting from order 2k to 2k+2 is e = 1/(2k+1).
-    """
-    a1 = 1.0 / (2.0 - 2.0**exponent)
-    a0 = 1.0 - 2.0 * a1
-    c1 = [a1 * x for x in c]
-    c0 = [a0 * x for x in c]
-    d1 = [a1 * x for x in d]
-    d0 = [a0 * x for x in d]
-    # Merge the trailing half-drift of each sub-method with the leading
-    # half-drift of the next (the d[-1]=0 null kick is absorbed implicitly).
-    c_new = c1[:-1] + [c1[-1] + c0[0]] + c0[1:-1] + [c0[-1] + c1[0]] + c1[1:]
-    d_new = d1[:-1] + d0[:-1] + d1[:-1] + [0.0]
-    return c_new, d_new
-
-
-# ---------------------------------------------------------------------------
-# Named instances
-# ---------------------------------------------------------------------------
-
-symplectic_euler = SymplecticCompositionIntegrator(
-    c=[1.0],
-    d=[1.0],
-    order=1,
-)
-
-_c_lf = [0.5, 0.5]
-_d_lf = [1.0, 0.0]
-leapfrog = SymplecticCompositionIntegrator(c=_c_lf, d=_d_lf, order=2)
-
-_c_fr, _d_fr = _triple_jump(_c_lf, _d_lf, exponent=1 / 3)
-forest_ruth = SymplecticCompositionIntegrator(c=_c_fr, d=_d_fr, order=4)
-
-_c_y6, _d_y6 = _triple_jump(_c_fr, _d_fr, exponent=1 / 5)
-yoshida_6 = SymplecticCompositionIntegrator(c=_c_y6, d=_d_y6, order=6)
-
-_c_y8, _d_y8 = _triple_jump(_c_y6, _d_y6, exponent=1 / 7)
-yoshida_8 = SymplecticCompositionIntegrator(c=_c_y8, d=_d_y8, order=8)
-
-
 __all__ = [
     "HamiltonianRHS",
     "HamiltonianRHSProtocol",
     "SymplecticCompositionIntegrator",
-    "forest_ruth",
-    "leapfrog",
-    "symplectic_euler",
-    "yoshida_6",
-    "yoshida_8",
 ]

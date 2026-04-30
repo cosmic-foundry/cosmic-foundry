@@ -11,11 +11,9 @@ where γᵢ = Aᴵ[i,i] and y_exp,i accumulates the explicit contributions from
 Ã and the lower-triangular implicit contributions from Aᴵ.  Newton iteration
 via LUFactorization resolves each stage using the Jacobian of f_I.
 
-Named instances
----------------
-ars222  — order 2, A-stable implicit pair (Ascher-Ruuth-Spiteri 1997)
-          γ = (2−√2)/2; implicit tableau is SDIRK; explicit and implicit
-          update weights are identical (b_E = b_I).
+The canonical tableau for each order is:
+    2 — ARS(2,2,2): Ascher-Ruuth-Spiteri 1997, A-stable implicit pair,
+        γ = (2−√2)/2; implicit tableau is SDIRK; b_E = b_I.
 """
 
 from __future__ import annotations
@@ -92,8 +90,30 @@ class SplitRHS:
         return result
 
 
+def _build_imex_tableaux() -> dict:
+    # ARS(2,2,2): Ascher, Ruuth, Spiteri (1997), Section 3.
+    # γ = (2−√2)/2 satisfies the order-2 Butcher conditions for the coupled pair.
+    # Implicit tableau: SDIRK with constant diagonal γ.
+    # δ = 1 − 1/(2γ) = −√2/2
+    g = (sympy.Integer(2) - sympy.sqrt(2)) / 2
+    d = 1 - 1 / (2 * g)
+    return {
+        2: dict(
+            A_E=[[0, 0, 0], [g, 0, 0], [d, 1 - d, 0]],
+            b_E=[0, 1 - g, g],
+            c_E=[0, g, 1],
+            A_I=[[0, 0, 0], [0, g, 0], [0, 1 - g, g]],
+            b_I=[0, 1 - g, g],
+            c_I=[0, g, 1],
+        ),
+    }
+
+
+_IMEX_TABLEAUX = _build_imex_tableaux()
+
+
 class AdditiveRungeKuttaIntegrator(TimeIntegrator):
-    """IMEX additive Runge-Kutta method defined by two Butcher tableaux.
+    """IMEX additive Runge-Kutta method selected by convergence order.
 
     Uses an explicit tableau (A_E, b_E, c_E) for the non-stiff component
     and a DIRK tableau (A_I, b_I, c_I) for the stiff component.  Each stage
@@ -101,34 +121,25 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
     component is then evaluated at the converged stage value.  When the
     implicit diagonal γᵢ = 0, the stage is purely explicit (no Newton step).
 
+    The canonical tableau for each order is:
+        2 — ARS(2,2,2): Ascher-Ruuth-Spiteri 1997, A-stable
+
     Parameters
     ----------
-    A_E:
-        Explicit stage interaction matrix, shape (s, s), strictly lower-triangular.
-    b_E:
-        Explicit quadrature weights, shape (s,).
-    c_E:
-        Explicit abscissae, shape (s,).
-    A_I:
-        Implicit stage interaction matrix, shape (s, s), lower-triangular.
-    b_I:
-        Implicit quadrature weights, shape (s,).
-    c_I:
-        Implicit abscissae, shape (s,).
     order:
-        Declared convergence order.
+        Convergence order.  Must be one of {2}.
     """
 
-    def __init__(
-        self,
-        A_E: list[list],
-        b_E: list,
-        c_E: list,
-        A_I: list[list],
-        b_I: list,
-        c_I: list,
-        order: int,
-    ) -> None:
+    def __init__(self, order: int) -> None:
+        if order not in _IMEX_TABLEAUX:
+            raise ValueError(
+                f"AdditiveRungeKuttaIntegrator order must be one of "
+                f"{sorted(_IMEX_TABLEAUX)}, got {order}"
+            )
+        tab = _IMEX_TABLEAUX[order]
+        A_E, b_E = tab["A_E"], tab["b_E"]
+        A_I, b_I, c_I = tab["A_I"], tab["b_I"], tab["c_I"]
+
         self._A_E_f = [[float(sympy.sympify(a)) for a in row] for row in A_E]
         self._b_E_f = [float(sympy.sympify(bi)) for bi in b_E]
         self._A_I_f = [[float(sympy.sympify(a)) for a in row] for row in A_I]
@@ -196,32 +207,8 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
         return ODEState(t + dt, u_new, dt, 0.0)
 
 
-# ---------------------------------------------------------------------------
-# Named instances
-# ---------------------------------------------------------------------------
-
-# ARS(2,2,2): Ascher, Ruuth, Spiteri (1997), Section 3.
-# γ = (2−√2)/2 satisfies the order-2 Butcher conditions for the coupled pair.
-# Implicit tableau: SDIRK with constant diagonal γ.
-# Explicit tableau: second stage at t_n + γh with weight γ; third at t_n + h.
-# Update weights b_E = b_I = [0, 1−γ, γ].
-_g = (sympy.Integer(2) - sympy.sqrt(2)) / 2
-_d = 1 - 1 / (2 * _g)  # δ = 1 − 1/(2γ) = −√2/2
-
-ars222 = AdditiveRungeKuttaIntegrator(
-    A_E=[[0, 0, 0], [_g, 0, 0], [_d, 1 - _d, 0]],
-    b_E=[0, 1 - _g, _g],
-    c_E=[0, _g, 1],
-    A_I=[[0, 0, 0], [0, _g, 0], [0, 1 - _g, _g]],
-    b_I=[0, 1 - _g, _g],
-    c_I=[0, _g, 1],
-    order=2,
-)
-
-
 __all__ = [
     "AdditiveRungeKuttaIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
-    "ars222",
 ]

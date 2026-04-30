@@ -77,12 +77,27 @@ class PhiFunction:
 
 
 class CoxMatthewsETDRK4Integrator:
-    """Fourth-order Cox-Matthews exponential Runge-Kutta integrator."""
+    """Exponential Runge-Kutta integrator selected by convergence order.
+
+    Currently supports order 4 only (Cox-Matthews ETDRK4).
+
+    Parameters
+    ----------
+    order:
+        Convergence order.  Must be 4.
+    """
+
+    def __init__(self, order: int) -> None:
+        if order != 4:
+            raise ValueError(
+                f"CoxMatthewsETDRK4Integrator only supports order 4, got {order}"
+            )
+        self._order = order
 
     @property
     def order(self) -> int:
         """Declared convergence order."""
-        return 4
+        return self._order
 
     def step(
         self,
@@ -154,13 +169,9 @@ def _factorial(n: int) -> int:
     return result
 
 
-cox_matthews_etdrk4 = CoxMatthewsETDRK4Integrator()
-
-
 __all__ = [
     "CoxMatthewsETDRK4Integrator",
     "PhiFunction",
     "SemilinearRHS",
     "SemilinearRHSProtocol",
-    "cox_matthews_etdrk4",
 ]
