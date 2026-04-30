@@ -8,8 +8,8 @@ from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     AdamsFamily,
     BDFFamily,
+    MultistepIntegrator,
     NordsieckHistory,
-    NordsieckIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
@@ -168,10 +168,10 @@ class VODEController:
             state = self.step(rhs, state, dt)
         return state
 
-    def _integrator(self, family: FamilyName, q: int) -> NordsieckIntegrator:
+    def _integrator(self, family: FamilyName, q: int) -> MultistepIntegrator:
         if family == "adams":
-            return NordsieckIntegrator(self._adams_family, q)
-        return NordsieckIntegrator(self._bdf_family, q)
+            return MultistepIntegrator(self._adams_family, q)
+        return MultistepIntegrator(self._bdf_family, q)
 
 
 __all__ = ["VODEController"]

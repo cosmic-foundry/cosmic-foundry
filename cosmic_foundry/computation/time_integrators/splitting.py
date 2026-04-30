@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
@@ -14,7 +15,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 
 
 @runtime_checkable
-class OperatorSplitRHSProtocol(Protocol):
+class CompositeRHSProtocol(Protocol):
     """Protocol for operator-split ODEs ``du/dt = f_1(t,u) + … + f_k(t,u)``.
 
     The ODE right-hand side is partitioned into ``k`` components, each a
@@ -29,8 +30,8 @@ class OperatorSplitRHSProtocol(Protocol):
         ...
 
 
-class OperatorSplitRHS:
-    """Concrete ``OperatorSplitRHSProtocol`` from a list of sub-RHS callables."""
+class CompositeRHS:
+    """Concrete ``CompositeRHSProtocol`` from a list of sub-RHS callables."""
 
     def __init__(self, components: Sequence[RHSProtocol]) -> None:
         self._components: list[RHSProtocol] = list(components)
@@ -54,7 +55,7 @@ class SplittingStep:
     weight: float
 
 
-class StrangSplittingIntegrator(TimeIntegrator):
+class CompositionIntegrator(TimeIntegrator):
     """Meta-integrator that composes sub-integrators via a splitting sequence.
 
     Each ``SplittingStep`` in ``sequence`` advances
@@ -95,7 +96,7 @@ class StrangSplittingIntegrator(TimeIntegrator):
 
     def step(
         self,
-        rhs: OperatorSplitRHSProtocol,
+        rhs: CompositeRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -111,6 +112,23 @@ class StrangSplittingIntegrator(TimeIntegrator):
             sub_integrator = self._sub_integrators[substep.component_index]
             state = sub_integrator.step(sub_rhs, state, substep.weight * dt)
         return state
+
+
+class StrangSplittingIntegrator(CompositionIntegrator):
+    """Deprecated alias for ``CompositionIntegrator``."""
+
+    def __init__(
+        self,
+        sub_integrators: Sequence[TimeIntegrator],
+        sequence: Sequence[SplittingStep],
+        order: int,
+    ) -> None:
+        warnings.warn(
+            "StrangSplittingIntegrator is deprecated; use CompositionIntegrator.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(sub_integrators, sequence, order)
 
 
 def lie_steps() -> list[SplittingStep]:
@@ -167,11 +185,15 @@ def yoshida_steps() -> list[SplittingStep]:
 
 
 __all__ = [
-    "OperatorSplitRHS",
-    "OperatorSplitRHSProtocol",
+    "CompositeRHS",
+    "CompositeRHSProtocol",
     "SplittingStep",
+    "CompositionIntegrator",
     "StrangSplittingIntegrator",
     "lie_steps",
     "strang_steps",
     "yoshida_steps",
 ]
+
+OperatorSplitRHS = CompositeRHS
+OperatorSplitRHSProtocol = CompositeRHSProtocol

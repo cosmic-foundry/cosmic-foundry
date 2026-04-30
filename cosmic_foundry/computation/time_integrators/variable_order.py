@@ -9,8 +9,8 @@ from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHS
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     AdamsFamily,
     BDFFamily,
+    MultistepIntegrator,
     NordsieckHistory,
-    NordsieckIntegrator,
 )
 
 
@@ -126,10 +126,10 @@ class OrderSelector:
 class VariableOrderNordsieckIntegrator:
     """Variable-order wrapper around fixed-order Nordsieck integrators.
 
-    The fixed-order `NordsieckIntegrator` remains responsible for the actual
+    The fixed-order `MultistepIntegrator` remains responsible for the actual
     BDF or Adams corrector.  This wrapper only attempts a step, asks an
     `OrderSelector` whether to accept it, and applies the Phase-9
-    `NordsieckState` order/step transformations before the next attempt.
+    Nordsieck-state order/step transformations before the next attempt.
     """
 
     def __init__(
@@ -172,7 +172,7 @@ class VariableOrderNordsieckIntegrator:
         dt: float,
     ) -> ODEState:
         """Initialize a Nordsieck state at the current starting order."""
-        return NordsieckIntegrator(self._family, self._q).init_state(rhs, t0, u0, dt)
+        return MultistepIntegrator(self._family, self._q).init_state(rhs, t0, u0, dt)
 
     def step(
         self,
@@ -187,7 +187,7 @@ class VariableOrderNordsieckIntegrator:
         state = ODEState(state.t, state.u, dt, state.err, nh)
         rejections = 0
         while True:
-            candidate = NordsieckIntegrator(self._family, q).step(rhs, state, dt)
+            candidate = MultistepIntegrator(self._family, q).step(rhs, state, dt)
             decision = self._selector.decide(candidate)
             if decision.accepted:
                 self._q = decision.q_next

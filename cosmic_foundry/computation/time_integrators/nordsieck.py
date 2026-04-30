@@ -45,6 +45,7 @@ adams_moulton1–am4 —  Adams-Moulton orders 1–4 (non-stiff, no Jacobian)
 
 from __future__ import annotations
 
+import warnings
 from math import comb, factorial  # comb used in _pascal_predict
 
 import sympy
@@ -335,7 +336,7 @@ class AdamsFamily:
         return self._q_max
 
 
-class NordsieckIntegrator:
+class MultistepIntegrator:
     """Fixed-order linear multistep integrator in Nordsieck form.
 
     Supports two corrector families selected by the family argument:
@@ -357,7 +358,7 @@ class NordsieckIntegrator:
     equation is satisfied; the l-vector distributes that adjustment across
     all Nordsieck slots so the history stays self-consistent.
 
-    Use init_state() to create the initial NordsieckState by bootstrapping
+    Use init_state() to create the initial multistep state by bootstrapping
     q RK4 steps.  BDF init uses one Jacobian evaluation to fill higher
     Nordsieck slots; Adams init uses backward differences of the bootstrap
     function values (no Jacobian required).
@@ -587,28 +588,41 @@ class NordsieckIntegrator:
         return ODEState(t_new, y, h, 0.0, NordsieckHistory(h, z_new))
 
 
+class NordsieckIntegrator(MultistepIntegrator):
+    """Deprecated alias for ``MultistepIntegrator``."""
+
+    def __init__(self, family: BDFFamily | AdamsFamily, q: int) -> None:
+        warnings.warn(
+            "NordsieckIntegrator is deprecated; use MultistepIntegrator.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(family, q)
+
+
 # ---------------------------------------------------------------------------
 # Named instances
 # ---------------------------------------------------------------------------
 
 bdf_family = BDFFamily(q_max=6)
 
-bdf1 = NordsieckIntegrator(bdf_family, q=1)
-bdf2 = NordsieckIntegrator(bdf_family, q=2)
-bdf3 = NordsieckIntegrator(bdf_family, q=3)
-bdf4 = NordsieckIntegrator(bdf_family, q=4)
+bdf1 = MultistepIntegrator(bdf_family, q=1)
+bdf2 = MultistepIntegrator(bdf_family, q=2)
+bdf3 = MultistepIntegrator(bdf_family, q=3)
+bdf4 = MultistepIntegrator(bdf_family, q=4)
 
 adams_family = AdamsFamily(q_max=6)
 
-adams_moulton1 = NordsieckIntegrator(adams_family, q=1)
-adams_moulton2 = NordsieckIntegrator(adams_family, q=2)
-adams_moulton3 = NordsieckIntegrator(adams_family, q=3)
-adams_moulton4 = NordsieckIntegrator(adams_family, q=4)
+adams_moulton1 = MultistepIntegrator(adams_family, q=1)
+adams_moulton2 = MultistepIntegrator(adams_family, q=2)
+adams_moulton3 = MultistepIntegrator(adams_family, q=3)
+adams_moulton4 = MultistepIntegrator(adams_family, q=4)
 
 
 __all__ = [
     "AdamsFamily",
     "BDFFamily",
+    "MultistepIntegrator",
     "NordsieckHistory",
     "NordsieckIntegrator",
     "adams_family",

@@ -14,7 +14,7 @@ class RHSProtocol(Protocol):
 
     f : ℝ × ℝⁿ → ℝⁿ.  Every concrete RHS that integrators accept must
     satisfy this protocol.  Phase 0 provides BlackBoxRHS; later phases add
-    structured variants (WithJacobianRHS, AdditiveRHS, HamiltonianSplit).
+    structured variants (WithJacobianRHS, SplitRHS, HamiltonianRHS).
     """
 
     def __call__(self, t: float, u: Tensor) -> Tensor:

@@ -1,7 +1,8 @@
-"""Exponential time integrators for linear-plus-nonlinear ODE splits."""
+"""Exponential time integrators for semilinear ODE splits."""
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -13,7 +14,7 @@ _SERIES_MAX_TERMS = 80
 
 
 @runtime_checkable
-class LinearPlusNonlinearRHSProtocol(Protocol):
+class SemilinearRHSProtocol(Protocol):
     """Protocol for semilinear ODEs ``du/dt = L u + N(t, u)``."""
 
     @property
@@ -26,8 +27,8 @@ class LinearPlusNonlinearRHSProtocol(Protocol):
         ...
 
 
-class LinearPlusNonlinearRHS:
-    """Concrete ``LinearPlusNonlinearRHSProtocol`` from a matrix and callable."""
+class SemilinearRHS:
+    """Concrete ``SemilinearRHSProtocol`` from a matrix and callable."""
 
     def __init__(
         self,
@@ -86,7 +87,7 @@ class ExponentialEulerIntegrator:
 
     def step(
         self,
-        rhs: LinearPlusNonlinearRHSProtocol,
+        rhs: SemilinearRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -107,7 +108,7 @@ class ETDRK2Integrator:
 
     def step(
         self,
-        rhs: LinearPlusNonlinearRHSProtocol,
+        rhs: SemilinearRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -135,7 +136,7 @@ class CoxMatthewsETDRK4Integrator:
 
     def step(
         self,
-        rhs: LinearPlusNonlinearRHSProtocol,
+        rhs: SemilinearRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -223,7 +224,7 @@ class KrogstadETDRK4Integrator:
 
     def step(
         self,
-        rhs: LinearPlusNonlinearRHSProtocol,
+        rhs: SemilinearRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -273,6 +274,22 @@ cox_matthews_etdrk4 = CoxMatthewsETDRK4Integrator()
 krogstad_etdrk4 = KrogstadETDRK4Integrator()
 
 
+class LinearPlusNonlinearRHS(SemilinearRHS):
+    """Deprecated alias for ``SemilinearRHS``."""
+
+    def __init__(
+        self,
+        linear_operator: Tensor,
+        nonlinear: Callable[[float, Tensor], Tensor],
+    ) -> None:
+        warnings.warn(
+            "LinearPlusNonlinearRHS is deprecated; use SemilinearRHS.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(linear_operator, nonlinear)
+
+
 __all__ = [
     "CoxMatthewsETDRK4Integrator",
     "ETDRK2Integrator",
@@ -281,8 +298,12 @@ __all__ = [
     "LinearPlusNonlinearRHS",
     "LinearPlusNonlinearRHSProtocol",
     "PhiFunction",
+    "SemilinearRHS",
+    "SemilinearRHSProtocol",
     "cox_matthews_etdrk4",
     "etd_euler",
     "etdrk2",
     "krogstad_etdrk4",
 ]
+
+LinearPlusNonlinearRHSProtocol = SemilinearRHSProtocol
