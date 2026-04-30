@@ -8,17 +8,14 @@ from cosmic_foundry.computation.time_integrators.constraint_aware import (
 from cosmic_foundry.computation.time_integrators.exponential import (
     CoxMatthewsETDRK4Integrator,
     SemilinearRHSProtocol,
-    cox_matthews_etdrk4,
 )
 from cosmic_foundry.computation.time_integrators.imex import (
     AdditiveRungeKuttaIntegrator,
     SplitRHSProtocol,
-    ars222,
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
     ImplicitRungeKuttaIntegrator,
     WithJacobianRHSProtocol,
-    implicit_midpoint,
 )
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -30,20 +27,24 @@ from cosmic_foundry.computation.time_integrators.reaction_network import (
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
-    rk4,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHSProtocol,
     CompositionIntegrator,
-    strang_steps,
 )
 from cosmic_foundry.computation.time_integrators.symplectic import (
     HamiltonianRHSProtocol,
     SymplecticCompositionIntegrator,
 )
 
-DEFAULT_COMPOSITION = CompositionIntegrator([rk4, rk4], strang_steps(), order=2)
+DEFAULT_EXPLICIT = RungeKuttaIntegrator(4)
+DEFAULT_SEMILINEAR = CoxMatthewsETDRK4Integrator(4)
 DEFAULT_SYMPLECTIC = SymplecticCompositionIntegrator(2)
+DEFAULT_COMPOSITION = CompositionIntegrator(
+    [RungeKuttaIntegrator(4), RungeKuttaIntegrator(4)], order=2
+)
+DEFAULT_SPLIT = AdditiveRungeKuttaIntegrator(2)
+DEFAULT_IMPLICIT = ImplicitRungeKuttaIntegrator(2)
 
 
 class AutoIntegrator(TimeIntegrator):
@@ -74,12 +75,12 @@ class AutoIntegrator(TimeIntegrator):
     def __init__(
         self,
         *,
-        explicit: RungeKuttaIntegrator = rk4,
-        semilinear: CoxMatthewsETDRK4Integrator = cox_matthews_etdrk4,
+        explicit: RungeKuttaIntegrator = DEFAULT_EXPLICIT,
+        semilinear: CoxMatthewsETDRK4Integrator = DEFAULT_SEMILINEAR,
         symplectic: SymplecticCompositionIntegrator = DEFAULT_SYMPLECTIC,
         composition: CompositionIntegrator = DEFAULT_COMPOSITION,
-        split: AdditiveRungeKuttaIntegrator = ars222,
-        implicit: ImplicitRungeKuttaIntegrator = implicit_midpoint,
+        split: AdditiveRungeKuttaIntegrator = DEFAULT_SPLIT,
+        implicit: ImplicitRungeKuttaIntegrator = DEFAULT_IMPLICIT,
     ) -> None:
         self._explicit = explicit
         self._semilinear = semilinear

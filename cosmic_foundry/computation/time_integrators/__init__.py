@@ -22,22 +22,17 @@ from cosmic_foundry.computation.time_integrators.exponential import (
     PhiFunction,
     SemilinearRHS,
     SemilinearRHSProtocol,
-    cox_matthews_etdrk4,
 )
 from cosmic_foundry.computation.time_integrators.imex import (
     AdditiveRungeKuttaIntegrator,
     SplitRHS,
     SplitRHSProtocol,
-    ars222,
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
     FiniteDiffJacobianRHS,
     ImplicitRungeKuttaIntegrator,
     JacobianRHS,
     WithJacobianRHSProtocol,
-    backward_euler,
-    crouzeix_3,
-    implicit_midpoint,
     stability_function,
 )
 from cosmic_foundry.computation.time_integrators.integrator import (
@@ -59,19 +54,11 @@ from cosmic_foundry.computation.time_integrators.reaction_network import (
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
-    bogacki_shampine,
-    dormand_prince,
-    forward_euler,
-    midpoint,
-    rk4,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHS,
     CompositeRHSProtocol,
     CompositionIntegrator,
-    SplittingStep,
-    strang_steps,
-    yoshida_steps,
 )
 from cosmic_foundry.computation.time_integrators.stepper import (
     IntegratorSelectionResult,
@@ -115,21 +102,15 @@ __all__ = [
     "RungeKuttaIntegrator",
     "TimeIntegrator",
     "TimeStepper",
-    "bogacki_shampine",
-    "dormand_prince",
     "elementary_weight",
-    "forward_euler",
     "gamma",
-    "midpoint",
     "order",
-    "rk4",
     "sigma",
     "trees_up_to_order",
     "CoxMatthewsETDRK4Integrator",
     "SemilinearRHS",
     "SemilinearRHSProtocol",
     "PhiFunction",
-    "cox_matthews_etdrk4",
     "CompositeRHS",
     "CompositeRHSProtocol",
     "CompositionIntegrator",
@@ -140,14 +121,10 @@ __all__ = [
     "JacobianRHS",
     "ImplicitRungeKuttaIntegrator",
     "WithJacobianRHSProtocol",
-    "backward_euler",
-    "crouzeix_3",
-    "implicit_midpoint",
     "stability_function",
     "AdditiveRungeKuttaIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
-    "ars222",
     "ExplicitMultistepIntegrator",
     "MultistepIntegrator",
     "NordsieckHistory",
@@ -161,7 +138,4 @@ __all__ = [
     "StiffnessSwitcher",
     "nordsieck_solution_distance",
     "VODEController",
-    "SplittingStep",
-    "strang_steps",
-    "yoshida_steps",
 ]

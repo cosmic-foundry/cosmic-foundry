@@ -12,50 +12,95 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 )
 
 
+def _build_rk_tableaux() -> dict:
+    return {
+        1: dict(A=[[0]], b=[1], c=[0]),
+        2: dict(A=[[0, 0], ["1/2", 0]], b=[0, 1], c=[0, "1/2"]),
+        # Bogacki-Shampine BS23(2) — 4-stage FSAL; embedded pair at order 2.
+        3: dict(
+            A=[
+                [0, 0, 0, 0],
+                ["1/2", 0, 0, 0],
+                [0, "3/4", 0, 0],
+                ["2/9", "1/3", "4/9", 0],
+            ],
+            b=["2/9", "1/3", "4/9", 0],
+            b_hat=["7/24", "1/4", "1/3", "1/8"],
+            c=[0, "1/2", "3/4", 1],
+        ),
+        4: dict(
+            A=[[0, 0, 0, 0], ["1/2", 0, 0, 0], [0, "1/2", 0, 0], [0, 0, 1, 0]],
+            b=["1/6", "1/3", "1/3", "1/6"],
+            c=[0, "1/2", "1/2", 1],
+        ),
+        # Dormand-Prince DOPRI5(4) — 7-stage FSAL; embedded pair at order 4.
+        5: dict(
+            A=[
+                [0, 0, 0, 0, 0, 0, 0],
+                ["1/5", 0, 0, 0, 0, 0, 0],
+                ["3/40", "9/40", 0, 0, 0, 0, 0],
+                ["44/45", "-56/15", "32/9", 0, 0, 0, 0],
+                ["19372/6561", "-25360/2187", "64448/6561", "-212/729", 0, 0, 0],
+                ["9017/3168", "-355/33", "46732/5247", "49/176", "-5103/18656", 0, 0],
+                ["35/384", 0, "500/1113", "125/192", "-2187/6784", "11/84", 0],
+            ],
+            b=["35/384", 0, "500/1113", "125/192", "-2187/6784", "11/84", 0],
+            b_hat=[
+                "5179/57600",
+                0,
+                "7571/16695",
+                "393/640",
+                "-92097/339200",
+                "187/2100",
+                "1/40",
+            ],
+            c=[0, "1/5", "3/10", "4/5", "8/9", 1, 1],
+        ),
+    }
+
+
+_RK_TABLEAUX = _build_rk_tableaux()
+
+
 class RungeKuttaIntegrator(TimeIntegrator):
-    """Explicit Runge-Kutta method defined by a Butcher tableau (A, b, c, order).
+    """Explicit Runge-Kutta method selected by convergence order.
 
     Given du/dt = f(t, u), advances u from tₙ to tₙ₊₁ = tₙ + h via:
 
         kᵢ = f(tₙ + cᵢ h, uₙ + h Σⱼ<ᵢ Aᵢⱼ kⱼ)   i = 1, …, s
         uₙ₊₁ = uₙ + h Σᵢ bᵢ kᵢ
 
-    When an embedded weight vector b_hat is provided, the embedded solution
+    The canonical tableau for each order is:
+        1 — forward Euler
+        2 — explicit midpoint
+        3 — Bogacki-Shampine BS23 (4-stage FSAL, embedded pair at order 2)
+        4 — classical RK4
+        5 — Dormand-Prince DOPRI5 (7-stage FSAL, embedded pair at order 4)
 
-        û_{n+1} = uₙ + h Σᵢ b̂ᵢ kᵢ
+    For orders 3 and 5, the embedded lower-order solution is computed during
+    each step at no extra cost; the L² error estimate is stored in ODEState.err
+    and used by PIController for adaptive step-size control.
 
-    is computed using the same stage evaluations at no extra cost.  The L2
-    norm ‖uₙ₊₁ − û_{n+1}‖ is an O(hᵖ) local error estimate and is stored
-    in the returned ODEState.err for use by PIController.
-
-    Coefficients may be supplied as Python numbers or strings parseable by
-    sympy.Rational (e.g. "1/2").  They are stored as sympy.Rational for the
-    order-check framework and as Python floats for numerical stepping.
+    Coefficients are stored as sympy.Rational (or exact sympy expressions for
+    irrational entries) for the B-series order-check framework, and as Python
+    floats for numerical stepping.
 
     Parameters
     ----------
-    A:
-        Stage interaction matrix, shape (s, s), strictly lower-triangular.
-    b:
-        Quadrature weights, shape (s,).  Must sum to 1.
-    c:
-        Abscissae (time nodes), shape (s,).  c[0] is conventionally 0.
     order:
-        Declared convergence order of the method.
-    b_hat:
-        Embedded quadrature weights, shape (s,).  When provided, each step
-        also computes the lower-order embedded solution and stores the error
-        norm in ODEState.err.
+        Convergence order.  Must be one of {1, 2, 3, 4, 5}.
     """
 
-    def __init__(
-        self,
-        A: list[list],
-        b: list,
-        c: list,
-        order: int,
-        b_hat: list | None = None,
-    ) -> None:
+    def __init__(self, order: int) -> None:
+        if order not in _RK_TABLEAUX:
+            raise ValueError(
+                f"RungeKuttaIntegrator order must be one of "
+                f"{sorted(_RK_TABLEAUX)}, got {order}"
+            )
+        tab = _RK_TABLEAUX[order]
+        A, b, c = tab["A"], tab["b"], tab["c"]
+        b_hat = tab.get("b_hat")
+
         self._A_sym = [[sympy.Rational(a) for a in row] for row in A]
         self._b_sym = [sympy.Rational(bi) for bi in b]
         self._c_sym = [sympy.Rational(ci) for ci in c]
@@ -118,88 +163,4 @@ class RungeKuttaIntegrator(TimeIntegrator):
         return ODEState(t + dt, u_new, dt, err)
 
 
-# ---------------------------------------------------------------------------
-# Named instances — standard Butcher tableaux with sympy.Rational coefficients
-# ---------------------------------------------------------------------------
-
-forward_euler = RungeKuttaIntegrator(
-    A=[[0]],
-    b=[1],
-    c=[0],
-    order=1,
-)
-
-# Explicit midpoint: b = [0, 1], c = [0, 1/2].
-midpoint = RungeKuttaIntegrator(
-    A=[[0, 0], ["1/2", 0]],
-    b=[0, 1],
-    c=[0, "1/2"],
-    order=2,
-)
-
-rk4 = RungeKuttaIntegrator(
-    A=[
-        [0, 0, 0, 0],
-        ["1/2", 0, 0, 0],
-        [0, "1/2", 0, 0],
-        [0, 0, 1, 0],
-    ],
-    b=["1/6", "1/3", "1/3", "1/6"],
-    c=[0, "1/2", "1/2", 1],
-    order=4,
-)
-
-# Dormand-Prince DOPRI5(4) — 7-stage explicit method with FSAL.
-# Stage 7 is the FSAL stage: k₇ = f(t+h, u_{n+1}).  Its weight in b is 0
-# so the primary 5th-order solution is unchanged from the 6-stage version.
-# b_hat gives the 4th-order embedded solution using all 7 stages.
-dormand_prince = RungeKuttaIntegrator(
-    A=[
-        [0, 0, 0, 0, 0, 0, 0],
-        ["1/5", 0, 0, 0, 0, 0, 0],
-        ["3/40", "9/40", 0, 0, 0, 0, 0],
-        ["44/45", "-56/15", "32/9", 0, 0, 0, 0],
-        ["19372/6561", "-25360/2187", "64448/6561", "-212/729", 0, 0, 0],
-        ["9017/3168", "-355/33", "46732/5247", "49/176", "-5103/18656", 0, 0],
-        ["35/384", 0, "500/1113", "125/192", "-2187/6784", "11/84", 0],
-    ],
-    b=["35/384", 0, "500/1113", "125/192", "-2187/6784", "11/84", 0],
-    b_hat=[
-        "5179/57600",
-        0,
-        "7571/16695",
-        "393/640",
-        "-92097/339200",
-        "187/2100",
-        "1/40",
-    ],
-    c=[0, "1/5", "3/10", "4/5", "8/9", 1, 1],
-    order=5,
-)
-
-# Bogacki-Shampine BS23(2) — 4-stage method with FSAL.
-# Stage 4 is the FSAL stage: k₄ = f(t+h, u_{n+1}).  Its weight in b is 0
-# so the primary 3rd-order solution is unchanged from the 3-stage version.
-# b_hat gives the 2nd-order embedded solution using all 4 stages.
-bogacki_shampine = RungeKuttaIntegrator(
-    A=[
-        [0, 0, 0, 0],
-        ["1/2", 0, 0, 0],
-        [0, "3/4", 0, 0],
-        ["2/9", "1/3", "4/9", 0],
-    ],
-    b=["2/9", "1/3", "4/9", 0],
-    b_hat=["7/24", "1/4", "1/3", "1/8"],
-    c=[0, "1/2", "3/4", 1],
-    order=3,
-)
-
-
-__all__ = [
-    "RungeKuttaIntegrator",
-    "bogacki_shampine",
-    "dormand_prince",
-    "forward_euler",
-    "midpoint",
-    "rk4",
-]
+__all__ = ["RungeKuttaIntegrator"]
