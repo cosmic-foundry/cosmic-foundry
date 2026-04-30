@@ -592,16 +592,7 @@ class MultistepIntegrator:
 # ---------------------------------------------------------------------------
 
 bdf_family = BDFFamily(q_max=6)
-
-bdf2 = MultistepIntegrator(bdf_family, q=2)
-bdf3 = MultistepIntegrator(bdf_family, q=3)
-bdf4 = MultistepIntegrator(bdf_family, q=4)
-
 adams_family = AdamsFamily(q_max=6)
-
-adams_moulton2 = MultistepIntegrator(adams_family, q=2)
-adams_moulton3 = MultistepIntegrator(adams_family, q=3)
-adams_moulton4 = MultistepIntegrator(adams_family, q=4)
 
 
 __all__ = [
@@ -610,11 +601,5 @@ __all__ = [
     "MultistepIntegrator",
     "NordsieckHistory",
     "adams_family",
-    "adams_moulton2",
-    "adams_moulton3",
-    "adams_moulton4",
-    "bdf2",
-    "bdf3",
-    "bdf4",
     "bdf_family",
 ]

@@ -53,6 +53,29 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
         Declared convergence order.
     """
 
+    # Classical Adams-Bashforth quadrature weights for orders 2–4.
+    # Keys are order; values are (beta_list, order) ready for __init__.
+    _AB: dict[int, list] = {
+        2: [sympy.Rational(3, 2), sympy.Rational(-1, 2)],
+        3: [sympy.Rational(23, 12), sympy.Rational(-16, 12), sympy.Rational(5, 12)],
+        4: [
+            sympy.Rational(55, 24),
+            sympy.Rational(-59, 24),
+            sympy.Rational(37, 24),
+            sympy.Rational(-9, 24),
+        ],
+    }
+
+    @classmethod
+    def for_order(cls, q: int) -> ExplicitMultistepIntegrator:
+        """Return the standard Adams-Bashforth integrator of order q (2–4)."""
+        if q not in cls._AB:
+            raise ValueError(
+                f"Adams-Bashforth order {q} not available; "
+                f"choose from {sorted(cls._AB)}"
+            )
+        return cls(cls._AB[q], q)
+
     def __init__(self, beta: list, order: int) -> None:
         self._beta_f = [float(sympy.sympify(b)) for b in beta]
         self._order = order
@@ -90,34 +113,6 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
         return ODEState(t + dt, u_new, dt, 0.0, all_f[:-1])
 
 
-# ---------------------------------------------------------------------------
-# Named instances
-# ---------------------------------------------------------------------------
-
-ab2 = ExplicitMultistepIntegrator(
-    beta=[sympy.Rational(3, 2), sympy.Rational(-1, 2)],
-    order=2,
-)
-
-ab3 = ExplicitMultistepIntegrator(
-    beta=[sympy.Rational(23, 12), sympy.Rational(-16, 12), sympy.Rational(5, 12)],
-    order=3,
-)
-
-ab4 = ExplicitMultistepIntegrator(
-    beta=[
-        sympy.Rational(55, 24),
-        sympy.Rational(-59, 24),
-        sympy.Rational(37, 24),
-        sympy.Rational(-9, 24),
-    ],
-    order=4,
-)
-
-
 __all__ = [
     "ExplicitMultistepIntegrator",
-    "ab2",
-    "ab3",
-    "ab4",
 ]

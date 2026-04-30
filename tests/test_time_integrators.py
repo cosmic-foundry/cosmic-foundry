@@ -228,11 +228,7 @@ def _build_registry() -> tuple[list, list]:
         (
             "ab",
             "bb",
-            {
-                2: _ti.ab2,
-                3: _ti.ab3,
-                4: _ti.ab4,
-            },
+            {q: _ti.ExplicitMultistepIntegrator.for_order(q) for q in [2, 3, 4]},
         ),
         (
             "dirk",
@@ -246,20 +242,12 @@ def _build_registry() -> tuple[list, list]:
         (
             "bdf",
             "jac",
-            {
-                2: _ti.bdf2,
-                3: _ti.bdf3,
-                4: _ti.bdf4,
-            },
+            {q: _ti.MultistepIntegrator(_ti.bdf_family, q) for q in [2, 3, 4]},
         ),
         (
             "am",
             "jac",
-            {
-                2: _ti.adams_moulton2,
-                3: _ti.adams_moulton3,
-                4: _ti.adams_moulton4,
-            },
+            {q: _ti.MultistepIntegrator(_ti.adams_family, q) for q in [2, 3, 4]},
         ),
         (
             "imex",
