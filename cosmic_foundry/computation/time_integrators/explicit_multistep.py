@@ -9,10 +9,10 @@ The coefficients β_j are the classical Adams-Bashforth quadrature weights;
 they satisfy the LMM order conditions of order k.  The first k−1 steps are
 bootstrapped with RK4 to populate the history without degrading accuracy.
 
-MultistepState extends the four-field (t, u, dt, err) step state with a
-history field that carries past function evaluations.  An initial state with
-empty history triggers bootstrapping; each bootstrap call appends one entry
-until the history is full and the full AB formula takes over.
+The initial state is an ODEState with history=None; each bootstrap call
+populates history until it holds k−1 entries and the full AB formula takes
+over.  Past function evaluations are stored most-recent-first in
+ODEState.history.
 
 Named instances
 ---------------
@@ -23,46 +23,14 @@ ab4  — order 4, β = [55/24, −59/24, 37/24, −9/24]
 
 from __future__ import annotations
 
-from typing import NamedTuple
-
 import sympy
 
-from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
+    ODEState,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import rk4 as _rk4
-
-
-class MultistepState(NamedTuple):
-    """State for explicit linear multistep integrators.
-
-    Extends the four-field step state with a history tuple of past function
-    evaluations.  Single-step integrators never read or write the fifth
-    field; multistep integrators update it on every step.
-
-    Fields
-    ------
-    t:
-        Current time.
-    u:
-        Current solution as a Tensor.
-    dt:
-        Step size used to arrive at this state (0.0 before any step).
-    err:
-        Embedded error estimate norm (0.0 for methods without embedded pairs).
-    history:
-        Tuple of previous function evaluations (f_{n-1}, f_{n-2}, …),
-        most recent first.  Empty for the initial state; filled by bootstrap.
-    """
-
-    t: float
-    u: Tensor
-    dt: float = 0.0
-    err: float = 0.0
-    history: tuple[Tensor, ...] = ()
 
 
 class ExplicitMultistepIntegrator(TimeIntegrator):
@@ -71,9 +39,9 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
     The first k−1 steps are bootstrapped with RK4 to build the required
     function-value history; all subsequent steps use the full AB formula.
 
-    step() accepts an RKState (as seeded by TimeStepper on the first call)
-    or a MultistepState returned by a previous step.  It always returns
-    MultistepState.
+    step() accepts an ODEState with history=None (as seeded by TimeStepper on
+    the first call) or an ODEState with history populated by a previous step.
+    It always returns ODEState.
 
     Parameters
     ----------
@@ -98,28 +66,28 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
     def step(
         self,
         rhs: RHSProtocol,
-        state: RKState | MultistepState,
+        state: ODEState,
         dt: float,
-    ) -> MultistepState:
+    ) -> ODEState:
         """Advance state by one step of size dt.
 
         Uses one RK4 step for each of the first k−1 bootstrap calls, then
         switches to the full Adams-Bashforth formula once the history is full.
         """
         t, u = state.t, state.u
-        history = state.history if isinstance(state, MultistepState) else ()
+        history = () if state.history is None else state.history
 
         if len(history) < self._k - 1:
             f_n = rhs(t, u)
-            rk4_state: RKState = _rk4.step(rhs, RKState(t, u), dt)
-            return MultistepState(rk4_state.t, rk4_state.u, dt, 0.0, (f_n,) + history)
+            rk4_state: ODEState = _rk4.step(rhs, ODEState(t, u), dt)
+            return ODEState(rk4_state.t, rk4_state.u, dt, 0.0, (f_n,) + history)
 
         f_n = rhs(t, u)
         all_f = (f_n,) + history[: self._k - 1]
         u_new = u
         for beta_j, f_j in zip(self._beta_f, all_f, strict=True):
             u_new = u_new + (beta_j * dt) * f_j
-        return MultistepState(t + dt, u_new, dt, 0.0, all_f[:-1])
+        return ODEState(t + dt, u_new, dt, 0.0, all_f[:-1])
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +117,6 @@ ab4 = ExplicitMultistepIntegrator(
 
 __all__ = [
     "ExplicitMultistepIntegrator",
-    "MultistepState",
     "ab2",
     "ab3",
     "ab4",

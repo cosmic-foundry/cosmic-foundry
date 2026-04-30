@@ -6,8 +6,8 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.integrator import (
+    ODEState,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 
@@ -26,7 +26,7 @@ class RungeKuttaIntegrator(TimeIntegrator):
 
     is computed using the same stage evaluations at no extra cost.  The L2
     norm ‖uₙ₊₁ − û_{n+1}‖ is an O(hᵖ) local error estimate and is stored
-    in the returned RKState.err for use by PIController.
+    in the returned ODEState.err for use by PIController.
 
     Coefficients may be supplied as Python numbers or strings parseable by
     sympy.Rational (e.g. "1/2").  They are stored as sympy.Rational for the
@@ -45,7 +45,7 @@ class RungeKuttaIntegrator(TimeIntegrator):
     b_hat:
         Embedded quadrature weights, shape (s,).  When provided, each step
         also computes the lower-order embedded solution and stores the error
-        norm in RKState.err.
+        norm in ODEState.err.
     """
 
     def __init__(
@@ -98,7 +98,7 @@ class RungeKuttaIntegrator(TimeIntegrator):
         """Embedded weights as sympy.Rational, or None if no embedded pair."""
         return self._b_hat_sym
 
-    def step(self, rhs: RHSProtocol, state: RKState, dt: float) -> RKState:
+    def step(self, rhs: RHSProtocol, state: ODEState, dt: float) -> ODEState:
         t, u = state.t, state.u
         k: list[Tensor] = []
         for i in range(self._s):
@@ -115,7 +115,7 @@ class RungeKuttaIntegrator(TimeIntegrator):
             for i in range(self._s):
                 u_hat = u_hat + self._b_hat_f[i] * k[i] * dt
             err = float(norm(u_new - u_hat))
-        return RKState(t + dt, u_new, dt, err)
+        return ODEState(t + dt, u_new, dt, err)
 
 
 # ---------------------------------------------------------------------------

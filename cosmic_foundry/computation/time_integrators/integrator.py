@@ -44,8 +44,8 @@ class BlackBoxRHS:
         return result
 
 
-class RKState(NamedTuple):
-    """Integrator state for Runge-Kutta methods.
+class ODEState(NamedTuple):
+    """Integrator state for ODE solvers.
 
     Carries all information the stepper and controller need after each
     attempted step.
@@ -63,12 +63,16 @@ class RKState(NamedTuple):
         Raw L2 error norm from the embedded estimate for the step that
         produced this state (0.0 if the integrator has no embedded pair or
         for the initial state).
+    history:
+        Tuple of past function evaluations for multistep integrators
+        (most recent first), or None for single-step methods.
     """
 
     t: float
     u: Tensor
     dt: float = 0.0
     err: float = 0.0
+    history: tuple[Tensor, ...] | None = None
 
 
 class Controller(Protocol):
@@ -89,11 +93,11 @@ class Controller(Protocol):
         controller).
     """
 
-    def accept(self, state: RKState) -> bool:
+    def accept(self, state: ODEState) -> bool:
         """Return True iff the step that produced state is accepted."""
         ...
 
-    def suggest(self, state: RKState, *, accepted: bool = True) -> float:
+    def suggest(self, state: ODEState, *, accepted: bool = True) -> float:
         """Return the step size to use next (or to retry with on rejection)."""
         ...
 
@@ -114,10 +118,10 @@ class ConstantStep:
     def __init__(self, dt: float) -> None:
         self._dt = dt
 
-    def accept(self, state: RKState) -> bool:
+    def accept(self, state: ODEState) -> bool:
         return True
 
-    def suggest(self, state: RKState, *, accepted: bool = True) -> float:
+    def suggest(self, state: ODEState, *, accepted: bool = True) -> float:
         return self._dt
 
 
@@ -177,11 +181,11 @@ class PIController:
         self._factor_max = factor_max
         self._err_prev = tol  # neutral: tol/err_prev = 1 on first step
 
-    def accept(self, state: RKState) -> bool:
+    def accept(self, state: ODEState) -> bool:
         """Accept when err ≤ tol or when there is no embedded estimate."""
         return state.err == 0.0 or state.err <= self._tol
 
-    def suggest(self, state: RKState, *, accepted: bool = True) -> float:
+    def suggest(self, state: ODEState, *, accepted: bool = True) -> float:
         """Compute next step size via the PI formula.
 
         On acceptance: full PI formula using current error and the previous
@@ -212,10 +216,8 @@ class TimeIntegrator(ABC):
     """Abstract base for all time integrators.
 
     Each integrator accepts an RHS and a state object, advances one step of
-    size dt, and returns a new state.  The state type varies by integrator
-    family: single-step methods use RKState; explicit multistep methods use
-    MultistepState; Phase D will introduce ODEState as the unified type
-    and replace the Any annotations here.
+    size dt, and returns a new state.  All integrators use ODEState as the
+    unified state type.
 
     Required:
         order — declared convergence order
@@ -242,8 +244,8 @@ __all__ = [
     "BlackBoxRHS",
     "ConstantStep",
     "Controller",
+    "ODEState",
     "PIController",
     "RHSProtocol",
-    "RKState",
     "TimeIntegrator",
 ]

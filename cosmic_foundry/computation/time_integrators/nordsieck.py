@@ -52,7 +52,7 @@ import sympy
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
-from cosmic_foundry.computation.time_integrators.integrator import RHSProtocol, RKState
+from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
 from cosmic_foundry.computation.time_integrators.runge_kutta import rk4 as _rk4
 
 _LU = LUFactorization()
@@ -441,7 +441,7 @@ class NordsieckIntegrator:
         dt: float,
     ) -> NordsieckState:
         q = self._q
-        rk_state = RKState(t0, u0)
+        rk_state = ODEState(t0, u0)
         for _ in range(q):
             rk_state = _rk4.step(rhs, rk_state, dt)
         t_q = rk_state.t
@@ -465,7 +465,7 @@ class NordsieckIntegrator:
         dt: float,
     ) -> NordsieckState:
         q = self._q
-        rk_states = [RKState(t0, u0)]
+        rk_states = [ODEState(t0, u0)]
         for _ in range(q):
             rk_states.append(_rk4.step(rhs, rk_states[-1], dt))
         t_q = rk_states[-1].t

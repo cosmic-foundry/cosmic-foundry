@@ -42,14 +42,13 @@ from cosmic_foundry.computation.time_integrators import (
     JacobianRHS,
     KrogstadETDRK4Integrator,
     LinearPlusNonlinearRHS,
-    MultistepState,
     NordsieckIntegrator,
     NordsieckState,
+    ODEState,
     OperatorSplitRHS,
     OrderSelector,
     PhiFunction,
     PIController,
-    RKState,
     RungeKuttaIntegrator,
     SplittingStep,
     StiffnessDiagnostic,
@@ -207,7 +206,7 @@ class _ConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+            state = ODEState(0.0, Tensor([1.0, 0.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
             errors.append(_max_decay_error(state.u, state.t))
@@ -501,7 +500,7 @@ class _DIRKConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, Tensor([1.0, 0.0]))
+            state = ODEState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
             errors.append(_max_base_network_error(state.u, state.t))
@@ -682,7 +681,7 @@ def _max_decay_error(u: Tensor, t: float) -> float:
 class _AbundanceConservationClaim(Claim):
     """Verify a closed decay chain: accuracy, mass-fraction sum = 1, positivity.
 
-    Applies to any integrator whose step(rhs, state, dt) → RKState interface
+    Applies to any integrator whose step(rhs, state, dt) → ODEState interface
     accepts a JacobianRHS (which also satisfies the plain RHSProtocol, so
     explicit RK methods work too).
     """
@@ -708,7 +707,7 @@ class _AbundanceConservationClaim(Claim):
     def check(self) -> None:
         inst = self._instance
         n_steps = round(self._t_end / self._dt)
-        state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+        state = ODEState(0.0, Tensor([1.0, 0.0, 0.0]))
         for _ in range(n_steps):
             state = inst.step(_DECAY_RHS, state, self._dt)
 
@@ -758,7 +757,7 @@ class _IMEXAbundanceConservationClaim(Claim):
     def check(self) -> None:
         inst = self._instance
         n_steps = round(self._t_end / self._dt)
-        state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+        state = ODEState(0.0, Tensor([1.0, 0.0, 0.0]))
         for _ in range(n_steps):
             state = inst.step(_DECAY_RHS_IMEX, state, self._dt)
 
@@ -810,7 +809,7 @@ class _IMEXConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state = RKState(0.0, Tensor([1.0, 0.0]))
+            state = ODEState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
             errors.append(_max_base_network_error(state.u, state.t))
@@ -911,7 +910,7 @@ class _ABConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = math.ceil(1.0 / dt)
-            state: MultistepState = MultistepState(0.0, Tensor([1.0, 0.0]))
+            state: ODEState = ODEState(0.0, Tensor([1.0, 0.0]))
             for _ in range(n_steps):
                 state = inst.step(rhs, state, dt)
             errors.append(_max_base_network_error(state.u, state.t))
@@ -966,7 +965,7 @@ class _ABAbundanceConservationClaim(Claim):
     def check(self) -> None:
         inst = self._instance
         n_steps = round(self._t_end / self._dt)
-        state: MultistepState = MultistepState(0.0, Tensor([1.0, 0.0, 0.0]))
+        state: ODEState = ODEState(0.0, Tensor([1.0, 0.0, 0.0]))
         for _ in range(n_steps):
             state = inst.step(_DECAY_RHS, state, self._dt)
 
@@ -1854,9 +1853,9 @@ def _integrate_etd(
     ),
     dt: float,
     t_end: float = 0.5,
-) -> RKState:
+) -> ODEState:
     rhs = _etd_split_rhs()
-    state = RKState(0.0, Tensor([1.0, 0.0, 0.0]))
+    state = ODEState(0.0, Tensor([1.0, 0.0, 0.0]))
     n_steps = round(t_end / dt)
     for _ in range(n_steps):
         state = inst.step(rhs, state, dt)
@@ -1999,10 +1998,10 @@ def _integrate_split(
     integrator: StrangSplittingIntegrator,
     dt: float,
     t_end: float = 1.0,
-) -> RKState:
+) -> ODEState:
     rhs = _split_rhs()
     u0 = Tensor([1.0, 0.0])
-    state = RKState(0.0, u0)
+    state = ODEState(0.0, u0)
     n_steps = round(t_end / dt)
     for _ in range(n_steps):
         state = integrator.step(rhs, state, dt)
@@ -2128,7 +2127,7 @@ class _SymplecticConvergenceClaim(Claim):
         errors: list[float] = []
         for dt in dts:
             n_steps = round(t_end / dt)
-            state = RKState(0.0, Tensor([1.0, 0.0], backend=backend))
+            state = ODEState(0.0, Tensor([1.0, 0.0], backend=backend))
             for _ in range(n_steps):
                 state = inst.step(H, state, dt)
             q_err = float(state.u[0]) - math.cos(state.t)

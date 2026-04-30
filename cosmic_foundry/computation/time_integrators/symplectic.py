@@ -17,7 +17,7 @@ Higher-order methods come from the Suzuki-Yoshida triple-jump composition:
 applying a base method at scales (α₁, α₀, α₁) where α₁ = 1/(2−2^e) and
 α₀ = 1−2α₁, with e = 1/(2k+1) to increase order from 2k to 2k+2.
 
-The state is an RKState where u = concat([q, p]) and HamiltonianSplitProtocol
+The state is an ODEState where u = concat([q, p]) and HamiltonianSplitProtocol
 carries split_index to indicate how many leading components are position (q);
 the remaining components are momentum (p).  This makes SymplecticCompositionIntegrator
 a TimeIntegrator that interoperates with TimeStepper.
@@ -37,7 +37,7 @@ from typing import Protocol, runtime_checkable
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
-    RKState,
+    ODEState,
     TimeIntegrator,
 )
 
@@ -112,7 +112,7 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
     Hamiltonian systems.  Advances the state one step by alternating drift
     and kick sub-steps with weights c[i] and d[i].
 
-    The state is an RKState where u = concat([q, p]).  The HamiltonianSplitProtocol
+    The state is an ODEState where u = concat([q, p]).  The HamiltonianSplitProtocol
     carries split_index so that q = u[:split_index] and p = u[split_index:].
     This makes the integrator fully compatible with TimeStepper.advance().
 
@@ -139,13 +139,13 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
     def step(
         self,
         H: HamiltonianSplitProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         """Advance state by one step of size dt.
 
         Unpacks q = state.u[:split_index] and p = state.u[split_index:],
-        applies the alternating drift/kick sequence, then returns a new RKState
+        applies the alternating drift/kick sequence, then returns a new ODEState
         with u = concat([q_new, p_new]) and t = state.t + dt.
         """
         n = H.split_index
@@ -159,7 +159,7 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
         q_list: list[float] = q.to_list()
         p_list: list[float] = p.to_list()
         u_new: Tensor = Tensor(q_list + p_list, backend=state.u.backend)
-        return RKState(state.t + dt, u_new)
+        return ODEState(state.t + dt, u_new)
 
 
 # ---------------------------------------------------------------------------

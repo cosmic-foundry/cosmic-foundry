@@ -34,8 +34,8 @@ import sympy
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators._newton import newton_solve
 from cosmic_foundry.computation.time_integrators.integrator import (
+    ODEState,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 
@@ -186,13 +186,13 @@ class DIRKIntegrator(TimeIntegrator):
     def step(
         self,
         rhs: RHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         """Advance state by one step of size dt via DIRK Newton iteration.
 
         ``rhs`` must satisfy ``WithJacobianRHSProtocol`` (expose ``.jacobian``).
-        Returns a new RKState with t = state.t + dt and updated u.
+        Returns a new ODEState with t = state.t + dt and updated u.
         The err field is set to 0.0 (no embedded pair in this base class).
         """
         if not isinstance(rhs, WithJacobianRHSProtocol):
@@ -221,7 +221,7 @@ class DIRKIntegrator(TimeIntegrator):
         u_new = u
         for i in range(self._s):
             u_new = u_new + (self._b_f[i] * dt) * k[i]
-        return RKState(t + dt, u_new, dt, 0.0)
+        return ODEState(t + dt, u_new, dt, 0.0)
 
 
 # ---------------------------------------------------------------------------
