@@ -28,32 +28,32 @@ import sympy
 
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators import (
-    AdditiveRHS,
+    AdditiveRungeKuttaIntegrator,
     BlackBoxRHS,
+    CompositeRHS,
+    CompositionIntegrator,
     ConstantStep,
     CoxMatthewsETDRK4Integrator,
-    DIRKIntegrator,
     ETDRK2Integrator,
     ExplicitMultistepIntegrator,
     ExponentialEulerIntegrator,
     FamilySwitchingNordsieckIntegrator,
-    HamiltonianSplit,
-    IMEXIntegrator,
+    HamiltonianRHS,
+    ImplicitRungeKuttaIntegrator,
     JacobianRHS,
     KrogstadETDRK4Integrator,
-    LinearPlusNonlinearRHS,
+    MultistepIntegrator,
     NordsieckHistory,
-    NordsieckIntegrator,
     ODEState,
-    OperatorSplitRHS,
     OrderSelector,
     PhiFunction,
     PIController,
     RungeKuttaIntegrator,
+    SemilinearRHS,
+    SplitRHS,
     SplittingStep,
     StiffnessDiagnostic,
     StiffnessSwitcher,
-    StrangSplittingIntegrator,
     SymplecticCompositionIntegrator,
     TimeStepper,
     VariableOrderNordsieckIntegrator,
@@ -163,7 +163,7 @@ class _RKOrderClaim(Claim):
     """Verify B-series order conditions: α(τ) = 1/γ(τ) for all trees with |τ| ≤ p."""
 
     def __init__(
-        self, instance: RungeKuttaIntegrator | DIRKIntegrator, label: str
+        self, instance: RungeKuttaIntegrator | ImplicitRungeKuttaIntegrator, label: str
     ) -> None:
         self._instance = instance
         self._label = label
@@ -483,7 +483,7 @@ class _DIRKConvergenceClaim(Claim):
 
     def __init__(
         self,
-        instance: DIRKIntegrator,
+        instance: ImplicitRungeKuttaIntegrator,
         label: str,
     ) -> None:
         self._instance = instance
@@ -529,7 +529,7 @@ class _DIRKConvergenceClaim(Claim):
 class _AStabilityClaim(Claim):
     """Verify A-stability: |R(iω)| ≤ 1 for sampled imaginary-axis points."""
 
-    def __init__(self, instance: DIRKIntegrator, label: str) -> None:
+    def __init__(self, instance: ImplicitRungeKuttaIntegrator, label: str) -> None:
         self._instance = instance
         self._label = label
 
@@ -552,7 +552,7 @@ class _AStabilityClaim(Claim):
 class _LStabilityClaim(Claim):
     """Verify L-stability: |R(z)| → 0 as Re(z) → −∞."""
 
-    def __init__(self, instance: DIRKIntegrator, label: str) -> None:
+    def __init__(self, instance: ImplicitRungeKuttaIntegrator, label: str) -> None:
         self._instance = instance
         self._label = label
 
@@ -654,7 +654,7 @@ def _decay_jac(t: float, u: Tensor) -> Tensor:
 _DECAY_RHS = JacobianRHS(f=_decay_f, jac=_decay_jac)
 
 # IMEX split: f_I = diagonal decay, f_E = off-diagonal production.
-_DECAY_RHS_IMEX = AdditiveRHS(
+_DECAY_RHS_IMEX = SplitRHS(
     f_E=lambda t, u: Tensor(
         [0.0, _K1 * float(u[0]), _K2 * float(u[1])], backend=u.backend
     ),
@@ -688,7 +688,7 @@ class _AbundanceConservationClaim(Claim):
 
     def __init__(
         self,
-        instance: RungeKuttaIntegrator | DIRKIntegrator,
+        instance: RungeKuttaIntegrator | ImplicitRungeKuttaIntegrator,
         label: str,
         dt: float = 0.05,
         t_end: float = 2.0,
@@ -734,11 +734,11 @@ class _AbundanceConservationClaim(Claim):
 
 
 class _IMEXAbundanceConservationClaim(Claim):
-    """Same decay-chain checks for an IMEXIntegrator with the production/decay split."""
+    """Same decay-chain checks for an AdditiveRungeKuttaIntegrator with the split."""
 
     def __init__(
         self,
-        instance: IMEXIntegrator,
+        instance: AdditiveRungeKuttaIntegrator,
         label: str,
         dt: float = 0.05,
         t_end: float = 2.0,
@@ -788,7 +788,7 @@ class _IMEXConvergenceClaim(Claim):
 
     def __init__(
         self,
-        instance: IMEXIntegrator,
+        instance: AdditiveRungeKuttaIntegrator,
         label: str,
     ) -> None:
         self._instance = instance
@@ -800,7 +800,7 @@ class _IMEXConvergenceClaim(Claim):
 
     def check(self) -> None:
         inst = self._instance
-        rhs = AdditiveRHS(
+        rhs = SplitRHS(
             f_E=lambda t, u: Tensor([0.0, _BASE_K * float(u[0])], backend=u.backend),
             f_I=lambda t, u: Tensor([-_BASE_K * float(u[0]), 0.0], backend=u.backend),
             jac_I=lambda t, u: Tensor([[-_BASE_K, 0.0], [0.0, 0.0]], backend=u.backend),
@@ -1058,7 +1058,7 @@ class _BDFConvergenceClaim(Claim):
 
     def __init__(
         self,
-        instance: NordsieckIntegrator,
+        instance: MultistepIntegrator,
         label: str,
     ) -> None:
         self._instance = instance
@@ -1114,7 +1114,7 @@ class _BDFConservationClaim(Claim):
 
     def __init__(
         self,
-        instance: NordsieckIntegrator,
+        instance: MultistepIntegrator,
         label: str,
         dt: float = 0.05,
         t_end: float = 2.0,
@@ -1219,7 +1219,7 @@ class _AMConvergenceClaim(Claim):
 
     def __init__(
         self,
-        instance: NordsieckIntegrator,
+        instance: MultistepIntegrator,
         label: str,
     ) -> None:
         self._instance = instance
@@ -1275,7 +1275,7 @@ class _AMConservationClaim(Claim):
 
     def __init__(
         self,
-        instance: NordsieckIntegrator,
+        instance: MultistepIntegrator,
         label: str,
         dt: float = 0.05,
         t_end: float = 2.0,
@@ -1399,7 +1399,7 @@ class _NordsieckRescaledAccuracyClaim(Claim):
 
     def __init__(
         self,
-        instance: NordsieckIntegrator,
+        instance: MultistepIntegrator,
         label: str,
         rhs: BlackBoxRHS | JacobianRHS,
         q_source: int = 4,
@@ -1825,7 +1825,7 @@ def test_vode_controller(claim: Claim) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _etd_split_rhs() -> LinearPlusNonlinearRHS:
+def _etd_split_rhs() -> SemilinearRHS:
     linear = Tensor([[-8.0, 0.0, 0.0], [8.0, -0.5, 0.0], [0.0, 0.5, 0.0]])
 
     def residual(t: float, u: Tensor) -> Tensor:
@@ -1836,7 +1836,7 @@ def _etd_split_rhs() -> LinearPlusNonlinearRHS:
         rate = 0.25 + 0.1 * math.sin(2.0 * t)
         return Tensor([-rate * x0, 0.0, rate * x0], backend=u.backend)
 
-    return LinearPlusNonlinearRHS(linear, residual)
+    return SemilinearRHS(linear, residual)
 
 
 def _integrate_etd(
@@ -1974,10 +1974,10 @@ def _split_component_b(t: float, u: Tensor) -> Tensor:
     return Tensor([0.0, _SPLIT_OMEGA * float(u[0])], backend=u.backend)
 
 
-def _split_rhs() -> OperatorSplitRHS:
+def _split_rhs() -> CompositeRHS:
     from cosmic_foundry.computation.time_integrators import BlackBoxRHS
 
-    return OperatorSplitRHS(
+    return CompositeRHS(
         [BlackBoxRHS(_split_component_a), BlackBoxRHS(_split_component_b)]
     )
 
@@ -1990,7 +1990,7 @@ def _split_exact(t: float, u0: Tensor) -> Tensor:
 
 
 def _integrate_split(
-    integrator: StrangSplittingIntegrator,
+    integrator: CompositionIntegrator,
     dt: float,
     t_end: float = 1.0,
 ) -> ODEState:
@@ -2025,7 +2025,7 @@ class _SplittingConvergenceClaim(Claim):
         return f"splitting/convergence/{self._label}"
 
     def check(self) -> None:
-        integrator = StrangSplittingIntegrator(
+        integrator = CompositionIntegrator(
             self._sub_integrators, self._sequence, order=self._order
         )
         u0 = Tensor([1.0, 0.0])
@@ -2112,7 +2112,7 @@ class _SymplecticConvergenceClaim(Claim):
     def check(self) -> None:
         inst = self._instance
         backend = Tensor([0.0]).backend
-        H = HamiltonianSplit(
+        H = HamiltonianRHS(
             dT_dp=lambda p: p,
             dV_dq=lambda q: q,
             split_index=1,
@@ -2247,14 +2247,14 @@ class _NewtonSolveClaim(Claim):
 
 _TYPE_COHERENCE_CLAIMS: list[_TypeCoherenceClaim] = [
     _TypeCoherenceClaim(
-        DIRKIntegrator,
+        ImplicitRungeKuttaIntegrator,
         [backward_euler, implicit_midpoint, crouzeix_3],
-        "DIRKIntegrator",
+        "ImplicitRungeKuttaIntegrator",
     ),
     _TypeCoherenceClaim(
-        IMEXIntegrator,
+        AdditiveRungeKuttaIntegrator,
         [ars222],
-        "IMEXIntegrator",
+        "AdditiveRungeKuttaIntegrator",
     ),
     _TypeCoherenceClaim(
         ExplicitMultistepIntegrator,
@@ -2267,9 +2267,9 @@ _TYPE_COHERENCE_CLAIMS: list[_TypeCoherenceClaim] = [
         "SymplecticCompositionIntegrator",
     ),
     _TypeCoherenceClaim(
-        StrangSplittingIntegrator,
-        [StrangSplittingIntegrator([rk4, rk4], strang_steps(), order=2)],
-        "StrangSplittingIntegrator",
+        CompositionIntegrator,
+        [CompositionIntegrator([rk4, rk4], strang_steps(), order=2)],
+        "CompositionIntegrator",
     ),
 ]
 

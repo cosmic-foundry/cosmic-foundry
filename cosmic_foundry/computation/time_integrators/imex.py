@@ -20,6 +20,7 @@ ars222  — order 2, A-stable implicit pair (Ascher-Ruuth-Spiteri 1997)
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -35,7 +36,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 
 
 @runtime_checkable
-class AdditiveRHSProtocol(Protocol):
+class SplitRHSProtocol(Protocol):
     """Protocol for ODE right-hand sides with an explicit/implicit additive split.
 
     Implementers supply three callables: the non-stiff explicit component,
@@ -56,8 +57,8 @@ class AdditiveRHSProtocol(Protocol):
         ...
 
 
-class AdditiveRHS:
-    """Concrete AdditiveRHSProtocol wrapping three callables.
+class SplitRHS:
+    """Concrete SplitRHSProtocol wrapping three callables.
 
     Parameters
     ----------
@@ -92,7 +93,7 @@ class AdditiveRHS:
         return result
 
 
-class IMEXIntegrator(TimeIntegrator):
+class AdditiveRungeKuttaIntegrator(TimeIntegrator):
     """IMEX additive Runge-Kutta method defined by two Butcher tableaux.
 
     Uses an explicit tableau (A_E, b_E, c_E) for the non-stiff component
@@ -150,14 +151,15 @@ class IMEXIntegrator(TimeIntegrator):
     ) -> ODEState:
         """Advance state by one IMEX step of size dt.
 
-        ``rhs`` must satisfy ``AdditiveRHSProtocol`` (expose ``.explicit``,
+        ``rhs`` must satisfy ``SplitRHSProtocol`` (expose ``.explicit``,
         ``.implicit``, ``.jacobian_implicit``).
         Returns a new ODEState with t = state.t + dt and updated u.
         The err field is 0.0 (no embedded pair in this base class).
         """
-        if not isinstance(rhs, AdditiveRHSProtocol):
+        if not isinstance(rhs, SplitRHSProtocol):
             raise TypeError(
-                f"IMEXIntegrator requires an AdditiveRHSProtocol; got {type(rhs)}"
+                "AdditiveRungeKuttaIntegrator requires a SplitRHSProtocol; "
+                f"got {type(rhs)}"
             )
         t, u = state.t, state.u
         k_E: list[Tensor] = []
@@ -195,6 +197,44 @@ class IMEXIntegrator(TimeIntegrator):
         return ODEState(t + dt, u_new, dt, 0.0)
 
 
+class IMEXIntegrator(AdditiveRungeKuttaIntegrator):
+    """Deprecated alias for ``AdditiveRungeKuttaIntegrator``."""
+
+    def __init__(
+        self,
+        A_E: list[list],
+        b_E: list,
+        c_E: list,
+        A_I: list[list],
+        b_I: list,
+        c_I: list,
+        order: int,
+    ) -> None:
+        warnings.warn(
+            "IMEXIntegrator is deprecated; use AdditiveRungeKuttaIntegrator.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(A_E, b_E, c_E, A_I, b_I, c_I, order)
+
+
+class AdditiveRHS(SplitRHS):
+    """Deprecated alias for ``SplitRHS``."""
+
+    def __init__(
+        self,
+        f_E: Callable[[float, Tensor], Tensor],
+        f_I: Callable[[float, Tensor], Tensor],
+        jac_I: Callable[[float, Tensor], Tensor],
+    ) -> None:
+        warnings.warn(
+            "AdditiveRHS is deprecated; use SplitRHS.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(f_E, f_I, jac_I)
+
+
 # ---------------------------------------------------------------------------
 # Named instances
 # ---------------------------------------------------------------------------
@@ -207,7 +247,7 @@ class IMEXIntegrator(TimeIntegrator):
 _g = (sympy.Integer(2) - sympy.sqrt(2)) / 2
 _d = 1 - 1 / (2 * _g)  # δ = 1 − 1/(2γ) = −√2/2
 
-ars222 = IMEXIntegrator(
+ars222 = AdditiveRungeKuttaIntegrator(
     A_E=[[0, 0, 0], [_g, 0, 0], [_d, 1 - _d, 0]],
     b_E=[0, 1 - _g, _g],
     c_E=[0, _g, 1],
@@ -220,7 +260,12 @@ ars222 = IMEXIntegrator(
 
 __all__ = [
     "AdditiveRHS",
+    "AdditiveRungeKuttaIntegrator",
     "AdditiveRHSProtocol",
     "IMEXIntegrator",
+    "SplitRHS",
+    "SplitRHSProtocol",
     "ars222",
 ]
+
+AdditiveRHSProtocol = SplitRHSProtocol

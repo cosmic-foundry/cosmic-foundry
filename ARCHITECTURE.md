@@ -465,10 +465,10 @@ RHSProtocol                      — base: __call__(t, u) → Tensor
 ├── BlackBoxRHS                  — wraps any callable
 ├── JacobianRHS                  — adds .jac(t, u) for Newton-based methods
 ├── FiniteDiffJacobianRHS        — finite-difference Jacobian approximation
-├── AdditiveRHS                  — (explicit, implicit) split for IMEX
-├── HamiltonianSplit             — (dH_dq, dH_dp) for symplectic methods
-├── LinearPlusNonlinearRHS       — (L, N) split for exponential integrators
-└── OperatorSplitRHS             — [f_1, …, f_k] for operator splitting
+├── SplitRHS                     — (explicit, implicit) split for ARK
+├── HamiltonianRHS               — (dH_dq, dH_dp) for symplectic methods
+├── SemilinearRHS                — (L, N) split for exponential integrators
+└── CompositeRHS                 — [f_1, …, f_k] for operator splitting
                                    (SplittingStep sequence drives substep weights)
 
 State types:
@@ -487,14 +487,14 @@ RungeKuttaIntegrator             — Butcher-tableau explicit RK (arbitrary orde
                                    instances: forward_euler(1), midpoint(2), heun(2),
                                    ralston(2), rk4(4), bogacki_shampine(3,embedded),
                                    dormand_prince(5,embedded)
-DIRKIntegrator                   — diagonally implicit RK
+ImplicitRungeKuttaIntegrator     — diagonally implicit RK
                                    instances: backward_euler(1), implicit_midpoint(2),
                                    crouzeix_3(3)
-IMEXIntegrator                   — additive RK (paired explicit + implicit tableaux)
+AdditiveRungeKuttaIntegrator     — additive RK (paired explicit + implicit tableaux)
                                    instances: ars222(2)
 ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
                                    instances: ab2, ab3, ab4
-NordsieckIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
+MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
                                    factories: bdf_family → bdf1–bdf4
                                               adams_family → adams_moulton1–adams_moulton4
 VariableOrderNordsieckIntegrator — online order selection (OrderSelector)
@@ -506,10 +506,10 @@ CoxMatthewsETDRK4Integrator      — order 4 (classical); instance: cox_matthews
 KrogstadETDRK4Integrator         — order 4 (stiff-order-correct); instance: krogstad_etdrk4
 SymplecticCompositionIntegrator  — position-Verlet family for separable Hamiltonian
                                    systems; inherits TimeIntegrator; accepts
-                                   HamiltonianSplit with split_index
+                                   HamiltonianRHS with split_index
                                    instances: symplectic_euler(1), leapfrog(2),
                                    forest_ruth(4), yoshida_6(6), yoshida_8(8)
-StrangSplittingIntegrator        — meta-integrator composing sub-integrators;
+CompositionIntegrator            — meta-integrator composing sub-integrators;
                                    factories: lie_steps()(1), strang_steps()(2),
                                    yoshida_steps()(4, negative substep weights)
 
@@ -565,16 +565,16 @@ name.  The migration is breaking; it happens in phases (see below).
 |---|---|---|
 | `RKState` | `ODEState` *(done)* | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). `MultistepState` folded in via `history` field. |
 | `NordsieckState` | `MultistepState` *(done — NordsieckHistory)* | Nordsieck encoding is an implementation detail; `NordsieckHistory` carries the scaled-derivative vector in `ODEState.history`. |
-| `PartitionedState` | *(eliminated — done)* | Folded into `ODEState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianSplit.split_index`. |
-| `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` | DIRK is one implementation strategy for implicit RK; the public name should say "implicit Runge-Kutta". |
-| `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
-| `NordsieckIntegrator` | `MultistepIntegrator` | Same reasoning as `NordsieckState`. |
-| `StrangSplittingIntegrator` | `CompositionIntegrator` | Strang is one composition scheme; the class is the general composition meta-integrator. |
+| `PartitionedState` | *(eliminated — done)* | Folded into `ODEState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianRHS.split_index`. |
+| `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` *(done; deprecated alias kept)* | DIRK is one implementation strategy for implicit RK; the public name says "implicit Runge-Kutta". |
+| `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` *(done; deprecated alias kept)* | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
+| `NordsieckIntegrator` | `MultistepIntegrator` *(done; deprecated alias kept)* | Same reasoning as `NordsieckState`. |
+| `StrangSplittingIntegrator` | `CompositionIntegrator` *(done; deprecated alias kept)* | Strang is one composition scheme; the class is the general composition meta-integrator. |
 | `SymplecticSplittingIntegrator` | `SymplecticCompositionIntegrator` *(done)* | Specializes `CompositionIntegrator` with symplecticity constraint. |
-| `LinearPlusNonlinearRHS` | `SemilinearRHS` | du/dt = Lu + N(t,u) is a semilinear ODE; the name should say so. |
-| `AdditiveRHS` | `SplitRHS` | Carries an explicit/implicit split; "additive" is the ARK term, "split" is the mathematical concept. |
-| `HamiltonianSplit` | `HamiltonianRHS` | The protocol describes a Hamiltonian RHS; "split" implies an algorithmic choice. |
-| `OperatorSplitRHS` | `CompositeRHS` | Carries k component RHS objects; "composite" names the mathematical structure. |
+| `LinearPlusNonlinearRHS` | `SemilinearRHS` *(done; deprecated alias kept)* | du/dt = Lu + N(t,u) is a semilinear ODE; the name says so. |
+| `AdditiveRHS` | `SplitRHS` *(done; deprecated alias kept)* | Carries an explicit/implicit split; "split" is the mathematical concept. |
+| `HamiltonianSplit` | `HamiltonianRHS` *(done; deprecated alias kept)* | The protocol describes a Hamiltonian RHS; "split" implied an algorithmic choice. |
+| `OperatorSplitRHS` | `CompositeRHS` *(done; deprecated alias kept)* | Carries k component RHS objects; "composite" names the mathematical structure. |
 
 ---
 
@@ -619,8 +619,8 @@ callers are unaffected.
 know their algorithm keep using the specific class.
 
 **Type coherence requirement.** All specialist integrators must satisfy
-the `Integrator` protocol — concretely, `DIRKIntegrator` and
-`IMEXIntegrator` must inherit (or structurally match) the same
+the `Integrator` protocol — concretely, `ImplicitRungeKuttaIntegrator` and
+`AdditiveRungeKuttaIntegrator` must inherit (or structurally match) the same
 `TimeIntegrator` ABC that `RungeKuttaIntegrator` currently inherits.
 This is the most impactful single cleanup and unblocks Axis A.
 
@@ -655,7 +655,7 @@ ODEState:
 - `NordsieckState` *(done)* — replaced by `ODEState` carrying
   `history = NordsieckHistory(h, z)`.  `NordsieckHistory` holds the
   scaled-derivative vector and exposes `change_order()` / `rescale_step()`.
-  `NordsieckIntegrator` reads/writes `state.history`; single-step integrators
+  `MultistepIntegrator` reads/writes `state.history`; single-step integrators
   leave `state.history = None`.
 
 **Breaking change surface.** `TimeStepper.advance` return type changed
@@ -673,7 +673,7 @@ at least one new test for the structural change.
 |---|---|---|
 | D1 | **Unified state (done)** | Rename `RKState → ODEState`; fold `MultistepState` into `ODEState.history`; `TimeStepper.advance` returns `ODEState`. |
 | D2 | **Fold NordsieckState (done)** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; `change_order()` / `rescale_step()` moved to `NordsieckHistory`. |
-| E | **Rename sweep** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
+| E | **Rename sweep (done)** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
 | F | **`AutoIntegrator`** | Implement dispatch chain; add integration test that passes each RHS type through `AutoIntegrator` and verifies correct order. |
 
 Phase D2 can proceed immediately.  Phases E and F require D2.

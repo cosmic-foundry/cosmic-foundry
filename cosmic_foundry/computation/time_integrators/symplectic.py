@@ -32,6 +32,7 @@ Named instances (all ABA-form, d[-1] = 0):
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -43,7 +44,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 
 
 @runtime_checkable
-class HamiltonianSplitProtocol(Protocol):
+class HamiltonianRHSProtocol(Protocol):
     """Protocol for separable Hamiltonians H(q, p) = T(p) + V(q).
 
     Implementers supply the two gradient maps needed by the drift/kick split
@@ -65,8 +66,8 @@ class HamiltonianSplitProtocol(Protocol):
         ...
 
 
-class HamiltonianSplit:
-    """Concrete HamiltonianSplitProtocol wrapping two gradient callables.
+class HamiltonianRHS:
+    """Concrete HamiltonianRHSProtocol wrapping two gradient callables.
 
     Parameters
     ----------
@@ -138,7 +139,7 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
 
     def step(
         self,
-        H: HamiltonianSplitProtocol,
+        H: HamiltonianRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -160,6 +161,23 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
         p_list: list[float] = p.to_list()
         u_new: Tensor = Tensor(q_list + p_list, backend=state.u.backend)
         return ODEState(state.t + dt, u_new)
+
+
+class HamiltonianSplit(HamiltonianRHS):
+    """Deprecated alias for ``HamiltonianRHS``."""
+
+    def __init__(
+        self,
+        dT_dp: Callable[[Tensor], Tensor],
+        dV_dq: Callable[[Tensor], Tensor],
+        split_index: int,
+    ) -> None:
+        warnings.warn(
+            "HamiltonianSplit is deprecated; use HamiltonianRHS.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(dT_dp, dV_dq, split_index)
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +235,9 @@ yoshida_8 = SymplecticCompositionIntegrator(c=_c_y8, d=_d_y8, order=8)
 
 
 __all__ = [
+    "HamiltonianRHS",
+    "HamiltonianRHSProtocol",
     "HamiltonianSplit",
-    "HamiltonianSplitProtocol",
     "SymplecticCompositionIntegrator",
     "forest_ruth",
     "leapfrog",
@@ -226,3 +245,5 @@ __all__ = [
     "yoshida_6",
     "yoshida_8",
 ]
+
+HamiltonianSplitProtocol = HamiltonianRHSProtocol

@@ -10,8 +10,8 @@ from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     AdamsFamily,
     BDFFamily,
+    MultistepIntegrator,
     NordsieckHistory,
-    NordsieckIntegrator,
 )
 
 FamilyName = Literal["adams", "bdf"]
@@ -90,7 +90,7 @@ class FamilySwitchingNordsieckIntegrator:
     The stored Nordsieck vector is family-neutral: ``z[j] = h^j y^(j) / j!``.
     Switching families therefore preserves the vector directly, with ``z[0]``
     unchanged exactly.  The corrector coefficients live in the fixed-order
-    `NordsieckIntegrator` selected for the next step.
+    `MultistepIntegrator` selected for the next step.
     """
 
     def __init__(
@@ -196,10 +196,10 @@ class FamilySwitchingNordsieckIntegrator:
             state = self.step(rhs, state, dt_step)
         return state
 
-    def _integrator(self) -> NordsieckIntegrator:
+    def _integrator(self) -> MultistepIntegrator:
         if self._family == "adams":
-            return NordsieckIntegrator(self._adams_family, self._q)
-        return NordsieckIntegrator(self._bdf_family, self._q)
+            return MultistepIntegrator(self._adams_family, self._q)
+        return MultistepIntegrator(self._bdf_family, self._q)
 
 
 def nordsieck_solution_distance(lhs: ODEState, rhs: ODEState) -> float:

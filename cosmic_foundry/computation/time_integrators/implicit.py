@@ -26,6 +26,7 @@ crouzeix_3       — order 3, L-stable (Crouzeix 1979, γ = (3+√3)/6)
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -124,7 +125,7 @@ class FiniteDiffJacobianRHS:
         return Tensor(rows, backend=backend)
 
 
-class DIRKIntegrator(TimeIntegrator):
+class ImplicitRungeKuttaIntegrator(TimeIntegrator):
     """Diagonally Implicit Runge-Kutta method defined by a Butcher tableau.
 
     Each stage of a DIRK step is solved by Newton iteration using the
@@ -197,7 +198,8 @@ class DIRKIntegrator(TimeIntegrator):
         """
         if not isinstance(rhs, WithJacobianRHSProtocol):
             raise TypeError(
-                f"DIRKIntegrator requires a WithJacobianRHSProtocol; got {type(rhs)}"
+                "ImplicitRungeKuttaIntegrator requires a WithJacobianRHSProtocol; "
+                f"got {type(rhs)}"
             )
         t, u = state.t, state.u
         k: list[Tensor] = []
@@ -224,18 +226,36 @@ class DIRKIntegrator(TimeIntegrator):
         return ODEState(t + dt, u_new, dt, 0.0)
 
 
+class DIRKIntegrator(ImplicitRungeKuttaIntegrator):
+    """Deprecated alias for ``ImplicitRungeKuttaIntegrator``."""
+
+    def __init__(
+        self,
+        A: list[list],
+        b: list,
+        c: list,
+        order: int,
+    ) -> None:
+        warnings.warn(
+            "DIRKIntegrator is deprecated; use ImplicitRungeKuttaIntegrator.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(A, b, c, order)
+
+
 # ---------------------------------------------------------------------------
 # Named instances
 # ---------------------------------------------------------------------------
 
-backward_euler = DIRKIntegrator(
+backward_euler = ImplicitRungeKuttaIntegrator(
     A=[[1]],
     b=[1],
     c=[1],
     order=1,
 )
 
-implicit_midpoint = DIRKIntegrator(
+implicit_midpoint = ImplicitRungeKuttaIntegrator(
     A=[["1/2"]],
     b=[1],
     c=["1/2"],
@@ -245,7 +265,7 @@ implicit_midpoint = DIRKIntegrator(
 # Crouzeix (1979) 2-stage order-3 L-stable DIRK.
 # γ = (3 + √3) / 6 satisfies the order-3 Butcher conditions exactly.
 _gamma_c3 = sympy.Rational(3, 6) + sympy.sqrt(3) / 6
-crouzeix_3 = DIRKIntegrator(
+crouzeix_3 = ImplicitRungeKuttaIntegrator(
     A=[[_gamma_c3, 0], [1 - 2 * _gamma_c3, _gamma_c3]],
     b=["1/2", "1/2"],
     c=[_gamma_c3, 1 - _gamma_c3],
@@ -284,6 +304,7 @@ __all__ = [
     "DIRKIntegrator",
     "FiniteDiffJacobianRHS",
     "JacobianRHS",
+    "ImplicitRungeKuttaIntegrator",
     "WithJacobianRHSProtocol",
     "backward_euler",
     "crouzeix_3",
