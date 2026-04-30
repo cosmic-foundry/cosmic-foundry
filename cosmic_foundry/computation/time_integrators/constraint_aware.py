@@ -288,7 +288,7 @@ class ConstraintAwareController:
        (consistent initialization) before the next step.
 
     ``advance`` owns the integration loop and is not compatible with
-    ``TimeStepper`` because it modifies state between steps.
+    ``Integrator`` because it modifies state between steps.
 
     Parameters
     ----------
