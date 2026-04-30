@@ -228,7 +228,7 @@ class TimeIntegrator(ABC):
         """Declared convergence order of the method."""
 
     @abstractmethod
-    def step(self, rhs: RHSProtocol, state: Any, dt: float) -> Any:
+    def step(self, rhs: Any, state: Any, dt: float) -> Any:
         """Advance state by one step of size dt.
 
         Returns a new state with t = state.t + dt, updated u, dt set to the
