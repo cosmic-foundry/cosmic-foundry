@@ -189,12 +189,23 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         rhs: RHSProtocol,
         state: ODEState,
         dt: float,
+        *,
+        constraint_gradients: Tensor | None = None,
     ) -> ODEState:
         """Advance state by one step of size dt via DIRK Newton iteration.
 
         ``rhs`` must satisfy ``WithJacobianRHSProtocol`` (expose ``.jacobian``).
         Returns a new ODEState with t = state.t + dt and updated u.
         The err field is set to 0.0 (no embedded pair in this base class).
+
+        Parameters
+        ----------
+        constraint_gradients:
+            Optional k × n matrix whose rows are the gradients of the k
+            active algebraic constraints.  When provided, each Newton step
+            is projected onto the null space of these gradients before being
+            applied.  The ``active_constraints`` field of ``state`` is
+            preserved in the returned state unchanged.
         """
         if not isinstance(rhs, WithJacobianRHSProtocol):
             raise TypeError(
@@ -217,13 +228,14 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
                 gamma_i * dt,
                 f=lambda y, _t=t_i: rhs(_t, y),  # type: ignore[misc]
                 jac=lambda y, _t=t_i: rhs.jacobian(_t, y),  # type: ignore[misc]
+                constraint_gradients=constraint_gradients,
             )
             k.append(rhs(t_i, y))
 
         u_new = u
         for i in range(self._s):
             u_new = u_new + (self._b_f[i] * dt) * k[i]
-        return ODEState(t + dt, u_new, dt, 0.0)
+        return state._replace(t=t + dt, u=u_new, dt=dt, err=0.0, history=None)
 
 
 class DIRKIntegrator(ImplicitRungeKuttaIntegrator):

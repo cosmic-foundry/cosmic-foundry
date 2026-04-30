@@ -66,6 +66,12 @@ class ODEState(NamedTuple):
     history:
         Tuple of past function evaluations for multistep integrators
         (most recent first), or None for single-step methods.
+    active_constraints:
+        Frozenset of reaction-pair indices currently treated as algebraic
+        constraints.  ``None`` (the default) means no constraint tracking.
+        A frozenset means those pairs are algebraic constraints; the
+        ``ConstraintAwareController`` manages this field across steps.
+        Integrators pass it through without interpreting it.
     """
 
     t: float
@@ -73,6 +79,7 @@ class ODEState(NamedTuple):
     dt: float = 0.0
     err: float = 0.0
     history: Any = None
+    active_constraints: frozenset[int] | None = None
 
 
 class Controller(Protocol):

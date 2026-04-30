@@ -35,6 +35,7 @@ from cosmic_foundry.computation.time_integrators import (
     CompositeRHS,
     CompositionIntegrator,
     ConstantStep,
+    ConstraintAwareController,
     CoxMatthewsETDRK4Integrator,
     ETDRK2Integrator,
     ExplicitMultistepIntegrator,
@@ -2768,4 +2769,127 @@ _PROJECTED_NEWTON_CLAIMS: list[_ProjectedNewtonClaim] = [
     ids=[c.description for c in _PROJECTED_NEWTON_CLAIMS],
 )
 def test_projected_newton(claim: _ProjectedNewtonClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Constraint lifecycle claims
+# ---------------------------------------------------------------------------
+
+# A⇌B with k_f = 1.0, k_r = 0.5.
+#
+# Conservation: A + B = 1.  Equilibrium: k_f·A_eq = k_r·B_eq → A_eq = 1/3.
+# Exact: A(t) = 1/3 + 2/3·exp(−1.5t).
+#
+# Equilibrium ratio ρ = |r⁺ − r⁻|/max(r⁺, r⁻) ≈ 3·exp(−1.5t) for t ≫ 0.
+# ρ < 0.01 (eps_activate) first occurs at t ≈ 3.8; ρ drops to 0 as t → ∞.
+# ρ < 0.10 (eps_deactivate) for all t > 2.3, so once activated the constraint
+# remains active and there is no chattering.
+#
+# The four claims test each of the four behaviors stated in the F4 spec:
+#   activation        — constraint activates before t_end = 6
+#   no_chattering     — no deactivation events during the run to t_end = 6
+#   consistent_init   — final equilibrium ratio < eps_activate (state on manifold)
+#   deactivation      — starts constrained with u far from equilibrium;
+#                       constraint deactivates within the first step
+
+_LC_K_F = 1.0
+_LC_K_R = 0.5
+_LC_S = Tensor([[-1.0], [1.0]])
+_LC_U0 = Tensor([1.0, 0.0])
+
+
+def _lc_r_plus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_LC_K_F * float(u[0])], backend=u.backend)
+
+
+def _lc_r_minus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_LC_K_R * float(u[1])], backend=u.backend)
+
+
+class _ConstraintLifecycleClaim(Claim):
+    """Verify one facet of ConstraintAwareController lifecycle management.
+
+    All four checks use the A⇌B reversible toy with k_f = 1.0, k_r = 0.5.
+    """
+
+    def __init__(self, label: str, check_kind: str) -> None:
+        self._label = label
+        self._check_kind = check_kind
+
+    @property
+    def description(self) -> str:
+        return f"constraint_lifecycle/{self._label}"
+
+    def _make_rhs(self) -> ReactionNetworkRHS:
+        return ReactionNetworkRHS(_LC_S, _lc_r_plus, _lc_r_minus, _LC_U0)
+
+    def _make_ctrl(self, rhs: ReactionNetworkRHS) -> ConstraintAwareController:
+        return ConstraintAwareController(
+            rhs=rhs,
+            integrator=implicit_midpoint,
+            inner=PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.05),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+
+    def check(self) -> None:
+        rhs = self._make_rhs()
+
+        if self._check_kind == "activation":
+            ctrl = self._make_ctrl(rhs)
+            state = ctrl.advance(_LC_U0, 0.0, 6.0)
+            assert state.active_constraints == frozenset({0}), (
+                "constraint pair 0 not active at t=6: "
+                f"active_constraints = {state.active_constraints}"
+            )
+            assert ctrl.activation_events, "no activation events recorded"
+
+        elif self._check_kind == "no_chattering":
+            ctrl = self._make_ctrl(rhs)
+            ctrl.advance(_LC_U0, 0.0, 6.0)
+            assert not ctrl.deactivation_events, (
+                f"deactivation events observed (chattering): "
+                f"{ctrl.deactivation_events}"
+            )
+
+        elif self._check_kind == "consistent_init":
+            ctrl = self._make_ctrl(rhs)
+            state = ctrl.advance(_LC_U0, 0.0, 6.0)
+            rp = float(rhs.forward_rate(state.t, state.u)[0])
+            rm = float(rhs.reverse_rate(state.t, state.u)[0])
+            ratio = abs(rp - rm) / max(abs(rp), abs(rm), 1e-100)
+            assert ratio < 0.01, (
+                f"final equilibrium ratio {ratio:.3e} >= eps_activate=0.01; "
+                "consistent initialization failed to land state on constraint manifold"
+            )
+
+        elif self._check_kind == "deactivation":
+            # Start with the constraint forced active but u far from equilibrium.
+            # ratio ≈ |1.0·0.7 − 0.5·0.3| / 0.7 ≈ 0.79 >> eps_deactivate = 0.1,
+            # so the constraint must deactivate on the first accepted step.
+            ctrl = self._make_ctrl(rhs)
+            u_far = Tensor([0.7, 0.3])
+            state = ctrl.advance(u_far, 0.0, 0.5, initial_active=frozenset({0}))
+            assert ctrl.deactivation_events, "no deactivation events recorded"
+            assert state.active_constraints == frozenset(), (
+                f"constraint still active after deactivation run: "
+                f"{state.active_constraints}"
+            )
+
+
+_CONSTRAINT_LIFECYCLE_CLAIMS: list[_ConstraintLifecycleClaim] = [
+    _ConstraintLifecycleClaim("activation", "activation"),
+    _ConstraintLifecycleClaim("no_chattering", "no_chattering"),
+    _ConstraintLifecycleClaim("consistent_init", "consistent_init"),
+    _ConstraintLifecycleClaim("deactivation", "deactivation"),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _CONSTRAINT_LIFECYCLE_CLAIMS,
+    ids=[c.description for c in _CONSTRAINT_LIFECYCLE_CLAIMS],
+)
+def test_constraint_lifecycle(claim: _ConstraintLifecycleClaim) -> None:
     claim.check()
