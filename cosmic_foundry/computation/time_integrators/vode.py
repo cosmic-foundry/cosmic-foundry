@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
+from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     AdamsFamily,
     BDFFamily,
+    NordsieckHistory,
     NordsieckIntegrator,
-    NordsieckState,
 )
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
@@ -95,20 +96,22 @@ class VODEController:
         t0: float,
         u0: Tensor,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Initialize with the current family and order."""
         return self._integrator(self._family, self._q).init_state(rhs, t0, u0, dt)
 
     def step(
         self,
         rhs: WithJacobianRHSProtocol,
-        state: NordsieckState,
+        state: ODEState,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance one accepted adaptive VODE step."""
-        q = min(self._q, state.q, self._order_selector.q_max)
+        nh: NordsieckHistory = state.history
+        q = min(self._q, nh.q, self._order_selector.q_max)
         family = self._family
-        state = state.change_order(q).rescale_step(dt)
+        nh = nh.change_order(q).rescale_step(dt)
+        state = ODEState(state.t, state.u, dt, state.err, nh)
         rejections = 0
 
         while True:
@@ -130,8 +133,15 @@ class VODEController:
                 self.accepted_errors.append(order_decision.error)
                 self.accepted_stiffness.append(stiffness)
                 self.accepted_times.append(candidate.t)
-                return candidate.change_order(self._q).rescale_step(
+                nh_out = candidate.history.change_order(self._q).rescale_step(
                     order_decision.h_next
+                )
+                return ODEState(
+                    candidate.t,
+                    candidate.u,
+                    order_decision.h_next,
+                    candidate.err,
+                    nh_out,
                 )
 
             rejections += 1
@@ -140,7 +150,8 @@ class VODEController:
                 raise RuntimeError("VODE step exceeded rejection limit.")
             q = order_decision.q_next
             dt = order_decision.h_next
-            state = state.change_order(q).rescale_step(dt)
+            nh = state.history.change_order(q).rescale_step(dt)
+            state = ODEState(state.t, state.u, dt, state.err, nh)
 
     def advance(
         self,
@@ -149,11 +160,11 @@ class VODEController:
         t0: float,
         t_end: float,
         dt0: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance from ``t0`` to ``t_end`` with adaptive family/order/step."""
         state = self.init_state(rhs, t0, u0, dt0)
         while state.t < t_end:
-            dt = min(state.h, t_end - state.t)
+            dt = min(state.dt, t_end - state.t)
             state = self.step(rhs, state, dt)
         return state
 

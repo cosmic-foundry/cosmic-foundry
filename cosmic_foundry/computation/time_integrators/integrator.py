@@ -72,7 +72,7 @@ class ODEState(NamedTuple):
     u: Tensor
     dt: float = 0.0
     err: float = 0.0
-    history: tuple[Tensor, ...] | None = None
+    history: Any = None
 
 
 class Controller(Protocol):

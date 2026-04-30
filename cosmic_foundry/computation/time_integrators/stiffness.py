@@ -6,11 +6,12 @@ from typing import Literal, NamedTuple
 
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
+from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     AdamsFamily,
     BDFFamily,
+    NordsieckHistory,
     NordsieckIntegrator,
-    NordsieckState,
 )
 
 FamilyName = Literal["adams", "bdf"]
@@ -134,18 +135,19 @@ class FamilySwitchingNordsieckIntegrator:
 
     def transform_family(
         self,
-        state: NordsieckState,
+        state: ODEState,
         target: FamilyName,
-    ) -> NordsieckState:
-        """Return ``state`` represented for ``target`` family.
+    ) -> ODEState:
+        """Return ``state`` with its Nordsieck history at the wrapper's fixed order.
 
-        The current Nordsieck representation is already scaled-derivative
-        based, so this transformation is identity on the history vector except
-        for enforcing the wrapper's fixed order.
+        The Nordsieck representation is already scaled-derivative based, so the
+        transformation is identity on the history vector except for enforcing
+        the wrapper's fixed order.
         """
         if target not in ("adams", "bdf"):
             raise ValueError(f"unknown Nordsieck family {target!r}.")
-        return state.change_order(self._q)
+        nh: NordsieckHistory = state.history.change_order(self._q)
+        return ODEState(state.t, state.u, state.dt, state.err, nh)
 
     def init_state(
         self,
@@ -153,18 +155,20 @@ class FamilySwitchingNordsieckIntegrator:
         t0: float,
         u0: Tensor,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Initialize using the currently selected family."""
         return self._integrator().init_state(rhs, t0, u0, dt)
 
     def step(
         self,
         rhs: WithJacobianRHSProtocol,
-        state: NordsieckState,
+        state: ODEState,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance one step, update stiffness, and switch family if needed."""
-        state = self.transform_family(state, self._family).rescale_step(dt)
+        state = self.transform_family(state, self._family)
+        nh: NordsieckHistory = state.history.rescale_step(dt)
+        state = ODEState(state.t, state.u, dt, state.err, nh)
         candidate = self._integrator().step(rhs, state, dt)
         stiffness = self._diagnostic.update(rhs.jacobian(candidate.t, candidate.u), dt)
         decision = self._switcher.decide(self._family, stiffness)
@@ -184,7 +188,7 @@ class FamilySwitchingNordsieckIntegrator:
         t0: float,
         t_end: float,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance from ``t0`` to ``t_end`` with fixed order and step size."""
         state = self.init_state(rhs, t0, u0, dt)
         while state.t < t_end:
@@ -198,8 +202,8 @@ class FamilySwitchingNordsieckIntegrator:
         return NordsieckIntegrator(self._bdf_family, self._q)
 
 
-def nordsieck_solution_distance(lhs: NordsieckState, rhs: NordsieckState) -> float:
-    """Return ``||lhs.z[0] - rhs.z[0]||`` for family-transform checks."""
+def nordsieck_solution_distance(lhs: ODEState, rhs: ODEState) -> float:
+    """Return ``||lhs.u - rhs.u||`` for family-transform checks."""
     return float(norm(lhs.u - rhs.u))
 
 

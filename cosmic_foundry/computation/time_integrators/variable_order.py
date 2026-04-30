@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from cosmic_foundry.computation.tensor import Tensor, norm
-from cosmic_foundry.computation.time_integrators.integrator import RHSProtocol
+from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     AdamsFamily,
     BDFFamily,
+    NordsieckHistory,
     NordsieckIntegrator,
-    NordsieckState,
 )
 
 
@@ -67,11 +67,12 @@ class OrderSelector:
         self.lower_smoothness = lower_smoothness
         self.raise_error = raise_error
 
-    def decide(self, state: NordsieckState) -> OrderDecision:
+    def decide(self, state: ODEState) -> OrderDecision:
         """Choose acceptance, next order, and next step size for ``state``."""
-        q = state.q
+        nh: NordsieckHistory = state.history
+        q = nh.q
         error = self.normalized_error(state)
-        h_next = self.next_step_size(state.h, q, error)
+        h_next = self.next_step_size(nh.h, q, error)
         if error > 1.0:
             return OrderDecision(
                 accepted=False,
@@ -92,20 +93,22 @@ class OrderSelector:
             q_next = q + 1
         return OrderDecision(True, q_next, h_next, error)
 
-    def normalized_error(self, state: NordsieckState) -> float:
+    def normalized_error(self, state: ODEState) -> float:
         """Return the dimensionless LTE proxy for the current order."""
-        q = state.q
+        nh: NordsieckHistory = state.history
+        q = nh.q
         scale = self.atol + self.rtol * float(norm(state.u))
-        raw = float(norm(state.z[q])) * state.h / (q + 1)
+        raw = float(norm(nh.z[q])) * nh.h / (q + 1)
         return raw / scale
 
-    def smoothness(self, state: NordsieckState) -> float:
+    def smoothness(self, state: ODEState) -> float:
         """Return the highest-slot smoothness ratio used for order changes."""
-        q = state.q
+        nh: NordsieckHistory = state.history
+        q = nh.q
         if q == 0:
             return 0.0
-        numerator = float(norm(state.z[q]))
-        denominator = float(norm(state.z[q - 1]))
+        numerator = float(norm(nh.z[q]))
+        denominator = float(norm(nh.z[q - 1]))
         if denominator == 0.0:
             return 0.0 if numerator == 0.0 else float("inf")
         return numerator / denominator
@@ -167,19 +170,21 @@ class VariableOrderNordsieckIntegrator:
         t0: float,
         u0: Tensor,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Initialize a Nordsieck state at the current starting order."""
         return NordsieckIntegrator(self._family, self._q).init_state(rhs, t0, u0, dt)
 
     def step(
         self,
         rhs: RHSProtocol,
-        state: NordsieckState,
+        state: ODEState,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance by one accepted variable-order step."""
-        q = min(self._q, state.q, self._selector.q_max)
-        state = state.change_order(q).rescale_step(dt)
+        nh: NordsieckHistory = state.history
+        q = min(self._q, nh.q, self._selector.q_max)
+        nh = nh.change_order(q).rescale_step(dt)
+        state = ODEState(state.t, state.u, dt, state.err, nh)
         rejections = 0
         while True:
             candidate = NordsieckIntegrator(self._family, q).step(rhs, state, dt)
@@ -190,7 +195,12 @@ class VariableOrderNordsieckIntegrator:
                 self.accepted_step_sizes.append(decision.h_next)
                 self.accepted_errors.append(decision.error)
                 self.accepted_times.append(candidate.t)
-                return candidate.change_order(self._q).rescale_step(decision.h_next)
+                nh_out = candidate.history.change_order(self._q).rescale_step(
+                    decision.h_next
+                )
+                return ODEState(
+                    candidate.t, candidate.u, decision.h_next, candidate.err, nh_out
+                )
 
             rejections += 1
             self.rejected_steps += 1
@@ -198,7 +208,8 @@ class VariableOrderNordsieckIntegrator:
                 raise RuntimeError("variable-order step exceeded rejection limit.")
             q = decision.q_next
             dt = decision.h_next
-            state = state.change_order(q).rescale_step(dt)
+            nh = state.history.change_order(q).rescale_step(dt)
+            state = ODEState(state.t, state.u, dt, state.err, nh)
 
     def advance(
         self,
@@ -207,11 +218,11 @@ class VariableOrderNordsieckIntegrator:
         t0: float,
         t_end: float,
         dt0: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance from ``t0`` to ``t_end`` using variable order and step size."""
         state = self.init_state(rhs, t0, u0, dt0)
         while state.t < t_end:
-            dt = min(state.h, t_end - state.t)
+            dt = min(state.dt, t_end - state.t)
             state = self.step(rhs, state, dt)
         return state
 

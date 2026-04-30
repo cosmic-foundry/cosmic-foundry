@@ -42,8 +42,8 @@ from cosmic_foundry.computation.time_integrators import (
     JacobianRHS,
     KrogstadETDRK4Integrator,
     LinearPlusNonlinearRHS,
+    NordsieckHistory,
     NordsieckIntegrator,
-    NordsieckState,
     ODEState,
     OperatorSplitRHS,
     OrderSelector,
@@ -1367,8 +1367,7 @@ class _NordsieckRoundTripClaim(Claim):
         return "nordsieck_round_trip/order_and_step_size"
 
     def check(self) -> None:
-        state = NordsieckState(
-            t=0.25,
+        nh = NordsieckHistory(
             h=0.1,
             z=(
                 Tensor([0.8, 0.2]),
@@ -1377,22 +1376,21 @@ class _NordsieckRoundTripClaim(Claim):
             ),
         )
 
-        raised = state.change_order(4)
+        raised = nh.change_order(4)
         lowered = raised.change_order(2)
-        assert lowered.q == state.q
-        assert lowered.t == state.t
-        assert lowered.h == state.h
-        for lhs, rhs in zip(lowered.z, state.z, strict=True):
+        assert lowered.q == nh.q
+        assert lowered.h == nh.h
+        for lhs, rhs in zip(lowered.z, nh.z, strict=True):
             assert float(norm(lhs - rhs)) == 0.0
 
         assert raised.q == 4
-        assert float(norm(raised.z[0] - state.z[0])) == 0.0
+        assert float(norm(raised.z[0] - nh.z[0])) == 0.0
         assert float(norm(raised.z[3])) == 0.0
         assert float(norm(raised.z[4])) == 0.0
 
-        rescaled = state.rescale_step(0.05).rescale_step(0.1)
-        assert rescaled.h == state.h
-        for lhs, rhs in zip(rescaled.z, state.z, strict=True):
+        rescaled = nh.rescale_step(0.05).rescale_step(0.1)
+        assert rescaled.h == nh.h
+        for lhs, rhs in zip(rescaled.z, nh.z, strict=True):
             assert float(norm(lhs - rhs)) < 1e-16
 
 
@@ -1432,13 +1430,12 @@ class _NordsieckRescaledAccuracyClaim(Claim):
             scale = (self._h_source**j) / math.factorial(j)
             z_terms.append(Tensor([scale * deriv, -scale * deriv]))
         z_source = tuple(z_terms)
-        transformed = (
-            NordsieckState(0.0, self._h_source, z_source)
+        nh = (
+            NordsieckHistory(self._h_source, z_source)
             .change_order(self._q_target)
             .rescale_step(h)
         )
-
-        state = transformed
+        state = ODEState(0.0, nh.z[0], h, 0.0, nh)
         for _ in range(round((t_end - state.t) / h)):
             state = inst.step(self._rhs, state, h)
         transformed_error = _max_base_network_error(state.u, state.t)
@@ -1640,22 +1637,20 @@ class _FamilySwitchRoundTripClaim(Claim):
             q=2,
             initial_family="adams",
         )
-        state = NordsieckState(
-            0.25,
-            0.05,
-            (
-                Tensor([0.8, 0.15, 0.05]),
-                Tensor([-0.02, 0.01, 0.01]),
-                Tensor([0.0, 0.0, 0.0]),
-            ),
+        z = (
+            Tensor([0.8, 0.15, 0.05]),
+            Tensor([-0.02, 0.01, 0.01]),
+            Tensor([0.0, 0.0, 0.0]),
         )
+        nh = NordsieckHistory(0.05, z)
+        state = ODEState(0.25, z[0], 0.05, 0.0, nh)
 
         bdf_state = inst.transform_family(state, "bdf")
         round_trip = inst.transform_family(bdf_state, "adams")
 
         assert nordsieck_solution_distance(state, round_trip) == 0.0
-        assert round_trip.h == state.h
-        assert round_trip.q == state.q
+        assert round_trip.history.h == state.history.h
+        assert round_trip.history.q == state.history.q
 
 
 class _StiffeningNetworkSwitchClaim(Claim):

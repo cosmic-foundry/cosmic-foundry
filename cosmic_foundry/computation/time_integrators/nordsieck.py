@@ -52,7 +52,10 @@ import sympy
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
-from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
+from cosmic_foundry.computation.time_integrators.integrator import (
+    ODEState,
+    RHSProtocol,
+)
 from cosmic_foundry.computation.time_integrators.runge_kutta import rk4 as _rk4
 
 _LU = LUFactorization()
@@ -62,34 +65,30 @@ _FP_MAX_ITER = 50
 _FP_TOL = 1e-12
 
 
-class NordsieckState:
-    """State for Nordsieck-form linear multistep integrators.
+class NordsieckHistory:
+    """Nordsieck vector and the step size for which it is scaled.
 
-    z[j] = h^j / j! · y^(j)(t) for j = 0, …, q.  Storing h in the state
+    z[j] = h^j / j! · y^(j)(t) for j = 0, …, q.  Storing h alongside z
     makes prediction a pure Pascal-matrix multiply independent of the next
     step size.  The derivative slot z[1] equals h · f(t, y) exactly after
     each accepted step.
 
-    In plain terms: each slot of z carries a scaled derivative of the
-    solution — the zeroth slot is y itself, the first is h times the
-    velocity, the second is h²/2 times the acceleration, and so on.
-    Keeping h in the state rather than as an argument to step() lets the
+    Each slot carries a scaled derivative of the solution: z[0] is y itself,
+    z[1] is h times the velocity, z[2] is h²/2 times the acceleration, and
+    so on.  Keeping h here rather than passing it separately lets the
     integrator rescale z cheaply when the step size changes.
 
     Parameters
     ----------
-    t:
-        Current time.
     h:
         Step size for which z is scaled.
     z:
         Nordsieck vector as a tuple of q+1 Tensors; z[j] ∈ ℝⁿ.
     """
 
-    __slots__ = ("t", "h", "z")
+    __slots__ = ("h", "z")
 
-    def __init__(self, t: float, h: float, z: tuple[Tensor, ...]) -> None:
-        self.t = t
+    def __init__(self, h: float, z: tuple[Tensor, ...]) -> None:
         self.h = h
         self.z = z
 
@@ -103,31 +102,26 @@ class NordsieckState:
         """Current solution vector (z[0])."""
         return self.z[0]
 
-    def rescale_step(self, h_new: float) -> NordsieckState:
-        """Return this state with its Nordsieck vector rescaled to ``h_new``.
+    def rescale_step(self, h_new: float) -> NordsieckHistory:
+        """Return this history rescaled to ``h_new``.
 
-        The Nordsieck slots store ``h^j y^(j) / j!``.  Changing the step size
-        from ``h`` to ``h_new`` therefore multiplies slot ``j`` by
-        ``(h_new / h)^j`` while leaving ``z[0]`` unchanged.
+        Slot ``j`` is multiplied by ``(h_new / h)^j``; z[0] is unchanged.
         """
         if h_new <= 0.0:
             raise ValueError("Nordsieck step size must be positive.")
         if h_new == self.h:
             return self
         r = h_new / self.h
-        return NordsieckState(
-            self.t,
+        return NordsieckHistory(
             h_new,
             tuple(self.z[j] * (r**j) for j in range(self.q + 1)),
         )
 
-    def change_order(self, q_new: int) -> NordsieckState:
-        """Return this state represented at order ``q_new``.
+    def change_order(self, q_new: int) -> NordsieckHistory:
+        """Return this history at order ``q_new``.
 
         Lowering order truncates the highest derivative slots.  Raising order
-        pads the new derivative slots with zero, preserving the represented
-        solution ``z[0]`` exactly while admitting that no higher-order history
-        has been earned yet.
+        pads new slots with zero.
         """
         if q_new < 0:
             raise ValueError("Nordsieck order must be non-negative.")
@@ -135,11 +129,11 @@ class NordsieckState:
         if q_new == q_old:
             return self
         if q_new < q_old:
-            return NordsieckState(self.t, self.h, self.z[: q_new + 1])
+            return NordsieckHistory(self.h, self.z[: q_new + 1])
 
         zero = Tensor.zeros(*self.u.shape, backend=self.u.backend)
         padding = tuple(zero for _ in range(q_new - q_old))
-        return NordsieckState(self.t, self.h, self.z + padding)
+        return NordsieckHistory(self.h, self.z + padding)
 
 
 def _pascal_predict(z: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
@@ -395,7 +389,7 @@ class NordsieckIntegrator:
         t0: float,
         u0: Tensor,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Bootstrap q RK4 steps and initialize the Nordsieck vector.
 
         For BDFFamily: initializes z[j] via the Jacobian-based Taylor recursion
@@ -439,7 +433,7 @@ class NordsieckIntegrator:
         t0: float,
         u0: Tensor,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         q = self._q
         rk_state = ODEState(t0, u0)
         for _ in range(q):
@@ -455,7 +449,8 @@ class NordsieckIntegrator:
             f_deriv = J @ f_deriv
             z.append(f_deriv * (dt**j / factorial(j)))
 
-        return NordsieckState(t_q, dt, tuple(z))
+        nh = NordsieckHistory(dt, tuple(z))
+        return ODEState(t_q, y_q, dt, 0.0, nh)
 
     def _init_state_adams(
         self,
@@ -463,7 +458,7 @@ class NordsieckIntegrator:
         t0: float,
         u0: Tensor,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         q = self._q
         rk_states = [ODEState(t0, u0)]
         for _ in range(q):
@@ -492,22 +487,23 @@ class NordsieckIntegrator:
             nabla = nabla + ((j - 1) / 2) * nabla_j
             z.append(nabla * (dt / factorial(j)))
 
-        return NordsieckState(t_q, dt, tuple(z))
+        nh = NordsieckHistory(dt, tuple(z))
+        return ODEState(t_q, y_q, dt, 0.0, nh)
 
     def step(
         self,
         rhs: RHSProtocol,
-        state: NordsieckState,
+        state: ODEState,
         dt: float,
-    ) -> NordsieckState:
+    ) -> ODEState:
         """Advance state by one step of size dt.
 
-        Rescales z if dt ≠ state.h, predicts via Pascal, corrects via Newton
-        (BDFFamily) or fixed-point iteration (AdamsFamily), then updates the
-        full Nordsieck vector with l · f_delta where
+        Rescales z if dt ≠ state.history.h, predicts via Pascal, corrects via
+        Newton (BDFFamily) or fixed-point iteration (AdamsFamily), then updates
+        the full Nordsieck vector with l · f_delta where
         f_delta = h · f(t_{n+1}, y_{n+1}) − z_pred[1].
 
-        Returns a new NordsieckState at t + dt.
+        Returns a new ODEState at t + dt.
         """
         if isinstance(self._family, BDFFamily):
             return self._step_bdf(rhs, state, dt)  # type: ignore[arg-type]
@@ -516,17 +512,18 @@ class NordsieckIntegrator:
     def _step_bdf(
         self,
         rhs: WithJacobianRHSProtocol,
-        state: NordsieckState,
+        state: ODEState,
         dt: float,
-    ) -> NordsieckState:
-        if state.q != self._q:
+    ) -> ODEState:
+        nh: NordsieckHistory = state.history
+        if nh.q != self._q:
             raise ValueError(
-                f"Nordsieck state order {state.q} does not match integrator "
+                f"Nordsieck history order {nh.q} does not match integrator "
                 f"order {self._q}."
             )
-        state = state.rescale_step(dt)
-        t, h, z = state.t, state.h, state.z
-        q = state.q
+        nh = nh.rescale_step(dt)
+        t, h, z = state.t, nh.h, nh.z
+        q = nh.q
         n = z[0].shape[0]
         backend = z[0].backend
 
@@ -552,22 +549,23 @@ class NordsieckIntegrator:
         f_delta = h * fy - z_pred[1]
         lvec = self._l
         z_new = tuple(z_pred[i] + lvec[i] * f_delta for i in range(q + 1))
-        return NordsieckState(t_new, h, z_new)
+        return ODEState(t_new, y, h, 0.0, NordsieckHistory(h, z_new))
 
     def _step_adams(
         self,
         rhs: RHSProtocol,
-        state: NordsieckState,
+        state: ODEState,
         dt: float,
-    ) -> NordsieckState:
-        if state.q != self._q:
+    ) -> ODEState:
+        nh: NordsieckHistory = state.history
+        if nh.q != self._q:
             raise ValueError(
-                f"Nordsieck state order {state.q} does not match integrator "
+                f"Nordsieck history order {nh.q} does not match integrator "
                 f"order {self._q}."
             )
-        state = state.rescale_step(dt)
-        t, h, z = state.t, state.h, state.z
-        q = state.q
+        nh = nh.rescale_step(dt)
+        t, h, z = state.t, nh.h, nh.z
+        q = nh.q
 
         z_pred = _pascal_predict(z)
         t_new = t + h
@@ -586,7 +584,7 @@ class NordsieckIntegrator:
         f_delta = h * fy - z_pred[1]
         lvec = self._l
         z_new = tuple(z_pred[i] + lvec[i] * f_delta for i in range(q + 1))
-        return NordsieckState(t_new, h, z_new)
+        return ODEState(t_new, y, h, 0.0, NordsieckHistory(h, z_new))
 
 
 # ---------------------------------------------------------------------------
@@ -611,8 +609,8 @@ adams_moulton4 = NordsieckIntegrator(adams_family, q=4)
 __all__ = [
     "AdamsFamily",
     "BDFFamily",
+    "NordsieckHistory",
     "NordsieckIntegrator",
-    "NordsieckState",
     "adams_family",
     "adams_moulton1",
     "adams_moulton2",
