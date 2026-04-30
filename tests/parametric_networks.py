@@ -28,12 +28,16 @@ Both return lists of ``_ParametricNSEClaim`` ready for pytest.mark.parametrize.
 
 from __future__ import annotations
 
+import math
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators import (
+    ConstantStep,
     ConstraintAwareController,
+    ODEState,
     PIController,
     ReactionNetworkRHS,
     implicit_midpoint,
@@ -206,4 +210,124 @@ def spoke_claims(
     return result
 
 
-__all__ = ["_NetworkSpec", "_ParametricNSEClaim", "chain_claims", "spoke_claims"]
+# ---------------------------------------------------------------------------
+# Cost model
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _CostCalibration:
+    """Per-step cost model: cost_per_step(n) = a·n³ + b.
+
+    a captures LU throughput (dominant for n ≳ 5).
+    b captures fixed Python dispatch overhead per Newton step.
+
+    Fit from two timing measurements at different network sizes so both
+    coefficients can be separated.  For n in the CI range (3–6) both terms
+    matter; for n ≥ 10 the cubic term dominates.
+    """
+
+    a: float  # s per n³ (cubic, LU throughput)
+    b: float  # s per step (fixed overhead)
+
+
+def calibrate_cost(
+    n_small: int = 4,
+    n_large: int = 8,
+    n_reps: int = 50,
+) -> _CostCalibration:
+    """Fit a and b by timing implicit_midpoint steps at two chain-network sizes.
+
+    Runs n_reps steps at each of n_small and n_large with dt=0.001, measures
+    wall time, and solves the 2×2 linear system for a and b.  Clamps both to
+    zero to avoid negative predictions from measurement noise.
+    """
+
+    def _per_step(n: int) -> float:
+        spec = _NetworkSpec(
+            name=f"_cal_{n}",
+            topology="chain",
+            n_species=n,
+            rates=[1.0] * (n - 1),
+        )
+        rhs = spec.build_rhs()
+        state = ODEState(0.0, spec.u0())
+        dt = 0.001
+        t0 = time.perf_counter()
+        for _ in range(n_reps):
+            state = implicit_midpoint.step(rhs, state, dt)
+        return (time.perf_counter() - t0) / n_reps
+
+    c_s = _per_step(n_small)
+    c_l = _per_step(n_large)
+    denom = n_large**3 - n_small**3
+    a = (c_l - c_s) / denom
+    b = c_s - a * n_small**3
+    return _CostCalibration(a=max(a, 0.0), b=max(b, 0.0))
+
+
+def predicted_cost(spec: _NetworkSpec, calibration: _CostCalibration) -> float:
+    """Predicted wall time for a ConstantStep integration of spec.
+
+    Uses n_steps = floor(t_end / dt0) — analytically determined for ConstantStep.
+    Cost per step = a·n³ + b from calibration.
+
+    Closed-form scaling:
+      chain  : cost ~ a · 40·k · n⁵   (n⁵ in species count, linear in rate)
+      spoke  : cost ~ a · 80·(k_fast/k_slow) · n³  (n³, linear in stiffness ratio)
+    """
+    n_steps = math.floor(spec.t_end() / spec.dt0())
+    cost_per_step = calibration.a * spec.n_species**3 + calibration.b
+    return n_steps * cost_per_step
+
+
+class _CostModelClaim(Claim):
+    """Assert actual wall time < 2 × predicted_cost(spec, calibration).
+
+    Uses ConstantStep so the step count is analytically determined and the
+    prediction is checkable without running the integration first.  The 2×
+    factor absorbs JIT/cache variability and pre-asymptotic constant errors.
+
+    This claim is a regression gate: if backend throughput degrades, the
+    actual/predicted ratio rises above 2 and CI catches it before session time
+    inflates silently.
+    """
+
+    def __init__(self, spec: _NetworkSpec, calibration: _CostCalibration) -> None:
+        self._spec = spec
+        self._cal = calibration
+
+    @property
+    def description(self) -> str:
+        return f"cost_model/{self._spec.name}"
+
+    def check(self) -> None:
+        spec = self._spec
+        rhs = spec.build_rhs()
+        u0 = spec.u0()
+        ctrl = ConstraintAwareController(
+            rhs=rhs,
+            integrator=implicit_midpoint,
+            inner=ConstantStep(dt=spec.dt0()),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+        t0 = time.perf_counter()
+        ctrl.advance(u0, 0.0, spec.t_end())
+        actual = time.perf_counter() - t0
+        pred = predicted_cost(spec, self._cal)
+        assert (
+            actual < 2.0 * pred
+        ), f"{spec.name}: actual {actual:.3f}s > 2 × predicted {pred:.3f}s"
+
+
+__all__ = [
+    "_NetworkSpec",
+    "_ParametricNSEClaim",
+    "_CostCalibration",
+    "_CostModelClaim",
+    "calibrate_cost",
+    "chain_claims",
+    "predicted_cost",
+    "spoke_claims",
+]
