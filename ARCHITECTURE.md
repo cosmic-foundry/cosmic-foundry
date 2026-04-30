@@ -669,7 +669,7 @@ All tests register in `tests/test_time_integrators.py`.
 |---|---|---|---|
 | F1 ✓ | n-species decay chain (Aₙ → Aₙ₊₁, linear; `BlackBoxRHS`) | `ReactionNetworkRHS` protocol; stoichiometry analysis; conservation law derivation | 2-species A⇌B toy: verify S, conservation_basis = left null space of S, factored form __call__ = S·(r⁺−r⁻), detailed balance at equilibrium |
 | F2 ✓ | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
-| F3 | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
+| F3 ✓ | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
 | F4 | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
 | F5 | α-chain + internal energy (augmented state (x₁,…,xₙ,ε); T=ε/Cᵥ; `ReactionNetworkRHS`) | NSE limit detection; full DAE path | A⇌B⇌C toy: both constraints activate simultaneously; final abundances match analytic equilibrium ratios k₋₁/k₊₁ and k₋₂/k₊₂; state and error estimate are continuous across the transition |
 
@@ -713,6 +713,14 @@ All tests register in `tests/test_time_integrators.py`.
    code must inherit whichever resolution lands; a per-`TimeStepper`
    backend override is the natural API extension if process-wide defaults
    turn out to be insufficient.
+
+2. **Nonlinear system solver.**  The current Newton kernel in `_newton.py`
+   is purpose-built for the implicit-RK fixed-point `y − γh·f(y) = y_exp`.
+   A general `nonlinear_solve(F, jac, x0) → x` would benefit small systems
+   (equilibrium detection in reaction networks, consistent initialization
+   for constraint activation) just as a general linear solver benefits large
+   systems (global Poisson solve).  The right time to extract it is when a
+   second caller with a different residual structure appears.
 
 **Design decisions to revisit in later epochs:**
 

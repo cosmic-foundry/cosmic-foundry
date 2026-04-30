@@ -2683,3 +2683,89 @@ _PROJECT_CONSERVED_CLAIMS: list[_ProjectConservedClaim] = [
 )
 def test_project_conserved(claim: _ProjectConservedClaim) -> None:
     claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Projected Newton claims
+# ---------------------------------------------------------------------------
+
+# Synthetic test: 2D linear decay f(y) = [-k*y0, k*y0] with constraint y0+y1=1.
+#
+# With constraint y1 = 1 - y0, the fixed-point equation y - γh·f(y) = y_exp
+# reduces to a scalar:
+#   y0 - γh·(-k·y0) = y_exp[0]  →  y0 = y_exp[0] / (1 + γh·k)
+#   y1 = 1 - y0
+#
+# The projected Newton result must agree with this exact solution and must
+# satisfy the constraint to machine precision.  A second entry at different
+# (k, γh) rules out accidental cancellation.
+
+_PN_CONSTRAINT = Tensor([[1.0, 1.0]])  # y0 + y1 = 1
+
+
+class _ProjectedNewtonClaim(Claim):
+    """Projected Newton: result on manifold, agrees with exact 1D solution."""
+
+    def __init__(
+        self, label: str, k: float, gamma_dt: float, y_exp: list[float]
+    ) -> None:
+        self._label = label
+        self._k = k
+        self._gamma_dt = gamma_dt
+        self._y_exp = y_exp
+
+    @property
+    def description(self) -> str:
+        return f"projected_newton/{self._label}"
+
+    def check(self) -> None:
+        k, gdt = self._k, self._gamma_dt
+        y_exp = Tensor(self._y_exp)
+
+        def f(y: Tensor) -> Tensor:
+            y0 = float(y[0])
+            return Tensor([-k * y0, k * y0], backend=y.backend)
+
+        def jac(y: Tensor) -> Tensor:
+            return Tensor([[-k, 0.0], [k, 0.0]], backend=y.backend)
+
+        result = newton_solve(y_exp, gdt, f, jac, constraint_gradients=_PN_CONSTRAINT)
+
+        # Constraint satisfied to machine precision
+        c_res = abs(float(result[0]) + float(result[1]) - 1.0)
+        assert c_res < 1e-12, f"{self._label}: constraint residual {c_res:.2e} > 1e-12"
+
+        # Agrees with exact reduced 1D solution
+        y0_exact = self._y_exp[0] / (1.0 + gdt * k)
+        y1_exact = 1.0 - y0_exact
+        assert (
+            abs(float(result[0]) - y0_exact) < 1e-10
+        ), f"{self._label}: y0 = {float(result[0]):.12f}, exact = {y0_exact:.12f}"
+        assert (
+            abs(float(result[1]) - y1_exact) < 1e-10
+        ), f"{self._label}: y1 = {float(result[1]):.12f}, exact = {y1_exact:.12f}"
+
+
+_PROJECTED_NEWTON_CLAIMS: list[_ProjectedNewtonClaim] = [
+    _ProjectedNewtonClaim(
+        label="decay_k1_gh01",
+        k=1.0,
+        gamma_dt=0.1,
+        y_exp=[0.9, 0.1],
+    ),
+    _ProjectedNewtonClaim(
+        label="decay_k5_gh02",
+        k=5.0,
+        gamma_dt=0.2,
+        y_exp=[0.7, 0.3],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _PROJECTED_NEWTON_CLAIMS,
+    ids=[c.description for c in _PROJECTED_NEWTON_CLAIMS],
+)
+def test_projected_newton(claim: _ProjectedNewtonClaim) -> None:
+    claim.check()
