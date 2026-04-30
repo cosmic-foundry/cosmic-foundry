@@ -50,12 +50,12 @@ from cosmic_foundry.computation.time_integrators import (  # noqa: E402
     BlackBoxRHS,
     ConstantStep,
     Controller,
+    Integrator,
     IntegratorSelectionResult,
     ODEState,
     PIController,
     RHSProtocol,
     RungeKuttaIntegrator,
-    TimeStepper,
 )
 
 # Register Tensor as a JAX pytree so jax.lax.fori_loop, jax.lax.while_loop,
@@ -81,7 +81,7 @@ __all__ = [
     "RHSProtocol",
     "ODEState",
     "RungeKuttaIntegrator",
-    "TimeStepper",
+    "Integrator",
     "BenchmarkResult",
     "Benchmarker",
     "Decomposition",

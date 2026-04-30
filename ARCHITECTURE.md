@@ -521,7 +521,7 @@ VODEController                   — VODE-style Nordsieck-aware step control
 
 Infrastructure:
 
-TimeStepper                      — drives integrator + controller loop;
+Integrator                      — drives integrator + controller loop;
                                    advance(rhs, u0, t0, t_end) → ODEState
 PhiFunction(k)                   — φ_k operator action for exponential methods
 StiffnessDiagnostic              — online spectral radius estimation
@@ -682,9 +682,9 @@ the implementation lane becomes clear.
 
 **`set_default_backend` vs. solver-level override (Epoch 4 carry-over).**
 Time-integrator code currently inherits the process-wide default backend set
-by `set_default_backend`.  If per-`TimeStepper` backend overrides are needed
+by `set_default_backend`.  If per-`Integrator` backend overrides are needed
 (e.g., a JAX backend for one integrator while the rest use NumPy), a
-keyword argument on `TimeStepper.__init__` is the natural extension point.
+keyword argument on `Integrator.__init__` is the natural extension point.
 Defer until a concrete use case requires it.
 
 **AMR integration state (Epoch 12 forward).**  The time-stepper must accept
