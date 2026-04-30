@@ -1,5 +1,6 @@
 """Time-integration layer: integrators, steppers, controllers, B-series, symplectic."""
 
+from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
 from cosmic_foundry.computation.time_integrators.auto import AutoIntegrator
 from cosmic_foundry.computation.time_integrators.bseries import (
     Tree,
@@ -11,6 +12,7 @@ from cosmic_foundry.computation.time_integrators.bseries import (
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
+    solve_nse,
 )
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
@@ -141,6 +143,8 @@ __all__ = [
     "AutoIntegrator",
     "BlackBoxRHS",
     "ConstraintAwareController",
+    "nonlinear_solve",
+    "solve_nse",
     "ReactionNetworkRHS",
     "project_conserved",
     "ConstantStep",

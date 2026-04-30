@@ -671,7 +671,7 @@ All tests register in `tests/test_time_integrators.py`.
 | F2 ✓ | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
 | F3 ✓ | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
 | F4 ✓ | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
-| F5 | α-chain + internal energy (augmented state (x₁,…,xₙ,ε); T=ε/Cᵥ; `ReactionNetworkRHS`) | NSE limit detection; full DAE path | A⇌B⇌C toy: both constraints activate simultaneously; final abundances match analytic equilibrium ratios k₋₁/k₊₁ and k₋₂/k₊₂; state and error estimate are continuous across the transition |
+| F5 ✓ | 3-species A⇌B⇌C symmetric network (`ReactionNetworkRHS`) | `nonlinear_solve` in `_newton.py`; `solve_nse` in `constraint_aware.py`; NSE limit detection and direct NSE solve in `ConstraintAwareController`; absent-species rate-threshold guard in `_equilibrium_ratios` | A⇌B⇌C toy: both constraints activate simultaneously, `solve_nse` recovers A=B=C=1/3 to machine precision; 11-species hub-and-spoke: fast and slow spoke groups activate at distinct times (staggered activation), `nse_events` logged at full NSE, final Aᵢ=1/11; rate-threshold guard prevents spurious activation of absent-species pairs in chain topology |
 
 #### Governing constraints
 
@@ -717,13 +717,9 @@ All tests register in `tests/test_time_integrators.py`.
    backend override is the natural API extension if process-wide defaults
    turn out to be insufficient.
 
-2. **Nonlinear system solver.**  The current Newton kernel in `_newton.py`
-   is purpose-built for the implicit-RK fixed-point `y − γh·f(y) = y_exp`.
-   A general `nonlinear_solve(F, jac, x0) → x` would benefit small systems
-   (equilibrium detection in reaction networks, consistent initialization
-   for constraint activation) just as a general linear solver benefits large
-   systems (global Poisson solve).  The right time to extract it is when a
-   second caller with a different residual structure appears.
+2. ~~**Nonlinear system solver.**~~  Resolved in F5: `nonlinear_solve(F, jac, x0) → x`
+   extracted into `_newton.py`.  Used by `solve_nse` for direct NSE solution at
+   full-constraint activation.  The second caller materialized as expected.
 
 **Design decisions to revisit in later epochs:**
 

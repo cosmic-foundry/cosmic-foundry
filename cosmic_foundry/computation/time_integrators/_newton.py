@@ -81,4 +81,41 @@ def newton_solve(
     return y
 
 
-__all__ = ["newton_solve"]
+def nonlinear_solve(
+    F: Callable[[Tensor], Tensor],
+    jac: Callable[[Tensor], Tensor],
+    x0: Tensor,
+) -> Tensor:
+    """Solve ``F(x) = 0`` by Newton iteration starting from ``x0``.
+
+    Terminates when the residual norm or step norm falls below
+    ``_NEWTON_TOL * (1 + ‖x‖)``, or after ``_NEWTON_MAX_ITER`` iterations.
+
+    Parameters
+    ----------
+    F:
+        Residual callable ``x ↦ F(x)``, shape (n,).
+    jac:
+        Jacobian callable ``x ↦ ∂F/∂x``, shape (n, n).
+    x0:
+        Initial guess, shape (n,).
+
+    Returns
+    -------
+    Tensor
+        Converged solution ``x``.
+    """
+    x = x0
+    for _ in range(_NEWTON_MAX_ITER):
+        Fx = F(x)
+        if float(norm(Fx)) < _NEWTON_TOL * (1.0 + float(norm(x))):
+            break
+        J = jac(x)
+        delta = _LU.factorize(J).solve(Tensor.zeros(x.shape[0], backend=x.backend) - Fx)
+        x = x + delta
+        if float(norm(delta)) < _NEWTON_TOL * (1.0 + float(norm(x))):
+            break
+    return x
+
+
+__all__ = ["newton_solve", "nonlinear_solve"]

@@ -93,10 +93,12 @@ from cosmic_foundry.computation.time_integrators import (
     leapfrog,
     lie_steps,
     midpoint,
+    nonlinear_solve,
     nordsieck_solution_distance,
     project_conserved,
     ralston,
     rk4,
+    solve_nse,
     stability_function,
     strang_steps,
     symplectic_euler,
@@ -2892,4 +2894,295 @@ _CONSTRAINT_LIFECYCLE_CLAIMS: list[_ConstraintLifecycleClaim] = [
     ids=[c.description for c in _CONSTRAINT_LIFECYCLE_CLAIMS],
 )
 def test_constraint_lifecycle(claim: _ConstraintLifecycleClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# NSE limit claims  (A⇌B⇌C)
+# ---------------------------------------------------------------------------
+#
+# A⇌B⇌C with k_f = k_r = 1 for both pairs.
+#
+# S = [[-1,  0],       pairs: 0 = A→B, 1 = B→C
+#       [+1, -1],
+#       [ 0, +1]]
+#
+# Conservation: A + B + C = 1 (one left null vector [1,1,1]/√3).
+# Equilibrium: A=B=C=1/3 (detailed balance, symmetric).
+#
+# Both equilibrium ratios decay as ≈ (3/2)·exp(−t), crossing eps_activate
+# simultaneously at t ≈ 5.  Since all independent constraints (rank=2) activate
+# together, solve_nse is called immediately and the NSE state is recovered exactly.
+#
+# Four checks:
+#   nse_detected  — nse_events non-empty after integrating to t_end=8
+#   final_abund   — |u_i − 1/3| < 1e-10 for all i after NSE
+#   direct_solve  — solve_nse(rhs, u_near, t=0) ≈ [1/3,1/3,1/3]
+#   nonlinear_solve_abc — standalone nonlinear_solve on a quadratic system
+
+_NSE_K = 1.0
+_NSE_S = Tensor([[-1.0, 0.0], [1.0, -1.0], [0.0, 1.0]])
+_NSE_U0 = Tensor([1.0, 0.0, 0.0])
+
+
+def _nse_r_plus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_NSE_K * float(u[0]), _NSE_K * float(u[1])], backend=u.backend)
+
+
+def _nse_r_minus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_NSE_K * float(u[1]), _NSE_K * float(u[2])], backend=u.backend)
+
+
+class _NSELimitClaim(Claim):
+    """Verify NSE detection and solve_nse on the A⇌B⇌C symmetric network."""
+
+    def __init__(self, label: str, check_kind: str) -> None:
+        self._label = label
+        self._check_kind = check_kind
+
+    @property
+    def description(self) -> str:
+        return f"nse_limit/{self._label}"
+
+    def _make_rhs(self) -> ReactionNetworkRHS:
+        return ReactionNetworkRHS(_NSE_S, _nse_r_plus, _nse_r_minus, _NSE_U0)
+
+    def _make_ctrl(self, rhs: ReactionNetworkRHS) -> ConstraintAwareController:
+        return ConstraintAwareController(
+            rhs=rhs,
+            integrator=implicit_midpoint,
+            inner=PIController(alpha=0.35, beta=0.2, tol=1e-6, dt0=0.05),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+
+    def check(self) -> None:
+        rhs = self._make_rhs()
+
+        if self._check_kind == "nse_detected":
+            ctrl = self._make_ctrl(rhs)
+            ctrl.advance(_NSE_U0, 0.0, 8.0)
+            assert ctrl.nse_events, "no NSE events recorded for A⇌B⇌C"
+
+        elif self._check_kind == "final_abund":
+            ctrl = self._make_ctrl(rhs)
+            state = ctrl.advance(_NSE_U0, 0.0, 8.0)
+            for i in range(3):
+                xi = float(state.u[i])
+                assert (
+                    abs(xi - 1.0 / 3.0) < 1e-10
+                ), f"species {i}: |u[{i}] - 1/3| = {abs(xi - 1/3):.3e} >= 1e-10"
+
+        elif self._check_kind == "direct_solve":
+            # solve_nse from a near-equilibrium starting point
+            u_near = Tensor([0.34, 0.33, 0.33])
+            result = solve_nse(rhs, u_near, t=0.0)
+            for i in range(3):
+                xi = float(result[i])
+                assert (
+                    abs(xi - 1.0 / 3.0) < 1e-10
+                ), f"solve_nse species {i}: |u[{i}] - 1/3| = {abs(xi - 1/3):.3e}"
+
+        elif self._check_kind == "nonlinear_solve_scalar":
+            # Stand-alone nonlinear_solve: find root of x² − 2 = 0 starting from x=1.
+            def F_quad(x: Tensor) -> Tensor:
+                return Tensor([float(x[0]) ** 2 - 2.0], backend=x.backend)
+
+            def J_quad(x: Tensor) -> Tensor:
+                return Tensor([[2.0 * float(x[0])]], backend=x.backend)
+
+            x0 = Tensor([1.0])
+            root = nonlinear_solve(F_quad, J_quad, x0)
+            assert (
+                abs(float(root[0]) - 2.0**0.5) < 1e-12
+            ), f"nonlinear_solve: root = {float(root[0]):.15f}, expected √2"
+
+
+_NSE_LIMIT_CLAIMS: list[_NSELimitClaim] = [
+    _NSELimitClaim("nse_detected", "nse_detected"),
+    _NSELimitClaim("final_abund", "final_abund"),
+    _NSELimitClaim("direct_solve", "direct_solve"),
+    _NSELimitClaim("nonlinear_solve_scalar", "nonlinear_solve_scalar"),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _NSE_LIMIT_CLAIMS,
+    ids=[c.description for c in _NSE_LIMIT_CLAIMS],
+)
+def test_nse_limit(claim: _NSELimitClaim) -> None:
+    claim.check()
+
+
+# ---------------------------------------------------------------------------
+# Staggered activation claims  (11-species hub-and-spoke network)
+# ---------------------------------------------------------------------------
+#
+# Hub A₀ connects to 10 spokes: A₁..A₅ (fast, k=2.0) and A₆..A₁₀ (slow, k=0.5).
+# Each pair j = A₀⇌A_{j+1}, so all spokes evolve independently given A₀.
+#
+#   Fast spokes j=0..4: k=2.0  → equilibrium ratio ≈ exp(−4t); activate at t ≈ 1–2
+#   Slow spokes j=5..9: k=0.5  → equilibrium ratio ≈ exp(−t);  activate at t ≈ 5–10
+#
+# u₀ = [1, 0, ..., 0].  At t=0 all spokes are absent, so r⁻_j = 0 while
+# r⁺_j = k·A₀ > 0; the _RATE_THRESHOLD guard is not triggered here because
+# the hub concentration keeps denom above the threshold.
+#
+# Equilibrium (k_f=k_r ∀j, equal weights): A_i = 1/11 for all i.
+# Conservation: Σ Aᵢ = 1 (one conservation law).
+# n_eligible = 10 (= n_species − n_conserved = 11 − 1).
+#
+# Three checks:
+#   staggered_activation  — fast spokes activate strictly before slow spokes
+#   nse_final_abund       — all 10 pairs active at end; Aᵢ ≈ 1/11
+#   rate_threshold_guard  — chain variant: absent-species pairs return inf ratio,
+#                           verifying the _RATE_THRESHOLD fix prevents spurious
+#                           early activation
+
+_SPOKE_K_FAST = 2.0
+_SPOKE_K_SLOW = 0.5
+_SPOKE_FAST = list(range(5))  # pairs 0..4
+_SPOKE_SLOW = list(range(5, 10))  # pairs 5..9
+
+# Stoichiometry: 11×10, column j has S[0,j]=-1, S[j+1,j]=+1
+_SPOKE_S_ROWS = [[0.0] * 10 for _ in range(11)]
+for _j in range(10):
+    _SPOKE_S_ROWS[0][_j] = -1.0
+    _SPOKE_S_ROWS[_j + 1][_j] = 1.0
+_SPOKE_S = Tensor(_SPOKE_S_ROWS)
+_SPOKE_U0 = Tensor([1.0] + [0.0] * 10)
+
+_SPOKE_K_F = [_SPOKE_K_FAST if j < 5 else _SPOKE_K_SLOW for j in range(10)]
+_SPOKE_K_R = list(_SPOKE_K_F)
+
+
+def _spoke_r_plus(t: float, u: Tensor) -> Tensor:
+    a0 = float(u[0])
+    return Tensor([_SPOKE_K_F[j] * a0 for j in range(10)], backend=u.backend)
+
+
+def _spoke_r_minus(t: float, u: Tensor) -> Tensor:
+    return Tensor(
+        [_SPOKE_K_R[j] * float(u[j + 1]) for j in range(10)], backend=u.backend
+    )
+
+
+# Chain variant for rate-threshold check: A₀⇌A₁⇌...⇌A₉ (10 species, 9 pairs, k=1.0).
+# At t=0 with u₀=[1,0,...,0], pairs 1..8 have both species absent → ratio should be inf.
+_CHAIN_RT_S_ROWS = [[0.0] * 9 for _ in range(10)]
+for _j in range(9):
+    _CHAIN_RT_S_ROWS[_j][_j] = -1.0
+    _CHAIN_RT_S_ROWS[_j + 1][_j] = 1.0
+_CHAIN_RT_S = Tensor(_CHAIN_RT_S_ROWS)
+_CHAIN_RT_U0 = Tensor([1.0] + [0.0] * 9)
+_CHAIN_RT_K = 1.0
+
+
+def _chain_rt_r_plus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_CHAIN_RT_K * float(u[j]) for j in range(9)], backend=u.backend)
+
+
+def _chain_rt_r_minus(t: float, u: Tensor) -> Tensor:
+    return Tensor([_CHAIN_RT_K * float(u[j + 1]) for j in range(9)], backend=u.backend)
+
+
+class _StaggeredActivationClaim(Claim):
+    """Verify staggered activation and NSE in the 11-species hub-and-spoke network."""
+
+    def __init__(self, label: str, check_kind: str) -> None:
+        self._label = label
+        self._check_kind = check_kind
+
+    @property
+    def description(self) -> str:
+        return f"staggered_activation/{self._label}"
+
+    def _make_rhs(self) -> ReactionNetworkRHS:
+        return ReactionNetworkRHS(_SPOKE_S, _spoke_r_plus, _spoke_r_minus, _SPOKE_U0)
+
+    def _make_ctrl(self, rhs: ReactionNetworkRHS) -> ConstraintAwareController:
+        return ConstraintAwareController(
+            rhs=rhs,
+            integrator=implicit_midpoint,
+            inner=PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.05),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+
+    def check(self) -> None:
+        if self._check_kind == "staggered_activation":
+            rhs = self._make_rhs()
+            ctrl = self._make_ctrl(rhs)
+            ctrl.advance(_SPOKE_U0, 0.0, 25.0)
+            fast_times = [
+                t
+                for t, pairs in ctrl.activation_events
+                if any(j in _SPOKE_FAST for j in pairs)
+            ]
+            slow_times = [
+                t
+                for t, pairs in ctrl.activation_events
+                if any(j in _SPOKE_SLOW for j in pairs)
+            ]
+            assert fast_times, "no fast-spoke activation events recorded"
+            assert slow_times, "no slow-spoke activation events recorded"
+            assert min(fast_times) < min(slow_times), (
+                "fast spokes did not activate before slow spokes; "
+                f"min fast t={min(fast_times):.2f}, min slow t={min(slow_times):.2f}"
+            )
+
+        elif self._check_kind == "nse_final_abund":
+            rhs = self._make_rhs()
+            ctrl = self._make_ctrl(rhs)
+            state = ctrl.advance(_SPOKE_U0, 0.0, 25.0)
+            assert state.active_constraints == frozenset(
+                range(10)
+            ), f"not all 10 spokes active at t=25: {state.active_constraints}"
+            assert ctrl.nse_events, "no NSE event recorded for hub-and-spoke network"
+            for i in range(11):
+                xi = float(state.u[i])
+                assert (
+                    abs(xi - 1.0 / 11.0) < 1e-5
+                ), f"species {i}: |u[{i}] - 1/11| = {abs(xi - 1/11):.3e} >= 1e-5"
+
+        elif self._check_kind == "rate_threshold_guard":
+            # Chain network: at t=0, pairs 1..8 involve only absent species.
+            # The _RATE_THRESHOLD guard must return inf for those pairs, preventing
+            # spurious activation at the start of the simulation.
+            rhs = ReactionNetworkRHS(
+                _CHAIN_RT_S, _chain_rt_r_plus, _chain_rt_r_minus, _CHAIN_RT_U0
+            )
+            ctrl = ConstraintAwareController(
+                rhs=rhs,
+                integrator=implicit_midpoint,
+                inner=PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
+                eps_activate=0.01,
+                eps_deactivate=0.1,
+            )
+            # Run just a tiny step; if spurious activation happened it would fire
+            # immediately and project the state erroneously.
+            state = ctrl.advance(_CHAIN_RT_U0, 0.0, 0.05)
+            # Only pair 0 could possibly activate this early; pairs 1..8 must not.
+            for t_ev, pairs in ctrl.activation_events:
+                for j in pairs:
+                    assert j == 0 or t_ev > 0.04, (
+                        f"spurious early activation of pair {j} at t={t_ev:.4f}; "
+                        "_RATE_THRESHOLD fix may be broken"
+                    )
+
+
+_STAGGERED_ACTIVATION_CLAIMS: list[_StaggeredActivationClaim] = [
+    _StaggeredActivationClaim("staggered_activation", "staggered_activation"),
+    _StaggeredActivationClaim("nse_final_abund", "nse_final_abund"),
+    _StaggeredActivationClaim("rate_threshold_guard", "rate_threshold_guard"),
+]
+
+
+@pytest.mark.parametrize(
+    "claim",
+    _STAGGERED_ACTIVATION_CLAIMS,
+    ids=[c.description for c in _STAGGERED_ACTIVATION_CLAIMS],
+)
+def test_staggered_activation(claim: _StaggeredActivationClaim) -> None:
     claim.check()
