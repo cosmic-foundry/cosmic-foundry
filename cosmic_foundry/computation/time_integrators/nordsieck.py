@@ -36,16 +36,12 @@ giving l = [β₀, 1, 1/2], [β₀, 1, 3/4, 1/6], [β₀, 1, 11/12, 1/3, 1/24], 
 (Gear 1971 Table 11.2; l[q] = 1/q! always).  The implicit equation is
 solved by fixed-point iteration, so no Jacobian is required; this family
 satisfies plain RHSProtocol and is preferred for non-stiff problems.
-
-Named instances
----------------
-bdf2–bdf4          —  BDF orders 2–4 (L/A/A(α)-stable)
-adams_moulton2–am4 —  Adams-Moulton orders 2–4 (non-stiff, no Jacobian)
 """
 
 from __future__ import annotations
 
 from math import comb, factorial  # comb used in _pascal_predict
+from typing import Literal
 
 import sympy
 
@@ -154,7 +150,7 @@ def _pascal_predict(z: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
     return tuple(z_pred)
 
 
-class BDFFamily:
+class _BDFFamily:
     """Parametric BDF coefficient provider for orders 1 through q_max.
 
     BDF-q advances the ODE using the implicit linear multistep formula
@@ -226,7 +222,7 @@ class BDFFamily:
         return self._q_max
 
 
-class AdamsFamily:
+class _AdamsFamily:
     """Parametric Adams-Moulton coefficient provider for orders 1 through q_max.
 
     Adams-Moulton of order q is the implicit corrector:
@@ -260,7 +256,7 @@ class AdamsFamily:
 
     Use this family for non-stiff problems.  The implicit equation is solved
     by fixed-point iteration — no Jacobian is required (plain RHSProtocol).
-    For stiff problems use BDFFamily, which solves via Newton iteration.
+    For stiff problems use BDF, which solves via Newton iteration.
 
     Parameters
     ----------
@@ -335,16 +331,25 @@ class AdamsFamily:
         return self._q_max
 
 
+class _MultistepCoefficients:
+    def __init__(self) -> None:
+        self.bdf = _BDFFamily(q_max=6)
+        self.adams = _AdamsFamily(q_max=6)
+
+
+_COEFFS = _MultistepCoefficients()
+
+
 class MultistepIntegrator:
     """Fixed-order linear multistep integrator in Nordsieck form.
 
     Supports two corrector families selected by the family argument:
 
-    BDFFamily (stiff problems)
+    BDF (stiff problems)
         Each step solves y − β₀ h f(t_{n+1}, y) = z_pred[0] − β₀ z_pred[1]
         via Newton iteration, requiring WithJacobianRHSProtocol.
 
-    AdamsFamily (non-stiff problems)
+    Adams (non-stiff problems)
         Each step solves the same equation via fixed-point iteration,
         requiring only plain RHSProtocol (no Jacobian).
 
@@ -365,18 +370,19 @@ class MultistepIntegrator:
     Parameters
     ----------
     family:
-        BDFFamily or AdamsFamily instance supplying l and β₀ coefficients.
+        ``"bdf"`` or ``"adams"``.
     q:
-        Method order (1 ≤ q ≤ family.q_max).
+        Method order (1 ≤ q ≤ 6).
     """
 
-    def __init__(self, family: BDFFamily | AdamsFamily, q: int) -> None:
-        if not 1 <= q <= family.q_max:
-            raise ValueError(f"q={q} outside [1, {family.q_max}]")
-        self._family = family
+    def __init__(self, family: Literal["bdf", "adams"], q: int) -> None:
+        fam = _COEFFS.bdf if family == "bdf" else _COEFFS.adams
+        if not 1 <= q <= fam.q_max:
+            raise ValueError(f"q={q} outside [1, {fam.q_max}]")
+        self._family_name = family
         self._q = q
-        self._l = family.l_vector(q)
-        self._beta0 = family.beta0(q)
+        self._l = fam.l_vector(q)
+        self._beta0 = fam.beta0(q)
 
     @property
     def order(self) -> int:
@@ -392,11 +398,11 @@ class MultistepIntegrator:
     ) -> ODEState:
         """Bootstrap q RK4 steps and initialize the Nordsieck vector.
 
-        For BDFFamily: initializes z[j] via the Jacobian-based Taylor recursion
+        For ``"bdf"``: initializes z[j] via the Jacobian-based Taylor recursion
         z[j] = dt^j/j! · J^{j-1} · f evaluated at (t_q, y_q).  Requires
         WithJacobianRHSProtocol; raises AttributeError at runtime otherwise.
 
-        For AdamsFamily: initializes z[j] via a corrected backward-difference
+        For ``"adams"``: initializes z[j] via a corrected backward-difference
         formula using the bootstrap function values:
 
             z[j] = (dt / j!) · (∇^{j-1} f_q + (j−1)/2 · ∇^j f_q)
@@ -415,7 +421,7 @@ class MultistepIntegrator:
         ----------
         rhs:
             ODE right-hand side.  Must satisfy WithJacobianRHSProtocol for
-            BDFFamily; plain RHSProtocol suffices for AdamsFamily.
+            ``"bdf"``; plain RHSProtocol suffices for ``"adams"``.
         t0:
             Initial time.
         u0:
@@ -423,7 +429,7 @@ class MultistepIntegrator:
         dt:
             Step size for the bootstrap and all subsequent steps.
         """
-        if isinstance(self._family, BDFFamily):
+        if self._family_name == "bdf":
             return self._init_state_bdf(rhs, t0, u0, dt)  # type: ignore[arg-type]
         return self._init_state_adams(rhs, t0, u0, dt)
 
@@ -499,13 +505,13 @@ class MultistepIntegrator:
         """Advance state by one step of size dt.
 
         Rescales z if dt ≠ state.history.h, predicts via Pascal, corrects via
-        Newton (BDFFamily) or fixed-point iteration (AdamsFamily), then updates
+        Newton (BDF) or fixed-point iteration (Adams), then updates
         the full Nordsieck vector with l · f_delta where
         f_delta = h · f(t_{n+1}, y_{n+1}) − z_pred[1].
 
         Returns a new ODEState at t + dt.
         """
-        if isinstance(self._family, BDFFamily):
+        if self._family_name == "bdf":
             return self._step_bdf(rhs, state, dt)  # type: ignore[arg-type]
         return self._step_adams(rhs, state, dt)
 
@@ -587,19 +593,7 @@ class MultistepIntegrator:
         return ODEState(t_new, y, h, 0.0, NordsieckHistory(h, z_new))
 
 
-# ---------------------------------------------------------------------------
-# Named instances
-# ---------------------------------------------------------------------------
-
-bdf_family = BDFFamily(q_max=6)
-adams_family = AdamsFamily(q_max=6)
-
-
 __all__ = [
-    "AdamsFamily",
-    "BDFFamily",
     "MultistepIntegrator",
     "NordsieckHistory",
-    "adams_family",
-    "bdf_family",
 ]

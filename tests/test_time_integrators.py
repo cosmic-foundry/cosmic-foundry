@@ -242,12 +242,12 @@ def _build_registry() -> tuple[list, list]:
         (
             "bdf",
             "jac",
-            {q: _ti.MultistepIntegrator(_ti.bdf_family, q) for q in [2, 3, 4]},
+            {q: _ti.MultistepIntegrator("bdf", q) for q in [2, 3, 4]},
         ),
         (
             "am",
             "jac",
-            {q: _ti.MultistepIntegrator(_ti.adams_family, q) for q in [2, 3, 4]},
+            {q: _ti.MultistepIntegrator("adams", q) for q in [2, 3, 4]},
         ),
         (
             "imex",
@@ -497,7 +497,7 @@ def _phi_check() -> None:
 def _variable_order_check() -> None:
     """VariableOrderNordsieckIntegrator climbs to q=4, drops to q=2 on sharpening."""
     sel = _ti.OrderSelector(q_min=2, q_max=4, atol=1e-4, rtol=1e-4)
-    inst = _ti.VariableOrderNordsieckIntegrator(_ti.adams_family, sel)
+    inst = _ti.VariableOrderNordsieckIntegrator("adams", sel)
     bb = _ti.BlackBoxRHS(
         lambda t, u: Tensor(
             [-float(u[0]), float(u[0]) - 2.0 * float(u[1]), 2.0 * float(u[1])],
@@ -513,7 +513,7 @@ def _variable_order_check() -> None:
         x0, x1 = float(u[0]), float(u[1])
         return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
 
-    inst2 = _ti.VariableOrderNordsieckIntegrator(_ti.adams_family, sel, q_initial=4)
+    inst2 = _ti.VariableOrderNordsieckIntegrator("adams", sel, q_initial=4)
     state2 = inst2.advance(_ti.BlackBoxRHS(_sharp), _U3, t0=0.0, t_end=1.0, dt0=0.02)
     post = [
         q
@@ -537,8 +537,6 @@ def _vode_check() -> None:
         return Tensor([[-1.0, 0.0, 0.0], [1.0, -k2, 0.0], [0.0, k2, 0.0]])
 
     ctrl = _ti.VODEController(
-        adams_family=_ti.adams_family,
-        bdf_family=_ti.bdf_family,
         order_selector=_ti.OrderSelector(
             q_min=2, q_max=4, atol=5e-4, rtol=5e-4, factor_min=0.25, factor_max=1.15
         ),

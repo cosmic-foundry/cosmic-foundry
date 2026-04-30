@@ -6,8 +6,6 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
-    AdamsFamily,
-    BDFFamily,
     MultistepIntegrator,
     NordsieckHistory,
 )
@@ -32,8 +30,6 @@ class VODEController:
     def __init__(
         self,
         *,
-        adams_family: AdamsFamily,
-        bdf_family: BDFFamily,
         order_selector: OrderSelector,
         stiffness_switcher: StiffnessSwitcher,
         diagnostic: StiffnessDiagnostic | None = None,
@@ -41,12 +37,8 @@ class VODEController:
         initial_family: FamilyName = "adams",
         max_rejections: int = 20,
     ) -> None:
-        if order_selector.q_max > adams_family.q_max:
-            raise ValueError("order selector q_max exceeds Adams family q_max.")
-        if order_selector.q_max > bdf_family.q_max:
-            raise ValueError("order selector q_max exceeds BDF family q_max.")
-        self._adams_family = adams_family
-        self._bdf_family = bdf_family
+        if order_selector.q_max > 6:
+            raise ValueError("order selector q_max exceeds family q_max (6).")
         self._order_selector = order_selector
         self._stiffness_switcher = stiffness_switcher
         self._diagnostic = diagnostic or StiffnessDiagnostic()
@@ -169,9 +161,7 @@ class VODEController:
         return state
 
     def _integrator(self, family: FamilyName, q: int) -> MultistepIntegrator:
-        if family == "adams":
-            return MultistepIntegrator(self._adams_family, q)
-        return MultistepIntegrator(self._bdf_family, q)
+        return MultistepIntegrator(family, q)
 
 
 __all__ = ["VODEController"]
