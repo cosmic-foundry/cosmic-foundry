@@ -547,71 +547,163 @@ or a solver-level override is needed.
 
 ### Sprint: nuclear astrophysics stress tests
 
-The integrator family is structurally complete — all RHS protocols, state
-types, dispatch surface, and coefficient algebras are implemented and
-tested in isolation.  The outstanding Epoch 4 work is verification against
-hard problems before the integration layer meets real physics.
+The integrator family is structurally complete.  The outstanding Epoch 4
+work is two-pronged: build the infrastructure that lets the integrator
+exploit reaction-network structure, and verify the result against
+progressively harder synthetic nuclear astrophysics problems.  The two
+tracks are interleaved — each problem phase introduces one infrastructure
+piece alongside one harder problem.
 
-Synthetic nuclear astrophysics ODE systems are the verification ladder.
-Nuclear reaction networks are among the stiffest ODEs in computational
-physics, with timescale ratios reaching 10²⁰ in full networks; the
-conservation invariant Σᵢ xᵢ = 1 exposes integrator defects that smooth
-toy problems miss; and the problems are pure ODE systems — no spatial
-structure — so they isolate temporal integrator behavior cleanly.  Epoch 9
-(microphysics) will need exactly this capability; this sprint de-risks that.
+The long-horizon target is a single, unified time-integration path that
+handles dynamic, partially-equilibrated, and fully-equilibrated (NSE)
+reaction networks without mode switching.  The constraint-activation
+mechanism that handles one equilibrated reaction pair handles all of them;
+the NSE limit is the special case where all independent constraints are
+simultaneously active.  No separate NSE solver is needed.
 
 #### Design principle
 
-`AutoIntegrator` is the single correct entry point.  The caller's job is
-to express the mathematical structure of the RHS (via the appropriate RHS
-protocol); `AutoIntegrator` dispatches to the correct family from there.
-No phase in this sprint ever calls an explicit integrator on a problem
-where the RHS structure calls for an implicit one.  Each phase specifies
-the RHS protocol that correctly captures the problem's structure.
+`AutoIntegrator` is the single correct entry point.  The caller expresses
+the mathematical structure of the RHS via the appropriate protocol;
+`AutoIntegrator` dispatches to the correct family from there.  No phase
+ever calls an explicit integrator on a problem whose RHS structure calls
+for an implicit one.
+
+---
+
+#### `ReactionNetworkRHS` protocol
+
+A new RHS protocol sitting above `JacobianRHS` in the hierarchy, exposing
+the factored structure of a system of paired forward/reverse reactions:
+
+```
+ReactionNetworkRHS(JacobianRHS)
+
+    stoichiometry_matrix          # S: (n_species × n_reactions), integer
+    forward_rate(t, X) → Tensor   # r⁺: n_reactions-vector, ≥ 0 for X ≥ 0
+    reverse_rate(t, X) → Tensor   # r⁻: derived from r⁺ via detailed balance,
+                                  #     not independently specified
+
+    # Enforced at construction:
+    # - reverse_rate is computed from forward_rate and thermodynamic data
+    #   (partition functions / binding energies / free energies) via the
+    #   detailed balance relation.  This guarantees the fully-equilibrated
+    #   network recovers the correct thermodynamic fixed point.
+    # - forward_rate(t, X) ≥ 0 for all t, X ≥ 0.
+
+    # Derived at construction, not recomputed at runtime:
+    conservation_basis            # left null space of S;
+                                  # shape (n_conserved, n_species)
+    conservation_targets          # w·X₀ for each conservation row w
+    constraint_basis              # independent subset of the m pairwise
+                                  # equilibrium conditions {r⁺ⱼ = r⁻ⱼ};
+                                  # rank ≤ n_species − n_conserved
+
+    # Implied interface:
+    # __call__(t, X) = S @ (r⁺(t, X) − r⁻(t, X))
+```
+
+`AutoIntegrator` checks `ReactionNetworkRHS` before `JacobianRHS` (subtype
+specificity), routing to the constraint-aware path rather than the plain
+implicit-RK path.
+
+The protocol is not nuclear-specific.  Any system of coupled forward/reverse
+reactions — chemical kinetics, nuclear burning, radiative processes — satisfies
+it.  The stoichiometry analysis is identical regardless of what the species
+physically are.
+
+---
+
+#### New integrator infrastructure
+
+Four additions to the time integration layer, each introduced in the
+corresponding problem phase.  `TimeIntegrator.step(rhs, state, dt) → ODEState`
+does not change signature; the new machinery lives in the state type,
+the Newton kernel, and the controller.
+
+**Conservation projection** (introduced in F2).  A free function
+`project_conserved(X, basis, targets) → Tensor` returning the nearest point
+in the conservation hyperplane {X : basis · X = targets}.  The projection is
+orthogonal: X′ = X − basisᵀ (basis basisᵀ)⁻¹ (basis · X − targets).
+Cost is O(n_conserved² · n_species); applied once per accepted step by
+the controller.
+
+**Constraint activation state in `ODEState`** (introduced in F4).  A new
+optional field `active_constraints: frozenset[int] | None` on `ODEState`.
+`None` (the default for all existing code) means no constraint tracking.
+A frozenset of reaction-pair indices means those pairs are currently treated
+as algebraic constraints.  The integrator passes this field through without
+interpreting it; the controller and RHS read and write it.
+
+**Projected Newton iteration** (introduced in F3).  `newton_solve` gains
+an optional `constraint_gradients: Tensor | None` argument (shape
+k × n_species, the gradients of the k active algebraic constraints).
+When provided, each Newton step δX is projected onto the null space of the
+active constraint gradients before being applied:
+δX ← δX − Cᵀ(CCᵀ)⁻¹ C · δX.
+When `None`, existing behavior is preserved exactly.
+
+**`ConstraintAwareController`** (introduced in F4).  Wraps an existing
+step-size controller (`PIController` or `VODEController`) and adds
+constraint lifecycle management between accepted steps:
+- evaluates |r⁺ⱼ − r⁻ⱼ| / max(r⁺ⱼ, r⁻ⱼ) per reaction pair;
+- activates a constraint when the ratio falls below ε_activate and
+  deactivates when it rises above ε_deactivate (hysteresis prevents
+  chattering);
+- applies consistent initialization — projects the state onto the
+  newly-activated constraint manifold — before the next step;
+- calls `project_conserved` after each accepted step;
+- detects the NSE limit (rank of active constraint set equals
+  n_species − n_conserved) and switches to a direct Newton solve on
+  the n_conserved-dimensional conservation-law system.
+
+---
 
 #### Problem ladder
 
-| Phase | Problem | RHS protocol | Challenge probed | Pass criterion |
-|---|---|---|---|---|
-| F1 | n-species radioactive decay chain (Aₙ → Aₙ₊₁, all linear) | `BlackBoxRHS` | Baseline correctness; temporal order across all families | Every family converges at its claimed order vs. analytic solution; test registered in `tests/test_time_integrators.py` |
-| F2 | Two-body fusion A + A → B (one quadratic nonlinearity) | `BlackBoxRHS` | Species conservation under nonlinear RHS | Σᵢ xᵢ = 1 holds to floating-point precision; PI controller acceptance ≥ 50% on a smooth trajectory |
-| F3 | Robertson problem (k₁ = 0.04, k₂ = 3×10⁷, k₃ = 10⁴) | `JacobianRHS` | Extreme stiffness — canonical benchmark, timescale ratio ~10¹³ | `AutoIntegrator` routes to implicit family; integrates to t = 10¹¹ without step-size collapse; conservation Σᵢ xᵢ = 1 holds throughout |
-| F4 | 5-isotope α-chain at fixed T (⁴He, ¹²C, ¹⁶O, ²⁰Ne, ²⁴Mg) | `JacobianRHS` | Multi-species coupling; moderate nuclear stiffness | BDF4 converges at O(h⁴) on a smooth trajectory; `StiffnessDiagnostic` triggers family switch at stiff phases |
-| F5 | α-chain + internal energy (augmented state (x₁, …, xₙ, ε); T = ε/Cᵥ; rates T-dependent) | `JacobianRHS` | Nonlinear Jacobian; stiffness grows with T; T/ε as a full ODE variable, not an external parameter | `VariableOrderNordsieckIntegrator` advances without order oscillation; `FamilySwitchingNordsieckIntegrator` selects BDF during stiff phases; energy conservation Δε = Σᵢ Qᵢ Δxᵢ holds at floating-point precision |
+Each phase introduces one infrastructure piece, tests it on a synthetic
+toy problem, and exercises the growing stack on a harder physics problem.
+All tests register in `tests/test_time_integrators.py`.
+
+| Phase | Physics problem | Infrastructure introduced | Synthetic tests |
+|---|---|---|---|
+| F1 | n-species decay chain (Aₙ → Aₙ₊₁, linear; `BlackBoxRHS`) | `ReactionNetworkRHS` protocol; stoichiometry analysis; conservation law derivation | 2-species A⇌B toy: verify S, conservation_basis = left null space of S, factored form __call__ = S·(r⁺−r⁻), detailed balance at equilibrium |
+| F2 | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
+| F3 | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
+| F4 | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
+| F5 | α-chain + internal energy (augmented state (x₁,…,xₙ,ε); T=ε/Cᵥ; `ReactionNetworkRHS`) | NSE limit detection; full DAE path | A⇌B⇌C toy: both constraints activate simultaneously; final abundances match analytic equilibrium ratios k₋₁/k₊₁ and k₋₂/k₊₂; state and error estimate are continuous across the transition |
 
 #### Governing constraints
 
 - **No microphysics EOS.**  Temperature is related to internal energy by
   a constant specific heat (T = ε/Cᵥ).  Full T-dependent EOS belongs to
   Epoch 9.
-- **Pure ODE systems.**  No spatial structure; spatial + temporal coupling
-  belongs to Epoch 5 (scalar transport) and beyond.
-- **Existing RHS protocols only.**  All problems use `BlackBoxRHS` or
-  `JacobianRHS`; no new RHS protocol is introduced in this sprint.
-- **Conservation is a first-class pass criterion.**  Any integrator family
-  that violates Σᵢ xᵢ = 1 at floating-point precision is a defect to fix
-  in that PR, not a known limitation to document.
-- **Each phase is a self-contained PR** that adds the problem, its
-  verification test, and any integrator fixes discovered during testing.
-  No fix carries forward to the next phase without a test demonstrating
+- **Pure ODE/DAE systems.**  No spatial structure; spatial + temporal
+  coupling belongs to Epoch 5 and beyond.
+- **Conservation is a first-class pass criterion.**  Any integrator or
+  controller that violates conservation beyond floating-point precision is
+  a defect to fix in that PR, not a known limitation to document.
+- **Each phase is a self-contained PR** that adds the physics problem, its
+  verification test, the synthetic infrastructure unit tests, and any fixes
+  found during testing.  No fix carries forward without a test demonstrating
   the problem it solves.
 
 #### Expected friction points
 
-- **Newton convergence at extreme stiffness (F3–F5):** the implicit
-  family's Newton iteration may need tighter tolerances or a line search
-  at stiffness ratios above ~10¹⁰.  Record any change and its rationale
-  in the PR.
-- **PI controller over-rejection at stiffness transitions (F3–F5):**
-  γ, α, β parameters may need tuning under nuclear stiffness profiles.
-- **Dense Newton step scalability ceiling (F4–F5):** O(n³) cost is
-  acceptable for n = 5 and n = 6.  Record the species count at which
-  a sparse factorization would pay off, so Epoch 9 planning can account
-  for it.
-- **Nordsieck order-selector oscillation at transitions (F5):** F5 is
-  the first real test of `VODEController` / `OrderSelector` under
-  variable-stiffness conditions.  If oscillation occurs, the fix lives
-  in those classes; record the trigger conditions in the PR.
+- **Consistent initialization ill-conditioning (F4–F5):** projecting onto
+  a newly activated constraint manifold requires solving (CCᵀ)δ = residual.
+  If active constraint gradients are nearly parallel, CCᵀ is ill-conditioned.
+  The pre-computed constraint_basis from stoichiometry analysis should keep
+  the basis well-conditioned; record any case where it does not.
+- **Constraint chattering (F4–F5):** hysteresis thresholds ε_activate <
+  ε_deactivate prevent rapid cycling; record chosen values and rationale in
+  the PR.
+- **Newton convergence at extreme stiffness (F3–F5):** the Newton iteration
+  may need tighter tolerances or a line search at stiffness ratios above ~10¹⁰.
+  Record any change and its rationale in the PR.
+- **Dense Newton scalability ceiling (F4–F5):** O(n³) is acceptable for
+  n ≤ 6.  Record the species count at which sparse factorization would pay
+  off, so Epoch 9 planning can account for it.
 
 ---
 
