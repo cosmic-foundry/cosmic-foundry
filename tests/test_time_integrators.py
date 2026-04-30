@@ -2080,7 +2080,7 @@ def test_splitting_integrators(claim: Claim) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase C claims — symplectic composition integrators
+# Symplectic composition integrators
 # ---------------------------------------------------------------------------
 
 # Test problem: harmonic oscillator H = p²/2 + q²/2.
@@ -2281,7 +2281,7 @@ def test_auto_dispatch(claim: _AutoDispatchClaim) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase A — type-coherence and shared Newton kernel
+# Type-coherence and shared Newton kernel
 # ---------------------------------------------------------------------------
 
 

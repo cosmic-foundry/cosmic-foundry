@@ -17,7 +17,7 @@ Higher-order methods come from the Suzuki-Yoshida triple-jump composition:
 applying a base method at scales (α₁, α₀, α₁) where α₁ = 1/(2−2^e) and
 α₀ = 1−2α₁, with e = 1/(2k+1) to increase order from 2k to 2k+2.
 
-The state is an ODEState where u = concat([q, p]) and HamiltonianSplitProtocol
+The state is an ODEState where u = concat([q, p]) and HamiltonianRHSProtocol
 carries split_index to indicate how many leading components are position (q);
 the remaining components are momentum (p).  This makes SymplecticCompositionIntegrator
 a TimeIntegrator that interoperates with TimeStepper.
@@ -113,7 +113,7 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
     Hamiltonian systems.  Advances the state one step by alternating drift
     and kick sub-steps with weights c[i] and d[i].
 
-    The state is an ODEState where u = concat([q, p]).  The HamiltonianSplitProtocol
+    The state is an ODEState where u = concat([q, p]).  The HamiltonianRHSProtocol
     carries split_index so that q = u[:split_index] and p = u[split_index:].
     This makes the integrator fully compatible with TimeStepper.advance().
 

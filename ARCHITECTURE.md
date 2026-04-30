@@ -543,145 +543,81 @@ or a solver-level override is needed.
 
 ---
 
-## Current work: Epoch 4 — Time integration layer
+## Current work: Epoch 4 — Time integration verification
 
-### Unification roadmap
+### Sprint: nuclear astrophysics stress tests
 
-The current layer works but contains two forms of fragmentation that
-compound as the integrator family grows.  The roadmap below resolves
-both, producing a single coherent entry point whose algorithm selection
-is driven entirely by the mathematical structure of the problem.
+The integrator family is structurally complete — all RHS protocols, state
+types, dispatch surface, and coefficient algebras are implemented and
+tested in isolation.  The outstanding Epoch 4 work is verification against
+hard problems before the integration layer meets real physics.
 
----
+Synthetic nuclear astrophysics ODE systems are the verification ladder.
+Nuclear reaction networks are among the stiffest ODEs in computational
+physics, with timescale ratios reaching 10²⁰ in full networks; the
+conservation invariant Σᵢ xᵢ = 1 exposes integrator defects that smooth
+toy problems miss; and the problems are pure ODE systems — no spatial
+structure — so they isolate temporal integrator behavior cleanly.  Epoch 9
+(microphysics) will need exactly this capability; this sprint de-risks that.
 
-#### Vocabulary — mathematically named replacements
+#### Design principle
 
-The table below replaces every name rooted in a specific algorithm or
-implementer convention with a name that describes mathematical function.
-The right column is the target name; the left column is the current
-name.  The migration is breaking; it happens in phases (see below).
+`AutoIntegrator` is the single correct entry point.  The caller's job is
+to express the mathematical structure of the RHS (via the appropriate RHS
+protocol); `AutoIntegrator` dispatches to the correct family from there.
+No phase in this sprint ever calls an explicit integrator on a problem
+where the RHS structure calls for an implicit one.  Each phase specifies
+the RHS protocol that correctly captures the problem's structure.
 
-| Current name | Target name | Rationale |
-|---|---|---|
-| `RKState` | `ODEState` *(done)* | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). `MultistepState` folded in via `history` field. |
-| `NordsieckState` | `MultistepState` *(done — NordsieckHistory)* | Nordsieck encoding is an implementation detail; `NordsieckHistory` carries the scaled-derivative vector in `ODEState.history`. |
-| `PartitionedState` | *(eliminated — done)* | Folded into `ODEState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianRHS.split_index`. |
-| `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` *(done; deprecated alias kept)* | DIRK is one implementation strategy for implicit RK; the public name says "implicit Runge-Kutta". |
-| `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` *(done; deprecated alias kept)* | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
-| `NordsieckIntegrator` | `MultistepIntegrator` *(done; deprecated alias kept)* | Same reasoning as `NordsieckState`. |
-| `StrangSplittingIntegrator` | `CompositionIntegrator` *(done; deprecated alias kept)* | Strang is one composition scheme; the class is the general composition meta-integrator. |
-| `SymplecticSplittingIntegrator` | `SymplecticCompositionIntegrator` *(done)* | Specializes `CompositionIntegrator` with symplecticity constraint. |
-| `LinearPlusNonlinearRHS` | `SemilinearRHS` *(done; deprecated alias kept)* | du/dt = Lu + N(t,u) is a semilinear ODE; the name says so. |
-| `AdditiveRHS` | `SplitRHS` *(done; deprecated alias kept)* | Carries an explicit/implicit split; "split" is the mathematical concept. |
-| `HamiltonianSplit` | `HamiltonianRHS` *(done; deprecated alias kept)* | The protocol describes a Hamiltonian RHS; "split" implied an algorithmic choice. |
-| `OperatorSplitRHS` | `CompositeRHS` *(done; deprecated alias kept)* | Carries k component RHS objects; "composite" names the mathematical structure. |
+#### Problem ladder
 
----
+| Phase | Problem | RHS protocol | Challenge probed | Pass criterion |
+|---|---|---|---|---|
+| F1 | n-species radioactive decay chain (Aₙ → Aₙ₊₁, all linear) | `BlackBoxRHS` | Baseline correctness; temporal order across all families | Every family converges at its claimed order vs. analytic solution; test registered in `tests/test_time_integrators.py` |
+| F2 | Two-body fusion A + A → B (one quadratic nonlinearity) | `BlackBoxRHS` | Species conservation under nonlinear RHS | Σᵢ xᵢ = 1 holds to floating-point precision; PI controller acceptance ≥ 50% on a smooth trajectory |
+| F3 | Robertson problem (k₁ = 0.04, k₂ = 3×10⁷, k₃ = 10⁴) | `JacobianRHS` | Extreme stiffness — canonical benchmark, timescale ratio ~10¹³ | `AutoIntegrator` routes to implicit family; integrates to t = 10¹¹ without step-size collapse; conservation Σᵢ xᵢ = 1 holds throughout |
+| F4 | 5-isotope α-chain at fixed T (⁴He, ¹²C, ¹⁶O, ²⁰Ne, ²⁴Mg) | `JacobianRHS` | Multi-species coupling; moderate nuclear stiffness | BDF4 converges at O(h⁴) on a smooth trajectory; `StiffnessDiagnostic` triggers family switch at stiff phases |
+| F5 | α-chain + internal energy (augmented state (x₁, …, xₙ, ε); T = ε/Cᵥ; rates T-dependent) | `JacobianRHS` | Nonlinear Jacobian; stiffness grows with T; T/ε as a full ODE variable, not an external parameter | `VariableOrderNordsieckIntegrator` advances without order oscillation; `FamilySwitchingNordsieckIntegrator` selects BDF during stiff phases; energy conservation Δε = Σᵢ Qᵢ Δxᵢ holds at floating-point precision |
 
-#### Axis A — unified dispatch surface
+#### Governing constraints
 
-**Goal.** A single `Integrator.step(rhs, state, dt)` entry point that
-selects the algorithm family by inspecting `rhs` against the protocol
-hierarchy.  No caller changes the integrator when they change the RHS;
-the dispatch is transparent.
+- **No microphysics EOS.**  Temperature is related to internal energy by
+  a constant specific heat (T = ε/Cᵥ).  Full T-dependent EOS belongs to
+  Epoch 9.
+- **Pure ODE systems.**  No spatial structure; spatial + temporal coupling
+  belongs to Epoch 5 (scalar transport) and beyond.
+- **Existing RHS protocols only.**  All problems use `BlackBoxRHS` or
+  `JacobianRHS`; no new RHS protocol is introduced in this sprint.
+- **Conservation is a first-class pass criterion.**  Any integrator family
+  that violates Σᵢ xᵢ = 1 at floating-point precision is a defect to fix
+  in that PR, not a known limitation to document.
+- **Each phase is a self-contained PR** that adds the problem, its
+  verification test, and any integrator fixes discovered during testing.
+  No fix carries forward to the next phase without a test demonstrating
+  the problem it solves.
 
-**Design.**
+#### Expected friction points
 
-```
-Integrator (ABC / Protocol)
-  step(rhs: RHSProtocol, state: ODEState, dt: float) -> ODEState
-```
-
-The concrete `AutoIntegrator` implements `step` as a dispatch chain:
-
-```python
-if isinstance(rhs, SemilinearRHS):
-    # exponential integrator family
-elif isinstance(rhs, HamiltonianRHS):
-    # symplectic composition family
-elif isinstance(rhs, CompositeRHS):
-    # general composition family
-elif isinstance(rhs, SplitRHS):
-    # additive RK (ARK) family
-elif isinstance(rhs, ImplicitRHS):   # WithJacobianRHSProtocol
-    # implicit RK family
-else:
-    # explicit RK family (default)
-```
-
-The dispatch chain is a total function: every `RHSProtocol` falls into
-exactly one branch.  Adding a new RHS type adds a new branch; existing
-callers are unaffected.
-
-**Existing specialist integrators** (`RungeKuttaIntegrator`,
-`ImplicitRungeKuttaIntegrator`, …) remain as first-class objects.
-`AutoIntegrator` is a convenience wrapper, not a replacement; users who
-know their algorithm keep using the specific class.
-
-**Type coherence requirement.** All specialist integrators must satisfy
-the `Integrator` protocol — concretely, `ImplicitRungeKuttaIntegrator` and
-`AdditiveRungeKuttaIntegrator` must inherit (or structurally match) the same
-`TimeIntegrator` ABC that `RungeKuttaIntegrator` currently inherits.
-This is the most impactful single cleanup and unblocks Axis A.
-
----
-
-#### Axis B — unified state type
-
-**Goal.** Replace four incompatible state types with one.  The
-`ODEState` type carries optional slots for structure that only some
-methods use; methods that do not need a slot ignore it.
-
-**Target definition.**
-
-```
-ODEState:
-    t:    float          — current time
-    u:    Tensor         — current solution vector (or structured pair for Hamiltonian)
-    dt:   float          — last accepted step size
-    err:  float          — last local error estimate (0.0 if not available)
-    history: MultistepHistory | None
-               — ordered ring buffer of past (t_k, u_k, f_k) tuples;
-                 None for single-step methods
-```
-
-**Migration path per affected type.**
-
-- `MultistepState` *(done)* — `ExplicitMultistepIntegrator` now stores past
-  `f` evaluations in `ODEState.history` as `tuple[Tensor, ...]` (most-recent
-  first).  `None` means no history (initial step); the integrator bootstraps
-  with `rk4` until enough history is available.
-
-- `NordsieckState` *(done)* — replaced by `ODEState` carrying
-  `history = NordsieckHistory(h, z)`.  `NordsieckHistory` holds the
-  scaled-derivative vector and exposes `change_order()` / `rescale_step()`.
-  `MultistepIntegrator` reads/writes `state.history`; single-step integrators
-  leave `state.history = None`.
-
-**Breaking change surface.** `TimeStepper.advance` return type changed
-from `RKState` to `ODEState` in D1; field names are identical (`t`, `u`, `dt`,
-`err`), so destructuring callsites are unaffected.
-
----
-
-#### Phased implementation plan
-
-Each phase is a self-contained PR that leaves all tests green and adds
-at least one new test for the structural change.
-
-| Phase | Title | Scope |
-|---|---|---|
-| D1 | **Unified state (done)** | Rename `RKState → ODEState`; fold `MultistepState` into `ODEState.history`; `TimeStepper.advance` returns `ODEState`. |
-| D2 | **Fold NordsieckState (done)** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; `change_order()` / `rescale_step()` moved to `NordsieckHistory`. |
-| E | **Rename sweep (done)** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
-
-All listed phases are complete; future work will be added here when it is fully specified.
+- **Newton convergence at extreme stiffness (F3–F5):** the implicit
+  family's Newton iteration may need tighter tolerances or a line search
+  at stiffness ratios above ~10¹⁰.  Record any change and its rationale
+  in the PR.
+- **PI controller over-rejection at stiffness transitions (F3–F5):**
+  γ, α, β parameters may need tuning under nuclear stiffness profiles.
+- **Dense Newton step scalability ceiling (F4–F5):** O(n³) cost is
+  acceptable for n = 5 and n = 6.  Record the species count at which
+  a sparse factorization would pay off, so Epoch 9 planning can account
+  for it.
+- **Nordsieck order-selector oscillation at transitions (F5):** F5 is
+  the first real test of `VODEController` / `OrderSelector` under
+  variable-stiffness conditions.  If oscillation occurs, the fix lives
+  in those classes; record the trigger conditions in the PR.
 
 ---
 
 **Open questions:**
 
-1. **`set_default_backend` vs. solver-level override.** Time-integrator
+1. **`set_default_backend` vs. solver-level override.**  Time-integrator
    code must inherit whichever resolution lands; a per-`TimeStepper`
    backend override is the natural API extension if process-wide defaults
    turn out to be insufficient.
@@ -725,7 +661,7 @@ broader persistence layer or as a standalone capability.
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
 | 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 6 onward. |
 | 3 | Computation | **Backend-agnostic computation layer. ✓** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; mixed-backend arithmetic guards; AST-based numeric-import boundary; self-calibrating roofline performance gate; `LazyDiscreteField` collapsed into `FaceField` and `_BasisField`. |
-| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. Implementation complete; verification pending. |
+| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. |
 
 ### Physics epochs
 

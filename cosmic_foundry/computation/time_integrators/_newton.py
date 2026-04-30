@@ -1,14 +1,15 @@
 """Shared Newton-iteration kernel for implicit integrators.
 
-Both ``DIRKIntegrator`` and ``IMEXIntegrator`` solve the same fixed-point
-problem at each stage::
+Both ``ImplicitRungeKuttaIntegrator`` and ``AdditiveRungeKuttaIntegrator``
+solve the same fixed-point problem at each stage::
 
     y − γ·h·f(y) = y_exp
 
 via Newton iteration with LU factorization.  The only caller-visible
 difference is which callable plays the role of ``f`` (the full RHS for
-DIRK, the implicit component for IMEX).  ``newton_solve`` accepts both
-as plain callables so the kernel stays independent of the RHS protocol.
+implicit RK, the implicit component for additive RK).  ``newton_solve``
+accepts both as plain callables so the kernel stays independent of the
+RHS protocol.
 """
 
 from __future__ import annotations
