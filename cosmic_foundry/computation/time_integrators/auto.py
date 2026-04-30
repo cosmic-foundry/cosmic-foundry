@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from cosmic_foundry.computation.time_integrators.constraint_aware import (
+    build_constraint_gradients,
+)
 from cosmic_foundry.computation.time_integrators.exponential import (
     CoxMatthewsETDRK4Integrator,
     SemilinearRHSProtocol,
@@ -21,6 +24,9 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
     RHSProtocol,
     TimeIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.reaction_network import (
+    ReactionNetworkRHS,
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
@@ -97,6 +103,10 @@ class AutoIntegrator(TimeIntegrator):
             return self._composition.step(rhs, state, dt)
         if isinstance(rhs, SplitRHSProtocol):
             return self._split.step(rhs, state, dt)
+        if isinstance(rhs, ReactionNetworkRHS):
+            active = state.active_constraints or frozenset()
+            cg = build_constraint_gradients(rhs, active, state.t, state.u)
+            return self._implicit.step(rhs, state, dt, constraint_gradients=cg)
         if isinstance(rhs, WithJacobianRHSProtocol):
             return self._implicit.step(rhs, state, dt)
         return self._explicit.step(rhs, state, dt)

@@ -9,6 +9,9 @@ from cosmic_foundry.computation.time_integrators.bseries import (
     sigma,
     trees_up_to_order,
 )
+from cosmic_foundry.computation.time_integrators.constraint_aware import (
+    ConstraintAwareController,
+)
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
     ab2,
@@ -137,6 +140,7 @@ __all__ = [
     "Tree",
     "AutoIntegrator",
     "BlackBoxRHS",
+    "ConstraintAwareController",
     "ReactionNetworkRHS",
     "project_conserved",
     "ConstantStep",

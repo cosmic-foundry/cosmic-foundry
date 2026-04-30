@@ -670,7 +670,7 @@ All tests register in `tests/test_time_integrators.py`.
 | F1 ✓ | n-species decay chain (Aₙ → Aₙ₊₁, linear; `BlackBoxRHS`) | `ReactionNetworkRHS` protocol; stoichiometry analysis; conservation law derivation | 2-species A⇌B toy: verify S, conservation_basis = left null space of S, factored form __call__ = S·(r⁺−r⁻), detailed balance at equilibrium |
 | F2 ✓ | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
 | F3 ✓ | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
-| F4 | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
+| F4 ✓ | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
 | F5 | α-chain + internal energy (augmented state (x₁,…,xₙ,ε); T=ε/Cᵥ; `ReactionNetworkRHS`) | NSE limit detection; full DAE path | A⇌B⇌C toy: both constraints activate simultaneously; final abundances match analytic equilibrium ratios k₋₁/k₊₁ and k₋₂/k₊₂; state and error estimate are continuous across the transition |
 
 #### Governing constraints
@@ -697,7 +697,10 @@ All tests register in `tests/test_time_integrators.py`.
   the basis well-conditioned; record any case where it does not.
 - **Constraint chattering (F4–F5):** hysteresis thresholds ε_activate <
   ε_deactivate prevent rapid cycling; record chosen values and rationale in
-  the PR.
+  the PR.  F4 uses ε_activate = 0.01, ε_deactivate = 0.10 (10× ratio).  For
+  the A⇌B toy the ratio ρ ≈ 3·exp(−1.5t) decreases monotonically, so
+  chattering cannot occur regardless of threshold.  For non-monotone problems
+  the 10× gap should be widened if chattering is observed.
 - **Newton convergence at extreme stiffness (F3–F5):** the Newton iteration
   may need tighter tolerances or a line search at stiffness ratios above ~10¹⁰.
   Record any change and its rationale in the PR.

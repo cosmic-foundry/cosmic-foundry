@@ -188,6 +188,8 @@ class ReactionNetworkRHS:
             self.conservation_basis = Tensor([[0.0] * n_species], backend=backend)
             self.conservation_targets = Tensor([0.0], backend=backend)
 
+        self.n_conserved: int = n_conserved
+
         pair_indices = _independent_reaction_pairs(S_list, n_conserved)
         self.constraint_basis = (
             Tensor([float(j) for j in pair_indices], backend=backend)
