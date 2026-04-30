@@ -40,10 +40,10 @@ from cosmic_foundry.computation.time_integrators.splitting import (
 from cosmic_foundry.computation.time_integrators.symplectic import (
     HamiltonianRHSProtocol,
     SymplecticCompositionIntegrator,
-    leapfrog,
 )
 
 DEFAULT_COMPOSITION = CompositionIntegrator([rk4, rk4], strang_steps(), order=2)
+DEFAULT_SYMPLECTIC = SymplecticCompositionIntegrator(2)
 
 
 class AutoIntegrator(TimeIntegrator):
@@ -76,7 +76,7 @@ class AutoIntegrator(TimeIntegrator):
         *,
         explicit: RungeKuttaIntegrator = rk4,
         semilinear: CoxMatthewsETDRK4Integrator = cox_matthews_etdrk4,
-        symplectic: SymplecticCompositionIntegrator = leapfrog,
+        symplectic: SymplecticCompositionIntegrator = DEFAULT_SYMPLECTIC,
         composition: CompositionIntegrator = DEFAULT_COMPOSITION,
         split: AdditiveRungeKuttaIntegrator = ars222,
         implicit: ImplicitRungeKuttaIntegrator = implicit_midpoint,

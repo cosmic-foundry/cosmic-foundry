@@ -267,13 +267,7 @@ def _build_registry() -> tuple[list, list]:
         (
             "sym",
             "sym",
-            {
-                1: _ti.symplectic_euler,
-                2: _ti.leapfrog,
-                4: _ti.forest_ruth,
-                6: _ti.yoshida_6,
-                8: _ti.yoshida_8,
-            },
+            {o: _ti.SymplecticCompositionIntegrator(o) for o in [1, 2, 4, 6, 8]},
         ),
     ]
     return probs, families
