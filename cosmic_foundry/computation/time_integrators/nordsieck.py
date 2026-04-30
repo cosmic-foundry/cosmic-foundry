@@ -39,8 +39,8 @@ satisfies plain RHSProtocol and is preferred for non-stiff problems.
 
 Named instances
 ---------------
-bdf1–bdf4          —  BDF orders 1–4 (L/A/A(α)-stable)
-adams_moulton1–am4 —  Adams-Moulton orders 1–4 (non-stiff, no Jacobian)
+bdf2–bdf4          —  BDF orders 2–4 (L/A/A(α)-stable)
+adams_moulton2–am4 —  Adams-Moulton orders 2–4 (non-stiff, no Jacobian)
 """
 
 from __future__ import annotations
@@ -606,14 +606,12 @@ class NordsieckIntegrator(MultistepIntegrator):
 
 bdf_family = BDFFamily(q_max=6)
 
-bdf1 = MultistepIntegrator(bdf_family, q=1)
 bdf2 = MultistepIntegrator(bdf_family, q=2)
 bdf3 = MultistepIntegrator(bdf_family, q=3)
 bdf4 = MultistepIntegrator(bdf_family, q=4)
 
 adams_family = AdamsFamily(q_max=6)
 
-adams_moulton1 = MultistepIntegrator(adams_family, q=1)
 adams_moulton2 = MultistepIntegrator(adams_family, q=2)
 adams_moulton3 = MultistepIntegrator(adams_family, q=3)
 adams_moulton4 = MultistepIntegrator(adams_family, q=4)
@@ -626,11 +624,9 @@ __all__ = [
     "NordsieckHistory",
     "NordsieckIntegrator",
     "adams_family",
-    "adams_moulton1",
     "adams_moulton2",
     "adams_moulton3",
     "adams_moulton4",
-    "bdf1",
     "bdf2",
     "bdf3",
     "bdf4",

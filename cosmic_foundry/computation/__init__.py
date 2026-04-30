@@ -59,9 +59,7 @@ from cosmic_foundry.computation.time_integrators import (  # noqa: E402
     bogacki_shampine,
     dormand_prince,
     forward_euler,
-    heun,
     midpoint,
-    ralston,
     rk4,
 )
 
@@ -86,11 +84,9 @@ __all__ = [
     "Controller",
     "dormand_prince",
     "forward_euler",
-    "heun",
     "IntegratorSelectionResult",
     "midpoint",
     "PIController",
-    "ralston",
     "RHSProtocol",
     "ODEState",
     "rk4",
