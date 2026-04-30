@@ -107,11 +107,12 @@ class CompositionIntegrator(TimeIntegrator):
         and ``err`` fields of the returned state reflect the last substep only;
         the ``t`` field is ``state.t + dt``.
         """
+        t_start = state.t
         for substep in self._sequence:
             sub_rhs = rhs.components[substep.component_index]
             sub_integrator = self._sub_integrators[substep.component_index]
             state = sub_integrator.step(sub_rhs, state, substep.weight * dt)
-        return state
+        return ODEState(t_start + dt, state.u, state.dt, state.err)
 
 
 class StrangSplittingIntegrator(CompositionIntegrator):
