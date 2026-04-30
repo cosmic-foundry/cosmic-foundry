@@ -543,145 +543,173 @@ or a solver-level override is needed.
 
 ---
 
-## Current work: Epoch 4 — Time integration layer
+## Current work: Epoch 4 — Time integration verification
 
-### Unification roadmap
+### Sprint: nuclear astrophysics stress tests
 
-The current layer works but contains two forms of fragmentation that
-compound as the integrator family grows.  The roadmap below resolves
-both, producing a single coherent entry point whose algorithm selection
-is driven entirely by the mathematical structure of the problem.
+The integrator family is structurally complete.  The outstanding Epoch 4
+work is two-pronged: build the infrastructure that lets the integrator
+exploit reaction-network structure, and verify the result against
+progressively harder synthetic nuclear astrophysics problems.  The two
+tracks are interleaved — each problem phase introduces one infrastructure
+piece alongside one harder problem.
 
----
+The long-horizon target is a single, unified time-integration path that
+handles dynamic, partially-equilibrated, and fully-equilibrated (NSE)
+reaction networks without mode switching.  The constraint-activation
+mechanism that handles one equilibrated reaction pair handles all of them;
+the NSE limit is the special case where all independent constraints are
+simultaneously active.  No separate NSE solver is needed.
 
-#### Vocabulary — mathematically named replacements
+#### Design principle
 
-The table below replaces every name rooted in a specific algorithm or
-implementer convention with a name that describes mathematical function.
-The right column is the target name; the left column is the current
-name.  The migration is breaking; it happens in phases (see below).
-
-| Current name | Target name | Rationale |
-|---|---|---|
-| `RKState` | `ODEState` *(done)* | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). `MultistepState` folded in via `history` field. |
-| `NordsieckState` | `MultistepState` *(done — NordsieckHistory)* | Nordsieck encoding is an implementation detail; `NordsieckHistory` carries the scaled-derivative vector in `ODEState.history`. |
-| `PartitionedState` | *(eliminated — done)* | Folded into `ODEState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianRHS.split_index`. |
-| `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` *(done; deprecated alias kept)* | DIRK is one implementation strategy for implicit RK; the public name says "implicit Runge-Kutta". |
-| `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` *(done; deprecated alias kept)* | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
-| `NordsieckIntegrator` | `MultistepIntegrator` *(done; deprecated alias kept)* | Same reasoning as `NordsieckState`. |
-| `StrangSplittingIntegrator` | `CompositionIntegrator` *(done; deprecated alias kept)* | Strang is one composition scheme; the class is the general composition meta-integrator. |
-| `SymplecticSplittingIntegrator` | `SymplecticCompositionIntegrator` *(done)* | Specializes `CompositionIntegrator` with symplecticity constraint. |
-| `LinearPlusNonlinearRHS` | `SemilinearRHS` *(done; deprecated alias kept)* | du/dt = Lu + N(t,u) is a semilinear ODE; the name says so. |
-| `AdditiveRHS` | `SplitRHS` *(done; deprecated alias kept)* | Carries an explicit/implicit split; "split" is the mathematical concept. |
-| `HamiltonianSplit` | `HamiltonianRHS` *(done; deprecated alias kept)* | The protocol describes a Hamiltonian RHS; "split" implied an algorithmic choice. |
-| `OperatorSplitRHS` | `CompositeRHS` *(done; deprecated alias kept)* | Carries k component RHS objects; "composite" names the mathematical structure. |
+`AutoIntegrator` is the single correct entry point.  The caller expresses
+the mathematical structure of the RHS via the appropriate protocol;
+`AutoIntegrator` dispatches to the correct family from there.  No phase
+ever calls an explicit integrator on a problem whose RHS structure calls
+for an implicit one.
 
 ---
 
-#### Axis A — unified dispatch surface
+#### `ReactionNetworkRHS` protocol
 
-**Goal.** A single `Integrator.step(rhs, state, dt)` entry point that
-selects the algorithm family by inspecting `rhs` against the protocol
-hierarchy.  No caller changes the integrator when they change the RHS;
-the dispatch is transparent.
-
-**Design.**
+A new RHS protocol sitting above `JacobianRHS` in the hierarchy, exposing
+the factored structure of a system of paired forward/reverse reactions:
 
 ```
-Integrator (ABC / Protocol)
-  step(rhs: RHSProtocol, state: ODEState, dt: float) -> ODEState
+ReactionNetworkRHS(JacobianRHS)
+
+    stoichiometry_matrix          # S: (n_species × n_reactions), integer
+    forward_rate(t, X) → Tensor   # r⁺: n_reactions-vector, ≥ 0 for X ≥ 0
+    reverse_rate(t, X) → Tensor   # r⁻: derived from r⁺ via detailed balance,
+                                  #     not independently specified
+
+    # Enforced at construction:
+    # - reverse_rate is computed from forward_rate and thermodynamic data
+    #   (partition functions / binding energies / free energies) via the
+    #   detailed balance relation.  This guarantees the fully-equilibrated
+    #   network recovers the correct thermodynamic fixed point.
+    # - forward_rate(t, X) ≥ 0 for all t, X ≥ 0.
+
+    # Derived at construction, not recomputed at runtime:
+    conservation_basis            # left null space of S;
+                                  # shape (n_conserved, n_species)
+    conservation_targets          # w·X₀ for each conservation row w
+    constraint_basis              # independent subset of the m pairwise
+                                  # equilibrium conditions {r⁺ⱼ = r⁻ⱼ};
+                                  # rank ≤ n_species − n_conserved
+
+    # Implied interface:
+    # __call__(t, X) = S @ (r⁺(t, X) − r⁻(t, X))
 ```
 
-The concrete `AutoIntegrator` implements `step` as a dispatch chain:
+`AutoIntegrator` checks `ReactionNetworkRHS` before `JacobianRHS` (subtype
+specificity), routing to the constraint-aware path rather than the plain
+implicit-RK path.
 
-```python
-if isinstance(rhs, SemilinearRHS):
-    # exponential integrator family
-elif isinstance(rhs, HamiltonianRHS):
-    # symplectic composition family
-elif isinstance(rhs, CompositeRHS):
-    # general composition family
-elif isinstance(rhs, SplitRHS):
-    # additive RK (ARK) family
-elif isinstance(rhs, ImplicitRHS):   # WithJacobianRHSProtocol
-    # implicit RK family
-else:
-    # explicit RK family (default)
-```
-
-The dispatch chain is a total function: every `RHSProtocol` falls into
-exactly one branch.  Adding a new RHS type adds a new branch; existing
-callers are unaffected.
-
-**Existing specialist integrators** (`RungeKuttaIntegrator`,
-`ImplicitRungeKuttaIntegrator`, …) remain as first-class objects.
-`AutoIntegrator` is a convenience wrapper, not a replacement; users who
-know their algorithm keep using the specific class.
-
-**Type coherence requirement.** All specialist integrators must satisfy
-the `Integrator` protocol — concretely, `ImplicitRungeKuttaIntegrator` and
-`AdditiveRungeKuttaIntegrator` must inherit (or structurally match) the same
-`TimeIntegrator` ABC that `RungeKuttaIntegrator` currently inherits.
-This is the most impactful single cleanup and unblocks Axis A.
+The protocol is not nuclear-specific.  Any system of coupled forward/reverse
+reactions — chemical kinetics, nuclear burning, radiative processes — satisfies
+it.  The stoichiometry analysis is identical regardless of what the species
+physically are.
 
 ---
 
-#### Axis B — unified state type
+#### New integrator infrastructure
 
-**Goal.** Replace four incompatible state types with one.  The
-`ODEState` type carries optional slots for structure that only some
-methods use; methods that do not need a slot ignore it.
+Four additions to the time integration layer, each introduced in the
+corresponding problem phase.  `TimeIntegrator.step(rhs, state, dt) → ODEState`
+does not change signature; the new machinery lives in the state type,
+the Newton kernel, and the controller.
 
-**Target definition.**
+**Conservation projection** (introduced in F2).  A free function
+`project_conserved(X, basis, targets) → Tensor` returning the nearest point
+in the conservation hyperplane {X : basis · X = targets}.  The projection is
+orthogonal: X′ = X − basisᵀ (basis basisᵀ)⁻¹ (basis · X − targets).
+Cost is O(n_conserved² · n_species); applied once per accepted step by
+the controller.
 
-```
-ODEState:
-    t:    float          — current time
-    u:    Tensor         — current solution vector (or structured pair for Hamiltonian)
-    dt:   float          — last accepted step size
-    err:  float          — last local error estimate (0.0 if not available)
-    history: MultistepHistory | None
-               — ordered ring buffer of past (t_k, u_k, f_k) tuples;
-                 None for single-step methods
-```
+**Constraint activation state in `ODEState`** (introduced in F4).  A new
+optional field `active_constraints: frozenset[int] | None` on `ODEState`.
+`None` (the default for all existing code) means no constraint tracking.
+A frozenset of reaction-pair indices means those pairs are currently treated
+as algebraic constraints.  The integrator passes this field through without
+interpreting it; the controller and RHS read and write it.
 
-**Migration path per affected type.**
+**Projected Newton iteration** (introduced in F3).  `newton_solve` gains
+an optional `constraint_gradients: Tensor | None` argument (shape
+k × n_species, the gradients of the k active algebraic constraints).
+When provided, each Newton step δX is projected onto the null space of the
+active constraint gradients before being applied:
+δX ← δX − Cᵀ(CCᵀ)⁻¹ C · δX.
+When `None`, existing behavior is preserved exactly.
 
-- `MultistepState` *(done)* — `ExplicitMultistepIntegrator` now stores past
-  `f` evaluations in `ODEState.history` as `tuple[Tensor, ...]` (most-recent
-  first).  `None` means no history (initial step); the integrator bootstraps
-  with `rk4` until enough history is available.
-
-- `NordsieckState` *(done)* — replaced by `ODEState` carrying
-  `history = NordsieckHistory(h, z)`.  `NordsieckHistory` holds the
-  scaled-derivative vector and exposes `change_order()` / `rescale_step()`.
-  `MultistepIntegrator` reads/writes `state.history`; single-step integrators
-  leave `state.history = None`.
-
-**Breaking change surface.** `TimeStepper.advance` return type changed
-from `RKState` to `ODEState` in D1; field names are identical (`t`, `u`, `dt`,
-`err`), so destructuring callsites are unaffected.
+**`ConstraintAwareController`** (introduced in F4).  Wraps an existing
+step-size controller (`PIController` or `VODEController`) and adds
+constraint lifecycle management between accepted steps:
+- evaluates |r⁺ⱼ − r⁻ⱼ| / max(r⁺ⱼ, r⁻ⱼ) per reaction pair;
+- activates a constraint when the ratio falls below ε_activate and
+  deactivates when it rises above ε_deactivate (hysteresis prevents
+  chattering);
+- applies consistent initialization — projects the state onto the
+  newly-activated constraint manifold — before the next step;
+- calls `project_conserved` after each accepted step;
+- detects the NSE limit (rank of active constraint set equals
+  n_species − n_conserved) and switches to a direct Newton solve on
+  the n_conserved-dimensional conservation-law system.
 
 ---
 
-#### Phased implementation plan
+#### Problem ladder
 
-Each phase is a self-contained PR that leaves all tests green and adds
-at least one new test for the structural change.
+Each phase introduces one infrastructure piece, tests it on a synthetic
+toy problem, and exercises the growing stack on a harder physics problem.
+All tests register in `tests/test_time_integrators.py`.
 
-| Phase | Title | Scope |
-|---|---|---|
-| D1 | **Unified state (done)** | Rename `RKState → ODEState`; fold `MultistepState` into `ODEState.history`; `TimeStepper.advance` returns `ODEState`. |
-| D2 | **Fold NordsieckState (done)** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; `change_order()` / `rescale_step()` moved to `NordsieckHistory`. |
-| E | **Rename sweep (done)** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
+| Phase | Physics problem | Infrastructure introduced | Synthetic tests |
+|---|---|---|---|
+| F1 | n-species decay chain (Aₙ → Aₙ₊₁, linear; `BlackBoxRHS`) | `ReactionNetworkRHS` protocol; stoichiometry analysis; conservation law derivation | 2-species A⇌B toy: verify S, conservation_basis = left null space of S, factored form __call__ = S·(r⁺−r⁻), detailed balance at equilibrium |
+| F2 | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
+| F3 | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
+| F4 | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
+| F5 | α-chain + internal energy (augmented state (x₁,…,xₙ,ε); T=ε/Cᵥ; `ReactionNetworkRHS`) | NSE limit detection; full DAE path | A⇌B⇌C toy: both constraints activate simultaneously; final abundances match analytic equilibrium ratios k₋₁/k₊₁ and k₋₂/k₊₂; state and error estimate are continuous across the transition |
 
-All listed phases are complete; future work will be added here when it is fully specified.
+#### Governing constraints
+
+- **No microphysics EOS.**  Temperature is related to internal energy by
+  a constant specific heat (T = ε/Cᵥ).  Full T-dependent EOS belongs to
+  Epoch 9.
+- **Pure ODE/DAE systems.**  No spatial structure; spatial + temporal
+  coupling belongs to Epoch 5 and beyond.
+- **Conservation is a first-class pass criterion.**  Any integrator or
+  controller that violates conservation beyond floating-point precision is
+  a defect to fix in that PR, not a known limitation to document.
+- **Each phase is a self-contained PR** that adds the physics problem, its
+  verification test, the synthetic infrastructure unit tests, and any fixes
+  found during testing.  No fix carries forward without a test demonstrating
+  the problem it solves.
+
+#### Expected friction points
+
+- **Consistent initialization ill-conditioning (F4–F5):** projecting onto
+  a newly activated constraint manifold requires solving (CCᵀ)δ = residual.
+  If active constraint gradients are nearly parallel, CCᵀ is ill-conditioned.
+  The pre-computed constraint_basis from stoichiometry analysis should keep
+  the basis well-conditioned; record any case where it does not.
+- **Constraint chattering (F4–F5):** hysteresis thresholds ε_activate <
+  ε_deactivate prevent rapid cycling; record chosen values and rationale in
+  the PR.
+- **Newton convergence at extreme stiffness (F3–F5):** the Newton iteration
+  may need tighter tolerances or a line search at stiffness ratios above ~10¹⁰.
+  Record any change and its rationale in the PR.
+- **Dense Newton scalability ceiling (F4–F5):** O(n³) is acceptable for
+  n ≤ 6.  Record the species count at which sparse factorization would pay
+  off, so Epoch 9 planning can account for it.
 
 ---
 
 **Open questions:**
 
-1. **`set_default_backend` vs. solver-level override.** Time-integrator
+1. **`set_default_backend` vs. solver-level override.**  Time-integrator
    code must inherit whichever resolution lands; a per-`TimeStepper`
    backend override is the natural API extension if process-wide defaults
    turn out to be insufficient.
@@ -725,7 +753,7 @@ broader persistence layer or as a standalone capability.
 | 1 | Geometry / Validation | **Observational grounding. ✓** `EuclideanManifold`, `CartesianChart`, `CartesianMesh`; first `validation/` notebook (Schwarzschild spacetime, GPS time dilation); settles `SymbolicFunction` interface and `Point` type (M3). |
 | 2 | Discrete | **FVM Poisson solver. ✓** `PoissonEquation`; `DiffusiveFlux(2,4)`; `DivergenceFormDiscretization` + `NumericalFlux` family; oracle-free convergence framework; SPD analysis; `LinearSolver` ABC with `DenseJacobiSolver` and `DenseLUSolver`; end-to-end O(hᵖ) convergence sweep. FVM machinery reused from Epoch 6 onward. |
 | 3 | Computation | **Backend-agnostic computation layer. ✓** `Tensor` (arbitrary rank, `Real` protocol); `Backend` protocol with `PythonBackend`, `NumpyBackend`, `JaxBackend`; mixed-backend arithmetic guards; AST-based numeric-import boundary; self-calibrating roofline performance gate; `LazyDiscreteField` collapsed into `FaceField` and `_BasisField`. |
-| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. Implementation complete; verification pending. |
+| 4 | Computation | **Time integration layer.** Six-axis DSL (RHS protocol, state, step program, coefficient algebra, controller, verification primitives) with explicit RK as the first instantiation; phases extend to adaptive control, B-series verification, symplectic, implicit, IMEX, multistep, variable-order, exponential, and splitting families. |
 
 ### Physics epochs
 
