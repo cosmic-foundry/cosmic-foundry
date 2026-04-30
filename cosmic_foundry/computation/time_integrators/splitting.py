@@ -7,8 +7,8 @@ from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 from cosmic_foundry.computation.time_integrators.integrator import (
+    ODEState,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 
@@ -60,7 +60,7 @@ class StrangSplittingIntegrator(TimeIntegrator):
     Each ``SplittingStep`` in ``sequence`` advances
     ``rhs.components[s.component_index]`` by ``s.weight * dt`` using
     ``sub_integrators[s.component_index]``.  Sub-integrators must accept and
-    return ``RKState``; passing the same integrator at multiple positions is
+    return ``ODEState``; passing the same integrator at multiple positions is
     allowed.
 
     ``order`` is declared by the factory function that constructs the sequence
@@ -96,13 +96,13 @@ class StrangSplittingIntegrator(TimeIntegrator):
     def step(
         self,
         rhs: OperatorSplitRHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         """Advance ``state`` by one full step of size ``dt``.
 
         Applies each ``SplittingStep`` in ``self._sequence`` in order.  The
-        output ``RKState`` of each substep feeds into the next.  The ``dt``
+        output ``ODEState`` of each substep feeds into the next.  The ``dt``
         and ``err`` fields of the returned state reflect the last substep only;
         the ``t`` field is ``state.t + dt``.
         """

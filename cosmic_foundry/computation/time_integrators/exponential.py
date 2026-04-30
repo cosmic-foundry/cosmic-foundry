@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
 from cosmic_foundry.computation.tensor import Tensor, norm
-from cosmic_foundry.computation.time_integrators.integrator import RKState
+from cosmic_foundry.computation.time_integrators.integrator import ODEState
 
 _SERIES_TOL = 1e-14
 _SERIES_MAX_TERMS = 80
@@ -87,14 +87,14 @@ class ExponentialEulerIntegrator:
     def step(
         self,
         rhs: LinearPlusNonlinearRHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         A = rhs.linear_operator * dt
         u = state.u
         Nu = rhs.nonlinear(state.t, u)
         u_new = PhiFunction(0).apply(A, u) + dt * PhiFunction(1).apply(A, Nu)
-        return RKState(state.t + dt, u_new, dt, 0.0)
+        return ODEState(state.t + dt, u_new, dt, 0.0)
 
 
 class ETDRK2Integrator:
@@ -108,9 +108,9 @@ class ETDRK2Integrator:
     def step(
         self,
         rhs: LinearPlusNonlinearRHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         A = rhs.linear_operator * dt
         t, u = state.t, state.u
         phi0 = PhiFunction(0)
@@ -122,7 +122,7 @@ class ETDRK2Integrator:
         predictor = e_u + dt * phi1.apply(A, Nu)
         N_pred = rhs.nonlinear(t + dt, predictor)
         u_new = e_u + dt * (phi1.apply(A, Nu) + phi2.apply(A, N_pred - Nu))
-        return RKState(t + dt, u_new, dt, 0.0)
+        return ODEState(t + dt, u_new, dt, 0.0)
 
 
 class CoxMatthewsETDRK4Integrator:
@@ -136,9 +136,9 @@ class CoxMatthewsETDRK4Integrator:
     def step(
         self,
         rhs: LinearPlusNonlinearRHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         A = rhs.linear_operator * dt
         A_half = A * 0.5
         t, u = state.t, state.u
@@ -161,7 +161,7 @@ class CoxMatthewsETDRK4Integrator:
         b2 = _phi_combination(A, Na + Nb, c2=2.0, c3=-4.0)
         b4 = _phi_combination(A, Nc, c2=-1.0, c3=4.0)
         u_new = phi0.apply(A, u) + dt * (b1 + b2 + b4)
-        return RKState(t + dt, u_new, dt, 0.0)
+        return ODEState(t + dt, u_new, dt, 0.0)
 
 
 def _phi_combination(
@@ -224,9 +224,9 @@ class KrogstadETDRK4Integrator:
     def step(
         self,
         rhs: LinearPlusNonlinearRHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         A = rhs.linear_operator * dt
         A_half = A * 0.5
         t, u = state.t, state.u
@@ -264,7 +264,7 @@ class KrogstadETDRK4Integrator:
         b2 = _phi_combination(A, F2 + F3, c2=2.0, c3=-4.0)
         b4 = _phi_combination(A, F4, c2=-1.0, c3=4.0)
         u_new = e_u + dt * (b1 + b2 + b4)
-        return RKState(t + dt, u_new, dt, 0.0)
+        return ODEState(t + dt, u_new, dt, 0.0)
 
 
 etd_euler = ExponentialEulerIntegrator()

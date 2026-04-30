@@ -473,10 +473,10 @@ RHSProtocol                      — base: __call__(t, u) → Tensor
 
 State types:
 
-RKState(NamedTuple)              — (t, u, dt, err); used by RK, exponential,
-                                   IMEX, implicit, and splitting integrators
-MultistepState(NamedTuple)       — (t, u, dt, err, history); used by explicit
-                                   multistep integrators
+ODEState(NamedTuple)             — (t, u, dt, err, history); unified state type
+                                   used by all integrators; history is None for
+                                   single-step methods and tuple[Tensor, ...] for
+                                   explicit multistep (Adams-Bashforth) methods
 NordsieckState                   — Nordsieck history vector for multistep methods
 
 Integrators:
@@ -520,7 +520,7 @@ VODEController                   — VODE-style Nordsieck-aware step control
 Infrastructure:
 
 TimeStepper                      — drives integrator + controller loop;
-                                   advance(rhs, u0, t0, t_end) → RKState
+                                   advance(rhs, u0, t0, t_end) → ODEState
 PhiFunction(k)                   — φ_k operator action for exponential methods
 StiffnessDiagnostic              — online spectral radius estimation
 Tree / elementary_weight / trees_up_to_order
@@ -561,9 +561,9 @@ name.  The migration is breaking; it happens in phases (see below).
 
 | Current name | Target name | Rationale |
 |---|---|---|
-| `RKState` | `ODEState` | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). The name should not imply method family. |
+| `RKState` | `ODEState` *(done)* | A Runge-Kutta state is just an ODE integration state: (t, u, dt, err). `MultistepState` folded in via `history` field. |
 | `NordsieckState` | `MultistepState` | The Nordsieck encoding is an implementation detail; the concept is a multistep history of past solution data. |
-| `PartitionedState` | *(eliminated — done)* | Folded into `RKState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianSplit.split_index`. |
+| `PartitionedState` | *(eliminated — done)* | Folded into `ODEState.u = concat([q, p])`; `SymplecticCompositionIntegrator` unpacks via `HamiltonianSplit.split_index`. |
 | `DIRKIntegrator` | `ImplicitRungeKuttaIntegrator` | DIRK is one implementation strategy for implicit RK; the public name should say "implicit Runge-Kutta". |
 | `IMEXIntegrator` | `AdditiveRungeKuttaIntegrator` | IMEX is the physics abbreviation; the mathematical name is additive Runge-Kutta (ARK). |
 | `NordsieckIntegrator` | `MultistepIntegrator` | Same reasoning as `NordsieckState`. |
@@ -645,20 +645,20 @@ ODEState:
 
 **Migration path per affected type.**
 
-- `NordsieckState` → `ODEState` with `history = MultistepHistory(nordsieck_vector)`.
-  `MultistepIntegrator` reads/writes `history`; single-step integrators
-  pass through `state.history = None`.
+- `MultistepState` *(done)* — `ExplicitMultistepIntegrator` now stores past
+  `f` evaluations in `ODEState.history` as `tuple[Tensor, ...]` (most-recent
+  first).  `None` means no history (initial step); the integrator bootstraps
+  with `rk4` until enough history is available.
 
-- `MultistepState(t, u, dt, err, history)` → `ODEState` with `history =
-  MultistepHistory(history_list)`.  `ExplicitMultistepIntegrator` stores
-  past `f` evaluations in `history.derivatives`; the Nordsieck form stores
-  scaled derivatives directly — the buffer layout is method-specific but
-  the type is shared.
+- `NordsieckState` — replace with `ODEState` carrying
+  `history = NordsieckHistory(nordsieck_vector)`.  `NordsieckHistory` holds
+  the scaled-derivative vector and exposes `change_order()` / `rescale_step()`
+  (methods currently on `NordsieckState`).  `NordsieckIntegrator` reads/writes
+  `history`; single-step integrators pass through `state.history = None`.
 
-**Breaking change surface.** `TimeStepper.advance` return type changes
-from `RKState` to `ODEState`; field names are identical (`t`, `u`, `dt`,
-`err`), so destructuring callsites are unaffected.  Callers that type-
-annotate the return must update the annotation.
+**Breaking change surface.** `TimeStepper.advance` return type changed
+from `RKState` to `ODEState` in D1; field names are identical (`t`, `u`, `dt`,
+`err`), so destructuring callsites are unaffected.
 
 ---
 
@@ -669,11 +669,12 @@ at least one new test for the structural change.
 
 | Phase | Title | Scope |
 |---|---|---|
-| D | **Unified state** | Rename `RKState → ODEState`; merge `NordsieckState` into `ODEState` with `history` slot; `TimeStepper.advance` returns `ODEState`. |
+| D1 | **Unified state (done)** | Rename `RKState → ODEState`; fold `MultistepState` into `ODEState.history`; `TimeStepper.advance` returns `ODEState`. |
+| D2 | **Fold NordsieckState** | Introduce `NordsieckHistory` wrapper; `ODEState.history = NordsieckHistory(...)` replaces `NordsieckState`; move `change_order()` / `rescale_step()` to `NordsieckHistory`. |
 | E | **Rename sweep** | All target names from the vocabulary table replace current names; deprecation warnings on old names for one release cycle; B-series verification re-exports under new names. |
 | F | **`AutoIntegrator`** | Implement dispatch chain; add integration test that passes each RHS type through `AutoIntegrator` and verifies correct order. |
 
-Phase D can proceed immediately.  Phases E and F require D.
+Phase D2 can proceed immediately.  Phases E and F require D2.
 
 ---
 

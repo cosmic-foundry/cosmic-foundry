@@ -8,8 +8,8 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     ConstantStep,
     Controller,
+    ODEState,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 
@@ -85,8 +85,8 @@ class TimeStepper:
         u0: Tensor,
         t0: float,
         t_end: float,
-    ) -> RKState:
-        """Advance from t0 to t_end; return the final RKState.
+    ) -> ODEState:
+        """Advance from t0 to t_end; return the final ODEState.
 
         Parameters
         ----------
@@ -100,7 +100,7 @@ class TimeStepper:
             Final time.  The last accepted step is shortened so that
             t = t_end exactly.
         """
-        state = RKState(t0, u0)
+        state = ODEState(t0, u0)
         dt = self._controller.suggest(state, accepted=True)
         while state.t < t_end:
             dt_try = min(dt, t_end - state.t)

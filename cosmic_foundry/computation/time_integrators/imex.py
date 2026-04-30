@@ -28,8 +28,8 @@ import sympy
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators._newton import newton_solve
 from cosmic_foundry.computation.time_integrators.integrator import (
+    ODEState,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 
@@ -145,14 +145,14 @@ class IMEXIntegrator(TimeIntegrator):
     def step(
         self,
         rhs: RHSProtocol,
-        state: RKState,
+        state: ODEState,
         dt: float,
-    ) -> RKState:
+    ) -> ODEState:
         """Advance state by one IMEX step of size dt.
 
         ``rhs`` must satisfy ``AdditiveRHSProtocol`` (expose ``.explicit``,
         ``.implicit``, ``.jacobian_implicit``).
-        Returns a new RKState with t = state.t + dt and updated u.
+        Returns a new ODEState with t = state.t + dt and updated u.
         The err field is 0.0 (no embedded pair in this base class).
         """
         if not isinstance(rhs, AdditiveRHSProtocol):
@@ -192,7 +192,7 @@ class IMEXIntegrator(TimeIntegrator):
             u_new = u_new + (self._b_E_f[i] * dt) * k_E[i]
             u_new = u_new + (self._b_I_f[i] * dt) * k_I[i]
 
-        return RKState(t + dt, u_new, dt, 0.0)
+        return ODEState(t + dt, u_new, dt, 0.0)
 
 
 # ---------------------------------------------------------------------------

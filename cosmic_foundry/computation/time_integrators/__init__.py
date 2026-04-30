@@ -10,7 +10,6 @@ from cosmic_foundry.computation.time_integrators.bseries import (
 )
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
-    MultistepState,
     ab2,
     ab3,
     ab4,
@@ -48,9 +47,9 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     BlackBoxRHS,
     ConstantStep,
     Controller,
+    ODEState,
     PIController,
     RHSProtocol,
-    RKState,
     TimeIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.nordsieck import (
@@ -125,7 +124,7 @@ __all__ = [
     "IntegratorSelectionResult",
     "PIController",
     "RHSProtocol",
-    "RKState",
+    "ODEState",
     "RungeKuttaIntegrator",
     "TimeIntegrator",
     "TimeStepper",
@@ -173,7 +172,6 @@ __all__ = [
     "IMEXIntegrator",
     "ars222",
     "ExplicitMultistepIntegrator",
-    "MultistepState",
     "ab2",
     "ab3",
     "ab4",
