@@ -1,9 +1,9 @@
 """Time-integrator verification — outer-product parametric test suite.
 
 Three test axes:
-  test_convergence : _INTEGS × _PROBS  — skips incompatible pairs and slow runs
-  test_nse         : _CI_SPECS          — NSE detection for parametric networks
-  test_behavior    : _CHECKS            — targeted checks for behaviors not on the grid
+  test_convergence : _FAMILIES × orders × _PROBS — skips incompatible pairs / slow runs
+  test_nse         : _CI_SPECS                   — NSE detection for parametric networks
+  test_behavior    : _CHECKS                     — targeted checks for non-grid behavior
 """
 
 from __future__ import annotations
@@ -207,65 +207,108 @@ def _build_registry() -> tuple[list, list]:
         ),
     ]
 
-    # ── integrator registry ──────────────────────────────────────────────────
-    # (id, inst, order, rhs_kind)
-    integs: list = [
-        ("forward_euler", _ti.forward_euler, 1, "bb"),
-        ("midpoint", _ti.midpoint, 2, "bb"),
-        ("heun", _ti.heun, 2, "bb"),
-        ("ralston", _ti.ralston, 2, "bb"),
-        ("rk4", _ti.rk4, 4, "bb"),
-        ("dormand_prince", _ti.dormand_prince, 5, "bb"),
-        ("bogacki_shampine", _ti.bogacki_shampine, 3, "bb"),
-        ("ab2", _ti.ab2, 2, "bb"),
-        ("ab3", _ti.ab3, 3, "bb"),
-        ("ab4", _ti.ab4, 4, "bb"),
-        ("backward_euler", _ti.backward_euler, 1, "jac"),
-        ("implicit_midpoint", _ti.implicit_midpoint, 2, "jac"),
-        ("crouzeix_3", _ti.crouzeix_3, 3, "jac"),
-        ("bdf1", _ti.bdf1, 1, "jac"),
-        ("bdf2", _ti.bdf2, 2, "jac"),
-        ("bdf3", _ti.bdf3, 3, "jac"),
-        ("bdf4", _ti.bdf4, 4, "jac"),
-        ("am1", _ti.adams_moulton1, 1, "jac"),
-        ("am2", _ti.adams_moulton2, 2, "jac"),
-        ("am3", _ti.adams_moulton3, 3, "jac"),
-        ("am4", _ti.adams_moulton4, 4, "jac"),
-        ("ars222", _ti.ars222, 2, "split"),
-        ("strang", strang, 2, "comp"),
-        ("yoshida_comp", yoshida_c, 4, "comp"),
-        ("symplectic_euler", _ti.symplectic_euler, 1, "sym"),
-        ("leapfrog", _ti.leapfrog, 2, "sym"),
-        ("forest_ruth", _ti.forest_ruth, 4, "sym"),
-        ("yoshida_6", _ti.yoshida_6, 6, "sym"),
-        ("yoshida_8", _ti.yoshida_8, 8, "sym"),
+    # ── integrator family registry ───────────────────────────────────────────
+    # (family_name, rhs_kind, {order: instance})
+    # Each family covers a distinct algorithmic lineage; order is the sweep axis.
+    # Redundant aliases within a family (heun/ralston ≡ midpoint at order 2,
+    # bdf1/am1 ≡ backward_euler at order 1) are omitted — one representative per
+    # (family, order) cell keeps the grid informative without duplication.
+    families: list = [
+        (
+            "rk",
+            "bb",
+            {
+                1: _ti.forward_euler,
+                2: _ti.midpoint,
+                3: _ti.bogacki_shampine,
+                4: _ti.rk4,
+                5: _ti.dormand_prince,
+            },
+        ),
+        (
+            "ab",
+            "bb",
+            {q: _ti.ExplicitMultistepIntegrator.for_order(q) for q in [2, 3, 4]},
+        ),
+        (
+            "dirk",
+            "jac",
+            {
+                1: _ti.backward_euler,
+                2: _ti.implicit_midpoint,
+                3: _ti.crouzeix_3,
+            },
+        ),
+        (
+            "bdf",
+            "jac",
+            {q: _ti.MultistepIntegrator("bdf", q) for q in [2, 3, 4]},
+        ),
+        (
+            "am",
+            "jac",
+            {q: _ti.MultistepIntegrator("adams", q) for q in [2, 3, 4]},
+        ),
+        (
+            "imex",
+            "split",
+            {
+                2: _ti.ars222,
+            },
+        ),
+        (
+            "comp",
+            "comp",
+            {
+                2: strang,
+                4: yoshida_c,
+            },
+        ),
+        (
+            "sym",
+            "sym",
+            {
+                1: _ti.symplectic_euler,
+                2: _ti.leapfrog,
+                4: _ti.forest_ruth,
+                6: _ti.yoshida_6,
+                8: _ti.yoshida_8,
+            },
+        ),
     ]
-    return probs, integs
+    return probs, families
 
 
-_PROBS, _INTEGS = _build_registry()
+_PROBS, _FAMILIES = _build_registry()
 
 
 # ── Claim wrappers ────────────────────────────────────────────────────────────
 
 
 class _ConvergenceClaim(Claim):
-    """Convergence + conservation claim for one (integrator, problem) pair."""
+    """Convergence + conservation claim for one (family, order, problem) triple."""
 
-    def __init__(self, integ: tuple, prob: tuple) -> None:
-        self._integ = integ
+    def __init__(
+        self, family: str, order: int, inst: Any, kind: str, prob: tuple
+    ) -> None:
+        self._family = family
+        self._order = order
+        self._inst = inst
+        self._kind = kind
         self._prob = prob
 
     @property
     def description(self) -> str:
-        return f"convergence/{self._integ[0]}/{self._prob[0]}"
+        return f"convergence/{self._family}/order{self._order}/{self._prob[0]}"
 
     def check(self) -> None:
-        name, inst, order, kind = self._integ
+        family, order, inst, kind = self._family, self._order, self._inst, self._kind
         pid, u0, n, exact, mass_cons, rhs_dict = self._prob
         rhs = rhs_dict.get(kind)
         if rhs is None:
-            pytest.skip(f"{name} ({kind}) has no compatible RHS for {pid}")
+            pytest.skip(
+                f"{family}/order{order} ({kind}) has no compatible RHS for {pid}"
+            )
         t0 = time.perf_counter()
         dts: list[float] = []
         errs: list[float] = []
@@ -279,11 +322,17 @@ class _ConvergenceClaim(Claim):
                 break
             if time.perf_counter() - t0 > _BUDGET:
                 break
-        assert _slope(errs, dts) >= order - 0.3, f"{name}/{pid}: slope too low"
+        assert (
+            _slope(errs, dts) >= order - 0.3
+        ), f"{family}/order{order}/{pid}: slope too low"
         if mass_cons:
-            assert _conserved(state.u, n), f"{name}/{pid}: mass not conserved"
+            assert _conserved(
+                state.u, n
+            ), f"{family}/order{order}/{pid}: mass not conserved"
             for i in range(n):
-                assert float(state.u[i]) >= -1e-10, f"{name}/{pid}: u[{i}] negative"
+                assert (
+                    float(state.u[i]) >= -1e-10
+                ), f"{family}/order{order}/{pid}: u[{i}] negative"
 
 
 class _NSEClaim(Claim):
@@ -448,7 +497,7 @@ def _phi_check() -> None:
 def _variable_order_check() -> None:
     """VariableOrderNordsieckIntegrator climbs to q=4, drops to q=2 on sharpening."""
     sel = _ti.OrderSelector(q_min=2, q_max=4, atol=1e-4, rtol=1e-4)
-    inst = _ti.VariableOrderNordsieckIntegrator(_ti.adams_family, sel)
+    inst = _ti.VariableOrderNordsieckIntegrator("adams", sel)
     bb = _ti.BlackBoxRHS(
         lambda t, u: Tensor(
             [-float(u[0]), float(u[0]) - 2.0 * float(u[1]), 2.0 * float(u[1])],
@@ -464,7 +513,7 @@ def _variable_order_check() -> None:
         x0, x1 = float(u[0]), float(u[1])
         return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
 
-    inst2 = _ti.VariableOrderNordsieckIntegrator(_ti.adams_family, sel, q_initial=4)
+    inst2 = _ti.VariableOrderNordsieckIntegrator("adams", sel, q_initial=4)
     state2 = inst2.advance(_ti.BlackBoxRHS(_sharp), _U3, t0=0.0, t_end=1.0, dt0=0.02)
     post = [
         q
@@ -488,8 +537,6 @@ def _vode_check() -> None:
         return Tensor([[-1.0, 0.0, 0.0], [1.0, -k2, 0.0], [0.0, k2, 0.0]])
 
     ctrl = _ti.VODEController(
-        adams_family=_ti.adams_family,
-        bdf_family=_ti.bdf_family,
         order_selector=_ti.OrderSelector(
             q_min=2, q_max=4, atol=5e-4, rtol=5e-4, factor_min=0.25, factor_max=1.15
         ),
@@ -565,7 +612,10 @@ def _nse_direct_check() -> None:
 # ── claim registries ─────────────────────────────────────────────────────────
 
 _CONV_CLAIMS: list[Claim] = [
-    _ConvergenceClaim(integ, prob) for integ in _INTEGS for prob in _PROBS
+    _ConvergenceClaim(family, order, inst, kind, prob)
+    for family, kind, orders in _FAMILIES
+    for order, inst in sorted(orders.items())
+    for prob in _PROBS
 ]
 
 _NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS]

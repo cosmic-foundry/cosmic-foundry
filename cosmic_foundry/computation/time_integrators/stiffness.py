@@ -8,8 +8,6 @@ from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
-    AdamsFamily,
-    BDFFamily,
     MultistepIntegrator,
     NordsieckHistory,
 )
@@ -96,8 +94,6 @@ class FamilySwitchingNordsieckIntegrator:
     def __init__(
         self,
         *,
-        adams_family: AdamsFamily,
-        bdf_family: BDFFamily,
         switcher: StiffnessSwitcher,
         diagnostic: StiffnessDiagnostic | None = None,
         q: int = 2,
@@ -105,10 +101,8 @@ class FamilySwitchingNordsieckIntegrator:
     ) -> None:
         if q < 1:
             raise ValueError("q must be at least 1.")
-        if q > adams_family.q_max or q > bdf_family.q_max:
+        if q > 6:
             raise ValueError("q must be supported by both families.")
-        self._adams_family = adams_family
-        self._bdf_family = bdf_family
         self._switcher = switcher
         self._diagnostic = diagnostic or StiffnessDiagnostic()
         self._q = q
@@ -197,9 +191,7 @@ class FamilySwitchingNordsieckIntegrator:
         return state
 
     def _integrator(self) -> MultistepIntegrator:
-        if self._family == "adams":
-            return MultistepIntegrator(self._adams_family, self._q)
-        return MultistepIntegrator(self._bdf_family, self._q)
+        return MultistepIntegrator(self._family, self._q)
 
 
 def nordsieck_solution_distance(lhs: ODEState, rhs: ODEState) -> float:

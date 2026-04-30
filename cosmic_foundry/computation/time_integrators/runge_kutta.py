@@ -137,22 +137,6 @@ midpoint = RungeKuttaIntegrator(
     order=2,
 )
 
-# Heun (RK22) with Heun-Euler embedded pair: b̂ = forward Euler weights.
-heun = RungeKuttaIntegrator(
-    A=[[0, 0], [1, 0]],
-    b=["1/2", "1/2"],
-    b_hat=[1, 0],
-    c=[0, 1],
-    order=2,
-)
-
-ralston = RungeKuttaIntegrator(
-    A=[[0, 0], ["2/3", 0]],
-    b=["1/4", "3/4"],
-    c=[0, "2/3"],
-    order=2,
-)
-
 rk4 = RungeKuttaIntegrator(
     A=[
         [0, 0, 0, 0],
@@ -216,8 +200,6 @@ __all__ = [
     "bogacki_shampine",
     "dormand_prince",
     "forward_euler",
-    "heun",
     "midpoint",
-    "ralston",
     "rk4",
 ]

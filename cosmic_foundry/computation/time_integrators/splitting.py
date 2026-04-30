@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import warnings
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
@@ -115,32 +114,6 @@ class CompositionIntegrator(TimeIntegrator):
         return ODEState(t_start + dt, state.u, state.dt, state.err)
 
 
-class StrangSplittingIntegrator(CompositionIntegrator):
-    """Deprecated alias for ``CompositionIntegrator``."""
-
-    def __init__(
-        self,
-        sub_integrators: Sequence[TimeIntegrator],
-        sequence: Sequence[SplittingStep],
-        order: int,
-    ) -> None:
-        warnings.warn(
-            "StrangSplittingIntegrator is deprecated; use CompositionIntegrator.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(sub_integrators, sequence, order)
-
-
-def lie_steps() -> list[SplittingStep]:
-    """Lie (sequential) splitting sequence for two components.
-
-    ``[A(h), B(h)]``: advance component 0 by the full step, then component 1.
-    First-order accurate; error is ``O(h²)`` per step, ``O(h)`` globally.
-    """
-    return [SplittingStep(0, 1.0), SplittingStep(1, 1.0)]
-
-
 def strang_steps() -> list[SplittingStep]:
     """Strang (symmetric) splitting sequence for two components.
 
@@ -190,11 +163,6 @@ __all__ = [
     "CompositeRHSProtocol",
     "SplittingStep",
     "CompositionIntegrator",
-    "StrangSplittingIntegrator",
-    "lie_steps",
     "strang_steps",
     "yoshida_steps",
 ]
-
-OperatorSplitRHS = CompositeRHS
-OperatorSplitRHSProtocol = CompositeRHSProtocol

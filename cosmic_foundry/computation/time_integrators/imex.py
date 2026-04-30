@@ -20,7 +20,6 @@ ars222  — order 2, A-stable implicit pair (Ascher-Ruuth-Spiteri 1997)
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
@@ -197,44 +196,6 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
         return ODEState(t + dt, u_new, dt, 0.0)
 
 
-class IMEXIntegrator(AdditiveRungeKuttaIntegrator):
-    """Deprecated alias for ``AdditiveRungeKuttaIntegrator``."""
-
-    def __init__(
-        self,
-        A_E: list[list],
-        b_E: list,
-        c_E: list,
-        A_I: list[list],
-        b_I: list,
-        c_I: list,
-        order: int,
-    ) -> None:
-        warnings.warn(
-            "IMEXIntegrator is deprecated; use AdditiveRungeKuttaIntegrator.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(A_E, b_E, c_E, A_I, b_I, c_I, order)
-
-
-class AdditiveRHS(SplitRHS):
-    """Deprecated alias for ``SplitRHS``."""
-
-    def __init__(
-        self,
-        f_E: Callable[[float, Tensor], Tensor],
-        f_I: Callable[[float, Tensor], Tensor],
-        jac_I: Callable[[float, Tensor], Tensor],
-    ) -> None:
-        warnings.warn(
-            "AdditiveRHS is deprecated; use SplitRHS.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(f_E, f_I, jac_I)
-
-
 # ---------------------------------------------------------------------------
 # Named instances
 # ---------------------------------------------------------------------------
@@ -259,13 +220,8 @@ ars222 = AdditiveRungeKuttaIntegrator(
 
 
 __all__ = [
-    "AdditiveRHS",
     "AdditiveRungeKuttaIntegrator",
-    "AdditiveRHSProtocol",
-    "IMEXIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
     "ars222",
 ]
-
-AdditiveRHSProtocol = SplitRHSProtocol

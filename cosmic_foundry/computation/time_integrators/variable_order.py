@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
 from cosmic_foundry.computation.time_integrators.nordsieck import (
-    AdamsFamily,
-    BDFFamily,
     MultistepIntegrator,
     NordsieckHistory,
 )
@@ -134,15 +132,15 @@ class VariableOrderNordsieckIntegrator:
 
     def __init__(
         self,
-        family: AdamsFamily | BDFFamily,
+        family: Literal["bdf", "adams"],
         selector: OrderSelector,
         *,
         q_initial: int | None = None,
         max_rejections: int = 20,
     ) -> None:
-        if selector.q_max > family.q_max:
-            raise ValueError("selector q_max exceeds family q_max.")
-        self._family = family
+        if selector.q_max > 6:
+            raise ValueError("selector q_max exceeds family q_max (6).")
+        self._family_name = family
         self._selector = selector
         self._q = selector.q_min if q_initial is None else q_initial
         if not selector.q_min <= self._q <= selector.q_max:
@@ -172,7 +170,9 @@ class VariableOrderNordsieckIntegrator:
         dt: float,
     ) -> ODEState:
         """Initialize a Nordsieck state at the current starting order."""
-        return MultistepIntegrator(self._family, self._q).init_state(rhs, t0, u0, dt)
+        return MultistepIntegrator(self._family_name, self._q).init_state(
+            rhs, t0, u0, dt
+        )
 
     def step(
         self,
@@ -187,7 +187,7 @@ class VariableOrderNordsieckIntegrator:
         state = ODEState(state.t, state.u, dt, state.err, nh)
         rejections = 0
         while True:
-            candidate = MultistepIntegrator(self._family, q).step(rhs, state, dt)
+            candidate = MultistepIntegrator(self._family_name, q).step(rhs, state, dt)
             decision = self._selector.decide(candidate)
             if decision.accepted:
                 self._q = decision.q_next

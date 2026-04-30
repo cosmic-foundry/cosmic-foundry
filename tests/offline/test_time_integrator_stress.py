@@ -23,8 +23,6 @@ from cosmic_foundry.computation.time_integrators import (
     OrderSelector,
     StiffnessSwitcher,
     VODEController,
-    adams_family,
-    bdf_family,
 )
 
 _RUN_OFFLINE = os.environ.get("COSMIC_FOUNDRY_OFFLINE_INTEGRATOR_STRESS") == "1"
@@ -106,8 +104,6 @@ def _branched_hot_window_rates(n: int) -> RateFn:
 
 def _vode_controller(*, dt0: float, q_max: int = 4) -> VODEController:
     return VODEController(
-        adams_family=adams_family,
-        bdf_family=bdf_family,
         order_selector=OrderSelector(
             q_min=2,
             q_max=q_max,
