@@ -78,6 +78,7 @@ from cosmic_foundry.computation.time_integrators.nordsieck import (
 )
 from cosmic_foundry.computation.time_integrators.reaction_network import (
     ReactionNetworkRHS,
+    project_conserved,
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
@@ -137,6 +138,7 @@ __all__ = [
     "AutoIntegrator",
     "BlackBoxRHS",
     "ReactionNetworkRHS",
+    "project_conserved",
     "ConstantStep",
     "Controller",
     "IntegratorSelectionResult",

@@ -6,29 +6,31 @@ from collections.abc import Callable
 
 import numpy as np
 
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
+from cosmic_foundry.computation.tensor import Tensor, einsum
+
+_LU = LUFactorization()
 
 
-def _left_null_space(S_list: list[list[float]]) -> list[list[float]]:
+def _left_null_space(s_tensor: Tensor) -> list[list[float]]:
     """Return an orthonormal basis for null(Sᵀ) as row vectors.
 
     The left null space of S consists of vectors w satisfying w @ S = 0,
-    equivalently the null space of Sᵀ.  Uses full SVD; the threshold for
-    a zero singular value is n·ε_machine·σ₀, where σ₀ is the largest
-    singular value.
+    equivalently the null space of Sᵀ.  Uses full SVD of Sᵀ via the
+    tensor's backend; the threshold for a zero singular value is
+    n·ε_machine·σ₀, where σ₀ is the largest singular value.
     """
-    arr = np.array(S_list, dtype=float).T  # (n_reactions, n_species)
-    n_reactions, n_species = arr.shape
+    n_species, n_reactions = s_tensor.shape
     if n_reactions == 0 or n_species == 0:
         return []
-    _, sigma, Vh = np.linalg.svd(arr, full_matrices=True)
-    tol = (
-        max(n_reactions, n_species)
-        * np.finfo(float).eps
-        * (sigma[0] if len(sigma) else 1.0)
-    )
-    rank = int(np.sum(sigma > tol))
-    result: list[list[float]] = Vh[rank:].tolist()
+    backend = s_tensor.backend
+    s_t = einsum("ij->ji", s_tensor)  # (n_reactions, n_species)
+    _, sigma_raw, vt_raw = backend.svd(s_t._value, s_t.shape, full_matrices=True)
+    sigma = [float(x) for x in sigma_raw]
+    k = len(sigma)
+    tol = max(n_reactions, n_species) * np.finfo(float).eps * (sigma[0] if k else 1.0)
+    rank = sum(1 for s in sigma if s > tol)
+    result: list[list[float]] = [[float(x) for x in row] for row in vt_raw[rank:]]
     return result
 
 
@@ -62,6 +64,37 @@ def _independent_reaction_pairs(
         if len(selected) >= max_rank:
             break
     return selected
+
+
+def project_conserved(u: Tensor, basis: Tensor, targets: Tensor) -> Tensor:
+    """Project u onto the conservation hyperplane {u : basis @ u = targets}.
+
+    Returns the nearest point u′ satisfying basis @ u′ = targets by
+    orthogonal projection:
+
+        residual = basis @ u − targets          (shape: n_conserved)
+        u′ = u − basisᵀ (basis basisᵀ)⁻¹ residual
+
+    When u already satisfies the constraint the residual is zero and u is
+    returned unchanged to floating-point precision.  The projection is
+    idempotent and minimum-norm: u′ is the unique point on the hyperplane
+    closest to u in the Euclidean norm.
+
+    Parameters
+    ----------
+    u:
+        State vector to project, shape (n_species,).
+    basis:
+        Conservation-law matrix, shape (n_conserved, n_species).  Rows are
+        the left null-space vectors of the stoichiometry matrix S.
+    targets:
+        Target values basis @ u₀, shape (n_conserved,).
+    """
+    residual = basis @ u - targets
+    gram = einsum("ij,kj->ik", basis, basis)
+    delta = _LU.factorize(gram).solve(residual)
+    correction = einsum("ij,i->j", basis, delta)
+    return u - correction
 
 
 class ReactionNetworkRHS:
@@ -136,13 +169,13 @@ class ReactionNetworkRHS:
         n_species, n_reactions = stoichiometry_matrix.shape
         backend = initial_state.backend
 
+        null_rows = _left_null_space(stoichiometry_matrix)
+        n_conserved = len(null_rows)
+
         S_list = [
             [float(stoichiometry_matrix[i, j]) for j in range(n_reactions)]
             for i in range(n_species)
         ]
-
-        null_rows = _left_null_space(S_list)
-        n_conserved = len(null_rows)
 
         if n_conserved > 0:
             self.conservation_basis: Tensor = Tensor(null_rows, backend=backend)
@@ -200,4 +233,4 @@ class ReactionNetworkRHS:
         return Tensor(rows, backend=backend)
 
 
-__all__ = ["ReactionNetworkRHS"]
+__all__ = ["ReactionNetworkRHS", "project_conserved"]

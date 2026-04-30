@@ -124,9 +124,9 @@ class NumpyBackend:
         return np.diag(raw)
 
     def svd(
-        self, raw: np.ndarray, shape: tuple[int, ...]
+        self, raw: np.ndarray, shape: tuple[int, ...], full_matrices: bool = False
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        U, s, Vt = np.linalg.svd(raw, full_matrices=False)
+        U, s, Vt = np.linalg.svd(raw, full_matrices=full_matrices)
         return U, s, Vt
 
     # ------------------------------------------------------------------

@@ -142,8 +142,10 @@ class JaxBackend:
     def diag(self, raw: Any, shape: tuple[int, ...]) -> Any:
         return jnp.diag(raw)
 
-    def svd(self, raw: Any, shape: tuple[int, ...]) -> tuple[Any, Any, Any]:
-        u, s, vt = jnp.linalg.svd(raw, full_matrices=False)
+    def svd(
+        self, raw: Any, shape: tuple[int, ...], full_matrices: bool = False
+    ) -> tuple[Any, Any, Any]:
+        u, s, vt = jnp.linalg.svd(raw, full_matrices=full_matrices)
         return u, s, vt
 
     # ------------------------------------------------------------------
