@@ -1193,44 +1193,6 @@ def _generic_integrator_domain_rejection_spec() -> _CorrectnessSpec:
     )
 
 
-def _variable_order_domain_rejection_spec() -> _CorrectnessSpec:
-    def run() -> list[_ti.ODEState]:
-        rhs = _two_species_decay_rhs(300.0)
-        controller = _ti.VariableOrderNordsieckIntegrator(
-            "adams",
-            _ti.OrderSelector(
-                1,
-                3,
-                atol=1e-2,
-                rtol=1e-2,
-                factor_min=0.5,
-                factor_max=1.2,
-            ),
-            q_initial=2,
-        )
-        state = controller.advance(
-            rhs,
-            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
-            0.0,
-            0.03,
-            0.005,
-        )
-
-        _assert_abundance_state(state.u, label="variable_order_domain_retry")
-        assert controller.domain_limited_step_sizes
-        assert max(controller.domain_limited_step_sizes) < 0.005
-        assert controller.rejection_reasons.count("domain") == 0
-        assert controller.rejected_steps < 10
-        return [state]
-
-    return _CorrectnessSpec(
-        "domain/variable_order_limits_negative_abundance",
-        run,
-        lambda t: (1.0, 1.0),
-        float("inf"),
-    )
-
-
 def _constraint_aware_domain_rejection_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rhs = _two_species_decay_rhs(1000.0)
@@ -1377,7 +1339,6 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _CorrectnessClaim(_nse_transient_correctness_spec()),
     _CorrectnessClaim(_vode_domain_rejection_spec()),
     _CorrectnessClaim(_generic_integrator_domain_rejection_spec()),
-    _CorrectnessClaim(_variable_order_domain_rejection_spec()),
     _CorrectnessClaim(_constraint_aware_domain_rejection_spec()),
     *[
         _CorrectnessClaim(_nse_correctness_spec(s, expected_walltime_s=5.0))

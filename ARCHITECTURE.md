@@ -518,9 +518,8 @@ ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
 MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
                                    factories: bdf_family → bdf1–bdf6
                                               adams_family → adams_moulton1–adams_moulton6
-VariableOrderNordsieckIntegrator — online order selection (OrderSelector)
-FamilySwitchingNordsieckIntegrator
-                                 — runtime BDF ↔ Adams-Moulton switching (StiffnessSwitcher)
+VODEController                   — adaptive Nordsieck controller combining
+                                   OrderSelector and StiffnessSwitcher
 LawsonRungeKuttaIntegrator       — integrating-factor RK for semilinear systems
                                    instances: lawson_rk1–lawson_rk6
 SymplecticCompositionIntegrator  — position-Verlet family for separable Hamiltonian
@@ -537,7 +536,8 @@ Controllers:
 
 ConstantStep                     — fixed step size
 PIController                     — Gustafsson PI formula with accept/reject
-VODEController                   — VODE-style Nordsieck-aware step control
+OrderSelector                    — Nordsieck order and step-size policy
+StiffnessSwitcher                — Adams/BDF family-switch policy
 
 Infrastructure:
 
@@ -774,8 +774,10 @@ The sprint is complete when the following are true:
   because a negative component was clamped after the step.
 - **General controller path.**  After VODE is proven on the known failure, the
   same domain-acceptance mechanism is made available to other adaptive
-  controllers (`Integrator`/`PIController`, `VariableOrderNordsieckIntegrator`,
-  and `ConstraintAwareController`) where they own candidate acceptance.
+  controllers (`Integrator`/`PIController` and `ConstraintAwareController`)
+  where they own candidate acceptance.  VODE is the single public adaptive
+  Nordsieck controller; `OrderSelector` and `StiffnessSwitcher` remain
+  reusable policies rather than competing wrappers.
 - **Domain-aware timestep prediction.**  The algorithm uses the known domain to
   choose less reckless initial and retry timesteps.  For positivity domains this
   can start with a conservative time-to-bound estimate from the current state
