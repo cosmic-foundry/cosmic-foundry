@@ -1,9 +1,10 @@
 """Time-integrator verification — outer-product parametric test suite.
 
-Two test axes:
+Three test axes:
   test_convergence : _ORDERS × _PROBS — AutoIntegrator dispatches by RHS type; skips
                      unsupported (order, problem) pairs via ValueError
   test_correctness : _CORRECT_CLAIMS  — integration histories match analytical f(t)
+  test_performance : _PERF_CLAIMS     — self-calibrated cost-to-accuracy rooflines
 """
 
 from __future__ import annotations
@@ -23,13 +24,16 @@ from cosmic_foundry.computation.backends import (
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor
-from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
+from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, CalibratedClaim, Claim
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
 _BUDGET = INTEGRATOR_CLAIM_BUDGET_S
 _OFFLINE = os.environ.get("COSMIC_FOUNDRY_OFFLINE_NETWORK_STRESS") == "1"
 _U2, _U3 = Tensor([1.0, 0.0]), Tensor([1.0, 0.0, 0.0])
+_PERF_TRIALS = 10
+_PERF_BATCH = 200
+_PERF_OVERHEAD = 80.0
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -64,6 +68,29 @@ def _history(inst: Any, rhs: Any, u0: Tensor, dt: float, t_end: float) -> list:
         state = inst.step(rhs, state, min(dt, t_end - state.t))
         states.append(state)
     return states
+
+
+def _best_per_call(fn: Any, *, batch: int = _PERF_BATCH) -> float:
+    best = float("inf")
+    for _ in range(_PERF_TRIALS):
+        t0 = time.perf_counter()
+        for _ in range(batch):
+            fn()
+        best = min(best, time.perf_counter() - t0)
+    return best / batch
+
+
+def _best_elapsed(fn: Any) -> tuple[float, Any]:
+    best_elapsed = float("inf")
+    best_result = None
+    for _ in range(_PERF_TRIALS):
+        t0 = time.perf_counter()
+        result = fn()
+        elapsed = time.perf_counter() - t0
+        if elapsed < best_elapsed:
+            best_elapsed = elapsed
+            best_result = result
+    return best_elapsed, best_result
 
 
 # ── convergence slope (log-log OLS) ──────────────────────────────────────────
@@ -224,6 +251,22 @@ class _CorrectnessSpec:
     offline: bool = False
 
 
+@dataclass(frozen=True)
+class _IntegratorCalibration:
+    scalar_rhs_s: float
+    semilinear_nonlinear_s: float
+    exp_action_s: float
+
+
+@dataclass(frozen=True)
+class _PerformanceSpec:
+    name: str
+    run: Any
+    expected: Any
+    tol: float
+    roofline: Any
+
+
 class _ConvergenceClaim(Claim):
     """Convergence + conservation claim for one (order, problem) pair."""
 
@@ -283,6 +326,28 @@ class _CorrectnessClaim(Claim):
             pytest.skip(_OFF_REASON)
         for state in self._spec.run():
             assert _err(state.u, self._spec.expected, state.t) < self._spec.tol
+
+
+class _PerformanceClaim(CalibratedClaim[_IntegratorCalibration]):
+    """Cost-to-accuracy claim against locally measured primitive rooflines."""
+
+    def __init__(self, spec: _PerformanceSpec) -> None:
+        self._spec = spec
+
+    @property
+    def description(self) -> str:
+        return f"performance/{self._spec.name}"
+
+    def check(self, calibration: _IntegratorCalibration) -> None:
+        elapsed, state = _best_elapsed(self._spec.run)
+        err = _err(state.u, self._spec.expected, state.t)
+        assert err < self._spec.tol
+        roofline = self._spec.roofline(calibration)
+        assert elapsed <= _PERF_OVERHEAD * roofline, (
+            f"{self.description}: {elapsed:.3e}s actual, "
+            f"{roofline:.3e}s calibrated roofline, "
+            f"{elapsed / roofline:.1f}x > {_PERF_OVERHEAD:.1f}x"
+        )
 
 
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
@@ -414,6 +479,75 @@ def _nse_transient_correctness_spec() -> _CorrectnessSpec:
     return _CorrectnessSpec("nse/transient", run, expected, 1e-4)
 
 
+def _explicit_rk4_performance_spec() -> _PerformanceSpec:
+    rhs = _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend))
+    dt, t_end, order = 0.02, 1.0, 4
+    n_steps = round(t_end / dt)
+
+    def run() -> _ti.ODEState:
+        return _run(_ti.RungeKuttaIntegrator(order), rhs, Tensor([1.0]), dt, t_end)
+
+    def roofline(cal: _IntegratorCalibration) -> float:
+        return n_steps * order * cal.scalar_rhs_s
+
+    return _PerformanceSpec(
+        "explicit_rk4/scalar_decay",
+        run,
+        _exact_scalar_decay,
+        1e-7,
+        roofline,
+    )
+
+
+def _semilinear_lawson4_performance_spec() -> _PerformanceSpec:
+    linear = Tensor([[-2.0]])
+
+    def nonlinear(t: float, u: Tensor) -> Tensor:
+        return Tensor([math.sin(t)], backend=u.backend)
+
+    rhs = _ti.SemilinearRHS(linear, nonlinear)
+    dt, t_end, order = 0.02, 0.4, 4
+    n_steps = round(t_end / dt)
+
+    def run() -> _ti.ODEState:
+        return _run(
+            _ti.LawsonRungeKuttaIntegrator(order), rhs, Tensor([1.0]), dt, t_end
+        )
+
+    def roofline(cal: _IntegratorCalibration) -> float:
+        # Lawson RK4 stages require nonlinear evaluations plus dense linear-flow
+        # actions; both primitives are calibrated on this device before testing.
+        return n_steps * (4 * cal.semilinear_nonlinear_s + 12 * cal.exp_action_s)
+
+    return _PerformanceSpec(
+        "lawson_rk4/semilinear_forcing",
+        run,
+        _exact_semilinear,
+        1e-7,
+        roofline,
+    )
+
+
+@pytest.fixture(scope="module")
+def integrator_calibration() -> _IntegratorCalibration:
+    u = Tensor([1.0])
+
+    def scalar_rhs() -> Tensor:
+        return Tensor([-float(u[0])], backend=u.backend)
+
+    def nonlinear() -> Tensor:
+        return Tensor([math.sin(0.2)], backend=u.backend)
+
+    def exp_action() -> Tensor:
+        return _ti.PhiFunction(0).apply(Tensor([[-0.04]]), u)
+
+    return _IntegratorCalibration(
+        scalar_rhs_s=_best_per_call(scalar_rhs),
+        semilinear_nonlinear_s=_best_per_call(nonlinear),
+        exp_action_s=_best_per_call(exp_action),
+    )
+
+
 # ── claim registries ─────────────────────────────────────────────────────────
 
 _CONV_CLAIMS: list[Claim] = [
@@ -430,6 +564,10 @@ _CORRECT_CLAIMS: list[Claim] = [
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
     *[_CorrectnessClaim(_nse_correctness_spec(s, offline=True)) for s in _OFF_SPECS],
+]
+_PERF_CLAIMS: list[CalibratedClaim[_IntegratorCalibration]] = [
+    _PerformanceClaim(_explicit_rk4_performance_spec()),
+    _PerformanceClaim(_semilinear_lawson4_performance_spec()),
 ]
 
 
@@ -449,3 +587,13 @@ def test_convergence(claim: Claim) -> None:
 )
 def test_correctness(claim: Claim) -> None:
     claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim", _PERF_CLAIMS, ids=[c.description for c in _PERF_CLAIMS]
+)
+def test_performance(
+    claim: CalibratedClaim[_IntegratorCalibration],
+    integrator_calibration: _IntegratorCalibration,
+) -> None:
+    claim.check(integrator_calibration)
