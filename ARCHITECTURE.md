@@ -733,67 +733,71 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Sprint: Domain-preserving adaptive integration
+### Sprint: Architecture ownership structural claims
 
-Goal: make adaptive time integrators respect known state domains without
-post-step clipping.  For reaction-network abundances the valid domain is the
-nonnegative orthant intersected with the conservation manifold.  A candidate
-step that leaves that domain is not a valid accepted state: the controller must
-reject the internal step, reduce the step size, and retry from the previous
-state.  Projection remains for exact conservation and algebraic constraint
-initialization; it must not be used to hide a negative-abundance candidate.
+Goal: make architecture ownership a reusable, machine-checkable capability in
+the test suite.  Numerical claims verify that an algorithm is correct on a
+problem.  Architecture ownership claims verify that the codebase has one
+intended owner for a responsibility, that public exports are deliberately
+categorized, and that helper/policy objects do not quietly become competing
+implementations.  The validation home for this capability is
+`tests/test_structure.py`; feature-specific tests may remain in their existing
+files, but ownership maps and anti-duplication checks belong in the structural
+claim registry.
+
+The first application is the time-integration layer.  The recent Nordsieck
+cleanup made `VODEController` the single public adaptive Nordsieck controller,
+with `OrderSelector` and `StiffnessSwitcher` retained as reusable policies.
+This sprint should encode that decision structurally so the wrappers cannot
+reappear accidentally, and so future packages can reuse the same pattern.
 
 The sprint is complete when the following are true:
 
-- **Domain abstraction.**  The computation layer exposes a small domain
-  predicate/protocol for integrator state validity.  It supports at least:
-  membership testing for a candidate `Tensor`, a roundoff floor for tiny
-  negative values, and failure metadata identifying the violated component and
-  margin.  Generic integrators know only that a domain accepted or rejected a
-  candidate; reaction-network-specific meaning stays in `ReactionNetworkRHS` or
-  a companion domain object.
-- **Reaction-network domain.**  `ReactionNetworkRHS` can provide the abundance
-  domain implied by its species vector: all abundances must be nonnegative
-  within an explicit roundoff tolerance.  Conservation laws remain separate
-  equality constraints enforced by `project_conserved`; positivity is an
-  acceptance criterion, not a clipping operation.
-- **Retry on domain failure.**  `VODEController` composes local error
-  acceptance with domain acceptance.  If either fails, the controller rejects
-  the step, leaves the previous state/history unchanged, shrinks the internal
-  timestep, rebuilds the Nordsieck history for the retry, and records the
-  rejection reason.  Domain rejection counts toward the existing rejection
-  limit.
-- **Known failure promoted.**  The branched hot-window reaction-network stress
-  claim no longer xfails.  It asserts nonnegative accepted abundances, tight
-  conservation, bounded rejection count, family switching, and coarse/fine
-  self-consistency.
-- **No clipping guard.**  Tests include a targeted network where a large
-  unconstrained step would produce a negative abundance.  The accepted solution
-  must be nonnegative because the controller either predicted a smaller
-  domain-safe attempt or retried from the previous state after rejection, not
-  because a negative component was clamped after the step.
-- **General controller path.**  After VODE is proven on the known failure, the
-  same domain-acceptance mechanism is made available to other adaptive
-  controllers (`Integrator`/`PIController` and `ConstraintAwareController`)
-  where they own candidate acceptance.  VODE is the single public adaptive
-  Nordsieck controller; `OrderSelector` and `StiffnessSwitcher` remain
-  reusable policies rather than competing wrappers.
-- **Domain-aware timestep prediction.**  The algorithm uses the known domain to
-  choose less reckless initial and retry timesteps.  For positivity domains this
-  can start with a conservative time-to-bound estimate from the current state
-  and RHS direction, then evolve toward richer domain hooks that provide
-  controller-specific step limits or safety factors.  The controller should
-  still verify every candidate; predictive bounds reduce avoidable rejections
-  but do not replace acceptance checks.
-- **Diagnostics.**  Rejection logs distinguish local truncation error,
-  stiffness/family changes, and domain violations.  Failed tests must report the
-  violated component, candidate value, tolerance, attempted `dt`, and retry
-  count so the single failing step can be reconstructed.
+- **Reusable ownership claim type.**  `tests/test_structure.py` exposes a
+  declarative claim for package-level architecture ownership.  A claim can
+  categorize public symbols, name exclusive responsibility owners, list
+  forbidden public symbols, and fail with diagnostics that identify the
+  mismatched symbol or responsibility.
+- **Public-category maps.**  Ownership claims can assert that each public export
+  in a package belongs to an expected category such as integrator, controller,
+  policy, RHS wrapper, decomposition, solver, result object, or helper.  The
+  categories are deliberately local to each package so the mechanism is general
+  without imposing a global taxonomy too early.
+- **Exclusive-owner checks.**  Ownership claims can assert that a named
+  responsibility has exactly one public owner.  This is the guard against
+  parallel implementations at the same abstraction level: if a new class claims
+  the same role, the structural test fails until the architecture map is
+  consciously updated or the duplication is removed.
+- **Forbidden-symbol checks.**  Ownership claims can assert that retired public
+  names remain absent.  This catches accidental reintroduction of wrappers or
+  compatibility aliases when the project has explicitly consolidated a
+  responsibility.
+- **Time-integrator ownership map.**  The first concrete map covers
+  `cosmic_foundry.computation.time_integrators`.  It should classify public
+  method families, drivers/controllers, policies, RHS wrappers, domains,
+  coefficient/history objects, and helpers.  It should encode at least:
+  `VODEController` owns adaptive Nordsieck control; `Integrator` owns the
+  generic integrator/controller advance loop; `ConstraintAwareController` owns
+  reaction-network constraint lifecycle advancement; `OrderSelector` and
+  `StiffnessSwitcher` are policies, not competing controllers.
+- **Time-integrator anti-duplication guard.**  The time-integrator map forbids
+  retired wrapper names including `VariableOrderNordsieckIntegrator` and
+  `FamilySwitchingNordsieckIntegrator`.  If the first implementation discovers
+  other same-level overlaps or ambiguous ownership, fix the code or update the
+  map in the same PR rather than documenting the ambiguity as acceptable.
+- **Generalization path.**  The structure-claim machinery is documented in code
+  well enough for later PRs to add maps for solvers, decompositions, discrete
+  operators, geometry, and autotuning without copying test logic.
 
 Recommended PR sequence:
 
-No remaining implementation PRs in this sprint; select the next sprint after
-this PR lands.
+1. Add the reusable ownership-claim machinery to `tests/test_structure.py` and
+   implement the time-integrator ownership map.  Fix any time-integrator
+   ownership gaps or overlaps the claim exposes.
+2. Add ownership maps for linear solvers and decompositions, reusing the same
+   claim machinery.
+3. Add ownership maps for discrete operators and geometry/theory boundaries,
+   reusing the same claim machinery.
 
 ---
 
