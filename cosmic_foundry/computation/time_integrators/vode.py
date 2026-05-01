@@ -6,6 +6,7 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
     check_state_domain,
+    predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
@@ -61,6 +62,7 @@ class VODEController:
         self.rejection_reasons: list[str] = []
         self.domain_violations: list[DomainViolation] = []
         self.domain_rejection_step_sizes: list[float] = []
+        self.domain_limited_step_sizes: list[float] = []
         self.rejected_steps = 0
         self.family_switches = 0
 
@@ -109,6 +111,7 @@ class VODEController:
         nh: NordsieckHistory = state.history
         q = min(self._q, nh.q, self._order_selector.q_max)
         family = self._family
+        dt = self._limit_step_to_domain(rhs, state, dt)
         nh = nh.change_order(q).rescale_step(dt)
         state = ODEState(state.t, state.u, dt, state.err, nh)
         rejections = 0
@@ -165,6 +168,7 @@ class VODEController:
                 if not order_decision.accepted
                 else dt * self._order_selector.factor_min
             )
+            dt = self._limit_step_to_domain(rhs, state, dt)
             nh = state.history.change_order(q).rescale_step(dt)
             state = ODEState(state.t, state.u, dt, state.err, nh)
 
@@ -185,6 +189,18 @@ class VODEController:
 
     def _integrator(self, family: FamilyName, q: int) -> MultistepIntegrator:
         return MultistepIntegrator(family, q)
+
+    def _limit_step_to_domain(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        state: ODEState,
+        dt: float,
+    ) -> float:
+        limit = predict_domain_step_limit(rhs, state.t, state.u)
+        if limit is None or limit <= 0.0 or limit >= dt:
+            return dt
+        self.domain_limited_step_sizes.append(limit)
+        return limit
 
 
 __all__ = ["VODEController"]
