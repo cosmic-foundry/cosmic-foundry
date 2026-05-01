@@ -10,8 +10,8 @@ Three test axes:
 from __future__ import annotations
 
 import math
-import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,13 +23,12 @@ from cosmic_foundry.computation.backends import (
     get_default_backend,
     set_default_backend,
 )
-from cosmic_foundry.computation.tensor import Tensor
-from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
+from cosmic_foundry.computation.tensor import Tensor, norm
+from tests.claims import CLAIM_WALLTIME_BUDGET_S, INTEGRATOR_CLAIM_BUDGET_S, Claim
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
 _BUDGET = INTEGRATOR_CLAIM_BUDGET_S
-_OFFLINE = os.environ.get("COSMIC_FOUNDRY_OFFLINE_NETWORK_STRESS") == "1"
 _U2, _U3 = Tensor([1.0, 0.0]), Tensor([1.0, 0.0, 0.0])
 _PERF_TRIALS = 10
 _PERF_BATCH = 200
@@ -248,7 +247,8 @@ class _CorrectnessSpec:
     run: Any
     expected: Any
     tol: float
-    offline: bool = False
+    expected_walltime_s: float = 1.0
+    xfail_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -322,8 +322,20 @@ class _CorrectnessClaim(Claim[None]):
         return f"correctness/{self._spec.name}"
 
     def check(self, _calibration: None) -> None:
-        if self._spec.offline and not _OFFLINE:
-            pytest.skip(_OFF_REASON)
+        if self._spec.expected_walltime_s > CLAIM_WALLTIME_BUDGET_S:
+            pytest.skip(
+                f"{self.description}: expected {self._spec.expected_walltime_s:.1f}s "
+                f"> walltime budget {CLAIM_WALLTIME_BUDGET_S:.1f}s"
+            )
+        if self._spec.xfail_reason is not None:
+            try:
+                self._check_history()
+            except AssertionError:
+                pytest.xfail(self._spec.xfail_reason)
+            raise AssertionError(f"{self.description}: expected failure passed")
+        self._check_history()
+
+    def _check_history(self) -> None:
         for state in self._spec.run():
             assert _err(state.u, self._spec.expected, state.t) < self._spec.tol
 
@@ -435,7 +447,9 @@ def _ode_correctness_specs() -> list[_CorrectnessSpec]:
     return specs
 
 
-def _nse_correctness_spec(spec: _Spec, *, offline: bool = False) -> _CorrectnessSpec:
+def _nse_correctness_spec(
+    spec: _Spec, *, expected_walltime_s: float = 1.0
+) -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rhs = spec.build_rhs()
         ctrl = _ti.ConstraintAwareController(
@@ -450,7 +464,9 @@ def _nse_correctness_spec(spec: _Spec, *, offline: bool = False) -> _Correctness
     def expected(t: float) -> tuple[float, ...]:
         return (1.0 / spec.n,) * spec.n
 
-    return _CorrectnessSpec(f"nse/{spec.name}", run, expected, 1e-7, offline)
+    return _CorrectnessSpec(
+        f"nse/{spec.name}", run, expected, 1e-7, expected_walltime_s
+    )
 
 
 def _nse_transient_correctness_spec() -> _CorrectnessSpec:
@@ -477,6 +493,139 @@ def _nse_transient_correctness_spec() -> _CorrectnessSpec:
         return x0, 1.0 - x0
 
     return _CorrectnessSpec("nse/transient", run, expected, 1e-4)
+
+
+RateFn = Callable[[float], list[tuple[int, int, float]]]
+
+
+def _linear_network_rhs(rate_fn: RateFn) -> _ti.JacobianRHS:
+    """Build a mass-conserving linear reaction network RHS from edge rates."""
+
+    def f(t: float, u: Tensor) -> Tensor:
+        n = u.shape[0]
+        out = [0.0] * n
+        for src, dst, rate in rate_fn(t):
+            flux = rate * float(u[src])
+            out[src] -= flux
+            out[dst] += flux
+        return Tensor(out, backend=u.backend)
+
+    def jac(t: float, u: Tensor) -> Tensor:
+        n = u.shape[0]
+        mat = [[0.0 for _ in range(n)] for _ in range(n)]
+        for src, dst, rate in rate_fn(t):
+            mat[src][src] -= rate
+            mat[dst][src] += rate
+        return Tensor(mat, backend=u.backend)
+
+    return _ti.JacobianRHS(f=f, jac=jac)
+
+
+def _alpha_chain_rates(n: int) -> RateFn:
+    rates = [10.0 ** (-2.0 + 8.0 * i / (n - 2)) for i in range(n - 1)]
+
+    def edges(t: float) -> list[tuple[int, int, float]]:
+        return [(i, i + 1, rates[i]) for i in range(n - 1)]
+
+    return edges
+
+
+def _branched_hot_window_rates(n: int) -> RateFn:
+    base_edges = [(i, i + 1, 0.04 * (1.25**i)) for i in range(n - 1)]
+    branches = [(2, 7, 0.03), (4, 10, 0.02), (6, 13, 0.015), (8, 15, 0.012)]
+
+    def edges(t: float) -> list[tuple[int, int, float]]:
+        hot = 1.0 + 2.0e4 * math.exp(-(((t - 0.18) / 0.025) ** 2))
+        breakout = 1.0 + 5.0e5 * math.exp(-(((t - 0.24) / 0.018) ** 2))
+        result = [(src, dst, rate * hot) for src, dst, rate in base_edges]
+        result.extend((src, dst, rate * breakout) for src, dst, rate in branches)
+        return result
+
+    return edges
+
+
+def _vode_controller(*, q_max: int = 6) -> _ti.VODEController:
+    return _ti.VODEController(
+        order_selector=_ti.OrderSelector(
+            q_min=2,
+            q_max=q_max,
+            atol=2e-5,
+            rtol=2e-5,
+            factor_min=0.2,
+            factor_max=1.15,
+        ),
+        stiffness_switcher=_ti.StiffnessSwitcher(
+            stiff_threshold=1.0,
+            nonstiff_threshold=0.35,
+        ),
+        q_initial=2,
+        initial_family="adams",
+        max_rejections=80,
+    )
+
+
+def _assert_abundance_state(u: Tensor, *, label: str) -> None:
+    total = sum(float(u[i]) for i in range(u.shape[0]))
+    assert abs(total - 1.0) < 1e-10, f"{label}: mass drift {total - 1.0:.3e}"
+    minimum = min(float(u[i]) for i in range(u.shape[0]))
+    assert minimum >= -1e-8, f"{label}: minimum abundance {minimum:.3e}"
+
+
+def _alpha_chain_stress_spec() -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rhs = _linear_network_rhs(_alpha_chain_rates(13))
+        controller = _vode_controller()
+        state = controller.advance(
+            rhs,
+            Tensor([1.0] + [0.0] * 12),
+            t0=0.0,
+            t_end=0.04,
+            dt0=2e-4,
+        )
+        _assert_abundance_state(state.u, label="alpha_chain")
+        assert controller.family_switches >= 1
+        assert "bdf" in controller.accepted_families
+        assert max(controller.accepted_stiffness) > 1.0
+        assert controller.rejected_steps < 80
+        return [state]
+
+    return _CorrectnessSpec(
+        "stress/vode_alpha_chain_rate_contrast",
+        run,
+        lambda t: (1.0,) * 13,
+        float("inf"),
+        expected_walltime_s=20.0,
+    )
+
+
+def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rhs = _linear_network_rhs(_branched_hot_window_rates(16))
+        coarse = _vode_controller()
+        fine = _vode_controller()
+        u0 = Tensor([1.0] + [0.0] * 15)
+        coarse_state = coarse.advance(rhs, u0, t0=0.0, t_end=0.32, dt0=5e-4)
+        fine_state = fine.advance(rhs, u0, t0=0.0, t_end=0.32, dt0=2.5e-4)
+        _assert_abundance_state(coarse_state.u, label="branched_hot_window/coarse")
+        _assert_abundance_state(fine_state.u, label="branched_hot_window/fine")
+        assert "adams" in coarse.accepted_families
+        assert "bdf" in coarse.accepted_families
+        assert coarse.family_switches >= 1
+        assert max(coarse.accepted_stiffness) > 1.0
+        assert float(norm(coarse_state.u - fine_state.u)) < 5e-2
+        return [coarse_state]
+
+    return _CorrectnessSpec(
+        "stress/vode_branched_hot_window_self_consistency",
+        run,
+        lambda t: (1.0,) * 16,
+        float("inf"),
+        expected_walltime_s=30.0,
+        xfail_reason=(
+            "current VODE controller does not enforce positivity; this branched "
+            "hot-window network exposes small negative abundances"
+        ),
+    )
 
 
 def _explicit_rk4_performance_spec() -> _PerformanceSpec:
@@ -554,16 +703,17 @@ _CONV_CLAIMS: list[Claim[None]] = [
     _ConvergenceClaim(order, prob) for order in _ORDERS for prob in _PROBS
 ]
 
-_OFF_REASON = (
-    "offline network stress tests; "
-    "set COSMIC_FOUNDRY_OFFLINE_NETWORK_STRESS=1 to run"
-)
 _OFF_SPECS = _chain_specs(range(5, 12)) + _spoke_specs(range(7, 22), [1, 10, 100])
 _CORRECT_CLAIMS: list[Claim[None]] = [
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
-    *[_CorrectnessClaim(_nse_correctness_spec(s, offline=True)) for s in _OFF_SPECS],
+    *[
+        _CorrectnessClaim(_nse_correctness_spec(s, expected_walltime_s=5.0))
+        for s in _OFF_SPECS
+    ],
+    _CorrectnessClaim(_alpha_chain_stress_spec()),
+    _CorrectnessClaim(_branched_hot_window_stress_spec()),
 ]
 _PERF_CLAIMS: list[Claim[_IntegratorCalibration]] = [
     _PerformanceClaim(_explicit_rk4_performance_spec()),
