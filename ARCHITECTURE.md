@@ -783,6 +783,14 @@ with owned, explicitly rejected, and uncovered cells.  Explicit missing regions
 are useful after a gap is noticed; the grid is what exposes gaps that nobody has
 named yet.
 
+This is not just a cleaner naming scheme.  The meta-level goal is to make
+algorithm ownership an executable epistemic model: separate the mathematical
+space being described, the evidence available for locating a concrete problem in
+that space, the regions our implementations claim, and the projection used to
+explain those claims to humans.  Prose names such as "linear solver" or "SPD"
+are allowed only as views over that model.  They must not become independent
+sources of truth.
+
 The sprint is complete when the following are true:
 
 - **Parameter-space schema is primary.**  Each package that participates in
@@ -808,6 +816,12 @@ The sprint is complete when the following are true:
   containing it, reject if none own it, and fail on overlap unless priority data
   is explicit.  This keeps dispatch, generated documentation, and structure
   tests as different views of the same object.
+- **Knowledge state is modeled separately from truth.**  A coordinate such as
+  "symmetric", "full rank", or "well conditioned" has two parts: the underlying
+  mathematical predicate and the evidence currently available to the selector.
+  Exact facts, certified bounds, estimates, caller assumptions, and unknowns are
+  distinct states.  A capability owns the request only when its contract says
+  which evidence states it accepts and how uncertainty affects the bound.
 - **Bound vocabulary is finite and inspectable.**  Bounds are structured data,
   not ad hoc lambdas or prose.  The initial operators should include only
   comparison predicates over named descriptor fields, membership predicates for
@@ -912,6 +926,12 @@ The sprint is complete when the following are true:
   certificate sources accepted by the selector, the cost model, and the priority
   rule for every owned overlap.  Uncovered cells remain visible even before
   anyone has written a missing-capability note for them.
+- **Coverage projections are honest.**  A rendered atlas page is a projection of
+  a higher-dimensional schema, not the schema itself.  Each plot or table must
+  state which axes are shown, which axes are fixed, which axes are marginalized
+  into a summary marker, and whether any hidden-axis overlap or gap exists.  A
+  cell may not be rendered as simply "owned" when ownership depends on an
+  unshown certificate, budget, tolerance, or backend axis.
 - **Gaps are first-class regions.**  A missing algorithm can be represented as an
   explicitly named unowned descriptor region after the coverage atlas exposes
   it.  For example, the current solver coverage page should show blank coverage
@@ -950,6 +970,13 @@ The sprint is complete when the following are true:
   dominant systems select Jacobi when the iteration budget is satisfied;
   nonsymmetric matrix-free systems select GMRES; unsupported descriptors reject.
   Ambiguous overlap without explicit priority remains a test failure.
+- **No prose-only ownership.**  The generated documentation may contain human
+  explanation, but every ownership, rejection, invalidity, overlap, priority, and
+  missing-region statement in it must trace back to a structural claim in
+  `tests/test_structure.py`.  Conversely, every structural claim that changes
+  dispatch behavior must appear in the generated atlas or in an explicit
+  machine-readable exclusion list.  This prevents the documentation from
+  becoming a parallel taxonomy that can drift from the selector.
 - **Qualitative tags become schema aliases.**  Existing string-set capability
   tags may remain temporarily, but the sprint should move high-value tags onto
   schema aliases.  An alias such as `full_rank` must expand to a rank or
