@@ -20,6 +20,13 @@ SchwarzschildManifold         — Schwarzschild vacuum solution; static spherica
                                 symmetric spacetime with Lorentzian signature
 """
 
+from cosmic_foundry.geometry.capabilities import (
+    GeometryCapability,
+    GeometryRegistry,
+    GeometryRequest,
+    geometry_capabilities,
+    select_geometry,
+)
 from cosmic_foundry.geometry.cartesian_exterior_derivative import (
     CartesianExteriorDerivative,
 )
@@ -44,5 +51,10 @@ __all__ = [
     "CartesianRestrictionOperator",
     "CartesianVolumeRestriction",
     "EuclideanManifold",
+    "GeometryCapability",
+    "geometry_capabilities",
+    "GeometryRegistry",
+    "GeometryRequest",
+    "select_geometry",
     "SchwarzschildManifold",
 ]

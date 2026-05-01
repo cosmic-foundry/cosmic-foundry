@@ -10,6 +10,13 @@ from cosmic_foundry.theory.discrete.advection_diffusion_flux import (
     AdvectionDiffusionFlux,
 )
 from cosmic_foundry.theory.discrete.advective_flux import AdvectiveFlux
+from cosmic_foundry.theory.discrete.capabilities import (
+    DiscreteOperatorCapability,
+    DiscreteOperatorRegistry,
+    DiscreteOperatorRequest,
+    discrete_operator_capabilities,
+    select_discrete_operator,
+)
 from cosmic_foundry.theory.discrete.cell_complex import CellComplex
 from cosmic_foundry.theory.discrete.diffusive_flux import DiffusiveFlux
 from cosmic_foundry.theory.discrete.discrete_boundary_condition import (
@@ -44,6 +51,10 @@ __all__ = [
     "CellComplex",
     "DiffusiveFlux",
     "DirichletGhostCells",
+    "DiscreteOperatorCapability",
+    "discrete_operator_capabilities",
+    "DiscreteOperatorRegistry",
+    "DiscreteOperatorRequest",
     "DiscreteBoundaryCondition",
     "DiscreteExteriorDerivative",
     "DiscreteField",
@@ -59,6 +70,7 @@ __all__ = [
     "PeriodicGhostCells",
     "PointField",
     "RestrictionOperator",
+    "select_discrete_operator",
     "StructuredMesh",
     "VolumeField",
     "ZeroGhostCells",
