@@ -689,7 +689,7 @@ _UNSUPPORTED_CLAIMS: list[Claim] = [
     ],
     *[
         _UnsupportedClaim(_ti.SymplecticCompositionIntegrator, q, "symplectic")
-        for q in (3, 5)
+        for q in (3, 5, 8)
     ],
 ]
 

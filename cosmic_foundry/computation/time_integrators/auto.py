@@ -79,8 +79,8 @@ class AutoIntegrator(TimeIntegrator):
     ----------
     order:
         Convergence order threaded through all branches.  Branches whose
-        algorithm family does not support this order (e.g. IMEX only at
-        order 2, symplectic only at {1,2,4,6,8}) are
+        algorithm family does not support this order (e.g. IMEX only through
+        order 4, symplectic only at {1,2,4,6}) are
         unavailable and raise ``ValueError`` on dispatch.
     explicit:
         Override for the explicit RK branch.

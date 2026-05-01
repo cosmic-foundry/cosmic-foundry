@@ -508,7 +508,7 @@ SymplecticCompositionIntegrator  — position-Verlet family for separable Hamilt
                                    systems; inherits TimeIntegrator; accepts
                                    HamiltonianRHS with split_index
                                    instances: symplectic_euler(1), leapfrog(2),
-                                   forest_ruth(4), yoshida_6(6), yoshida_8(8)
+                                   forest_ruth(4), yoshida_6(6)
 CompositionIntegrator            — meta-integrator composing sub-integrators;
                                    factories: lie_steps()(1), strang_steps()(2),
                                    yoshida4_steps()(4, negative substep weights),

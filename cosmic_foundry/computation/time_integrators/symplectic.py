@@ -23,7 +23,7 @@ the remaining components are momentum (p).  This makes SymplecticCompositionInte
 a TimeIntegrator that interoperates with Integrator.
 
 Supported orders: 1 (symplectic Euler), 2 (leapfrog/Störmer-Verlet), 4
-(Forest-Ruth), 6 (Yoshida), 8 (Yoshida).
+(Forest-Ruth), and 6 (Yoshida).
 """
 
 from __future__ import annotations
@@ -135,13 +135,11 @@ def _build_symplectic_coefficients() -> dict[int, tuple[list[float], list[float]
     c2, d2 = [0.5, 0.5], [1.0, 0.0]
     c4, d4 = _triple_jump(c2, d2, exponent=1 / 3)
     c6, d6 = _triple_jump(c4, d4, exponent=1 / 5)
-    c8, d8 = _triple_jump(c6, d6, exponent=1 / 7)
     return {
         1: ([1.0], [1.0]),
         2: (c2, d2),
         4: (c4, d4),
         6: (c6, d6),
-        8: (c8, d8),
     }
 
 
@@ -166,12 +164,11 @@ class SymplecticCompositionIntegrator(TimeIntegrator):
         2 — leapfrog / Störmer-Verlet
         4 — Forest-Ruth
         6 — Yoshida order 6
-        8 — Yoshida order 8
 
     Parameters
     ----------
     order:
-        Convergence order.  Must be one of {1, 2, 4, 6, 8}.
+        Convergence order.  Must be one of {1, 2, 4, 6}.
     """
 
     def __init__(self, order: int) -> None:
