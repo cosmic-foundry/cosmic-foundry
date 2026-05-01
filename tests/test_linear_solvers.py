@@ -14,6 +14,7 @@ import pytest
 import sympy
 
 from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
     DenseGaussSeidelSolver,
@@ -33,11 +34,11 @@ from cosmic_foundry.theory.discrete import (
     DivergenceFormDiscretization,
     PeriodicGhostCells,
 )
-from tests.calibration import _NP_BACKEND
 from tests.claims import Claim, assemble_linear_op
 
 _DIMS = [1, 2, 3]
 _SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
+_NP_BACKEND = NumpyBackend()
 
 
 class _SolverClaim(Claim[float]):

@@ -12,14 +12,18 @@ residual claims live in tests/test_linear_solvers.py.
 
 from __future__ import annotations
 
+import functools
 import math
 import sys
+import time
 from itertools import product as iproduct
 from typing import Any
 
 import pytest
 import sympy
 
+from cosmic_foundry.computation.autotuning.benchmarker import fit_log_log
+from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
@@ -49,8 +53,7 @@ from cosmic_foundry.theory.discrete import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.calibration import _MESH_FRACTIONS, _NP_BACKEND, _convergence_n_max
-from tests.claims import Claim, assemble_linear_op
+from tests.claims import SOLVER_CONVERGENCE_BUDGET_S, Claim, assemble_linear_op
 
 # ---------------------------------------------------------------------------
 # Dimension and budget configuration
@@ -69,6 +72,64 @@ _MAX_CONVERGENCE_RATE_DIM = 2
 # Cells per axis for solver-claim meshes; chosen so total cell count (n^ndim)
 # stays small enough for sympy assembly to remain fast.
 _SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
+
+# NumpyBackend for convergence claims: numpy SVD/solve are LAPACK-backed and
+# the dominant cost is the O(N²) Python-loop assembly, so the cost model fits
+# cleanly.  PythonBackend SVD is superlinear at N>64, making calibration noisy.
+_NP_BACKEND = NumpyBackend()
+
+# Mesh fractions for each convergence-rate sweep.  Fractions are exact over
+# multiples of 8, so all mesh sizes are integers whenever N_max is a multiple
+# of 8.
+_MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
+
+_CALIB_N = 64
+_MAX_PROBE_TIME_S = 1.5
+_CALIB_MANIFOLD = EuclideanManifold(1)
+
+
+def _time_solve_at(solver_class: type, n: int) -> float:
+    mesh = CartesianMesh(
+        origin=(sympy.Rational(0),),
+        spacing=(sympy.Rational(1, n),),
+        shape=(n,),
+    )
+    flux = DiffusiveFlux(DiffusiveFlux.min_order, _CALIB_MANIFOLD)
+    disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
+    b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
+    solver = solver_class()
+    op = assemble_linear_op(disc, mesh)
+    solver.solve(op, b_cal)
+    best = float("inf")
+    for _ in range(3):
+        t0 = time.perf_counter()
+        op = assemble_linear_op(disc, mesh)
+        solver.solve(op, b_cal)
+        best = min(best, time.perf_counter() - t0)
+    return best
+
+
+@functools.cache
+def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]:
+    """Fit T ~= alpha * N^p / fma_rate for the solver-backed convergence sweep."""
+    n2 = _CALIB_N
+    wall0 = time.perf_counter()
+    t1 = _time_solve_at(solver_class, n2 // 2)
+    if time.perf_counter() - wall0 > _MAX_PROBE_TIME_S:
+        n2 //= 2
+        t1 = _time_solve_at(solver_class, n2 // 2)
+    t2 = _time_solve_at(solver_class, n2)
+    alpha_raw, exponent = fit_log_log([(n2 // 2, t1), (n2, t2)])
+    return alpha_raw * fma_rate, exponent
+
+
+def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) -> int:
+    alpha, p = _calibrate_alpha(type(solver), fma_rate)
+    sum_fp = sum(f**p for f in _MESH_FRACTIONS)
+    budget_per_claim = SOLVER_CONVERGENCE_BUDGET_S / n_convergence_claims
+    n_raw = (budget_per_claim * fma_rate / (alpha * sum_fp)) ** (1 / p)
+    return max(16, round(n_raw / 8) * 8)
+
 
 # ---------------------------------------------------------------------------
 # Claim classes
