@@ -293,7 +293,7 @@ class ConstraintAwareController:
        (consistent initialization) before the next step.
 
     ``advance`` owns the integration loop and is not compatible with
-    ``Integrator`` because it modifies state between steps.
+    ``IntegrationDriver`` because it modifies state between steps.
 
     Parameters
     ----------

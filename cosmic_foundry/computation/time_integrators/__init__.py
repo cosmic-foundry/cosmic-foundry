@@ -1,6 +1,9 @@
 """Time-integration layer: integrators, steppers, controllers, B-series, symplectic."""
 
 from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
+from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
+    AdaptiveNordsieckController,
+)
 from cosmic_foundry.computation.time_integrators.auto import AutoIntegrator
 from cosmic_foundry.computation.time_integrators.bseries import (
     Tree,
@@ -9,6 +12,14 @@ from cosmic_foundry.computation.time_integrators.bseries import (
     order,
     sigma,
     trees_up_to_order,
+)
+from cosmic_foundry.computation.time_integrators.capabilities import (
+    AlgorithmStructureContract,
+    TimeIntegrationCapability,
+    TimeIntegrationRegistry,
+    TimeIntegrationRequest,
+    select_time_integrator,
+    time_integration_capabilities,
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
@@ -43,6 +54,10 @@ from cosmic_foundry.computation.time_integrators.implicit import (
     WithJacobianRHSProtocol,
     stability_function,
 )
+from cosmic_foundry.computation.time_integrators.integration_driver import (
+    IntegrationDriver,
+    IntegrationSelectionResult,
+)
 from cosmic_foundry.computation.time_integrators.integrator import (
     BlackBoxRHS,
     ConstantStep,
@@ -68,10 +83,6 @@ from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHSProtocol,
     CompositionIntegrator,
 )
-from cosmic_foundry.computation.time_integrators.stepper import (
-    Integrator,
-    IntegratorSelectionResult,
-)
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
     FamilySwitch,
@@ -87,9 +98,9 @@ from cosmic_foundry.computation.time_integrators.variable_order import (
     OrderDecision,
     OrderSelector,
 )
-from cosmic_foundry.computation.time_integrators.vode import VODEController
 
 __all__ = [
+    "AlgorithmStructureContract",
     "Tree",
     "AutoIntegrator",
     "BlackBoxRHS",
@@ -106,13 +117,18 @@ __all__ = [
     "project_conserved",
     "ConstantStep",
     "Controller",
-    "IntegratorSelectionResult",
+    "IntegrationSelectionResult",
     "PIController",
     "RHSProtocol",
     "ODEState",
     "RungeKuttaIntegrator",
+    "select_time_integrator",
     "TimeIntegrator",
-    "Integrator",
+    "IntegrationDriver",
+    "TimeIntegrationCapability",
+    "time_integration_capabilities",
+    "TimeIntegrationRegistry",
+    "TimeIntegrationRequest",
     "elementary_weight",
     "gamma",
     "order",
@@ -145,5 +161,5 @@ __all__ = [
     "FamilySwitch",
     "StiffnessDiagnostic",
     "StiffnessSwitcher",
-    "VODEController",
+    "AdaptiveNordsieckController",
 ]

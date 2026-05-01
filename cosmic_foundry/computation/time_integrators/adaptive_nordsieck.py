@@ -1,4 +1,4 @@
-"""VODE-style adaptive Nordsieck controller."""
+"""Adaptive Nordsieck controller."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from cosmic_foundry.computation.time_integrators.stiffness import (
 from cosmic_foundry.computation.time_integrators.variable_order import OrderSelector
 
 
-class VODEController:
+class AdaptiveNordsieckController:
     """Adaptive Adams/BDF controller over Nordsieck states.
 
     This composes the Phase-10 `OrderSelector` with the Phase-11
@@ -107,7 +107,7 @@ class VODEController:
         state: ODEState,
         dt: float,
     ) -> ODEState:
-        """Advance one accepted adaptive VODE step."""
+        """Advance one accepted adaptive Nordsieck step."""
         nh: NordsieckHistory = state.history
         q = min(self._q, nh.q, self._order_selector.q_max)
         family = self._family
@@ -157,7 +157,7 @@ class VODEController:
                 self.domain_violations.append(domain_check.violation)
                 self.domain_rejection_step_sizes.append(dt)
             if rejections > self._max_rejections:
-                raise RuntimeError("VODE step exceeded rejection limit.")
+                raise RuntimeError("adaptive Nordsieck step exceeded rejection limit.")
             q = (
                 order_decision.q_next
                 if not order_decision.accepted
@@ -203,4 +203,4 @@ class VODEController:
         return limit
 
 
-__all__ = ["VODEController"]
+__all__ = ["AdaptiveNordsieckController"]

@@ -518,7 +518,7 @@ ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
 MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
                                    factories: bdf_family → bdf1–bdf6
                                               adams_family → adams_moulton1–adams_moulton6
-VODEController                   — adaptive Nordsieck controller combining
+AdaptiveNordsieckController                   — adaptive Nordsieck controller combining
                                    OrderSelector and StiffnessSwitcher
 LawsonRungeKuttaIntegrator       — integrating-factor RK for semilinear systems
                                    instances: lawson_rk1–lawson_rk6
@@ -541,7 +541,7 @@ StiffnessSwitcher                — Adams/BDF family-switch policy
 
 Infrastructure:
 
-Integrator                      — drives integrator + controller loop;
+IntegrationDriver               — drives integrator + controller loop;
                                    advance(rhs, u0, t0, t_end) → ODEState
 PhiFunction(k)                   — φ_k operator action for exponential methods
 StiffnessDiagnostic              — online spectral radius estimation
@@ -651,7 +651,7 @@ active constraint gradients before being applied:
 When `None`, existing behavior is preserved exactly.
 
 **`ConstraintAwareController`** (introduced in F4).  Wraps an existing
-step-size controller (`PIController` or `VODEController`) and adds
+step-size controller (`PIController` or `AdaptiveNordsieckController`) and adds
 constraint lifecycle management between accepted steps:
 - evaluates |r⁺ⱼ − r⁻ⱼ| / max(r⁺ⱼ, r⁻ⱼ) per reaction pair;
 - activates a constraint when the ratio falls below ε_activate and
@@ -702,9 +702,9 @@ the implementation lane becomes clear.
 
 **`set_default_backend` vs. solver-level override (Epoch 4 carry-over).**
 Time-integrator code currently inherits the process-wide default backend set
-by `set_default_backend`.  If per-`Integrator` backend overrides are needed
-(e.g., a JAX backend for one integrator while the rest use NumPy), a
-keyword argument on `Integrator.__init__` is the natural extension point.
+by `set_default_backend`.  If per-`IntegrationDriver` backend overrides are
+needed (e.g., a JAX backend for one integrator while the rest use NumPy), a
+keyword argument on `IntegrationDriver.__init__` is the natural extension point.
 Defer until a concrete use case requires it.
 
 **AMR integration state (Epoch 12 forward).**  The time-stepper must accept
@@ -753,7 +753,7 @@ algorithmic properties they provide, and selection becomes the act of finding an
 implementation that inhabits a requested contract.
 
 The first application is the time-integration layer.  The recent Nordsieck
-cleanup made `VODEController` the single public adaptive Nordsieck controller,
+cleanup made `AdaptiveNordsieckController` the single public adaptive Nordsieck controller,
 with `OrderSelector` and `StiffnessSwitcher` retained as reusable policies.
 This sprint should encode that decision as declared capabilities rather than
 only prose: callers request adaptive, domain-aware, stiffness-switching
@@ -829,7 +829,7 @@ The sprint is complete when the following are true:
   method families, drivers/controllers, policies, RHS wrappers, domains,
   coefficient/history objects, and helpers.  It should encode at least:
   adaptive Nordsieck control with stiffness switching resolves to the single
-  adaptive Nordsieck controller; `Integrator` owns the generic
+  adaptive Nordsieck controller; `IntegrationDriver` owns the generic
   integrator/controller advance loop; `ConstraintAwareController` owns
   reaction-network constraint lifecycle advancement; `OrderSelector` and
   `StiffnessSwitcher` are policies, not selectable competing controllers.
@@ -852,19 +852,13 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add time-integrator algorithm-structure contracts, a minimal
-   capability-selection API, and reusable structure claims in
-   `tests/test_structure.py` that verify category coverage, request
-   inhabitation, dispatch uniqueness or explicit priority, forbidden symbols,
-   ownership-revealing class names, and class/module naming alignment.  Fix any
-   time-integrator ownership gaps or overlaps the claims expose.
-2. Move `AutoIntegrator` onto the capability-selection path, or remove any
+1. Move `AutoIntegrator` onto the capability-selection path, or remove any
    remaining ad hoc dispatch that competes with the registry.  Rename ambiguous
    time-integrator classes or modules if the ownership claims expose unclear
    names.
-3. Add capability/ownership maps for linear solvers and decompositions,
+2. Add capability/ownership maps for linear solvers and decompositions,
    reusing the same claim machinery.
-4. Add capability/ownership maps for discrete operators and geometry/theory
+3. Add capability/ownership maps for discrete operators and geometry/theory
    boundaries, reusing the same claim machinery.
 
 ---

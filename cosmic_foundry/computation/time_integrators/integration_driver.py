@@ -1,4 +1,4 @@
-"""Integrator and IntegratorSelectionResult."""
+"""Generic integration driver and selection result."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 )
 
 
-class IntegratorSelectionResult(NamedTuple):
+class IntegrationSelectionResult(NamedTuple):
     """Result of Autotuner integrator selection for a time-integration problem.
 
     Analogous to SelectionResult for linear solvers: encodes the chosen
@@ -47,7 +47,7 @@ class IntegratorSelectionResult(NamedTuple):
     predicted_cost: float
 
 
-class Integrator:
+class IntegrationDriver:
     """Drives a TimeIntegrator forward in time from t0 to t_end.
 
     At each time level the controller suggests a step size, the integrator
@@ -160,4 +160,4 @@ class Integrator:
         return limit
 
 
-__all__ = ["IntegratorSelectionResult", "Integrator"]
+__all__ = ["IntegrationSelectionResult", "IntegrationDriver"]

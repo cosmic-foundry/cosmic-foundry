@@ -765,7 +765,7 @@ class _BatchedAdaptiveDecayCorrectnessClaim(Claim[ExecutionPlan]):
             dt0=0.05,
             factor_max=2.0,
         )
-        state = _ti.Integrator(
+        state = _ti.IntegrationDriver(
             _ti.RungeKuttaIntegrator(self._ORDER), controller=controller
         ).advance(rhs, Tensor(u0_values, backend=backend), 0.0, self._T_END)
         state.u.sync()
@@ -922,7 +922,7 @@ def _nse_correctness_spec(
     def run() -> list[_ti.ODEState]:
         rhs = spec.build_rhs()
         if spec.topo == "chain":
-            ctrl = _vode_controller()
+            ctrl = _adaptive_nordsieck_controller()
             return [ctrl.advance(rhs, spec.u0(), 0.0, spec.t_end(), spec.dt0())]
         ctrl = _ti.ConstraintAwareController(
             rhs=rhs,
@@ -1038,8 +1038,10 @@ def _branched_hot_window_rates(n: int) -> RateFn:
     return edges
 
 
-def _vode_controller(*, q_max: int = 6) -> _ti.VODEController:
-    return _ti.VODEController(
+def _adaptive_nordsieck_controller(
+    *, q_max: int = 6
+) -> _ti.AdaptiveNordsieckController:
+    return _ti.AdaptiveNordsieckController(
         order_selector=_ti.OrderSelector(
             q_min=2,
             q_max=q_max,
@@ -1068,7 +1070,7 @@ def _assert_abundance_state(u: Tensor, *, label: str) -> None:
 def _alpha_chain_stress_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rhs = _linear_network_rhs(_alpha_chain_rates(13), 13)
-        controller = _vode_controller()
+        controller = _adaptive_nordsieck_controller()
         state = controller.advance(
             rhs,
             Tensor([1.0] + [0.0] * 12, backend=_TIME_BACKEND),
@@ -1084,7 +1086,7 @@ def _alpha_chain_stress_spec() -> _CorrectnessSpec:
         return [state]
 
     return _CorrectnessSpec(
-        "stress/vode_alpha_chain_rate_contrast",
+        "stress/adaptive_nordsieck_alpha_chain_rate_contrast",
         run,
         lambda t: (1.0,) * 13,
         float("inf"),
@@ -1095,8 +1097,8 @@ def _alpha_chain_stress_spec() -> _CorrectnessSpec:
 def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rhs = _linear_network_rhs(_branched_hot_window_rates(16), 16)
-        coarse = _vode_controller()
-        fine = _vode_controller()
+        coarse = _adaptive_nordsieck_controller()
+        fine = _adaptive_nordsieck_controller()
         u0 = Tensor([1.0] + [0.0] * 15, backend=_TIME_BACKEND)
         coarse_state = coarse.advance(rhs, u0, t0=0.0, t_end=0.32, dt0=5e-4)
         fine_state = fine.advance(rhs, u0, t0=0.0, t_end=0.32, dt0=2.5e-4)
@@ -1112,7 +1114,7 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
         return [coarse_state]
 
     return _CorrectnessSpec(
-        "stress/vode_branched_hot_window_self_consistency",
+        "stress/adaptive_nordsieck_branched_hot_window_self_consistency",
         run,
         lambda t: (1.0,) * 16,
         float("inf"),
@@ -1120,11 +1122,11 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
     )
 
 
-def _vode_domain_rejection_spec() -> _CorrectnessSpec:
+def _adaptive_nordsieck_domain_rejection_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rate = 300.0
         rhs = _two_species_decay_rhs(rate)
-        controller = _vode_controller()
+        controller = _adaptive_nordsieck_controller()
         state = controller.advance(
             rhs,
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
@@ -1133,7 +1135,7 @@ def _vode_domain_rejection_spec() -> _CorrectnessSpec:
             dt0=0.005,
         )
 
-        _assert_abundance_state(state.u, label="vode_domain_retry")
+        _assert_abundance_state(state.u, label="adaptive_nordsieck_domain_retry")
         assert controller.domain_limited_step_sizes
         assert max(controller.domain_limited_step_sizes) < 0.005
         assert controller.rejection_reasons.count("domain") == 0
@@ -1141,7 +1143,7 @@ def _vode_domain_rejection_spec() -> _CorrectnessSpec:
         return [state]
 
     return _CorrectnessSpec(
-        "domain/vode_limits_negative_abundance",
+        "domain/adaptive_nordsieck_limits_negative_abundance",
         run,
         lambda t: (1.0, 1.0),
         float("inf"),
@@ -1162,7 +1164,7 @@ def _generic_integrator_domain_rejection_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rate = 300.0
         rhs = _two_species_decay_rhs(rate)
-        stepper = _ti.Integrator(
+        stepper = _ti.IntegrationDriver(
             _ti.RungeKuttaIntegrator(3),
             controller=_ti.PIController(
                 alpha=0.35,
@@ -1337,7 +1339,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
-    _CorrectnessClaim(_vode_domain_rejection_spec()),
+    _CorrectnessClaim(_adaptive_nordsieck_domain_rejection_spec()),
     _CorrectnessClaim(_generic_integrator_domain_rejection_spec()),
     _CorrectnessClaim(_constraint_aware_domain_rejection_spec()),
     *[
