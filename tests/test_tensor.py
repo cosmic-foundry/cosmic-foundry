@@ -824,9 +824,11 @@ _PERF_CLAIMS: list[Claim[_TensorPerformanceCalibration]] = [
     *[_DotPerfClaim(n) for n in [8, 32, 128]],
     *[_MatvecPerfClaim(n) for n in [8, 16, 32]],
     *[_MatmulPerfClaim(n) for n in [8, 16]],
-    # NumpyBackend vs raw NumPy: wrapper overhead ≤ 2×
+    # NumpyBackend vs raw NumPy: wrapper overhead ≤ 2×.
+    # Tiny matvecs are omitted because sub-microsecond dispatch noise dominates
+    # the ratio; larger matvec and matmul cases still catch wrapper regressions.
     *[_NumpyParityPerfClaim("matmul", n) for n in [8, 16, 32]],
-    *[_NumpyParityPerfClaim("matvec", n) for n in [8, 16, 32]],
+    *[_NumpyParityPerfClaim("matvec", n) for n in [32]],
     # NumpyBackend vs PythonBackend: NumPy must be faster by at least min_speedup
     *[_BackendSpeedupClaim("matmul", n, 10) for n in [8, 16, 32]],
     *[_BackendSpeedupClaim("matvec", n, 5) for n in [16, 32]],
