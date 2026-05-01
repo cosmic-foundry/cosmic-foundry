@@ -406,11 +406,27 @@ def _domain_claims() -> list[_DomainClaim]:
         assert result.violation is not None
         assert result.violation.component == 1
 
+    def _predicts_time_to_nonnegative_boundary() -> None:
+        domain = _ti.NonnegativeStateDomain(3, roundoff_tolerance=1e-12)
+
+        limit = domain.step_limit(
+            Tensor([1.0, 0.25, 0.0], backend=_TIME_BACKEND),
+            Tensor([-2.0, -0.25, 1.0], backend=_TIME_BACKEND),
+            safety=0.5,
+        )
+
+        assert limit is not None
+        assert abs(limit - 0.25) < 1e-12
+
     return [
         _DomainClaim("nonnegative_accepts_valid", _accepts_nonnegative_state),
         _DomainClaim("nonnegative_accepts_roundoff", _accepts_roundoff_negative_state),
         _DomainClaim("nonnegative_rejects_negative", _rejects_material_negative_state),
         _DomainClaim("nonnegative_rejects_shape", _rejects_wrong_shape),
+        _DomainClaim(
+            "nonnegative_predicts_boundary_limit",
+            _predicts_time_to_nonnegative_boundary,
+        ),
         _DomainClaim(
             "reaction_network_exposes_abundance_domain",
             _reaction_network_exposes_abundance_domain,
@@ -1118,15 +1134,14 @@ def _vode_domain_rejection_spec() -> _CorrectnessSpec:
         )
 
         _assert_abundance_state(state.u, label="vode_domain_retry")
-        assert controller.rejection_reasons.count("domain") >= 1
-        assert controller.domain_violations
-        assert controller.domain_violations[0].component is not None
-        assert controller.domain_rejection_step_sizes[0] > 0.0
+        assert controller.domain_limited_step_sizes
+        assert max(controller.domain_limited_step_sizes) < 0.005
+        assert controller.rejection_reasons.count("domain") == 0
         assert controller.rejected_steps < 20
         return [state]
 
     return _CorrectnessSpec(
-        "domain/vode_retries_negative_abundance",
+        "domain/vode_limits_negative_abundance",
         run,
         lambda t: (1.0, 1.0),
         float("inf"),
@@ -1164,15 +1179,14 @@ def _generic_integrator_domain_rejection_spec() -> _CorrectnessSpec:
         )
 
         _assert_abundance_state(state.u, label="generic_integrator_domain_retry")
-        assert stepper.rejection_reasons.count("domain") >= 1
-        assert stepper.domain_violations
-        assert stepper.domain_violations[0].component is not None
-        assert stepper.domain_rejection_step_sizes[0] > 0.0
+        assert stepper.domain_limited_step_sizes
+        assert max(stepper.domain_limited_step_sizes) < 0.005
+        assert stepper.rejection_reasons.count("domain") == 0
         assert stepper.rejected_steps < 20
         return [state]
 
     return _CorrectnessSpec(
-        "domain/generic_integrator_retries_negative_abundance",
+        "domain/generic_integrator_limits_negative_abundance",
         run,
         lambda t: (1.0, 1.0),
         float("inf"),
@@ -1203,15 +1217,14 @@ def _variable_order_domain_rejection_spec() -> _CorrectnessSpec:
         )
 
         _assert_abundance_state(state.u, label="variable_order_domain_retry")
-        assert controller.rejection_reasons.count("domain") >= 1
-        assert controller.domain_violations
-        assert controller.domain_violations[0].component is not None
-        assert controller.domain_rejection_step_sizes[0] > 0.0
+        assert controller.domain_limited_step_sizes
+        assert max(controller.domain_limited_step_sizes) < 0.005
+        assert controller.rejection_reasons.count("domain") == 0
         assert controller.rejected_steps < 10
         return [state]
 
     return _CorrectnessSpec(
-        "domain/variable_order_retries_negative_abundance",
+        "domain/variable_order_limits_negative_abundance",
         run,
         lambda t: (1.0, 1.0),
         float("inf"),
@@ -1238,15 +1251,14 @@ def _constraint_aware_domain_rejection_spec() -> _CorrectnessSpec:
         )
 
         _assert_abundance_state(state.u, label="constraint_aware_domain_retry")
-        assert controller.rejection_reasons.count("domain") >= 1
-        assert controller.domain_violations
-        assert controller.domain_violations[0].component is not None
-        assert controller.domain_rejection_step_sizes[0] > 0.0
+        assert controller.domain_limited_step_sizes
+        assert max(controller.domain_limited_step_sizes) < 0.02
+        assert controller.rejection_reasons.count("domain") == 0
         assert controller.rejected_steps < 10
         return [state]
 
     return _CorrectnessSpec(
-        "domain/constraint_aware_retries_negative_abundance",
+        "domain/constraint_aware_limits_negative_abundance",
         run,
         lambda t: (1.0, 1.0),
         float("inf"),

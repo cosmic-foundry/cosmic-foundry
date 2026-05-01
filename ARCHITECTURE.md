@@ -768,9 +768,10 @@ The sprint is complete when the following are true:
   conservation, bounded rejection count, family switching, and coarse/fine
   self-consistency.
 - **No clipping guard.**  Tests include a targeted network where a large
-  attempted step would produce a negative abundance.  The accepted solution
-  must be nonnegative because at least one retry happened, not because a
-  negative component was clamped after the step.
+  unconstrained step would produce a negative abundance.  The accepted solution
+  must be nonnegative because the controller either predicted a smaller
+  domain-safe attempt or retried from the previous state after rejection, not
+  because a negative component was clamped after the step.
 - **General controller path.**  After VODE is proven on the known failure, the
   same domain-acceptance mechanism is made available to other adaptive
   controllers (`Integrator`/`PIController`, `VariableOrderNordsieckIntegrator`,
@@ -789,8 +790,8 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add domain-aware timestep prediction so controllers avoid most
-   positivity-violating attempts before rejection.
+No remaining implementation PRs in this sprint; select the next sprint after
+this PR lands.
 
 ---
 

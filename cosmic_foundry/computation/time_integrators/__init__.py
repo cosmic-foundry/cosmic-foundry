@@ -20,6 +20,7 @@ from cosmic_foundry.computation.time_integrators.domains import (
     NonnegativeStateDomain,
     StateDomain,
     check_state_domain,
+    predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
@@ -101,6 +102,7 @@ __all__ = [
     "DomainViolation",
     "nonlinear_solve",
     "NonnegativeStateDomain",
+    "predict_domain_step_limit",
     "solve_nse",
     "StateDomain",
     "ReactionNetworkRHS",

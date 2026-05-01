@@ -8,6 +8,7 @@ from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
     check_state_domain,
+    predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.integrator import (
     ConstantStep,
@@ -89,6 +90,7 @@ class Integrator:
         self.rejection_reasons: list[str] = []
         self.domain_violations: list[DomainViolation] = []
         self.domain_rejection_step_sizes: list[float] = []
+        self.domain_limited_step_sizes: list[float] = []
         self.rejected_steps = 0
 
     def advance(
@@ -117,6 +119,7 @@ class Integrator:
         rejections = 0
         while state.t < t_end:
             dt_try = min(dt, t_end - state.t)
+            dt_try = self._limit_step_to_domain(rhs, state, dt_try)
             candidate = self._integrator.step(rhs, state, dt_try)
             error_accepted = self._controller.accept(candidate)
             domain_check = check_state_domain(rhs, candidate.u)
@@ -143,6 +146,18 @@ class Integrator:
             factor_min = getattr(self._controller, "factor_min", 0.5)
             dt = dt_try * factor_min
         return state
+
+    def _limit_step_to_domain(
+        self,
+        rhs: RHSProtocol,
+        state: ODEState,
+        dt: float,
+    ) -> float:
+        limit = predict_domain_step_limit(rhs, state.t, state.u)
+        if limit is None or limit <= 0.0 or limit >= dt:
+            return dt
+        self.domain_limited_step_sizes.append(limit)
+        return limit
 
 
 __all__ = ["IntegratorSelectionResult", "Integrator"]

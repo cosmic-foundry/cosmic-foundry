@@ -8,6 +8,7 @@ from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
     check_state_domain,
+    predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
 from cosmic_foundry.computation.time_integrators.nordsieck import (
@@ -157,6 +158,7 @@ class VariableOrderNordsieckIntegrator:
         self.rejection_reasons: list[str] = []
         self.domain_violations: list[DomainViolation] = []
         self.domain_rejection_step_sizes: list[float] = []
+        self.domain_limited_step_sizes: list[float] = []
         self.rejected_steps = 0
 
     @property
@@ -190,6 +192,7 @@ class VariableOrderNordsieckIntegrator:
         """Advance by one accepted variable-order step."""
         nh: NordsieckHistory = state.history
         q = min(self._q, nh.q, self._selector.q_max)
+        dt = self._limit_step_to_domain(rhs, state, dt)
         nh = nh.change_order(q).rescale_step(dt)
         state = ODEState(state.t, state.u, dt, state.err, nh)
         rejections = 0
@@ -231,6 +234,7 @@ class VariableOrderNordsieckIntegrator:
                 if not decision.accepted
                 else dt * self._selector.factor_min
             )
+            dt = self._limit_step_to_domain(rhs, state, dt)
             nh = state.history.change_order(q).rescale_step(dt)
             state = ODEState(state.t, state.u, dt, state.err, nh)
 
@@ -248,6 +252,18 @@ class VariableOrderNordsieckIntegrator:
             dt = min(state.dt, t_end - state.t)
             state = self.step(rhs, state, dt)
         return state
+
+    def _limit_step_to_domain(
+        self,
+        rhs: RHSProtocol,
+        state: ODEState,
+        dt: float,
+    ) -> float:
+        limit = predict_domain_step_limit(rhs, state.t, state.u)
+        if limit is None or limit <= 0.0 or limit >= dt:
+            return dt
+        self.domain_limited_step_sizes.append(limit)
+        return limit
 
 
 __all__ = [

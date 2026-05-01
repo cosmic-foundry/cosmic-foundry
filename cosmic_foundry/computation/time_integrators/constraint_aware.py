@@ -21,6 +21,7 @@ from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
 from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
     check_state_domain,
+    predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
     ImplicitRungeKuttaIntegrator,
@@ -342,6 +343,7 @@ class ConstraintAwareController:
         self.rejection_reasons: list[str] = []
         self.domain_violations: list[DomainViolation] = []
         self.domain_rejection_step_sizes: list[float] = []
+        self.domain_limited_step_sizes: list[float] = []
         self.rejected_steps = 0
 
     def advance(
@@ -378,6 +380,7 @@ class ConstraintAwareController:
 
         while state.t < t_end:
             dt_try = min(dt, t_end - state.t)
+            dt_try = self._limit_step_to_domain(state, dt_try)
             cg = build_constraint_gradients(
                 self._rhs,
                 state.active_constraints,  # type: ignore[arg-type]
@@ -459,6 +462,13 @@ class ConstraintAwareController:
                 dt = min(t_end - state.t, dt_try * growth)
 
         return state
+
+    def _limit_step_to_domain(self, state: ODEState, dt: float) -> float:
+        limit = predict_domain_step_limit(self._rhs, state.t, state.u)
+        if limit is None or limit <= 0.0 or limit >= dt:
+            return dt
+        self.domain_limited_step_sizes.append(limit)
+        return limit
 
 
 __all__ = ["ConstraintAwareController", "build_constraint_gradients", "solve_nse"]

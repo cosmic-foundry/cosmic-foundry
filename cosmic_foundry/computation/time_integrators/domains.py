@@ -39,6 +39,19 @@ class StateDomain(Protocol):
         """Return whether ``u`` is inside the valid state domain."""
 
 
+class StepLimitingDomain(StateDomain, Protocol):
+    """State domain that can estimate a conservative step-size limit."""
+
+    def step_limit(
+        self,
+        u: Tensor,
+        du: Tensor,
+        *,
+        safety: float = 0.9,
+    ) -> float | None:
+        """Return a positive step limit from ``u`` and direction ``du``."""
+
+
 @dataclass(frozen=True)
 class NonnegativeStateDomain:
     """Domain requiring every component to be nonnegative within tolerance."""
@@ -85,6 +98,27 @@ class NonnegativeStateDomain:
             )
         return DomainCheck(accepted=True)
 
+    def step_limit(
+        self,
+        u: Tensor,
+        du: Tensor,
+        *,
+        safety: float = 0.9,
+    ) -> float | None:
+        """Estimate time to the nonnegative boundary along ``du``."""
+        if u.shape != (self.n_components,) or du.shape != (self.n_components,):
+            return None
+
+        limit: float | None = None
+        for i in range(self.n_components):
+            slope = float(du[i])
+            if slope >= 0.0:
+                continue
+            distance = float(u[i]) + self.roundoff_tolerance
+            candidate = 0.0 if distance <= 0.0 else safety * distance / -slope
+            limit = candidate if limit is None else min(limit, candidate)
+        return limit
+
 
 def check_state_domain(rhs: Any, u: Tensor) -> DomainCheck:
     """Return the RHS state-domain result, accepting when no domain is exposed."""
@@ -94,10 +128,27 @@ def check_state_domain(rhs: Any, u: Tensor) -> DomainCheck:
     return cast(StateDomain, domain).check(u)
 
 
+def predict_domain_step_limit(
+    rhs: Any,
+    t: float,
+    u: Tensor,
+    *,
+    safety: float = 0.9,
+) -> float | None:
+    """Return a domain-implied step limit for ``rhs`` at ``(t, u)`` if known."""
+    domain = getattr(rhs, "state_domain", None)
+    if domain is None or not hasattr(domain, "step_limit"):
+        return None
+    du = rhs(t, u)
+    return cast(StepLimitingDomain, domain).step_limit(u, du, safety=safety)
+
+
 __all__ = [
     "check_state_domain",
     "DomainCheck",
     "DomainViolation",
     "NonnegativeStateDomain",
+    "predict_domain_step_limit",
     "StateDomain",
+    "StepLimitingDomain",
 ]
