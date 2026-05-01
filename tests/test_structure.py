@@ -762,6 +762,12 @@ _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 _TimeIntegrationRequest = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.TimeIntegrationRequest"
 )
+_LinearSolverRequest = _resolve_dotted(
+    "cosmic_foundry.computation.solvers.LinearSolverRequest"
+)
+_DecompositionRequest = _resolve_dotted(
+    "cosmic_foundry.computation.decompositions.DecompositionRequest"
+)
 _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     package="cosmic_foundry.computation.time_integrators",
     public_categories={
@@ -979,7 +985,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     expected_class_modules={
         "AdaptiveNordsieckController": "adaptive_nordsieck",
         "AdditiveRungeKuttaIntegrator": "imex",
-        "AlgorithmStructureContract": "capabilities",
+        "AlgorithmStructureContract": "algorithm_capabilities",
         "AutoIntegrator": "auto",
         "BlackBoxRHS": "integrator",
         "CompositeRHS": "splitting",
@@ -1011,9 +1017,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         "StiffnessDiagnostic": "stiffness",
         "StiffnessSwitcher": "stiffness",
         "SymplecticCompositionIntegrator": "symplectic",
-        "TimeIntegrationCapability": "capabilities",
-        "TimeIntegrationRegistry": "capabilities",
-        "TimeIntegrationRequest": "capabilities",
+        "TimeIntegrationCapability": "algorithm_capabilities",
+        "TimeIntegrationRegistry": "algorithm_capabilities",
+        "TimeIntegrationRequest": "algorithm_capabilities",
     },
     required_name_fragments={
         "AdaptiveNordsieckController": ("Adaptive", "Nordsieck", "Controller"),
@@ -1021,6 +1027,217 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         "IntegrationDriver": ("Integration", "Driver"),
         "OrderSelector": ("Order", "Selector"),
         "StiffnessSwitcher": ("Stiffness", "Switcher"),
+    },
+)
+
+_LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
+    package="cosmic_foundry.computation.solvers",
+    public_categories={
+        "capability_contract": frozenset(
+            {
+                "LinearSolverCapability",
+                "linear_solver_capabilities",
+                "LinearSolverRegistry",
+                "LinearSolverRequest",
+                "select_linear_solver",
+            }
+        ),
+        "abstract_interface": frozenset(
+            {
+                "DirectSolver",
+                "IterativeSolver",
+                "LinearOperator",
+                "LinearSolver",
+            }
+        ),
+        "direct_solver": frozenset(
+            {
+                "DenseLUSolver",
+                "DenseSVDSolver",
+            }
+        ),
+        "iterative_solver": frozenset(
+            {
+                "DenseCGSolver",
+                "DenseGMRESSolver",
+                "DenseGaussSeidelSolver",
+                "DenseJacobiSolver",
+            }
+        ),
+    },
+    capability_provider="cosmic_foundry.computation.solvers.linear_solver_capabilities",
+    request_selector="cosmic_foundry.computation.solvers.select_linear_solver",
+    request_expectations=(
+        _CapabilityRequestExpectation(
+            _LinearSolverRequest(
+                available_structure=frozenset(
+                    {"dense_operator", "square_system", "full_rank"}
+                ),
+                requested_properties=frozenset({"solve", "direct", "exact"}),
+            ),
+            "DenseLUSolver",
+        ),
+        _CapabilityRequestExpectation(
+            _LinearSolverRequest(
+                available_structure=frozenset({"dense_operator"}),
+                requested_properties=frozenset(
+                    {"solve", "direct", "minimum_norm", "rank_deficient"}
+                ),
+            ),
+            "DenseSVDSolver",
+        ),
+        _CapabilityRequestExpectation(
+            _LinearSolverRequest(
+                available_structure=frozenset(
+                    {"linear_operator", "symmetric_positive_definite"}
+                ),
+                requested_properties=frozenset({"solve", "iterative", "krylov"}),
+            ),
+            "DenseCGSolver",
+        ),
+        _CapabilityRequestExpectation(
+            _LinearSolverRequest(
+                available_structure=frozenset({"linear_operator", "nonsingular"}),
+                requested_properties=frozenset(
+                    {"solve", "iterative", "krylov", "general"}
+                ),
+            ),
+            "DenseGMRESSolver",
+        ),
+        _CapabilityRequestExpectation(
+            _LinearSolverRequest(
+                available_structure=frozenset(
+                    {"linear_operator", "diagonal", "row_abs_sums"}
+                ),
+                requested_properties=frozenset(
+                    {"solve", "iterative", "stationary", "matrix_free"}
+                ),
+            ),
+            "DenseJacobiSolver",
+        ),
+    ),
+    rejected_requests=(
+        _CapabilityRejectionExpectation(
+            _LinearSolverRequest(
+                available_structure=frozenset({"linear_operator"}),
+                requested_properties=frozenset({"solve", "direct", "exact"}),
+            )
+        ),
+    ),
+    expected_class_modules={
+        "DenseCGSolver": "dense_cg_solver",
+        "DenseGMRESSolver": "dense_gmres_solver",
+        "DenseGaussSeidelSolver": "dense_gauss_seidel_solver",
+        "DenseJacobiSolver": "dense_jacobi_solver",
+        "DenseLUSolver": "dense_lu_solver",
+        "DenseSVDSolver": "dense_svd_solver",
+        "DirectSolver": "direct_solver",
+        "IterativeSolver": "iterative_solver",
+        "LinearOperator": "linear_solver",
+        "LinearSolver": "linear_solver",
+        "LinearSolverCapability": "algorithm_capabilities",
+        "LinearSolverRegistry": "algorithm_capabilities",
+        "LinearSolverRequest": "algorithm_capabilities",
+    },
+    required_name_fragments={
+        "DenseCGSolver": ("Dense", "Solver"),
+        "DenseGMRESSolver": ("Dense", "Solver"),
+        "DenseGaussSeidelSolver": ("Dense", "Solver"),
+        "DenseJacobiSolver": ("Dense", "Solver"),
+        "DenseLUSolver": ("Dense", "Solver"),
+        "DenseSVDSolver": ("Dense", "Solver"),
+    },
+)
+
+_DECOMPOSITION_OWNERSHIP = _ArchitectureOwnershipSpec(
+    package="cosmic_foundry.computation.decompositions",
+    public_categories={
+        "capability_contract": frozenset(
+            {
+                "DecompositionCapability",
+                "decomposition_capabilities",
+                "DecompositionRegistry",
+                "DecompositionRequest",
+                "select_decomposition",
+            }
+        ),
+        "abstract_interface": frozenset(
+            {
+                "DecomposedTensor",
+                "Decomposition",
+                "Factorization",
+            }
+        ),
+        "factorization": frozenset(
+            {
+                "LUFactorization",
+                "SVDFactorization",
+            }
+        ),
+        "decomposed_result": frozenset(
+            {
+                "LUDecomposedTensor",
+                "SVDDecomposedTensor",
+            }
+        ),
+    },
+    capability_provider=(
+        "cosmic_foundry.computation.decompositions.decomposition_capabilities"
+    ),
+    request_selector="cosmic_foundry.computation.decompositions.select_decomposition",
+    request_expectations=(
+        _CapabilityRequestExpectation(
+            _DecompositionRequest(
+                available_structure=frozenset(
+                    {"dense_matrix", "square_matrix", "full_rank"}
+                ),
+                requested_properties=frozenset(
+                    {"decompose", "factorize", "direct_solve", "exact"}
+                ),
+            ),
+            "LUFactorization",
+        ),
+        _CapabilityRequestExpectation(
+            _DecompositionRequest(
+                available_structure=frozenset({"dense_matrix"}),
+                requested_properties=frozenset(
+                    {
+                        "decompose",
+                        "factorize",
+                        "direct_solve",
+                        "minimum_norm",
+                        "rank_deficient",
+                    }
+                ),
+            ),
+            "SVDFactorization",
+        ),
+    ),
+    rejected_requests=(
+        _CapabilityRejectionExpectation(
+            _DecompositionRequest(
+                available_structure=frozenset({"dense_matrix"}),
+                requested_properties=frozenset({"decompose", "factorize", "exact"}),
+            )
+        ),
+    ),
+    expected_class_modules={
+        "DecomposedTensor": "decomposition",
+        "Decomposition": "decomposition",
+        "DecompositionCapability": "algorithm_capabilities",
+        "DecompositionRegistry": "algorithm_capabilities",
+        "DecompositionRequest": "algorithm_capabilities",
+        "Factorization": "factorization",
+        "LUDecomposedTensor": "lu_factorization",
+        "LUFactorization": "lu_factorization",
+        "SVDDecomposedTensor": "svd_factorization",
+        "SVDFactorization": "svd_factorization",
+    },
+    required_name_fragments={
+        "LUDecomposedTensor": ("Decomposed", "Tensor"),
+        "LUFactorization": ("Factorization",),
+        "SVDDecomposedTensor": ("Decomposed", "Tensor"),
+        "SVDFactorization": ("Factorization",),
     },
 )
 
@@ -1043,6 +1260,8 @@ _CLAIMS: list[Claim[None]] = [
     *[_TestAxisConventionClaim(p) for p in _TEST_FILES],
     *[_NoTopLevelDefaultBackendMutationClaim(p) for p in _TEST_FILES],
     _ArchitectureOwnershipClaim(_TIME_INTEGRATOR_OWNERSHIP),
+    _ArchitectureOwnershipClaim(_LINEAR_SOLVER_OWNERSHIP),
+    _ArchitectureOwnershipClaim(_DECOMPOSITION_OWNERSHIP),
     _AutoDiscoveryImportClaim(),
 ]
 

@@ -2,87 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from cosmic_foundry.computation.algorithm_capabilities import (
+    AlgorithmCapability,
+    AlgorithmRegistry,
+    AlgorithmRequest,
+    AlgorithmStructureContract,
+)
 
-
-@dataclass(frozen=True)
-class AlgorithmStructureContract:
-    """Required input structure and provided algorithmic properties."""
-
-    requires: frozenset[str]
-    provides: frozenset[str]
-
-
-@dataclass(frozen=True)
-class TimeIntegrationCapability:
-    """Declared capability of one selectable time-integration implementation."""
-
-    name: str
-    implementation: str
-    category: str
-    contract: AlgorithmStructureContract
-    min_order: int
-    max_order: int
-    supported_orders: frozenset[int] | None = None
-    priority: int | None = None
-
-    def supports(self, request: TimeIntegrationRequest) -> bool:
-        """Return whether this declaration inhabits ``request``."""
-        if request.order is not None:
-            if self.supported_orders is not None:
-                if request.order not in self.supported_orders:
-                    return False
-            elif not self.min_order <= request.order <= self.max_order:
-                return False
-        return (
-            self.contract.requires <= request.available_structure
-            and request.requested_properties <= self.contract.provides
-        )
-
-
-@dataclass(frozen=True)
-class TimeIntegrationRequest:
-    """Requested input structure and desired time-integration properties."""
-
-    available_structure: frozenset[str] = frozenset()
-    requested_properties: frozenset[str] = frozenset()
-    order: int | None = None
-
-
-class TimeIntegrationRegistry:
-    """Select time-integration implementations by declared capabilities."""
-
-    def __init__(self, capabilities: tuple[TimeIntegrationCapability, ...]) -> None:
-        self._capabilities = capabilities
-
-    @property
-    def capabilities(self) -> tuple[TimeIntegrationCapability, ...]:
-        """Registered implementation declarations."""
-        return self._capabilities
-
-    def matching(
-        self, request: TimeIntegrationRequest
-    ) -> tuple[TimeIntegrationCapability, ...]:
-        """Return all declarations that inhabit ``request``."""
-        return tuple(cap for cap in self._capabilities if cap.supports(request))
-
-    def select(self, request: TimeIntegrationRequest) -> TimeIntegrationCapability:
-        """Return the unique or explicitly prioritized implementation."""
-        matches = self.matching(request)
-        if not matches:
-            raise ValueError(f"no time integrator satisfies request {request!r}")
-        if len(matches) == 1:
-            return matches[0]
-
-        ranked = [cap for cap in matches if cap.priority is not None]
-        if not ranked:
-            names = ", ".join(cap.name for cap in matches)
-            raise ValueError(f"ambiguous time-integrator request {request!r}: {names}")
-        ranked.sort(key=lambda cap: cap.priority if cap.priority is not None else 0)
-        if len(ranked) > 1 and ranked[0].priority == ranked[1].priority:
-            names = ", ".join(cap.name for cap in ranked)
-            raise ValueError(f"ambiguous time-integrator priority {request!r}: {names}")
-        return ranked[0]
+TimeIntegrationCapability = AlgorithmCapability
+TimeIntegrationRegistry = AlgorithmRegistry
+TimeIntegrationRequest = AlgorithmRequest
 
 
 def _contract(

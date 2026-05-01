@@ -420,7 +420,7 @@ def _domain_claims() -> list[_DomainClaim]:
         for name, implementation in expected.items():
             assert auto.select(by_name[name]).implementation == implementation
 
-        with pytest.raises(ValueError, match="no time integrator"):
+        with pytest.raises(ValueError, match="no algorithm"):
             _ti.AutoIntegrator(3).select(by_name["ham2"])
 
     def _predicts_time_to_nonnegative_boundary() -> None:
