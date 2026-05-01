@@ -68,11 +68,19 @@ jobs:
           cache-downloads: true
       - name: Install package
         run: pip install -e .[dev]
+      - name: Fetch base ref for test selection
+        if: github.event_name == 'pull_request'
+        run: git fetch --depth=1 origin main
+      - name: Select pytest targets
+        if: github.event_name == 'pull_request'
+        run: |
+          targets=$(python scripts/ci/select_tests.py --base origin/main --head HEAD)
+          echo "PYTEST_TARGETS=$targets" >> "$GITHUB_ENV"
       - name: Run pytest
         env:
           CF_SOLVER_CONVERGENCE_BUDGET_S: "60"
           CF_INTEGRATOR_SESSION_BUDGET_S: "90"
-        run: bash run_tests.sh -q
+        run: bash run_tests.sh -q ${PYTEST_TARGETS:-tests}
 
   docs:
     runs-on: ubuntu-latest

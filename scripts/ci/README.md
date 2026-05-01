@@ -20,6 +20,14 @@ Checks currently wired:
   `uses:` entry or the line directly above it. SHA and branch pins
   are skipped. Requires `origin/main` to be fetched; CI does this
   via `git fetch --depth=1 origin main` before running pre-commit.
+- **`check_numeric_imports.py`** and
+  **`check_computation_imports.py`** — enforce package dependency
+  boundaries from the shared AST import graph in
+  `import_dependencies.py`.
+- **`select_tests.py`** — uses the same AST import graph to map
+  changed files to pytest targets. The selector is conservative:
+  shared test harness, CI/config, scripts, environment, or unmapped
+  package changes expand to the full `tests` target.
 
 Adding a check: write `scripts/ci/check_<name>.py` using stdlib
 only, add one step to `.github/workflows/ci.yml` invoking it, and
