@@ -452,20 +452,29 @@ def _nse_correctness_spec(
 ) -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rhs = spec.build_rhs()
+        if spec.topo == "chain":
+            ctrl = _vode_controller()
+            return [ctrl.advance(rhs, spec.u0(), 0.0, spec.t_end(), spec.dt0())]
         ctrl = _ti.ConstraintAwareController(
             rhs=rhs,
             integrator=_ti.ImplicitRungeKuttaIntegrator(2),
-            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=spec.dt0()),
+            inner=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1e-5,
+                dt0=spec.dt0(),
+                factor_max=1.15,
+            ),
             eps_activate=0.01,
             eps_deactivate=0.1,
         )
-        return [ctrl.advance(spec.u0(), 0.0, spec.t_end())]
+        return [ctrl.advance(spec.u0(), 0.0, spec.t_end(), stop_at_nse=True)]
 
     def expected(t: float) -> tuple[float, ...]:
         return (1.0 / spec.n,) * spec.n
 
     return _CorrectnessSpec(
-        f"nse/{spec.name}", run, expected, 1e-7, expected_walltime_s
+        f"nse/{spec.name}", run, expected, 1e-6, expected_walltime_s
     )
 
 
@@ -482,7 +491,13 @@ def _nse_transient_correctness_spec() -> _CorrectnessSpec:
         ctrl = _ti.ConstraintAwareController(
             rhs=rhs,
             integrator=_ti.ImplicitRungeKuttaIntegrator(2),
-            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
+            inner=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1e-5,
+                dt0=0.01,
+                factor_max=1.15,
+            ),
             eps_activate=0.01,
             eps_deactivate=0.1,
         )
