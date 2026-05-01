@@ -29,21 +29,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import sympy
 
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
-from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.discrete import (
-    DiffusiveFlux,
-    DirichletGhostCells,
-    DivergenceFormDiscretization,
-)
-from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
 from tests.claims import Claim
 
@@ -71,53 +62,34 @@ _JIT_N = 4
 _JIT_BACKEND = PythonBackend()
 
 
-def _make_jit_op() -> Any:
-    mesh = CartesianMesh(
-        origin=(sympy.Rational(0),),
-        spacing=(sympy.Rational(1, _JIT_N),),
-        shape=(_JIT_N,),
-    )
-    flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
-    disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
-    n = mesh.n_cells
-    u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
-    sym_field = _CallableDiscreteField(mesh, lambda idx: u_syms[idx[0]])
-    result = disc(sym_field)
-    rows: list[int] = []
-    cols: list[int] = []
-    vals: list[float] = []
-    for i in range(n):
-        expr = result((i,))
-        for j, sym in enumerate(u_syms):
-            coeff = float(expr.coeff(sym))
-            if coeff != 0.0:
-                rows.append(i)
-                cols.append(j)
-                vals.append(coeff)
+class _JitLinearOperator:
+    """Tiny tridiagonal SPD operator for iterative-solver structure checks."""
 
-    class _JitLinearOperator:
-        def apply(self, u: Tensor) -> Tensor:
-            backend = u.backend
-            raw = backend.spmv(rows, cols, vals, u._value, n)
-            return Tensor(raw, backend=backend)
+    def __init__(self, n: int) -> None:
+        self._n = n
 
-        def diagonal(self, backend: Any) -> Tensor:
-            diag = [0.0] * n
-            for row, col, val in zip(rows, cols, vals, strict=True):
-                if row == col:
-                    diag[row] += val
-            return Tensor(diag, backend=backend)
+    def apply(self, u: Tensor) -> Tensor:
+        values = []
+        for i in range(self._n):
+            value = 2.0 * float(u[i])
+            if i > 0:
+                value -= float(u[i - 1])
+            if i < self._n - 1:
+                value -= float(u[i + 1])
+            values.append(value)
+        return Tensor(values, backend=u.backend)
 
-        def row_abs_sums(self, backend: Any) -> Tensor:
-            sums = [0.0] * n
-            for row, val in zip(rows, vals, strict=True):
-                sums[row] += abs(val)
-            return Tensor(sums, backend=backend)
+    def diagonal(self, backend: Any) -> Tensor:
+        return Tensor([2.0] * self._n, backend=backend)
 
-    return _JitLinearOperator()
+    def row_abs_sums(self, backend: Any) -> Tensor:
+        return Tensor(
+            [3.0 if i in (0, self._n - 1) else 4.0 for i in range(self._n)],
+            backend=backend,
+        )
 
 
-_JIT_OP = _make_jit_op()
+_JIT_OP = _JitLinearOperator(_JIT_N)
 _JIT_B = Tensor([1.0] * _JIT_N, backend=_JIT_BACKEND)
 
 
