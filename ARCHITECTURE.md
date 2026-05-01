@@ -712,6 +712,81 @@ broader persistence layer or as a standalone capability.
 
 ---
 
+## Current work
+
+### Verification harness migration sprint
+
+Migrate the test suite to module-owned verification axes.  Each numerical
+module owns three parameterized claim registries:
+
+- `test_correctness`: compare outputs against analytical, exact, or residual
+  oracles.
+- `test_convergence`: verify asymptotic order or residual-rate behavior.
+- `test_performance`: verify calibrated cost-to-solution or cost-to-accuracy
+  against Tensor-grounded rooflines.
+
+All claims use a single calibrated interface: `description` plus
+`check(calibration)`.  Claims without meaningful calibration receive a trivial
+module calibration value; no compatibility layer is preserved for the old
+`Claim.check()` shape.
+
+CI eligibility is governed by a unified expected walltime policy, not by
+bespoke offline markers or environment flags.  Each claim declares, or is
+assigned by its module registry, an expected walltime.  The default target is
+one second per claim.  Claims expected to exceed the target are skipped in
+normal CI and local default runs; they remain available for explicit targeted
+stress runs by selecting a higher walltime budget.
+
+Planned PR sequence:
+
+1. **Unify the claim interface.**  Replace the split `Claim` /
+   `CalibratedClaim` hierarchy with one generic calibrated claim interface.
+   Update existing claim subclasses and tiny dispatch tests directly.
+2. **Normalize time-integrator tests.**  Keep `tests/test_time_integrators.py`
+   as the canonical example with correctness, convergence, and performance
+   axes.  Fold current time-integrator stress scenarios into claims in that
+   file, gate them by expected walltime rather than offline markers, then
+   remove `tests/offline/`.
+3. **Split global convergence coverage by module.**  Move discrete-operator
+   order and manufactured-solution convergence claims to
+   `tests/test_discrete_operators.py`.  Move solver residual, residual-rate,
+   and cost-to-solution claims to `tests/test_linear_solvers.py`.  Drop
+   standalone separability conformance checks unless they re-enter as
+   outcome-level claims for a fast-assembly module.  Delete the global
+   `tests/test_convergence.py`.
+4. **Move Tensor performance into the Tensor module tests.**  Merge the
+   Tensor/backend roofline claims from `tests/test_performance.py` into
+   `tests/test_tensor.py` under `test_performance`; keep Tensor arithmetic
+   and backend behavior under `test_correctness`.  Delete
+   `tests/test_performance.py`.
+5. **Remove standalone selector and boundary conformance tests.**  Delete
+   `tests/test_autotuning.py`; policy behavior is covered implicitly through
+   problem regimes in the owning module's correctness, convergence, or
+   performance claims.  Delete `tests/test_boundary_conditions.py`; boundary
+   behavior should reappear only through outcome-level module claims.
+6. **Clean up shared test infrastructure.**  Delete or relocate
+   `tests/calibration.py`; its current contents are solver/discrete-operator
+   convergence-sizing utilities, not shared harness infrastructure.  Keep
+   only genuinely session-wide fixtures in `tests/conftest.py`, such as
+   Tensor/device calibration.  Keep only the unified claim interface, shared
+   constants, and genuinely shared helpers in `tests/claims.py`.
+7. **Standardize claim walltime budgeting.**  Add shared harness support for a
+   per-claim expected walltime, defaulting to one second.  Remove explicit
+   offline markers and environment-variable gates from migrated tests.  Provide
+   a single way to raise the walltime budget for targeted stress runs.
+8. **Delete visual regression tests.**  Remove `tests/visual/` and its
+   baselines rather than carrying a pytest-mpl exception to the module-owned
+   claim harness.
+9. **Update structure enforcement.**  Keep `tests/test_structure.py` as
+   repository-governance coverage, but update its enforcement claims for the
+   unified calibrated claim signature and the module-owned axis convention.
+
+Policy selectors are not a fourth verification axis.  They are covered by
+problem regimes that force distinct choices; claims remain named by axis and
+mathematical regime, not by selected implementation class or branch.
+
+---
+
 ## Physics roadmap
 
 ### Foundation epochs
