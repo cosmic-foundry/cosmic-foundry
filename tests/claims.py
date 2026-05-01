@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
+import pytest
 import sympy
 
 from cosmic_foundry.computation.tensor import Tensor
@@ -67,6 +68,19 @@ class Claim(ABC, Generic[C]):
     @property
     @abstractmethod
     def description(self) -> str: ...
+
+    @property
+    def expected_walltime_s(self) -> float:
+        """Expected walltime for default local/CI eligibility."""
+        return 1.0
+
+    def skip_if_over_walltime_budget(self) -> None:
+        """Skip claims whose declared walltime exceeds the active budget."""
+        if self.expected_walltime_s > CLAIM_WALLTIME_BUDGET_S:
+            pytest.skip(
+                f"{self.description}: expected {self.expected_walltime_s:.1f}s "
+                f"> walltime budget {CLAIM_WALLTIME_BUDGET_S:.1f}s"
+            )
 
     @abstractmethod
     def check(self, calibration: C) -> None: ...

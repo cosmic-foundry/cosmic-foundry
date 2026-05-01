@@ -24,7 +24,7 @@ from cosmic_foundry.computation.backends import (
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
-from tests.claims import CLAIM_WALLTIME_BUDGET_S, INTEGRATOR_CLAIM_BUDGET_S, Claim
+from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
@@ -321,12 +321,12 @@ class _CorrectnessClaim(Claim[None]):
     def description(self) -> str:
         return f"correctness/{self._spec.name}"
 
+    @property
+    def expected_walltime_s(self) -> float:
+        return self._spec.expected_walltime_s
+
     def check(self, _calibration: None) -> None:
-        if self._spec.expected_walltime_s > CLAIM_WALLTIME_BUDGET_S:
-            pytest.skip(
-                f"{self.description}: expected {self._spec.expected_walltime_s:.1f}s "
-                f"> walltime budget {CLAIM_WALLTIME_BUDGET_S:.1f}s"
-            )
+        self.skip_if_over_walltime_budget()
         if self._spec.xfail_reason is not None:
             try:
                 self._check_history()
