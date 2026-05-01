@@ -18,7 +18,6 @@ from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.exponential import (
-    CoxMatthewsETDRK4Integrator,
     LawsonRungeKuttaIntegrator,
     PhiFunction,
     SemilinearRHS,
@@ -108,7 +107,6 @@ __all__ = [
     "order",
     "sigma",
     "trees_up_to_order",
-    "CoxMatthewsETDRK4Integrator",
     "LawsonRungeKuttaIntegrator",
     "SemilinearRHS",
     "SemilinearRHSProtocol",

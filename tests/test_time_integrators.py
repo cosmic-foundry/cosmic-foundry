@@ -310,28 +310,6 @@ _CI_SPECS = _chain_specs(range(3, 5)) + _spoke_specs(range(3, 7), [1, 10])
 # ── targeted behavior check implementations ───────────────────────────────────
 
 
-def _etd_check() -> None:
-    """ETD4RK convergence against a Richardson-extrapolated reference."""
-    _L = Tensor([[-8.0, 0.0, 0.0], [8.0, -0.5, 0.0], [0.0, 0.5, 0.0]])
-
-    def _N(t: float, u: Tensor) -> Tensor:
-        r = 0.25 + 0.1 * math.sin(2.0 * t)
-        return Tensor([-r * float(u[0]), 0.0, r * float(u[0])], backend=u.backend)
-
-    rhs = _ti.SemilinearRHS(_L, _N)
-    t_end = 0.5
-    ref = _run(_ti.CoxMatthewsETDRK4Integrator(4), rhs, _U3, t_end / 128, t_end)
-    t0, dts, errs = time.perf_counter(), [], []
-    for i in range(1, 7):
-        if time.perf_counter() - t0 > _BUDGET:
-            break
-        dt = t_end / 2**i
-        s = _run(_ti.CoxMatthewsETDRK4Integrator(4), rhs, _U3, dt, t_end)
-        errs.append(float(norm(s.u - ref.u)))
-        dts.append(dt)
-    assert _slope(errs, dts) >= 3.5
-
-
 def _semilinear_orders_check() -> None:
     """Lawson RK semilinear integrators converge at orders 1 through 6."""
     L = Tensor([[-2.0]])
@@ -566,7 +544,6 @@ _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_rk_order_conditions_check, "rk/order_conditions_1_6"),
     _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
     _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
-    _BehaviorClaim(_etd_check, "etd/convergence"),
     _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),
     _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
     _BehaviorClaim(_phi_check, "phi_function/coefficients"),

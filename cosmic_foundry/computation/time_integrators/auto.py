@@ -9,7 +9,6 @@ from cosmic_foundry.computation.time_integrators.constraint_aware import (
     build_constraint_gradients,
 )
 from cosmic_foundry.computation.time_integrators.exponential import (
-    CoxMatthewsETDRK4Integrator,
     LawsonRungeKuttaIntegrator,
     SemilinearRHSProtocol,
 )
@@ -102,9 +101,7 @@ class AutoIntegrator(TimeIntegrator):
         order: int,
         *,
         explicit: RungeKuttaIntegrator | None = None,
-        semilinear: (
-            LawsonRungeKuttaIntegrator | CoxMatthewsETDRK4Integrator | None
-        ) = None,
+        semilinear: LawsonRungeKuttaIntegrator | None = None,
         symplectic: SymplecticCompositionIntegrator | None = None,
         composition: CompositionIntegrator | None = None,
         split: AdditiveRungeKuttaIntegrator | None = None,
@@ -114,9 +111,7 @@ class AutoIntegrator(TimeIntegrator):
         self._explicit: RungeKuttaIntegrator | None = (
             explicit if explicit is not None else _try(RungeKuttaIntegrator, order)
         )
-        self._semilinear: (
-            LawsonRungeKuttaIntegrator | CoxMatthewsETDRK4Integrator | None
-        ) = (
+        self._semilinear: LawsonRungeKuttaIntegrator | None = (
             semilinear
             if semilinear is not None
             else _try(LawsonRungeKuttaIntegrator, order)
