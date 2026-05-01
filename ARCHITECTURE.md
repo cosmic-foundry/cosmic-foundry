@@ -733,128 +733,296 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Sprint: Algorithm structure and capability selection
+### Sprint: Parameter-space algorithm ownership atlas
 
-Goal: make algorithm ownership executable.  Calling code should be able to
-express the properties it needs from an algorithm, then let the package select
-the implementation whose declared capabilities satisfy those properties.
-Numerical claims verify that an algorithm is correct on a problem; capability
-ownership claims verify that implementations make truthful, non-overlapping
-claims about the domain they own.  The validation home for these architecture
-checks is `tests/test_structure.py`; feature-specific tests may remain in their
-existing files, but capability maps, dispatch uniqueness checks, and
-anti-duplication checks belong in the structural claim registry.
+Goal: make the problem parameter space the primary artifact, then derive
+algorithm ownership, selection, generated documentation, and coverage tests from
+how implementations cover that space.  The previous capability maps made
+ownership executable, but they still start from implementations and attach
+qualitative tags such as `symmetric_positive_definite`, `rank_deficient`, or
+`domain_aware_acceptance`.  This sprint should invert that hierarchy: first
+declare the axes of the problem space, then let algorithms claim bounded regions
+inside that space using numeric predicates, certificates with stated tolerances,
+and cost estimates.
 
-This is the computation-layer counterpart to the `theory/` formalism.  The
-theory layer makes mathematical structure explicit so valid operations follow
-from declared structure.  Computation should do the same for algorithms:
-selectable implementations declare the input structure they require and the
-algorithmic properties they provide, and selection becomes the act of finding an
-implementation that inhabits a requested contract.
+The first application is the linear solver and decomposition stack because its
+ownership range has the least subjective mathematical vocabulary.  Even there,
+the atlas should not start with a prose `problem_kind = linear_system` axis.
+The underlying mathematical object is a solve relation: find an unknown
+`x ∈ X` such that a residual/objective/constraint relation involving a map
+`R : X -> Y` satisfies an acceptance predicate.  Named classes such as "linear
+system", "least squares", "nonlinear root", and "eigenproblem" are derived
+regions over axes describing `X`, `Y`, `R`, available oracles, targets,
+constraints, and acceptance semantics.
 
-The first application is the time-integration layer.  The recent Nordsieck
-cleanup made `AdaptiveNordsieckController` the single public adaptive Nordsieck controller,
-with `OrderSelector` and `StiffnessSwitcher` retained as reusable policies.
-This sprint should encode that decision as declared capabilities rather than
-only prose: callers request adaptive, domain-aware, stiffness-switching
-Nordsieck integration, and the registry resolves that request to the single
-implementation that owns it.  Future packages should be able to reuse the same
-pattern for solvers, decompositions, discretizations, and autotuning.
+A solver should not merely claim to own "SPD systems"; it should declare a
+predicate over primitive descriptor coordinates such as:
+
+```
+symmetry_defect(A) <= eps_sym
+coercivity_lower_bound(A) >= alpha_min
+condition_estimate(A) <= kappa_max
+rhs_consistency_defect(A, b) <= eps_rhs
+predicted_memory_bytes(A, b) <= budget.memory_bytes
+predicted_work_fmas(A, b, tol) <= budget.work_fmas
+```
+
+Qualitative vocabulary remains useful only as a compact label derived from the
+space.  For example, `symmetric_positive_definite` is acceptable only if it is an
+alias for a region defined by bounded `symmetry_defect` and
+`coercivity_lower_bound` axes.  The validation home for these architecture
+claims remains `tests/test_structure.py`: the claim registry should hold the
+parameter-space schemas, coverage patches, derived aliases, invalid-cell rules,
+and gap annotations that feed both tests and documentation.  Numerical test
+modules should own the descriptor estimators and problem fixtures needed to
+check the mathematics.
+
+The same schema should generate capability coverage documentation.  A developer
+should be able to open one generated page and see the gridded parameter space
+with owned, explicitly rejected, and uncovered cells.  Explicit missing regions
+are useful after a gap is noticed; the grid is what exposes gaps that nobody has
+named yet.
+
+This is not just a cleaner naming scheme.  The meta-level goal is to make
+algorithm ownership an executable epistemic model: separate the mathematical
+space being described, the evidence available for locating a concrete problem in
+that space, the regions our implementations claim, and the projection used to
+explain those claims to humans.  Prose names such as "linear solver" or "SPD"
+are allowed only as views over that model.  They must not become independent
+sources of truth.
 
 The sprint is complete when the following are true:
 
-- **Capability declaration model.**  Each selectable implementation can declare
-  the properties it satisfies: method family, supported RHS structure,
-  adaptivity, variable order, stiffness switching, domain awareness, constraint
-  lifecycle support, order range, required derivative information, and similar
-  package-local properties.  The declaration should be data, not prose, so
-  tests and dispatch can inspect it.
-- **Algorithm structure contracts.**  Capability declarations distinguish
-  required input structure from provided algorithmic properties.  For time
-  integration, requirements include RHS structure such as plain, Jacobian,
-  split, Hamiltonian, or reaction-network RHS, plus optional state-domain or
-  conservation-constraint structure.  Provided properties include explicit or
-  implicit stepping, adaptive timestep control, variable order, stiffness
-  switching, domain-aware acceptance, and constraint lifecycle management.
-- **Capability request model.**  Calling code can express required properties
-  without naming the concrete implementation.  A request can be exact or
-  partial: for example, "adaptive, domain-aware Nordsieck integration with
-  stiffness switching" should resolve to the implementation that declares those
-  capabilities.
-- **Selection and ambiguity rules.**  A package-local registry can select an
-  implementation from a capability request.  If multiple implementations satisfy
-  the same request, the registry must either use an explicit priority/ranking
-  encoded in data or fail as an architectural ambiguity.  Silent first-match
-  dispatch is not acceptable for ownership-sensitive paths.
-- **Inhabitation checks.**  Structural claims verify that expected requests have
-  at least one declared implementation and that ownership-sensitive requests
-  have exactly one selected implementation unless explicit priority data says
-  otherwise.  Missing inhabitants expose unsupported regions of the claimed
-  algorithm domain; duplicate inhabitants expose competing implementations.
-- **Reusable ownership claim type.**  `tests/test_structure.py` exposes
-  declarative claims for capability-based architecture ownership.  A claim can
-  categorize public symbols, verify declared capabilities, assert dispatch
-  uniqueness or explicit priority, list forbidden public symbols, and fail with
-  diagnostics that identify the mismatched symbol, capability, or request.
-- **Public-category maps.**  Ownership claims can still assert that each public
-  export in a package belongs to an expected category such as integrator,
-  controller, policy, RHS wrapper, decomposition, solver, result object, or
-  helper.  The categories are deliberately local to each package so the
-  mechanism is general without imposing a global taxonomy too early.
-- **Exclusive-owner checks.**  Ownership claims can assert that a named
-  responsibility has exactly one public owner or exactly one selected owner for
-  a capability request.  This is the guard against parallel implementations at
-  the same abstraction level: if a new class claims the same role, the
-  structural test fails until the registry declares an intentional priority or
-  the duplication is removed.
-- **Forbidden-symbol checks.**  Ownership claims can assert that retired public
-  names remain absent.  This catches accidental reintroduction of wrappers or
-  compatibility aliases when the project has explicitly consolidated a
-  responsibility.
-- **Ownership-revealing class names.**  Public class names should resemble the
-  architectural claim they make.  Avoid generic, acronym-only, or historical
-  names when they obscure ownership; for example, a controller name should say
-  what kind of control it owns rather than relying on a shorthand such as
-  `VODE`.  The structural claim should make these naming expectations explicit
-  enough that unclear new public names require either a rename or an intentional
-  ownership-map update.
-- **Primary-class module names.**  Module filenames should resemble the primary
-  public class or concept they house.  A class such as `Integrator` should not
-  live in a vaguely named module such as `stepper.py` when `integrator.py` is
-  the ownership-revealing home.  The ownership machinery should flag public
-  classes whose defining module name does not match the class responsibility,
-  while still allowing explicitly mapped policy/helper modules.
-- **Time-integrator ownership map.**  The first concrete map covers
-  `cosmic_foundry.computation.time_integrators`.  It should classify public
-  method families, drivers/controllers, policies, RHS wrappers, domains,
-  coefficient/history objects, and helpers.  It should encode at least:
-  adaptive Nordsieck control with stiffness switching resolves to the single
-  adaptive Nordsieck controller; `IntegrationDriver` owns the generic
-  integrator/controller advance loop; `ConstraintAwareController` owns
-  reaction-network constraint lifecycle advancement; `OrderSelector` and
-  `StiffnessSwitcher` are policies, not selectable competing controllers.
-- **Time-integrator capability registry.**  The first implementation PR should
-  introduce the time-integrator capability declarations and selection API in the
-  smallest useful form.  It may start by wrapping or replacing the current
-  `AutoIntegrator` dispatch so branch choice follows declared properties rather
-  than ad hoc class names and `isinstance` ordering.  The registry should be
-  narrow enough to avoid speculative generality but general enough that solvers
-  and decompositions can reuse the pattern later.
-- **Time-integrator anti-duplication guard.**  The time-integrator map forbids
-  retired wrapper names including `VariableOrderNordsieckIntegrator` and
-  `FamilySwitchingNordsieckIntegrator`.  If the first implementation discovers
-  other same-level overlaps or ambiguous ownership, fix the code or update the
-  map in the same PR rather than documenting the ambiguity as acceptable.
-- **Generalization path.**  The capability/ownership claim machinery is
-  documented in code well enough for later PRs to add registries or maps for
-  solvers, decompositions, discrete operators, geometry, and autotuning without
-  copying test logic.  Shared capability primitives live in
-  `cosmic_foundry.computation.algorithm_capabilities`; package-local modules
-  provide domain vocabulary and selector names.
+- **Parameter-space schema is primary.**  Each package that participates in
+  capability selection declares a `ParameterSpaceSchema`: named axes, finite bins
+  or numeric intervals for those axes, allowed cross-axis combinations, units or
+  norm definitions, and the descriptor fields needed to place a concrete problem
+  into the space.  Capabilities are not allowed to introduce private axes; a new
+  ownership claim first extends the schema, then declares coverage over it.
+- **Descriptors are points or cells.**  `AlgorithmRequest` and
+  `AlgorithmCapability` can be evaluated against a typed descriptor that locates
+  a concrete problem in the schema.  A descriptor may be a point
+  (`n = 128`, `symmetry_defect = 2e-14`) or a conservative cell
+  (`conditioning = unknown_condition`).  Unknown descriptor values are explicit:
+  selection must either reject the request, choose a capability that can certify
+  the value internally, or require an explicit fallback policy.
+- **Capabilities are coverage patches.**  A capability declares a bounded region
+  in the parameter space plus the guarantees it provides inside that region.
+  The region may be a conjunction of bins, numeric intervals, and cost-model
+  inequalities over schema axes.  The implementation name is metadata attached
+  to the region, not the root of the model.
+- **Selection is a point query.**  Runtime dispatch becomes a query of the
+  parameter-space atlas: locate the descriptor cell, find all coverage patches
+  containing it, reject if none own it, and fail on overlap unless priority data
+  is explicit.  This keeps dispatch, generated documentation, and structure
+  tests as different views of the same object.
+- **Knowledge state is modeled separately from truth.**  A coordinate such as
+  "symmetric", "full rank", or "well conditioned" has two parts: the underlying
+  mathematical predicate and the evidence currently available to the selector.
+  Exact facts, certified bounds, estimates, caller assumptions, and unknowns are
+  distinct states.  A capability owns the request only when its contract says
+  which evidence states it accepts and how uncertainty affects the bound.
+- **Bound vocabulary is finite and inspectable.**  Bounds are structured data,
+  not ad hoc lambdas or prose.  The initial operators should include only
+  comparison predicates over named descriptor fields, membership predicates for
+  finite sets, and simple affine/cost comparisons.  If a contract needs a new
+  predicate kind, the PR adding it must also add structural tests for that kind.
+- **Solve-relation descriptor.**  Add a descriptor for solve requests whose
+  primitive coordinates can be measured, estimated, or certified: unknown-space
+  dimension `dim_x`; residual/target-space dimension `dim_y`; number of scalar
+  auxiliary unknowns; number of equality constraints; number of normalization
+  constraints; residual target availability; map linearity defect; matrix
+  representation availability; operator-application availability; derivative
+  oracle kind (`none`, `matrix`, `jvp`, `vjp`, `jacobian_callback`);
+  objective relation (`none`, `residual_norm`, `least_squares`, `spectral_residual`);
+  acceptance relation (`residual_below_tolerance`, `objective_minimum`,
+  `stationary_point`, `eigenpair_residual`); requested residual tolerance;
+  requested solution tolerance; backend kind; device kind; and work/memory
+  budgets.
+- **Linear-operator sub-descriptor.**  When the solve relation contains a linear
+  map or a linearized derivative, add numeric coordinates for matrix
+  availability; assembly cost; matvec cost; memory estimate; symmetry defect;
+  skew-symmetry defect; diagonal nonzero margin; diagonal dominance margin;
+  coercivity lower bound; singular-value lower bound; condition estimate; rank
+  estimate; nullity estimate; and RHS consistency defect.  Derived categories
+  such as square, overdetermined, full rank, rank deficient, SPD, and
+  matrix-free are aliases over these primitive coordinates.
+- **Linear solver schema.**  The solver parameter space should start with
+  orthogonal axes for solve-relation structure rather than named problem kinds:
+  `dim_x`, `dim_y`, auxiliary scalar count, residual map linearity defect,
+  target availability, objective relation, acceptance relation, constraint
+  counts, derivative/oracle availability, operator representation, rank/nullity
+  estimates, symmetry/skew-symmetry defects, coercivity lower bound, condition
+  estimate, RHS consistency defect, and resource budgets.  Axes are declared
+  independently of current implementations so an empty cell is a real absence,
+  not an omitted example.  Named regions are derived:
+
+  ```
+  linear system:
+    map_linearity_defect <= eps
+    dim_x == dim_y
+    residual_target_available = true
+    acceptance_relation = residual_below_tolerance
+
+  least squares:
+    map_linearity_defect <= eps
+    objective_relation = least_squares
+    residual_target_available = true
+
+  nonlinear root:
+    map_linearity_defect > eps or unknown
+    residual_target_available = false or target_is_zero = true
+    acceptance_relation = residual_below_tolerance
+
+  eigenproblem:
+    auxiliary_scalar_count >= 1
+    normalization_constraint_count >= 1
+    acceptance_relation = eigenpair_residual
+  ```
+- **Schema validity is explicit.**  The atlas records which axis products are
+  meaningful and which are invalid.  For example, symmetry and coercivity axes
+  apply to linear maps or derivative maps, not to an arbitrary residual relation
+  without a chosen linearization; SPD/coercivity ownership requires
+  `dim_x == dim_y`; eigenpair regions require a normalization constraint and an
+  auxiliary spectral parameter.  Invalid cells are rendered separately from
+  uncovered-but-valid cells so the documentation distinguishes impossible
+  combinations from missing algorithms.
+- **Norm definitions are fixed.**  Descriptor fields that use norms must name
+  the norm and scaling.  The default matrix defect is relative Frobenius norm:
+  `||A - A.T||_F / max(||A||_F, eps)`.  The default residual defect is
+  `||b - A x||_2 / max(||b||_2, eps)`.  Any different norm must be encoded in
+  the descriptor field name or metadata rather than implied by prose.
+- **Certificate source is explicit.**  Every descriptor field records whether it
+  is exact, estimated, bounded from above, bounded from below, assumed by the
+  caller, or unavailable.  Selection may trust exact and certified bounds;
+  caller assumptions are allowed only when the request explicitly permits them,
+  and tests must cover that policy.
+- **Solver coverage patches.**  Linear solver capabilities are coverage patches
+  over the schema.  Examples: `DenseCGSolver` covers descriptors whose residual
+  map is certified linear, `dim_x == dim_y`, symmetry defect is below tolerance,
+  coercivity lower bound is positive, condition estimate and iteration cost fit
+  budget, and a matrix-free or assembled matvec is available.  `DenseJacobiSolver`
+  covers the diagonally dominant stationary-iteration region.  `DenseLUSolver`
+  covers full-rank square dense linear maps inside memory/work budget.
+  `DenseSVDSolver` covers rank-deficient or minimum-norm dense regions.
+  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps only under
+  restart, memory, and predicted-work bounds.
+- **Decomposition coverage patches.**  Decomposition capabilities are coverage
+  patches over the dense-matrix subspace.  LU covers full-rank square dense
+  matrices within cost budget; SVD covers rank-deficient, ill-conditioned,
+  least-squares, or minimum-norm dense regions within factorization budget.
+- **Cost models are contracts too.**  Capabilities declare a conservative
+  symbolic cost model in terms of descriptor fields.  The first version can use
+  coarse asymptotic coefficients such as dense `O(n^3)` factorization, dense
+  `O(n^2)` solve, and iterative `iterations * matvec_cost`, but it must produce
+  comparable numeric work and memory estimates for selection.
+- **Coverage atlas generation.**  `tests/test_structure.py` is the source of
+  truth for coverage documentation.  Parameter-space schemas and capability
+  coverage patches are declared as structural claims or claim inputs there, and
+  a generator renders the documentation page from that same data.  The page
+  projects the space onto readable axis pairs or small tables, then overlays
+  selected owners, intentional rejections, invalid cells, and
+  uncovered-but-valid cells.  It must include the predicate bounds, the
+  certificate sources accepted by the selector, the cost model, and the priority
+  rule for every owned overlap.  Uncovered cells remain visible even before
+  anyone has written a missing-capability note for them.
+- **Coverage projections are honest.**  A rendered atlas page is a projection of
+  a higher-dimensional schema, not the schema itself.  Each plot or table must
+  state which axes are shown, which axes are fixed, which axes are marginalized
+  into a summary marker, and whether any hidden-axis overlap or gap exists.  A
+  cell may not be rendered as simply "owned" when ownership depends on an
+  unshown certificate, budget, tolerance, or backend axis.
+- **Gaps are first-class regions.**  A missing algorithm can be represented as an
+  explicitly named unowned descriptor region after the coverage atlas exposes
+  it.  For example, the current solver coverage page should show blank coverage
+  over the derived nonlinear-root region; that blank can then be
+  tagged as:
+
+  ```
+  Region: nonlinear algebraic solve F(x) = 0
+  Descriptor:
+    map_linearity_defect > eps or unknown
+    residual_target_available = false or target_is_zero = true
+    jacobian_available in {true, false}
+    acceptance_relation = residual_below_tolerance
+    requested_residual_tolerance = finite
+  Selected owner: none
+  Existing partial owners:
+    time_integrators._newton.nonlinear_solve is internal stage machinery, not a
+    public nonlinear-system solver capability.
+  Required capability before this region is owned:
+    NonlinearSolver with descriptor bounds for residual norm, Jacobian
+    availability, local convergence radius or globalization policy, line-search
+    or trust-region safeguards, max residual evaluations, and failure reporting.
+  ```
+
+  The important point is that the nonlinear-root region is derived from
+  primitive axes before this note is written.  The note records a known gap; the
+  axis grid is what gives us a chance to find unknown gaps.
+- **Coverage is tested at the schema level.**  Structural tests validate the
+  schema before any algorithm selection: every axis has bins or intervals; every
+  descriptor field referenced by an axis exists; every coverage patch references
+  declared axes; every invalid cell has a reason; every generated documentation
+  cell comes from the schema; and the rendered coverage document is byte-for-byte
+  current with the claim registry.  Then tests sample representative cells: SPD
+  well-conditioned dense systems select CG or LU only when priority data says
+  why; rank-deficient minimum-norm requests select SVD; strictly diagonally
+  dominant systems select Jacobi when the iteration budget is satisfied;
+  nonsymmetric matrix-free systems select GMRES; unsupported descriptors reject.
+  Ambiguous overlap without explicit priority remains a test failure.
+- **No prose-only ownership.**  The generated documentation may contain human
+  explanation, but every ownership, rejection, invalidity, overlap, priority, and
+  missing-region statement in it must trace back to a structural claim in
+  `tests/test_structure.py`.  Conversely, every structural claim that changes
+  dispatch behavior must appear in the generated atlas or in an explicit
+  machine-readable exclusion list.  This prevents the documentation from
+  becoming a parallel taxonomy that can drift from the selector.
+- **Qualitative tags become schema aliases.**  Existing string-set capability
+  tags may remain temporarily, but the sprint should move high-value tags onto
+  schema aliases.  An alias such as `full_rank` must expand to a rank or
+  singular-value interval; `matrix_free` must expand to operator-representation
+  and assembly-cost axes; `linear_system`, `least_squares`, `nonlinear_root`,
+  and `eigenproblem` must expand to solve-relation regions; and
+  `domain_aware_acceptance` must later expand to domain-distance and
+  retry-policy axes.
+- **Generalization path.**  After the linear solver/decomposition version is in
+  place, time integrators should receive descriptors for domain distance,
+  stiffness estimates, Jacobian availability, local error target, step retry
+  budget, and RHS evaluation cost.  Discrete operators should receive descriptors
+  for mesh regularity, geometry type, stencil width, formal order, boundary
+  closure, conservation form, and smoothness assumptions.  These later maps reuse
+  the same bound and descriptor machinery rather than introducing package-local
+  predicate systems.
 
 Recommended PR sequence:
 
-No queued implementation items remain in this sprint.
+1. Add `ParameterSpaceSchema`, axis, bin/interval, invalid-cell, descriptor, and
+   coverage-patch machinery to
+   `cosmic_foundry.computation.algorithm_capabilities`, with structural tests
+   proving that coverage patches reference declared axes, unknown values are
+   handled explicitly, unsupported predicate kinds fail closed, and invalid
+   cells are distinguishable from uncovered valid cells.
+2. Add the solve-relation, linear-solver, and decomposition parameter-space
+   schemas before changing any solver ownership.  Tests should prove that named
+   problem classes such as linear system, least squares, nonlinear root, and
+   eigenproblem are derived regions over primitive axes, not primary axes, and
+   that every generated coverage cell maps to a valid descriptor template.
+3. Generate a capability coverage document from the schemas and coverage patches,
+   all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
+   invalid, and uncovered cells.  The structural test should fail if the
+   generated documentation is stale.  Seed it with the public nonlinear-solver
+   gap as an annotation on an already-visible uncovered nonlinear-root region.
+4. Add `LinearOperatorDescriptor` construction for small assembled operators and
+   direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
+   conservative and deterministic; do not use performance timing as a source of
+   truth for ownership.
+5. Convert linear solver capabilities to coverage patches and update
+   selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
+   matrix-free, over-budget, and unknown-descriptor cases.
+6. Convert decomposition capabilities to coverage patches, including
+   rank threshold, minimum-norm semantics, dense memory budget, and work budget.
+7. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+   the solver/decomposition predicates have stabilized.
 
 ---
 
