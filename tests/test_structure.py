@@ -440,6 +440,13 @@ class _CapabilityRequestExpectation:
 
 
 @dataclass(frozen=True)
+class _CapabilityRejectionExpectation:
+    """Capability request that must not select an implementation."""
+
+    request: Any
+
+
+@dataclass(frozen=True)
 class _ArchitectureOwnershipSpec:
     """Package-level ownership contract checked by _ArchitectureOwnershipClaim."""
 
@@ -449,6 +456,7 @@ class _ArchitectureOwnershipSpec:
     capability_provider: str | None = None
     request_selector: str | None = None
     request_expectations: tuple[_CapabilityRequestExpectation, ...] = ()
+    rejected_requests: tuple[_CapabilityRejectionExpectation, ...] = ()
     expected_class_modules: dict[str, str] | None = None
     required_name_fragments: dict[str, tuple[str, ...]] | None = None
 
@@ -518,6 +526,15 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             assert selected.implementation == expectation.selected_implementation, (
                 f"{expectation.request!r} selected {selected.implementation}, "
                 f"expected {expectation.selected_implementation}"
+            )
+        for expectation in self._spec.rejected_requests:
+            try:
+                selected = selector(expectation.request)
+            except ValueError:
+                continue
+            raise AssertionError(
+                f"{expectation.request!r} unexpectedly selected "
+                f"{selected.implementation}"
             )
 
     def _check_class_modules(self, package: types.ModuleType) -> None:
@@ -883,6 +900,26 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
+                available_structure=frozenset({"hamiltonian_rhs"}),
+                requested_properties=frozenset(
+                    {"one_step", "symplectic", "composition"}
+                ),
+                order=4,
+            ),
+            "SymplecticCompositionIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"composite_rhs"}),
+                requested_properties=frozenset(
+                    {"one_step", "operator_splitting", "composition"}
+                ),
+                order=4,
+            ),
+            "CompositionIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
                 available_structure=frozenset({"jacobian_rhs", "state_domain"}),
                 requested_properties=frozenset(
                     {
@@ -917,6 +954,26 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
             ),
             "ConstraintAwareController",
+        ),
+    ),
+    rejected_requests=(
+        _CapabilityRejectionExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"hamiltonian_rhs"}),
+                requested_properties=frozenset(
+                    {"one_step", "symplectic", "composition"}
+                ),
+                order=3,
+            )
+        ),
+        _CapabilityRejectionExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"composite_rhs"}),
+                requested_properties=frozenset(
+                    {"one_step", "operator_splitting", "composition"}
+                ),
+                order=3,
+            )
         ),
     ),
     expected_class_modules={

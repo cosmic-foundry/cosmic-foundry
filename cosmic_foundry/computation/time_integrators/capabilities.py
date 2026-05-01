@@ -23,15 +23,17 @@ class TimeIntegrationCapability:
     contract: AlgorithmStructureContract
     min_order: int
     max_order: int
+    supported_orders: frozenset[int] | None = None
     priority: int | None = None
 
     def supports(self, request: TimeIntegrationRequest) -> bool:
         """Return whether this declaration inhabits ``request``."""
-        if (
-            request.order is not None
-            and not self.min_order <= request.order <= self.max_order
-        ):
-            return False
+        if request.order is not None:
+            if self.supported_orders is not None:
+                if request.order not in self.supported_orders:
+                    return False
+            elif not self.min_order <= request.order <= self.max_order:
+                return False
         return (
             self.contract.requires <= request.available_structure
             and request.requested_properties <= self.contract.provides
@@ -147,6 +149,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
+        supported_orders=frozenset({1, 2, 4, 6}),
     ),
     TimeIntegrationCapability(
         "operator_composition",
@@ -158,6 +161,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
+        supported_orders=frozenset({1, 2, 4, 6}),
     ),
     TimeIntegrationCapability(
         "explicit_multistep",
