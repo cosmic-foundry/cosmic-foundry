@@ -15,7 +15,7 @@ from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 C = TypeVar("C")
 
 # ── Solver convergence budget ─────────────────────────────────────────────────
-# Controls mesh-refinement N_max sizing for test_convergence.py claims only.
+# Controls mesh-refinement N_max sizing for discrete-operator convergence claims.
 # Set via CF_SOLVER_CONVERGENCE_BUDGET_S (default 5 s locally, 60 s in CI).
 SOLVER_CONVERGENCE_BUDGET_S: float = float(
     os.environ.get("CF_SOLVER_CONVERGENCE_BUDGET_S", "5.0")
