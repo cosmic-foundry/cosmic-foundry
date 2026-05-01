@@ -924,8 +924,12 @@ The sprint is complete when the following are true:
   selected owners, intentional rejections, invalid cells, and
   uncovered-but-valid cells.  It must include the predicate bounds, the
   certificate sources accepted by the selector, the cost model, and the priority
-  rule for every owned overlap.  Uncovered cells remain visible even before
-  anyone has written a missing-capability note for them.
+  rule for every owned overlap.  It must also overlay numerical-test coverage:
+  which descriptor cells have correctness, convergence, performance, or
+  regression claims exercising the owned capability, which claim file owns that
+  evidence, and whether the evidence is representative sampling or boundary
+  sampling.  Uncovered cells remain visible even before anyone has written a
+  missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
   a higher-dimensional schema, not the schema itself.  Each plot or table must
   state which axes are shown, which axes are fixed, which axes are marginalized
@@ -969,7 +973,12 @@ The sprint is complete when the following are true:
   why; rank-deficient minimum-norm requests select SVD; strictly diagonally
   dominant systems select Jacobi when the iteration budget is satisfied;
   nonsymmetric matrix-free systems select GMRES; unsupported descriptors reject.
-  Ambiguous overlap without explicit priority remains a test failure.
+  Numerical claim registries should expose enough descriptor metadata for the
+  atlas to overlay tested cells on top of owned cells.  An owned region without
+  numerical evidence is allowed only when it is explicitly marked structural-only
+  or deferred, so the documentation can distinguish "claimed and tested" from
+  "claimed but not numerically exercised".  Ambiguous overlap without explicit
+  priority remains a test failure.
 - **No prose-only ownership.**  The generated documentation may contain human
   explanation, but every ownership, rejection, invalidity, overlap, priority, and
   missing-region statement in it must trace back to a structural claim in
@@ -1003,9 +1012,10 @@ Recommended PR sequence:
    that every generated coverage cell maps to a valid descriptor template.
 2. Generate a capability coverage document from the schemas and coverage patches,
    all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
-   invalid, and uncovered cells.  The structural test should fail if the
-   generated documentation is stale.  Seed it with the public nonlinear-solver
-   gap as an annotation on an already-visible uncovered nonlinear-root region.
+   invalid, uncovered, and numerically tested cells.  The structural test should
+   fail if the generated documentation is stale.  Seed it with the public
+   nonlinear-solver gap as an annotation on an already-visible uncovered
+   nonlinear-root region.
 3. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
