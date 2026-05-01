@@ -739,30 +739,25 @@ stress runs by selecting a higher walltime budget.
 
 Planned PR sequence:
 
-1. **Move Tensor performance into the Tensor module tests.**  Merge the
-   Tensor/backend roofline claims from `tests/test_performance.py` into
-   `tests/test_tensor.py` under `test_performance`; keep Tensor arithmetic
-   and backend behavior under `test_correctness`.  Delete
-   `tests/test_performance.py`.
-2. **Remove standalone selector and boundary conformance tests.**  Delete
+1. **Remove standalone selector and boundary conformance tests.**  Delete
    `tests/test_autotuning.py`; policy behavior is covered implicitly through
    problem regimes in the owning module's correctness, convergence, or
    performance claims.  Delete `tests/test_boundary_conditions.py`; boundary
    behavior should reappear only through outcome-level module claims.
-3. **Clean up shared test infrastructure.**  Delete or relocate
+2. **Clean up shared test infrastructure.**  Delete or relocate
    `tests/calibration.py`; its current contents are solver/discrete-operator
    convergence-sizing utilities, not shared harness infrastructure.  Keep
    only genuinely session-wide fixtures in `tests/conftest.py`, such as
    Tensor/device calibration.  Keep only the unified claim interface, shared
    constants, and genuinely shared helpers in `tests/claims.py`.
-4. **Standardize claim walltime budgeting.**  Add shared harness support for a
+3. **Standardize claim walltime budgeting.**  Add shared harness support for a
    per-claim expected walltime, defaulting to one second.  Remove explicit
    offline markers and environment-variable gates from migrated tests.  Provide
    a single way to raise the walltime budget for targeted stress runs.
-5. **Delete visual regression tests.**  Remove `tests/visual/` and its
+4. **Delete visual regression tests.**  Remove `tests/visual/` and its
    baselines rather than carrying a pytest-mpl exception to the module-owned
    claim harness.
-6. **Update structure enforcement.**  Keep `tests/test_structure.py` as
+5. **Update structure enforcement.**  Keep `tests/test_structure.py` as
    repository-governance coverage, but update its enforcement claims for the
    unified calibrated claim signature and the module-owned axis convention.
 
