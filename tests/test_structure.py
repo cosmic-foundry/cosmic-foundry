@@ -15,6 +15,7 @@ Claim types:
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
   _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
   _TestAxisConventionClaim  — module tests use correctness/convergence/performance
+  _NoTopLevelDefaultBackendMutationClaim — tests do not mutate Tensor backend at import
 """
 
 from __future__ import annotations
@@ -537,6 +538,41 @@ class _TestAxisConventionClaim(Claim[None]):
             )
 
 
+class _NoTopLevelDefaultBackendMutationClaim(Claim[None]):
+    """Claim: test modules do not mutate Tensor's default backend at import time."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"test_pattern/no_top_level_backend_mutation/{self._path.name}"
+
+    def check(self, _calibration: None) -> None:
+        tree = ast.parse(self._path.read_text())
+        violations = []
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                continue
+            for child in ast.walk(node):
+                if not isinstance(child, ast.Call):
+                    continue
+                func = child.func
+                if isinstance(func, ast.Name) and func.id == "set_default_backend":
+                    violations.append(child.lineno)
+                elif (
+                    isinstance(func, ast.Attribute)
+                    and func.attr == "set_default_backend"
+                ):
+                    violations.append(child.lineno)
+        if violations:
+            lines = ", ".join(str(line) for line in violations)
+            raise AssertionError(
+                f"{self._path.name}: top-level set_default_backend() call(s) "
+                f"at line(s) {lines}; pass explicit backends or use a fixture"
+            )
+
+
 class _AutoDiscoveryImportClaim(Claim[None]):
     """Claim: test_structure.py imports no class that any _discover_concrete_* returns.
 
@@ -606,6 +642,7 @@ _CLAIMS: list[Claim[None]] = [
     *[_ParametrizeEnforcementClaim(p) for p in _TEST_FILES],
     *[_BodyDispatchClaim(p) for p in _TEST_FILES],
     *[_TestAxisConventionClaim(p) for p in _TEST_FILES],
+    *[_NoTopLevelDefaultBackendMutationClaim(p) for p in _TEST_FILES],
     _AutoDiscoveryImportClaim(),
 ]
 

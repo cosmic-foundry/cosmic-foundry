@@ -20,8 +20,6 @@ import pytest
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.backends import (
     NumpyBackend,
-    get_default_backend,
-    set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
 from tests.claims import (
@@ -30,17 +28,10 @@ from tests.claims import (
     ExecutionPlan,
 )
 
-_PREV = get_default_backend()
-set_default_backend(NumpyBackend())
+_TIME_BACKEND = NumpyBackend()
 _PERF_TRIALS = 10
 _PERF_OVERHEAD = 80.0
 _GPU_MIN_PERF_FMAS = 1.0e6
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _numpy_backend() -> Any:
-    yield
-    set_default_backend(_PREV)
 
 
 # ── integration runner ────────────────────────────────────────────────────────
@@ -154,9 +145,9 @@ def _scalar_decay_jacobian_rhs() -> _ti.JacobianRHS:
 # (id, u0, n_species, exact_fn, mass_conserved, rhs)
 
 
-def _build_probs(backend: Any | None = None) -> list:
+def _build_probs(backend: Any = _TIME_BACKEND) -> list:
     def tensor(data: Any) -> Tensor:
-        return Tensor(data, backend=backend) if backend is not None else Tensor(data)
+        return Tensor(data, backend=backend)
 
     def f2(t, u):  # type: ignore[misc]
         return Tensor([-float(u[0]), float(u[0])], backend=u.backend)
@@ -761,7 +752,7 @@ class _Spec:
         return min(0.05, 0.1 / max(self.rates))
 
     def u0(self) -> Tensor:
-        return Tensor([1.0] + [0.0] * self.p)
+        return Tensor([1.0] + [0.0] * self.p, backend=_TIME_BACKEND)
 
     def build_rhs(self) -> _ti.ReactionNetworkRHS:
         n, p, rates, topo = self.n, self.p, list(self.rates), self.topo
@@ -769,7 +760,7 @@ class _Spec:
         for j in range(p):
             rows[j if topo == "chain" else 0][j] = -1.0
             rows[j + 1][j] = 1.0
-        S = Tensor(rows)
+        S = Tensor(rows, backend=_TIME_BACKEND)
 
         def rp(t: float, u: Tensor) -> Tensor:
             idx = lambda j: j if topo == "chain" else 0  # noqa: E731
@@ -863,10 +854,10 @@ def _nse_transient_correctness_spec() -> _CorrectnessSpec:
 
     def run() -> list[_ti.ODEState]:
         rhs = _ti.ReactionNetworkRHS(
-            Tensor([[-1.0], [1.0]]),
-            lambda t, u: Tensor([k * float(u[0])]),
-            lambda t, u: Tensor([k * float(u[1])]),
-            Tensor([0.9, 0.1]),
+            Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
+            lambda t, u: Tensor([k * float(u[0])], backend=u.backend),
+            lambda t, u: Tensor([k * float(u[1])], backend=u.backend),
+            Tensor([0.9, 0.1], backend=_TIME_BACKEND),
         )
         ctrl = _ti.ConstraintAwareController(
             rhs=rhs,
@@ -881,7 +872,7 @@ def _nse_transient_correctness_spec() -> _CorrectnessSpec:
             eps_activate=0.01,
             eps_deactivate=0.1,
         )
-        return [ctrl.advance(Tensor([0.7, 0.3]), 0.0, 0.1)]
+        return [ctrl.advance(Tensor([0.7, 0.3], backend=_TIME_BACKEND), 0.0, 0.1)]
 
     def expected(t: float) -> tuple[float, float]:
         x0 = 0.5 + 0.2 * math.exp(-2.0 * k * t)
@@ -972,7 +963,7 @@ def _alpha_chain_stress_spec() -> _CorrectnessSpec:
         controller = _vode_controller()
         state = controller.advance(
             rhs,
-            Tensor([1.0] + [0.0] * 12),
+            Tensor([1.0] + [0.0] * 12, backend=_TIME_BACKEND),
             t0=0.0,
             t_end=0.04,
             dt0=2e-4,
@@ -998,7 +989,7 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
         rhs = _linear_network_rhs(_branched_hot_window_rates(16))
         coarse = _vode_controller()
         fine = _vode_controller()
-        u0 = Tensor([1.0] + [0.0] * 15)
+        u0 = Tensor([1.0] + [0.0] * 15, backend=_TIME_BACKEND)
         coarse_state = coarse.advance(rhs, u0, t0=0.0, t_end=0.32, dt0=5e-4)
         fine_state = fine.advance(rhs, u0, t0=0.0, t_end=0.32, dt0=2.5e-4)
         _assert_abundance_state(coarse_state.u, label="branched_hot_window/coarse")
