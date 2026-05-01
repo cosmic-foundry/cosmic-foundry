@@ -1,10 +1,12 @@
-"""Execution-plan extent selection tests."""
+"""Execution-plan correctness claims."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
-from tests.claims import DeviceCalibration, ExecutionPlan
+from tests.claims import Claim, DeviceCalibration, ExecutionPlan
 
 _CPU_BACKEND = object()
 _GPU_BACKEND = object()
@@ -31,7 +33,20 @@ def _plan(
     )
 
 
-def test_batch_size_uses_budget_safety_and_roofline() -> None:
+class _ExecutionPlanClaim(Claim[None]):
+    def __init__(self, description: str, check: Callable[[], None]) -> None:
+        self._description = description
+        self._check = check
+
+    @property
+    def description(self) -> str:
+        return self._description
+
+    def check(self, _calibration: None) -> None:
+        self._check()
+
+
+def _check_batch_size_uses_budget_safety_and_roofline() -> None:
     plan = _plan(budget_s=2.0, cpu_rate=100.0)
 
     assert (
@@ -40,7 +55,7 @@ def test_batch_size_uses_budget_safety_and_roofline() -> None:
     )
 
 
-def test_batch_size_clamps_to_max_when_budget_is_large() -> None:
+def _check_batch_size_clamps_to_max_when_budget_is_large() -> None:
     plan = _plan(budget_s=10.0, cpu_rate=100.0)
 
     assert (
@@ -49,7 +64,7 @@ def test_batch_size_clamps_to_max_when_budget_is_large() -> None:
     )
 
 
-def test_problem_size_uses_monotone_work_model() -> None:
+def _check_problem_size_uses_monotone_work_model() -> None:
     plan = _plan(budget_s=1.0, cpu_rate=1_000.0)
 
     size = plan.problem_size_for(
@@ -62,7 +77,7 @@ def test_problem_size_uses_monotone_work_model() -> None:
     assert size == 15
 
 
-def test_refinement_count_uses_cumulative_work_model() -> None:
+def _check_refinement_count_uses_cumulative_work_model() -> None:
     plan = _plan(budget_s=1.0, cpu_rate=100.0)
 
     count = plan.refinement_count_for(
@@ -75,14 +90,14 @@ def test_refinement_count_uses_cumulative_work_model() -> None:
     assert count == 3
 
 
-def test_extent_skips_when_smallest_debug_extent_exceeds_budget() -> None:
+def _check_extent_skips_when_smallest_debug_extent_exceeds_budget() -> None:
     plan = _plan(budget_s=1.0, cpu_rate=10.0)
 
     with pytest.raises(pytest.skip.Exception, match="smallest extent 4"):
         plan.batch_size_for(fmas_per_case=10.0, min_batch=4, max_batch=8, safety=0.5)
 
 
-def test_gpu_plan_uses_gpu_roofline() -> None:
+def _check_gpu_plan_uses_gpu_roofline() -> None:
     plan = _plan(budget_s=1.0, device_kind="gpu", cpu_rate=10.0, gpu_rate=1_000.0)
 
     assert plan.fma_rate == 1_000.0
@@ -92,27 +107,93 @@ def test_gpu_plan_uses_gpu_roofline() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        ({"min_extent": 0, "max_extent": 4}, "min_extent"),
-        ({"min_extent": 4, "max_extent": 3}, "max_extent"),
-        ({"min_extent": 1, "max_extent": 4, "safety": 0.0}, "safety"),
-    ],
-)
-def test_extent_rejects_invalid_bounds(kwargs: dict[str, float], match: str) -> None:
+def _check_extent_rejects_min_extent_below_one() -> None:
     plan = _plan()
 
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(ValueError, match="min_extent"):
         plan.extent_for(
             work_fmas=lambda n: float(n),
+            min_extent=0,
+            max_extent=4,
             label="bad_extent",
-            **kwargs,
         )
 
 
-def test_extent_rejects_nonpositive_work_estimate() -> None:
+def _check_extent_rejects_max_extent_below_min_extent() -> None:
+    plan = _plan()
+
+    with pytest.raises(ValueError, match="max_extent"):
+        plan.extent_for(
+            work_fmas=lambda n: float(n),
+            min_extent=4,
+            max_extent=3,
+            label="bad_extent",
+        )
+
+
+def _check_extent_rejects_nonpositive_safety() -> None:
+    plan = _plan()
+
+    with pytest.raises(ValueError, match="safety"):
+        plan.extent_for(
+            work_fmas=lambda n: float(n),
+            min_extent=1,
+            max_extent=4,
+            label="bad_extent",
+            safety=0.0,
+        )
+
+
+def _check_extent_rejects_nonpositive_work_estimate() -> None:
     plan = _plan()
 
     with pytest.raises(ValueError, match="work estimate"):
         plan.problem_size_for(work_fmas=lambda n: 0.0, min_size=1, max_size=4)
+
+
+_CORRECTNESS_CLAIMS: list[Claim[None]] = [
+    _ExecutionPlanClaim(
+        "extent/batch_budget_safety_roofline",
+        _check_batch_size_uses_budget_safety_and_roofline,
+    ),
+    _ExecutionPlanClaim(
+        "extent/batch_clamps_to_max",
+        _check_batch_size_clamps_to_max_when_budget_is_large,
+    ),
+    _ExecutionPlanClaim(
+        "extent/problem_size_monotone_work",
+        _check_problem_size_uses_monotone_work_model,
+    ),
+    _ExecutionPlanClaim(
+        "extent/refinement_count_cumulative_work",
+        _check_refinement_count_uses_cumulative_work_model,
+    ),
+    _ExecutionPlanClaim(
+        "extent/skip_smallest_debug_extent",
+        _check_extent_skips_when_smallest_debug_extent_exceeds_budget,
+    ),
+    _ExecutionPlanClaim("extent/gpu_roofline", _check_gpu_plan_uses_gpu_roofline),
+    _ExecutionPlanClaim(
+        "extent/reject_min_extent",
+        _check_extent_rejects_min_extent_below_one,
+    ),
+    _ExecutionPlanClaim(
+        "extent/reject_max_extent",
+        _check_extent_rejects_max_extent_below_min_extent,
+    ),
+    _ExecutionPlanClaim(
+        "extent/reject_safety",
+        _check_extent_rejects_nonpositive_safety,
+    ),
+    _ExecutionPlanClaim(
+        "extent/reject_work_estimate",
+        _check_extent_rejects_nonpositive_work_estimate,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "claim", _CORRECTNESS_CLAIMS, ids=[c.description for c in _CORRECTNESS_CLAIMS]
+)
+def test_correctness(claim: Claim[None]) -> None:
+    claim.check(None)
