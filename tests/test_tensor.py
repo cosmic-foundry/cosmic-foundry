@@ -1,8 +1,8 @@
-"""Tensor correctness claims for all backends.
+"""Tensor verification claims for all backends.
 
-Each claim encodes one correctness property of the Tensor / Backend interface.
-Adding a new claim requires only appending to _CLAIMS; the single parametric
-test covers all entries.
+Correctness claims encode Tensor / Backend semantic properties. Performance
+claims encode Tensor/backend roofline and parity checks. Adding a claim requires
+only appending it to the appropriate axis registry.
 
 Claim types:
   _RoundtripClaim(backend)       — to_native → from_native preserves values
@@ -15,14 +15,17 @@ Claim types:
 
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import pytest
 
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
-from tests.claims import Claim
+from tests.claims import Claim, DeviceCalibration
 
 _PY = PythonBackend()
 _NP = NumpyBackend()
@@ -341,10 +344,10 @@ _MIXED_OPS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Registry
+# Correctness Registry
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[Claim[None]] = [
+_CORRECTNESS_CLAIMS: list[Claim[None]] = [
     # Round-trips for all backends
     *[
         _RoundtripClaim(b, label, data)
@@ -393,6 +396,457 @@ _CLAIMS: list[Claim[None]] = [
 ]
 
 
-@pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_tensor(claim: Claim[None]) -> None:
+@pytest.mark.parametrize(
+    "claim", _CORRECTNESS_CLAIMS, ids=[c.description for c in _CORRECTNESS_CLAIMS]
+)
+def test_correctness(claim: Claim[None]) -> None:
     claim.check(None)
+
+
+# Regressions larger than this multiple of the roofline prediction fail.
+EFFICIENCY_FACTOR = 8
+
+# NumpyBackend Tensor must stay within this multiple of raw NumPy throughput.
+NUMPY_PARITY_FACTOR = 2
+
+# Number of trials; the minimum time across trials is used to eliminate
+# OS scheduling noise while still catching algorithmic slowdowns.
+_TRIALS = 20
+
+
+@dataclass(frozen=True)
+class _TensorPerformanceCalibration:
+    fma_rate: float
+    device_calibration: DeviceCalibration
+
+
+@pytest.fixture(scope="module")
+def tensor_performance_calibration(
+    fma_rate: float, device_calibration: DeviceCalibration
+) -> _TensorPerformanceCalibration:
+    return _TensorPerformanceCalibration(fma_rate, device_calibration)
+
+
+# ---------------------------------------------------------------------------
+# Performance claim classes
+# ---------------------------------------------------------------------------
+
+
+class _MatvecPerfClaim(Claim[_TensorPerformanceCalibration]):
+    """Claim: N×N @ N matvec runs within EFFICIENCY_FACTOR of the FMA roofline.
+
+    Expected FMAs: 2N² (N rows × N multiply-adds).
+    """
+
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    @property
+    def description(self) -> str:
+        return f"matvec/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        n = self._n
+        a = Tensor([[float(i + j) for j in range(n)] for i in range(n)])
+        x = Tensor([float(i) for i in range(n)])
+
+        best_elapsed = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            _ = a @ x
+            best_elapsed = min(best_elapsed, time.perf_counter() - t0)
+
+        expected = 2 * n**2 / calibration.fma_rate
+        assert best_elapsed <= EFFICIENCY_FACTOR * expected, (
+            f"matvec N={n}: {best_elapsed * 1e6:.1f}µs actual, "
+            f"{expected * 1e6:.1f}µs roofline, "
+            f"{best_elapsed / expected:.1f}× > {EFFICIENCY_FACTOR}× limit"
+        )
+
+
+class _MatmulPerfClaim(Claim[_TensorPerformanceCalibration]):
+    """Claim: N×N @ N×N matmul runs within EFFICIENCY_FACTOR of the FMA roofline.
+
+    Expected FMAs: 2N³ (N² output elements × N multiply-adds each).
+    """
+
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    @property
+    def description(self) -> str:
+        return f"matmul/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        n = self._n
+        a = Tensor([[float(i + j) for j in range(n)] for i in range(n)])
+        b = Tensor([[float(i * j + 1) for j in range(n)] for i in range(n)])
+
+        best_elapsed = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            _ = a @ b
+            best_elapsed = min(best_elapsed, time.perf_counter() - t0)
+
+        expected = 2 * n**3 / calibration.fma_rate
+        assert best_elapsed <= EFFICIENCY_FACTOR * expected, (
+            f"matmul N={n}: {best_elapsed * 1e6:.1f}µs actual, "
+            f"{expected * 1e6:.1f}µs roofline, "
+            f"{best_elapsed / expected:.1f}× > {EFFICIENCY_FACTOR}× limit"
+        )
+
+
+class _DotPerfClaim(Claim[_TensorPerformanceCalibration]):
+    """Claim: N @ N dot product runs within EFFICIENCY_FACTOR of the FMA roofline.
+
+    Expected FMAs: 2N (N multiplies + N-1 adds ≈ 2N).
+    """
+
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    @property
+    def description(self) -> str:
+        return f"dot/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        n = self._n
+        a = Tensor([float(i) for i in range(n)])
+        b = Tensor([float(i) * 0.5 for i in range(n)])
+
+        best_elapsed = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            _ = a @ b
+            best_elapsed = min(best_elapsed, time.perf_counter() - t0)
+
+        expected = 2 * n / calibration.fma_rate
+        assert best_elapsed <= EFFICIENCY_FACTOR * expected, (
+            f"dot N={n}: {best_elapsed * 1e6:.1f}µs actual, "
+            f"{expected * 1e6:.1f}µs roofline, "
+            f"{best_elapsed / expected:.1f}× > {EFFICIENCY_FACTOR}× limit"
+        )
+
+
+class _NumpyParityPerfClaim(Claim[_TensorPerformanceCalibration]):
+    """NumpyBackend Tensor op ≤ NUMPY_PARITY_FACTOR × raw NumPy op.
+
+    Measures the overhead of the Tensor wrapper (backend dispatch, shape
+    inference, _wrap) relative to calling NumPy directly.  Both the raw
+    NumPy arrays and the NumpyBackend Tensors are constructed before the
+    timed loops so that construction cost is excluded.
+
+    op must be one of "matmul" (N×N @ N×N) or "matvec" (N×N @ N).
+    """
+
+    def __init__(self, op: str, n: int) -> None:
+        self._op = op
+        self._n = n
+
+    @property
+    def description(self) -> str:
+        return f"numpy_parity/{self._op}/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        n = self._n
+        raw_a = np.array([[float(i + j) for j in range(n)] for i in range(n)])
+        ta = Tensor([[float(i + j) for j in range(n)] for i in range(n)], backend=_NP)
+
+        if self._op == "matmul":
+            raw_b = np.array([[float(i * j + 1) for j in range(n)] for i in range(n)])
+            tb = Tensor(
+                [[float(i * j + 1) for j in range(n)] for i in range(n)], backend=_NP
+            )
+
+            def np_op() -> None:
+                np.matmul(raw_a, raw_b)
+
+            def tensor_op() -> None:
+                ta @ tb
+
+        else:
+            raw_x = np.array([float(i) for i in range(n)])
+            tx = Tensor([float(i) for i in range(n)], backend=_NP)
+
+            def np_op() -> None:
+                np.matmul(raw_a, raw_x)
+
+            def tensor_op() -> None:
+                ta @ tx
+
+        best_np = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            np_op()
+            best_np = min(best_np, time.perf_counter() - t0)
+
+        best_tensor = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            tensor_op()
+            best_tensor = min(best_tensor, time.perf_counter() - t0)
+
+        assert best_tensor <= NUMPY_PARITY_FACTOR * best_np, (
+            f"{self.description}: "
+            f"Tensor={best_tensor * 1e6:.2f}µs  "
+            f"NumPy={best_np * 1e6:.2f}µs  "
+            f"ratio={best_tensor / best_np:.2f}× > {NUMPY_PARITY_FACTOR}× limit"
+        )
+
+
+class _BackendSpeedupClaim(Claim[_TensorPerformanceCalibration]):
+    """NumpyBackend Tensor op is at least min_speedup× faster than PythonBackend.
+
+    Catches regressions where NumPy is accidentally bypassed (e.g. an
+    operation falls back to pure-Python loops).  The minimum speedup is
+    set conservatively below the observed speedup so that natural variation
+    in timing does not produce false failures.
+
+    op must be one of "matmul" (N×N @ N×N) or "matvec" (N×N @ N).
+    """
+
+    def __init__(self, op: str, n: int, min_speedup: int) -> None:
+        self._op = op
+        self._n = n
+        self._min_speedup = min_speedup
+
+    @property
+    def description(self) -> str:
+        return f"numpy_speedup/{self._op}/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        n = self._n
+        py_a = Tensor([[float(i + j) for j in range(n)] for i in range(n)], backend=_PY)
+        np_a = Tensor([[float(i + j) for j in range(n)] for i in range(n)], backend=_NP)
+
+        if self._op == "matmul":
+            py_b = Tensor(
+                [[float(i * j + 1) for j in range(n)] for i in range(n)], backend=_PY
+            )
+            np_b = Tensor(
+                [[float(i * j + 1) for j in range(n)] for i in range(n)], backend=_NP
+            )
+
+            def py_op() -> None:
+                py_a @ py_b
+
+            def np_op() -> None:
+                np_a @ np_b
+
+        else:
+            py_x = Tensor([float(i) for i in range(n)], backend=_PY)
+            np_x = Tensor([float(i) for i in range(n)], backend=_NP)
+
+            def py_op() -> None:
+                py_a @ py_x
+
+            def np_op() -> None:
+                np_a @ np_x
+
+        best_py = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            py_op()
+            best_py = min(best_py, time.perf_counter() - t0)
+
+        best_np = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            np_op()
+            best_np = min(best_np, time.perf_counter() - t0)
+
+        speedup = best_py / best_np
+        assert speedup >= self._min_speedup, (
+            f"{self.description}: "
+            f"Python={best_py * 1e6:.1f}µs  "
+            f"NumPy={best_np * 1e6:.2f}µs  "
+            f"speedup={speedup:.1f}× < {self._min_speedup}× minimum"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Device performance model constants
+# ---------------------------------------------------------------------------
+
+# Post-warmup backend Tensor ops must stay within this multiple of the
+# JIT-compiled roofline.  The gap reflects eager dispatch overhead; the bound
+# catches catastrophic regressions (e.g. accidental CPU fallback on GPU).
+_DEVICE_EFFICIENCY_FACTOR = 10
+
+# GPU JIT roofline must be at least this many times the CPU JIT roofline.
+_DEVICE_GPU_CPU_MIN_SPEEDUP = 2
+
+# Warmup calls to issue before timed trials so the dispatch cache is warm.
+_DEVICE_WARMUP = 3
+
+
+# ---------------------------------------------------------------------------
+# Device claim classes
+# ---------------------------------------------------------------------------
+
+
+class _DeviceCpuPerfClaim(Claim[_TensorPerformanceCalibration]):
+    """Backend CPU op ≤ _DEVICE_EFFICIENCY_FACTOR × CPU JIT roofline (post-warmup)."""
+
+    def __init__(self, op: str, n: int) -> None:
+        self._op = op
+        self._n = n
+
+    @property
+    def description(self) -> str:
+        return f"device_cpu/{self._op}/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        device_calibration = calibration.device_calibration
+        backend = device_calibration.cpu_backend
+        n = self._n
+        if self._op == "matmul":
+            a = Tensor(
+                [[float(i + j) for j in range(n)] for i in range(n)], backend=backend
+            )
+            b = Tensor(
+                [[float(i * j + 1) for j in range(n)] for i in range(n)],
+                backend=backend,
+            )
+            expected_fmas = 2 * n**3
+        else:
+            a = Tensor(
+                [[float(i + j) for j in range(n)] for i in range(n)], backend=backend
+            )
+            b = Tensor([float(i) for i in range(n)], backend=backend)
+            expected_fmas = 2 * n**2
+        for _ in range(_DEVICE_WARMUP):
+            r = a @ b
+            r.sync()
+        best_elapsed = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            r = a @ b
+            r.sync()
+            best_elapsed = min(best_elapsed, time.perf_counter() - t0)
+        expected = expected_fmas / device_calibration.cpu_fma_rate
+        assert best_elapsed <= _DEVICE_EFFICIENCY_FACTOR * expected, (
+            f"{self.description}: "
+            f"{best_elapsed * 1e6:.1f}µs actual, "
+            f"{expected * 1e6:.1f}µs roofline, "
+            f"{best_elapsed / expected:.1f}× > {_DEVICE_EFFICIENCY_FACTOR}× limit"
+        )
+
+
+class _DeviceGpuPerfClaim(Claim[_TensorPerformanceCalibration]):
+    """Backend GPU op ≤ _DEVICE_EFFICIENCY_FACTOR × GPU JIT roofline (post-warmup).
+
+    Skipped automatically when device_calibration.gpu_fma_rate is None.
+    """
+
+    def __init__(self, op: str, n: int) -> None:
+        self._op = op
+        self._n = n
+
+    @property
+    def description(self) -> str:
+        return f"device_gpu/{self._op}/N={self._n}"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        device_calibration = calibration.device_calibration
+        if device_calibration.gpu_fma_rate is None:
+            pytest.skip("no GPU device available")
+        backend = device_calibration.gpu_backend
+        n = self._n
+        if self._op == "matmul":
+            a = Tensor(
+                [[float(i + j) for j in range(n)] for i in range(n)],
+                backend=backend,
+            )
+            b = Tensor(
+                [[float(i * j + 1) for j in range(n)] for i in range(n)],
+                backend=backend,
+            )
+            expected_fmas = 2 * n**3
+        else:
+            a = Tensor(
+                [[float(i + j) for j in range(n)] for i in range(n)],
+                backend=backend,
+            )
+            b = Tensor([float(i) for i in range(n)], backend=backend)
+            expected_fmas = 2 * n**2
+        for _ in range(_DEVICE_WARMUP):
+            r = a @ b
+            r.sync()
+        best_elapsed = float("inf")
+        for _ in range(_TRIALS):
+            t0 = time.perf_counter()
+            r = a @ b
+            r.sync()
+            best_elapsed = min(best_elapsed, time.perf_counter() - t0)
+        expected = expected_fmas / device_calibration.gpu_fma_rate
+        assert best_elapsed <= _DEVICE_EFFICIENCY_FACTOR * expected, (
+            f"{self.description}: "
+            f"{best_elapsed * 1e6:.1f}µs actual, "
+            f"{expected * 1e6:.1f}µs roofline, "
+            f"{best_elapsed / expected:.1f}× > {_DEVICE_EFFICIENCY_FACTOR}× limit"
+        )
+
+
+class _DeviceGpuVsCpuRooflineClaim(Claim[_TensorPerformanceCalibration]):
+    """GPU JIT roofline ≥ min_speedup × CPU JIT roofline.
+
+    Catches miscalibration (e.g. GPU measurement accidentally ran on CPU)
+    and GPU configurations where the backend falls back to a CPU-speed device.
+    Skipped when no GPU device is available.
+    """
+
+    def __init__(self, min_speedup: int) -> None:
+        self._min_speedup = min_speedup
+
+    @property
+    def description(self) -> str:
+        return f"device_gpu_vs_cpu_roofline/{self._min_speedup}x"
+
+    def check(self, calibration: _TensorPerformanceCalibration) -> None:
+        device_calibration = calibration.device_calibration
+        if device_calibration.gpu_fma_rate is None:
+            pytest.skip("no GPU device available")
+        speedup = device_calibration.gpu_fma_rate / device_calibration.cpu_fma_rate
+        assert speedup >= self._min_speedup, (
+            f"GPU roofline {device_calibration.gpu_fma_rate:.2e} FMAs/s is only "
+            f"{speedup:.1f}× CPU roofline {device_calibration.cpu_fma_rate:.2e} FMAs/s "
+            f"(required ≥ {self._min_speedup}×)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Performance Registries
+# ---------------------------------------------------------------------------
+
+_PERF_CLAIMS: list[Claim[_TensorPerformanceCalibration]] = [
+    # PythonBackend vs FMA roofline
+    *[_DotPerfClaim(n) for n in [8, 32, 128]],
+    *[_MatvecPerfClaim(n) for n in [8, 16, 32]],
+    *[_MatmulPerfClaim(n) for n in [8, 16]],
+    # NumpyBackend vs raw NumPy: wrapper overhead ≤ 2×
+    *[_NumpyParityPerfClaim("matmul", n) for n in [8, 16, 32]],
+    *[_NumpyParityPerfClaim("matvec", n) for n in [8, 16, 32]],
+    # NumpyBackend vs PythonBackend: NumPy must be faster by at least min_speedup
+    *[_BackendSpeedupClaim("matmul", n, 10) for n in [8, 16, 32]],
+    *[_BackendSpeedupClaim("matvec", n, 5) for n in [16, 32]],
+    # Backend CPU vs CPU JIT roofline (dot-product-calibrated, dispatch-limited)
+    *[_DeviceCpuPerfClaim("matmul", n) for n in [128, 256]],
+    *[_DeviceCpuPerfClaim("matvec", n) for n in [128, 256]],
+    # Backend GPU matmul vs GPU JIT roofline (matmul-calibrated, compute-bound)
+    # Matvec is omitted: at all testable N, GPU kernel launch overhead (~1 ms) swamps
+    # the tiny matvec compute, making the ratio meaninglessly large.
+    *[_DeviceGpuPerfClaim("matmul", n) for n in [256, 512, 1024]],
+    # Cross-device sanity check: GPU compute roofline ≥ 2× CPU dispatch-limited baseline
+    _DeviceGpuVsCpuRooflineClaim(min_speedup=_DEVICE_GPU_CPU_MIN_SPEEDUP),
+]
+
+
+@pytest.mark.parametrize(
+    "claim", _PERF_CLAIMS, ids=[c.description for c in _PERF_CLAIMS]
+)
+def test_performance(
+    claim: Claim[_TensorPerformanceCalibration],
+    tensor_performance_calibration: _TensorPerformanceCalibration,
+) -> None:
+    claim.check(tensor_performance_calibration)
