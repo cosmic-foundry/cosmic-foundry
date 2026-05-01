@@ -733,7 +733,7 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Sprint: Capability-selected architecture ownership
+### Sprint: Algorithm structure and capability selection
 
 Goal: make algorithm ownership executable.  Calling code should be able to
 express the properties it needs from an algorithm, then let the package select
@@ -744,6 +744,13 @@ claims about the domain they own.  The validation home for these architecture
 checks is `tests/test_structure.py`; feature-specific tests may remain in their
 existing files, but capability maps, dispatch uniqueness checks, and
 anti-duplication checks belong in the structural claim registry.
+
+This is the computation-layer counterpart to the `theory/` formalism.  The
+theory layer makes mathematical structure explicit so valid operations follow
+from declared structure.  Computation should do the same for algorithms:
+selectable implementations declare the input structure they require and the
+algorithmic properties they provide, and selection becomes the act of finding an
+implementation that inhabits a requested contract.
 
 The first application is the time-integration layer.  The recent Nordsieck
 cleanup made `VODEController` the single public adaptive Nordsieck controller,
@@ -762,6 +769,13 @@ The sprint is complete when the following are true:
   lifecycle support, order range, required derivative information, and similar
   package-local properties.  The declaration should be data, not prose, so
   tests and dispatch can inspect it.
+- **Algorithm structure contracts.**  Capability declarations distinguish
+  required input structure from provided algorithmic properties.  For time
+  integration, requirements include RHS structure such as plain, Jacobian,
+  split, Hamiltonian, or reaction-network RHS, plus optional state-domain or
+  conservation-constraint structure.  Provided properties include explicit or
+  implicit stepping, adaptive timestep control, variable order, stiffness
+  switching, domain-aware acceptance, and constraint lifecycle management.
 - **Capability request model.**  Calling code can express required properties
   without naming the concrete implementation.  A request can be exact or
   partial: for example, "adaptive, domain-aware Nordsieck integration with
@@ -772,6 +786,11 @@ The sprint is complete when the following are true:
   the same request, the registry must either use an explicit priority/ranking
   encoded in data or fail as an architectural ambiguity.  Silent first-match
   dispatch is not acceptable for ownership-sensitive paths.
+- **Inhabitation checks.**  Structural claims verify that expected requests have
+  at least one declared implementation and that ownership-sensitive requests
+  have exactly one selected implementation unless explicit priority data says
+  otherwise.  Missing inhabitants expose unsupported regions of the claimed
+  algorithm domain; duplicate inhabitants expose competing implementations.
 - **Reusable ownership claim type.**  `tests/test_structure.py` exposes
   declarative claims for capability-based architecture ownership.  A claim can
   categorize public symbols, verify declared capabilities, assert dispatch
@@ -833,11 +852,12 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add time-integrator capability declarations, a minimal capability-selection
-   API, and reusable structure claims in `tests/test_structure.py` that verify
-   category coverage, dispatch uniqueness or explicit priority, forbidden
-   symbols, ownership-revealing class names, and class/module naming alignment.
-   Fix any time-integrator ownership gaps or overlaps the claims expose.
+1. Add time-integrator algorithm-structure contracts, a minimal
+   capability-selection API, and reusable structure claims in
+   `tests/test_structure.py` that verify category coverage, request
+   inhabitation, dispatch uniqueness or explicit priority, forbidden symbols,
+   ownership-revealing class names, and class/module naming alignment.  Fix any
+   time-integrator ownership gaps or overlaps the claims expose.
 2. Move `AutoIntegrator` onto the capability-selection path, or remove any
    remaining ad hoc dispatch that competes with the registry.  Rename ambiguous
    time-integrator classes or modules if the ownership claims expose unclear
