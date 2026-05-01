@@ -789,12 +789,10 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add the domain predicate/protocol and reaction-network nonnegative-abundance
-   domain with focused tests.
-2. Wire domain rejection into `VODEController` and promote the branched
+1. Wire domain rejection into `VODEController` and promote the branched
    hot-window stress claim from xfail to passing.
-3. Generalize domain acceptance to the remaining adaptive controllers.
-4. Add domain-aware timestep prediction so controllers avoid most
+2. Generalize domain acceptance to the remaining adaptive controllers.
+3. Add domain-aware timestep prediction so controllers avoid most
    positivity-violating attempts before rejection.
 
 ---

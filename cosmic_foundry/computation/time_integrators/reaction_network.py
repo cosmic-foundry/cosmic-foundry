@@ -8,6 +8,7 @@ import numpy as np
 
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, einsum
+from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
 
 _LU = LUFactorization()
 
@@ -167,6 +168,7 @@ class ReactionNetworkRHS:
         self._eps = eps
 
         n_species, n_reactions = stoichiometry_matrix.shape
+        self._state_domain = NonnegativeStateDomain(n_species)
         backend = initial_state.backend
 
         null_rows = _left_null_space(stoichiometry_matrix)
@@ -201,6 +203,11 @@ class ReactionNetworkRHS:
     def stoichiometry_matrix(self) -> Tensor:
         """S, shape (n_species, n_reactions)."""
         return self._S
+
+    @property
+    def state_domain(self) -> NonnegativeStateDomain:
+        """Valid state domain for reaction-network species abundances."""
+        return self._state_domain
 
     def forward_rate(self, t: float, u: Tensor) -> Tensor:
         """Evaluate r⁺(t, u), shape (n_reactions,)."""

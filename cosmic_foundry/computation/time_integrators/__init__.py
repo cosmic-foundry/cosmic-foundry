@@ -14,6 +14,12 @@ from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
     solve_nse,
 )
+from cosmic_foundry.computation.time_integrators.domains import (
+    DomainCheck,
+    DomainViolation,
+    NonnegativeStateDomain,
+    StateDomain,
+)
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
 )
@@ -89,8 +95,12 @@ __all__ = [
     "AutoIntegrator",
     "BlackBoxRHS",
     "ConstraintAwareController",
+    "DomainCheck",
+    "DomainViolation",
     "nonlinear_solve",
+    "NonnegativeStateDomain",
     "solve_nse",
+    "StateDomain",
     "ReactionNetworkRHS",
     "project_conserved",
     "ConstantStep",
