@@ -271,11 +271,16 @@ to all AI agents working on this repository, regardless of platform
    `setup_environment.sh` or the remediation commands printed by the
    script.
 
-2. **Read `## Current work` in `ARCHITECTURE.md`** — current planned work
-   and navigation anchor.
+2. **Read `## Startup context` in `ARCHITECTURE.md`** — navigation anchor
+   for loading only the architecture sections relevant to the task.
 
-3. **Read `ARCHITECTURE.md`** — all live architectural decisions. When
-   work touches a topic documented there, read it before making changes.
+3. **Read `## Current work` in `ARCHITECTURE.md`** — current planned work
+   and implementation queue.
+
+4. **Read targeted `ARCHITECTURE.md` sections only as needed.** When work
+   touches a topic documented there, read the governing anchored section
+   before making changes. Do not duplicate architectural facts in a second
+   startup summary; `## Startup context` is an index, not a source of truth.
 
 ### Physics lane selection
 

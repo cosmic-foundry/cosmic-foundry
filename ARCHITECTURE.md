@@ -1,5 +1,24 @@
 # Cosmic Foundry — Architecture
 
+## Startup context
+
+Read this section and [## Current work](#current-work) at session start.
+Do not read this file end-to-end unless the task requires a broad architecture
+review; use the anchors below to load only the sections that govern the files
+being changed.
+
+- For foundational project claims, read [## Commitments](#commitments).
+- For package dependency rules and type hierarchy details, read
+  [## Layer architecture](#layer-architecture).
+- For deferred cross-cutting decisions, read
+  [## Cross-cutting open questions](#cross-cutting-open-questions).
+- For time-integrator design, read
+  [## Epoch 4 — Time integration verification (complete)](#epoch-4--time-integration-verification-complete).
+- For long-horizon sequencing, read [## Physics roadmap](#physics-roadmap).
+
+This section is a navigation index only.  Architectural facts live in their
+own sections so that each decision has one canonical home.
+
 ## Commitments
 
 These are the foundational claims about this repository. Each is a
