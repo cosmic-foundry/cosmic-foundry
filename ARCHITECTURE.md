@@ -789,10 +789,8 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Wire domain rejection into `VODEController` and promote the branched
-   hot-window stress claim from xfail to passing.
-2. Generalize domain acceptance to the remaining adaptive controllers.
-3. Add domain-aware timestep prediction so controllers avoid most
+1. Generalize domain acceptance to the remaining adaptive controllers.
+2. Add domain-aware timestep prediction so controllers avoid most
    positivity-violating attempts before rejection.
 
 ---

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators.domains import (
+    DomainCheck,
+    DomainViolation,
+    StateDomain,
+)
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
@@ -54,6 +61,9 @@ class VODEController:
         self.accepted_errors: list[float] = []
         self.accepted_stiffness: list[float] = []
         self.accepted_times: list[float] = []
+        self.rejection_reasons: list[str] = []
+        self.domain_violations: list[DomainViolation] = []
+        self.domain_rejection_step_sizes: list[float] = []
         self.rejected_steps = 0
         self.family_switches = 0
 
@@ -109,11 +119,12 @@ class VODEController:
         while True:
             candidate = self._integrator(family, q).step(rhs, state, dt)
             order_decision = self._order_selector.decide(candidate)
-            stiffness = self._diagnostic.update(
-                rhs.jacobian(candidate.t, candidate.u),
-                dt,
-            )
-            if order_decision.accepted:
+            domain_check = self._domain_check(rhs, candidate.u)
+            if order_decision.accepted and domain_check.accepted:
+                stiffness = self._diagnostic.update(
+                    rhs.jacobian(candidate.t, candidate.u),
+                    dt,
+                )
                 family_decision = self._stiffness_switcher.decide(family, stiffness)
                 if family_decision.switched:
                     self.family_switches += 1
@@ -138,10 +149,25 @@ class VODEController:
 
             rejections += 1
             self.rejected_steps += 1
+            if not order_decision.accepted:
+                self.rejection_reasons.append("error")
+            else:
+                self.rejection_reasons.append("domain")
+                assert domain_check.violation is not None
+                self.domain_violations.append(domain_check.violation)
+                self.domain_rejection_step_sizes.append(dt)
             if rejections > self._max_rejections:
                 raise RuntimeError("VODE step exceeded rejection limit.")
-            q = order_decision.q_next
-            dt = order_decision.h_next
+            q = (
+                order_decision.q_next
+                if not order_decision.accepted
+                else max(self._order_selector.q_min, q - 1)
+            )
+            dt = (
+                order_decision.h_next
+                if not order_decision.accepted
+                else dt * self._order_selector.factor_min
+            )
             nh = state.history.change_order(q).rescale_step(dt)
             state = ODEState(state.t, state.u, dt, state.err, nh)
 
@@ -162,6 +188,12 @@ class VODEController:
 
     def _integrator(self, family: FamilyName, q: int) -> MultistepIntegrator:
         return MultistepIntegrator(family, q)
+
+    def _domain_check(self, rhs: Any, u: Tensor) -> DomainCheck:
+        domain = getattr(rhs, "state_domain", None)
+        if domain is None:
+            return DomainCheck(accepted=True)
+        return cast(StateDomain, domain).check(u)
 
 
 __all__ = ["VODEController"]
