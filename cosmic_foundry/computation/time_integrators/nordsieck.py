@@ -56,7 +56,7 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator as _RungeKuttaIntegrator,
 )
 
-_rk4 = _RungeKuttaIntegrator(4)
+_bootstrap_rk = _RungeKuttaIntegrator(6)
 
 _LU = LUFactorization()
 _NEWTON_MAX_ITER = 50
@@ -416,7 +416,7 @@ class MultistepIntegrator:
         O(h^j); adding (j−1)/2 · ∇^j f_q cancels the leading error term,
         reducing the initialization error from O(h^{j+1}) to O(h^{j+2}).
         This keeps the bootstrap error one order below the method's global
-        error for all q, enabling AM1–AM4 to achieve their declared orders.
+        error for all q, enabling AM1–AM6 to achieve their declared orders.
 
         Both paths take q RK4 steps from (t0, u0) and arrive at (t_q, y_q)
         with t_q = t0 + q·dt.
@@ -447,7 +447,7 @@ class MultistepIntegrator:
         q = self._q
         rk_state = ODEState(t0, u0)
         for _ in range(q):
-            rk_state = _rk4.step(rhs, rk_state, dt)
+            rk_state = _bootstrap_rk.step(rhs, rk_state, dt)
         t_q = rk_state.t
         y_q = rk_state.u
 
@@ -472,7 +472,7 @@ class MultistepIntegrator:
         q = self._q
         rk_states = [ODEState(t0, u0)]
         for _ in range(q):
-            rk_states.append(_rk4.step(rhs, rk_states[-1], dt))
+            rk_states.append(_bootstrap_rk.step(rhs, rk_states[-1], dt))
         t_q = rk_states[-1].t
         y_q = rk_states[-1].u
 

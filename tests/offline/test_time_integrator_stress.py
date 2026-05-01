@@ -102,7 +102,7 @@ def _branched_hot_window_rates(n: int) -> RateFn:
     return edges
 
 
-def _vode_controller(*, dt0: float, q_max: int = 4) -> VODEController:
+def _vode_controller(*, dt0: float, q_max: int = 6) -> VODEController:
     return VODEController(
         order_selector=OrderSelector(
             q_min=2,

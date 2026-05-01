@@ -483,20 +483,20 @@ NordsieckHistory                 — Nordsieck vector (z, h) with rescale_step()
 
 Integrators:
 
-RungeKuttaIntegrator             — Butcher-tableau explicit RK (arbitrary order)
+RungeKuttaIntegrator             — Butcher-tableau explicit RK (orders 1–6)
                                    instances: forward_euler(1), midpoint(2), heun(2),
                                    ralston(2), rk4(4), bogacki_shampine(3,embedded),
-                                   dormand_prince(5,embedded)
+                                   dormand_prince(5,embedded), butcher_6(6)
 ImplicitRungeKuttaIntegrator     — diagonally implicit RK
                                    instances: backward_euler(1), implicit_midpoint(2),
                                    crouzeix_3(3)
 AdditiveRungeKuttaIntegrator     — additive RK (paired explicit + implicit tableaux)
                                    instances: ars222(2)
 ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
-                                   instances: ab2, ab3, ab4
+                                   instances: ab1, ab2, ab3, ab4, ab5, ab6
 MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
-                                   factories: bdf_family → bdf1–bdf4
-                                              adams_family → adams_moulton1–adams_moulton4
+                                   factories: bdf_family → bdf1–bdf6
+                                              adams_family → adams_moulton1–adams_moulton6
 VariableOrderNordsieckIntegrator — online order selection (OrderSelector)
 FamilySwitchingNordsieckIntegrator
                                  — runtime BDF ↔ Adams-Moulton switching (StiffnessSwitcher)

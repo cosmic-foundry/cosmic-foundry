@@ -144,7 +144,7 @@ def _build_probs() -> list:
     ]
 
 
-_ORDERS = [1, 2, 3, 4, 5]
+_ORDERS = [1, 2, 3, 4, 5, 6]
 _PROBS = _build_probs()
 
 
@@ -347,6 +347,61 @@ def _nordsieck_check() -> None:
         assert float(norm(a - b)) < 1e-14
 
 
+def _rk_order_conditions_check() -> None:
+    """Explicit RK tableaux satisfy rooted-tree order conditions through p=6."""
+    for q in range(1, 7):
+        inst = _ti.RungeKuttaIntegrator(q)
+        for tree in _ti.trees_up_to_order(q):
+            assert _ti.elementary_weight(tree, inst.A_sym, inst.b_sym) == (
+                1 / _ti.gamma(tree)
+            ), f"RK{q}: failed tree {tree}"
+
+
+def _scalar_decay_rhs() -> _ti.BlackBoxRHS:
+    return _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend))
+
+
+def _scalar_decay_jacobian_rhs() -> _ti.JacobianRHS:
+    return _ti.JacobianRHS(
+        lambda t, u: Tensor([-float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([[-1.0]], backend=u.backend),
+    )
+
+
+def _assert_scalar_decay_order(
+    inst: Any, rhs: Any, q: int, *, tol: float = 0.5
+) -> None:
+    dts = [0.1, 0.05, 0.025, 0.0125]
+    errs = []
+    for dt in dts:
+        state = _run(inst, rhs, Tensor([1.0]), dt, t_end=0.96)
+        errs.append(abs(float(state.u[0]) - math.exp(-state.t)))
+    assert _slope(errs, dts) >= q - tol, f"{type(inst).__name__} order {q}"
+
+
+def _explicit_multistep_orders_check() -> None:
+    """Adams-Bashforth fixed-order methods converge at orders 1 through 6."""
+    rhs = _scalar_decay_rhs()
+    for q in range(1, 7):
+        _assert_scalar_decay_order(_ti.ExplicitMultistepIntegrator.for_order(q), rhs, q)
+
+
+def _nordsieck_fixed_orders_check() -> None:
+    """Nordsieck Adams and BDF fixed-order methods are instantiable through order 6."""
+    plain = _scalar_decay_rhs()
+    jac = _scalar_decay_jacobian_rhs()
+    for q in range(1, 7):
+        adams = _ti.MultistepIntegrator("adams", q)
+        bdf = _ti.MultistepIntegrator("bdf", q)
+        assert adams.order == q
+        assert bdf.order == q
+
+        adams_state = adams.init_state(plain, 0.0, Tensor([1.0]), 0.01)
+        bdf_state = bdf.init_state(jac, 0.0, Tensor([1.0]), 0.01)
+        assert adams.step(plain, adams_state, 0.01).history.q == q
+        assert bdf.step(jac, bdf_state, 0.01).history.q == q
+
+
 def _phi_check() -> None:
     """φ_k functions satisfy the correct Taylor recurrence for nilpotent A."""
     A, v = Tensor([[0.0, 1.0], [0.0, 0.0]]), Tensor([0.0, 1.0])
@@ -478,6 +533,9 @@ _CONV_CLAIMS: list[Claim] = [
 _NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS]
 
 _BEHAVIOR_CLAIMS: list[Claim] = [
+    _BehaviorClaim(_rk_order_conditions_check, "rk/order_conditions_1_6"),
+    _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
+    _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
     _BehaviorClaim(_etd_check, "etd/convergence"),
     _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
     _BehaviorClaim(_phi_check, "phi_function/coefficients"),
