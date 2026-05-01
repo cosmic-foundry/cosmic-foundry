@@ -8,10 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
 import pytest
-import sympy
-
-from cosmic_foundry.computation.tensor import Tensor
-from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 
 C = TypeVar("C")
 
@@ -103,69 +99,3 @@ class DeviceCalibration:
     gpu_backend: Any | None
     cpu_fma_rate: float
     gpu_fma_rate: float | None
-
-
-def assemble_linear_op(disc: Any, mesh: Any) -> Any:
-    """Return a pre-assembled sparse object satisfying the LinearOperator protocol.
-
-    Probes disc symbolically on mesh to extract the sparse stiffness structure
-    (rows, cols, vals).  The returned object provides apply(), diagonal(), and
-    row_abs_sums() — the three methods required by LinearSolver.solve().
-
-    The mesh is used only during this call; it is not retained by the returned
-    object.  disc must be a linear DiscreteOperator: the probe assumes that each
-    output expression is linear in the symbolic input values.
-    """
-    n = mesh.n_cells
-    shape = mesh.shape
-
-    def _to_flat(idx: tuple[int, ...]) -> int:
-        flat, stride = 0, 1
-        for a, i in enumerate(idx):
-            flat += i * stride
-            stride *= shape[a]
-        return flat
-
-    def _to_multi(flat: int) -> tuple[int, ...]:
-        idx = []
-        for s in shape:
-            idx.append(flat % s)
-            flat //= s
-        return tuple(idx)
-
-    u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
-    sym_field = _CallableDiscreteField(mesh, lambda idx: u_syms[_to_flat(idx)])
-    result = disc(sym_field)
-
-    rows: list[int] = []
-    cols: list[int] = []
-    vals: list[float] = []
-    for i in range(n):
-        expr = result(_to_multi(i))
-        for j, sym in enumerate(u_syms):
-            c = float(expr.coeff(sym))
-            if c != 0.0:
-                rows.append(i)
-                cols.append(j)
-                vals.append(c)
-
-    class _Assembled:
-        def apply(self, u: Tensor) -> Tensor:
-            backend = u.backend
-            raw = backend.spmv(rows, cols, vals, u._value, n)
-            return Tensor(raw, backend=backend)
-
-        def diagonal(self, backend: Any) -> Tensor:
-            d = [0.0] * n
-            for r, c, v in zip(rows, cols, vals, strict=True):
-                if r == c:
-                    d[r] += v
-            return Tensor(d, backend=backend)
-
-        def row_abs_sums(self, backend: Any) -> Tensor:
-            s = [0.0] * n
-            for r, v in zip(rows, vals, strict=True):
-                s[r] += abs(v)
-            return Tensor(s, backend=backend)
-
-    return _Assembled()

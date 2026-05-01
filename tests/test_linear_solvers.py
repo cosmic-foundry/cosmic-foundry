@@ -15,6 +15,7 @@ import sympy
 
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.backends import NumpyBackend
+from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
     DenseGaussSeidelSolver,
@@ -23,6 +24,7 @@ from cosmic_foundry.computation.solvers.dense_gmres_solver import DenseGMRESSolv
 from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
+from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
@@ -34,11 +36,77 @@ from cosmic_foundry.theory.discrete import (
     DivergenceFormDiscretization,
     PeriodicGhostCells,
 )
-from tests.claims import Claim, assemble_linear_op
+from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
+from tests.claims import Claim
 
 _DIMS = [1, 2, 3]
 _SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
 _NP_BACKEND = NumpyBackend()
+_ASSEMBLER = DirectSolver(SVDFactorization())
+
+
+class _DiscreteApplyOperator:
+    def __init__(self, disc: Any, mesh: CartesianMesh) -> None:
+        self._disc = disc
+        self._mesh = mesh
+        self._n = mesh.n_cells
+        self._shape = mesh.shape
+
+    def _to_flat(self, idx: tuple[int, ...]) -> int:
+        flat, stride = 0, 1
+        for axis, cell in enumerate(idx):
+            flat += cell * stride
+            stride *= self._shape[axis]
+        return flat
+
+    def _to_multi(self, flat: int) -> tuple[int, ...]:
+        idx = []
+        for size in self._shape:
+            idx.append(flat % size)
+            flat //= size
+        return tuple(idx)
+
+    def apply(self, u: Tensor) -> Tensor:
+        field = _CallableDiscreteField(
+            self._mesh, lambda idx: float(u[self._to_flat(idx)])
+        )
+        result = self._disc(field)
+        values = [float(result(self._to_multi(i))) for i in range(self._n)]
+        return Tensor(values, backend=u.backend)
+
+
+class _DiscreteLinearOperator:
+    """LinearOperator whose matrix is assembled through DirectSolver._assemble."""
+
+    def __init__(self, disc: Any, mesh: CartesianMesh) -> None:
+        self._n = mesh.n_cells
+        self._apply_op = _DiscreteApplyOperator(disc, mesh)
+        self._matrices: dict[int, Tensor] = {}
+
+    def _matrix(self, backend: Any) -> Tensor:
+        key = id(backend)
+        if key not in self._matrices:
+            self._matrices[key] = _ASSEMBLER._assemble(
+                self._apply_op, Tensor.zeros(self._n, backend=backend)
+            )
+        return self._matrices[key]
+
+    def apply(self, u: Tensor) -> Tensor:
+        return self._matrix(u.backend) @ u
+
+    def diagonal(self, backend: Any) -> Tensor:
+        matrix = self._matrix(backend)
+        return Tensor([float(matrix[i, i]) for i in range(self._n)], backend=backend)
+
+    def row_abs_sums(self, backend: Any) -> Tensor:
+        matrix = self._matrix(backend)
+        return Tensor(
+            [
+                sum(abs(float(matrix[i, j])) for j in range(self._n))
+                for i in range(self._n)
+            ],
+            backend=backend,
+        )
 
 
 class _SolverClaim(Claim[float]):
@@ -64,7 +132,7 @@ class _SolverClaim(Claim[float]):
 
     def check(self, fma_rate: float) -> None:
         n = math.prod(self._mesh.shape)
-        op = assemble_linear_op(self._disc, self._mesh)
+        op = _DiscreteLinearOperator(self._disc, self._mesh)
         b = Tensor([1.0] * n, backend=_NP_BACKEND)
         u = self._solver.solve(op, b)
         residual = tensor.norm(b - op.apply(u)).get()
@@ -100,7 +168,7 @@ class _DirectSolverClaim(Claim[float]):
 
     def check(self, fma_rate: float) -> None:
         n = math.prod(self._mesh.shape)
-        op = assemble_linear_op(self._disc, self._mesh)
+        op = _DiscreteLinearOperator(self._disc, self._mesh)
         if isinstance(self._disc.boundary_condition, PeriodicGhostCells):
             shape = self._mesh.shape
             ndim = len(shape)

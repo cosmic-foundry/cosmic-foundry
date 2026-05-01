@@ -29,22 +29,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import sympy
 
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
-from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
-from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
 from cosmic_foundry.theory.continuous.manifold import Manifold
-from cosmic_foundry.theory.discrete import (
-    DiffusiveFlux,
-    DirichletGhostCells,
-    DivergenceFormDiscretization,
-)
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
-from tests.claims import Claim, assemble_linear_op
+from tests.claims import Claim
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
@@ -70,19 +62,34 @@ _JIT_N = 4
 _JIT_BACKEND = PythonBackend()
 
 
-def _make_jit_op() -> Any:
-    mesh = CartesianMesh(
-        origin=(sympy.Rational(0),),
-        spacing=(sympy.Rational(1, _JIT_N),),
-        shape=(_JIT_N,),
-    )
-    flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
-    return assemble_linear_op(
-        DivergenceFormDiscretization(flux, DirichletGhostCells()), mesh
-    )
+class _JitLinearOperator:
+    """Tiny tridiagonal SPD operator for iterative-solver structure checks."""
+
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    def apply(self, u: Tensor) -> Tensor:
+        values = []
+        for i in range(self._n):
+            value = 2.0 * float(u[i])
+            if i > 0:
+                value -= float(u[i - 1])
+            if i < self._n - 1:
+                value -= float(u[i + 1])
+            values.append(value)
+        return Tensor(values, backend=u.backend)
+
+    def diagonal(self, backend: Any) -> Tensor:
+        return Tensor([2.0] * self._n, backend=backend)
+
+    def row_abs_sums(self, backend: Any) -> Tensor:
+        return Tensor(
+            [3.0 if i in (0, self._n - 1) else 4.0 for i in range(self._n)],
+            backend=backend,
+        )
 
 
-_JIT_OP = _make_jit_op()
+_JIT_OP = _JitLinearOperator(_JIT_N)
 _JIT_B = Tensor([1.0] * _JIT_N, backend=_JIT_BACKEND)
 
 
