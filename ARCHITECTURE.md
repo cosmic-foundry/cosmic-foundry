@@ -492,7 +492,8 @@ ImplicitRungeKuttaIntegrator     — implicit RK
                                    crouzeix_3(3), gauss_legendre_2_stage(4),
                                    radau_iia_3_stage(5), gauss_legendre_3_stage(6)
 AdditiveRungeKuttaIntegrator     — additive RK (paired explicit + implicit tableaux)
-                                   instances: ars222(2)
+                                   instances: imex_euler(1), ars222(2),
+                                   imex_ssp3_433(3), ark436_l2sa(4)
 ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
                                    instances: ab1, ab2, ab3, ab4, ab5, ab6
 MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton

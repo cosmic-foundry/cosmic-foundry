@@ -341,6 +341,32 @@ def _semilinear_orders_check() -> None:
         assert float(norm(auto_state.u - direct_state.u)) < 1e-14
 
 
+def _imex_orders_check() -> None:
+    """IMEX additive RK methods converge at orders 1 through 4."""
+    lam_e, lam_i = -0.2, -0.8
+    rhs = _ti.SplitRHS(
+        lambda t, u: Tensor([lam_e * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([lam_i * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([[lam_i]], backend=u.backend),
+    )
+
+    def _exact(t: float) -> tuple[float]:
+        return (math.exp((lam_e + lam_i) * t),)
+
+    for q in range(1, 5):
+        inst = _ti.AdditiveRungeKuttaIntegrator(q)
+        dts = [0.2, 0.1, 0.05, 0.025]
+        errs = []
+        for dt in dts:
+            state = _run(inst, rhs, Tensor([1.0]), dt, t_end=1.0)
+            errs.append(_err(state.u, _exact, state.t))
+        assert _slope(errs, dts) >= q - 0.5, f"IMEX RK order {q}"
+
+        auto_state = _run(_ti.AutoIntegrator(q), rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        direct_state = _run(inst, rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        assert float(norm(auto_state.u - direct_state.u)) < 1e-14
+
+
 def _nordsieck_check() -> None:
     """NordsieckHistory change_order and rescale_step round-trip invariants."""
     nh = _ti.NordsieckHistory(
@@ -563,6 +589,7 @@ _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
     _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
     _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),
+    _BehaviorClaim(_imex_orders_check, "imex/orders_1_4"),
     _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
     _BehaviorClaim(_phi_check, "phi_function/coefficients"),
     _BehaviorClaim(_variable_order_check, "variable_order/climb_and_drop"),
