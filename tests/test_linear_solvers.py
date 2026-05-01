@@ -8,13 +8,14 @@ manufactured-solution convergence claims live in tests/test_discrete_operators.p
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 import pytest
 import sympy
 
-from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.backends import NumpyBackend
+from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
@@ -37,12 +38,13 @@ from cosmic_foundry.theory.discrete import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.claims import Claim
+from tests.claims import BatchedFailure, Claim, ExecutionPlan
 
 _DIMS = [1, 2, 3]
 _SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
 _NP_BACKEND = NumpyBackend()
 _ASSEMBLER = DirectSolver(SVDFactorization())
+_PERF_OVERHEAD = 200.0
 
 
 class _DiscreteApplyOperator:
@@ -109,7 +111,72 @@ class _DiscreteLinearOperator:
         )
 
 
-class _SolverClaim(Claim[float]):
+def _flux_name(disc: Any) -> str:
+    return type(disc._numerical_flux).__name__
+
+
+def _batched_rhs_values(
+    mesh: CartesianMesh,
+    lane_indices: tuple[int, ...],
+    *,
+    source_batch: int,
+    periodic: bool,
+) -> list[list[float]]:
+    n = mesh.n_cells
+    if not periodic:
+        return [
+            [1.0 + 0.05 * math.sin((col + 1) * (row + 1)) for col in lane_indices]
+            for row in range(n)
+        ]
+
+    shape = mesh.shape
+    ndim = len(shape)
+
+    def _idx(flat: int) -> tuple[int, ...]:
+        out = []
+        for s in shape:
+            out.append(flat % s)
+            flat //= s
+        return tuple(out)
+
+    base = [
+        math.sin(
+            2 * math.pi * sum(float(mesh.coordinate(_idx(row))[k]) for k in range(ndim))
+        )
+        for row in range(n)
+    ]
+    return [
+        [
+            (1.0 + 0.1 * col / max(source_batch - 1, 1)) * base[row]
+            for col in lane_indices
+        ]
+        for row in range(n)
+    ]
+
+
+def _column(matrix: list[list[float]], col: int, backend: Any) -> Tensor:
+    return Tensor([row[col] for row in matrix], backend=backend)
+
+
+def _matrix_from_columns(columns: list[Tensor], backend: Any) -> Tensor:
+    return Tensor(
+        [
+            [float(columns[col][row]) for col in range(len(columns))]
+            for row in range(columns[0].shape[0])
+        ],
+        backend=backend,
+    )
+
+
+def _residual_column_errors(residual: Tensor) -> list[float]:
+    n, batch_size = residual.shape
+    return [
+        math.sqrt(sum(float(residual[row, col]) ** 2 for row in range(n)))
+        for col in range(batch_size)
+    ]
+
+
+class _SolverClaim(Claim[ExecutionPlan]):
     """Claim: solver residual < tol after solve on the given Discretization.
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.  disc is pre-built
@@ -130,18 +197,51 @@ class _SolverClaim(Claim[float]):
             f"{type(self._disc).__name__}(order={self._disc.order})/N={n}/{ndim}D"
         )
 
-    def check(self, fma_rate: float) -> None:
+    def check(self, execution_plan: ExecutionPlan) -> None:
         n = math.prod(self._mesh.shape)
         op = _DiscreteLinearOperator(self._disc, self._mesh)
-        b = Tensor([1.0] * n, backend=_NP_BACKEND)
-        u = self._solver.solve(op, b)
-        residual = tensor.norm(b - op.apply(u)).get()
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=n * n * 16.0,
+            min_batch=2,
+            max_batch=4,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        b_values = _batched_rhs_values(
+            self._mesh,
+            lane_indices,
+            source_batch=source_batch,
+            periodic=False,
+        )
+        b = Tensor(b_values, backend=_NP_BACKEND)
+        solutions = [
+            self._solver.solve(op, _column(b_values, col, _NP_BACKEND))
+            for col in range(len(lane_indices))
+        ]
+        u = _matrix_from_columns(solutions, _NP_BACKEND)
+        residual = b - (op._matrix(_NP_BACKEND) @ u)
+        errors = _residual_column_errors(residual)
+        worst_col, worst_error = max(enumerate(errors), key=lambda item: item[1])
         tol = getattr(self._solver, "_tol", 1e-10)
-        assert residual < tol, f"Did not converge: residual {residual:.3e}"
+        assert worst_error < tol, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=lane_indices[worst_col],
+            method=type(self._solver).__name__,
+            order=self._disc.order,
+            problem=_flux_name(self._disc),
+            parameters={"n": n, "ndim": len(self._mesh.shape)},
+            actual=worst_error,
+            expected=0.0,
+            error=worst_error,
+            tolerance=tol,
+        ).format()
 
 
-class _DirectSolverClaim(Claim[float]):
-    """Claim: direct solver residual < tol after one factorization pass.
+class _DirectSolverClaim(Claim[ExecutionPlan]):
+    """Claim: direct solver residual < tol across a batched RHS set.
 
     disc is pre-built with its BC; assembled to a LinearOperator at check time.
     For PeriodicGhostCells the RHS is a zero-mean product of sines so the system
@@ -166,40 +266,134 @@ class _DirectSolverClaim(Claim[float]):
             f"/N={n}/{ndim}D{suffix}"
         )
 
-    def check(self, fma_rate: float) -> None:
+    def check(self, execution_plan: ExecutionPlan) -> None:
         n = math.prod(self._mesh.shape)
         op = _DiscreteLinearOperator(self._disc, self._mesh)
-        if isinstance(self._disc.boundary_condition, PeriodicGhostCells):
-            shape = self._mesh.shape
-            ndim = len(shape)
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=n * n * n * 4.0,
+            min_batch=2,
+            max_batch=4,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        periodic = isinstance(self._disc.boundary_condition, PeriodicGhostCells)
+        b_values = _batched_rhs_values(
+            self._mesh,
+            lane_indices,
+            source_batch=source_batch,
+            periodic=periodic,
+        )
+        b = Tensor(b_values, backend=_NP_BACKEND)
+        solutions = [
+            self._solver.solve(op, _column(b_values, col, _NP_BACKEND))
+            for col in range(len(lane_indices))
+        ]
+        u = _matrix_from_columns(solutions, _NP_BACKEND)
+        residual = b - (op._matrix(_NP_BACKEND) @ u)
+        errors = _residual_column_errors(residual)
+        worst_col, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        assert worst_error < 1e-10, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=lane_indices[worst_col],
+            method=type(self._solver).__name__,
+            order=self._disc.order,
+            problem=_flux_name(self._disc),
+            parameters={
+                "n": n,
+                "ndim": len(self._mesh.shape),
+                "periodic": periodic,
+            },
+            actual=worst_error,
+            expected=0.0,
+            error=worst_error,
+            tolerance=1e-10,
+        ).format()
 
-            def _idx(flat: int) -> tuple[int, ...]:
-                out = []
-                for s in shape:
-                    out.append(flat % s)
-                    flat //= s
-                return tuple(out)
 
-            # Use sum mode sin(2π·(x₁+…+xd)) as RHS.  Tensor-product modes
-            # sin(2πx)·sin(2πy) contain Fourier components (k,-k) which are in
-            # the null space of v·(∂/∂x+∂/∂y) (eigenvalue ∝ sin(2πk/N)+sin(-2πk/N)=0).
-            # The sum mode has only the (1,1,…,1) Fourier component, whose eigenvalue
-            # i·v/h·d·sin(2π/N) ≠ 0 for N ≥ 3, placing b safely in the column space.
-            # The mean over a full period is exactly zero; no subtraction needed.
-            raw = [
-                math.sin(
-                    2
-                    * math.pi
-                    * sum(float(self._mesh.coordinate(_idx(i))[k]) for k in range(ndim))
-                )
+class _CachedLUPerformanceClaim(Claim[ExecutionPlan]):
+    """Claim: cached LU solves stay within the execution-plan Tensor roofline."""
+
+    @property
+    def description(self) -> str:
+        return "DenseLUSolver/cached_factorization_solve"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        n = execution_plan.problem_size_for(
+            work_fmas=lambda size: size**3 + 8.0 * size**2,
+            min_size=8,
+            max_size=32,
+            label=self.description,
+        )
+        source_rhs_count = execution_plan.batch_size_for(
+            fmas_per_case=2.0 * n**2,
+            min_batch=2,
+            max_batch=16,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_rhs_count, label=self.description
+        )
+        rhs_count = len(lane_indices)
+        backend = execution_plan.backend
+        matrix = Tensor(
+            [
+                [2.0 if i == j else -1.0 if abs(i - j) == 1 else 0.0 for j in range(n)]
                 for i in range(n)
+            ],
+            backend=backend,
+        )
+        rhs_values = [
+            [1.0 + 0.05 * math.sin((col + 1) * (row + 1)) for col in lane_indices]
+            for row in range(n)
+        ]
+        factorization = LUFactorization().factorize(matrix)
+
+        def solve_all() -> Tensor:
+            solutions = [
+                factorization.solve(_column(rhs_values, col, backend))
+                for col in range(rhs_count)
             ]
-            b = Tensor(raw)
-        else:
-            b = Tensor([1.0] * n)
-        u = self._solver.solve(op, b)
-        residual = tensor.norm(b - op.apply(u)).get()
-        assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
+            result = _matrix_from_columns(solutions, backend)
+            result.sync()
+            return result
+
+        best = float("inf")
+        best_solution: Tensor | None = None
+        for _ in range(5):
+            t0 = time.perf_counter()
+            solution = solve_all()
+            elapsed = time.perf_counter() - t0
+            if elapsed < best:
+                best = elapsed
+                best_solution = solution
+        assert best_solution is not None
+        residual = Tensor(rhs_values, backend=backend) - (matrix @ best_solution)
+        errors = _residual_column_errors(residual)
+        worst_col, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        assert worst_error < 1e-10, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_rhs_count,
+            batch_index=lane_indices[worst_col],
+            method="LUFactorization.solve",
+            order=None,
+            problem="tridiagonal_spd",
+            parameters={"n": n},
+            actual=worst_error,
+            expected=0.0,
+            error=worst_error,
+            tolerance=1e-10,
+        ).format()
+        fmas = rhs_count * 2.0 * n**2
+        roofline = fmas / execution_plan.fma_rate
+        assert best <= _PERF_OVERHEAD * roofline, (
+            f"{self.description}/{execution_plan.device_kind}: n={n}, "
+            f"rhs_count={rhs_count}/{source_rhs_count}, {best:.3e}s actual, "
+            f"{roofline:.3e}s Tensor roofline, "
+            f"ratio={best / roofline:.1f}x > {_PERF_OVERHEAD:.1f}x"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +416,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 # Claim generation: solver residual correctness
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[Claim[float]] = []
+_CORRECTNESS_CLAIMS: list[Claim[ExecutionPlan]] = []
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)
@@ -252,23 +446,38 @@ for _ndim in _DIMS:
     for _f in _diff_fluxes:
         _disc = DivergenceFormDiscretization(_f, DirichletGhostCells())
         for _s in [*_SOLVERS, *_SPD_SOLVERS]:
-            _CLAIMS.append(_SolverClaim(_s, _disc, _solver_mesh))
+            _CORRECTNESS_CLAIMS.append(_SolverClaim(_s, _disc, _solver_mesh))
         for _s in _DIRECT_SOLVERS:
-            _CLAIMS.append(_DirectSolverClaim(_s, _disc, _solver_mesh))
+            _CORRECTNESS_CLAIMS.append(_DirectSolverClaim(_s, _disc, _solver_mesh))
 
     for _f in _adv_fluxes:
         _disc = DivergenceFormDiscretization(_f, PeriodicGhostCells())
         for _s in _DIRECT_SOLVERS:
-            _CLAIMS.append(_DirectSolverClaim(_s, _disc, _solver_mesh))
+            _CORRECTNESS_CLAIMS.append(_DirectSolverClaim(_s, _disc, _solver_mesh))
 
     for _f in _adv_diff_fluxes:
         _disc = DivergenceFormDiscretization(_f, DirichletGhostCells())
         for _s in _SOLVERS:
-            _CLAIMS.append(_SolverClaim(_s, _disc, _solver_mesh))
+            _CORRECTNESS_CLAIMS.append(_SolverClaim(_s, _disc, _solver_mesh))
         for _s in _DIRECT_SOLVERS:
-            _CLAIMS.append(_DirectSolverClaim(_s, _disc, _solver_mesh))
+            _CORRECTNESS_CLAIMS.append(_DirectSolverClaim(_s, _disc, _solver_mesh))
+
+_PERFORMANCE_CLAIMS: list[Claim[ExecutionPlan]] = [_CachedLUPerformanceClaim()]
 
 
-@pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_correctness(claim: Claim[float], fma_rate: float) -> None:
-    claim.check(fma_rate)
+@pytest.mark.parametrize(
+    "claim", _CORRECTNESS_CLAIMS, ids=[c.description for c in _CORRECTNESS_CLAIMS]
+)
+def test_correctness(
+    claim: Claim[ExecutionPlan], execution_plan: ExecutionPlan
+) -> None:
+    claim.check(execution_plan)
+
+
+@pytest.mark.parametrize(
+    "claim", _PERFORMANCE_CLAIMS, ids=[c.description for c in _PERFORMANCE_CLAIMS]
+)
+def test_performance(
+    claim: Claim[ExecutionPlan], execution_plan: ExecutionPlan
+) -> None:
+    claim.check(execution_plan)
