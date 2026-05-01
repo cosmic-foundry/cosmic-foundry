@@ -14,6 +14,7 @@ Claim types:
   _GenericBasesClaim        — no subclass leaves a generic base's TypeVars unbound
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
   _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
+  _TestAxisConventionClaim  — module tests use correctness/convergence/performance
 """
 
 from __future__ import annotations
@@ -497,6 +498,38 @@ class _BodyDispatchClaim(Claim[None]):
             )
 
 
+class _TestAxisConventionClaim(Claim[None]):
+    """Claim: module test functions are named by verification axis."""
+
+    _ALLOWED_AXES = {"test_correctness", "test_convergence", "test_performance"}
+    _EXEMPT_FILES = {"test_structure.py"}
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def description(self) -> str:
+        return f"test_pattern/module_axes/{self._path.name}"
+
+    def check(self, _calibration: None) -> None:
+        if self._path.name in self._EXEMPT_FILES:
+            return
+        tree = ast.parse(self._path.read_text())
+        violations = [
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name.startswith("test_")
+            and node.name not in self._ALLOWED_AXES
+        ]
+        if violations:
+            allowed = ", ".join(sorted(self._ALLOWED_AXES))
+            raise AssertionError(
+                f"{self._path.name}: test functions outside module-owned axes "
+                f"({allowed}): {', '.join(violations)}"
+            )
+
+
 class _AutoDiscoveryImportClaim(Claim[None]):
     """Claim: test_structure.py imports no class that any _discover_concrete_* returns.
 
@@ -565,6 +598,7 @@ _CLAIMS: list[Claim[None]] = [
     ],
     *[_ParametrizeEnforcementClaim(p) for p in _TEST_FILES],
     *[_BodyDispatchClaim(p) for p in _TEST_FILES],
+    *[_TestAxisConventionClaim(p) for p in _TEST_FILES],
     _AutoDiscoveryImportClaim(),
 ]
 
