@@ -34,11 +34,67 @@ from cosmic_foundry.theory.discrete import (
     DivergenceFormDiscretization,
     PeriodicGhostCells,
 )
-from tests.claims import Claim, assemble_linear_op
+from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
+from tests.claims import Claim
 
 _DIMS = [1, 2, 3]
 _SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
 _NP_BACKEND = NumpyBackend()
+
+
+def _assembled_op(disc: Any, mesh: CartesianMesh) -> Any:
+    n = mesh.n_cells
+    shape = mesh.shape
+
+    def to_flat(idx: tuple[int, ...]) -> int:
+        flat, stride = 0, 1
+        for axis, i in enumerate(idx):
+            flat += i * stride
+            stride *= shape[axis]
+        return flat
+
+    def to_multi(flat: int) -> tuple[int, ...]:
+        idx = []
+        for size in shape:
+            idx.append(flat % size)
+            flat //= size
+        return tuple(idx)
+
+    u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
+    sym_field = _CallableDiscreteField(mesh, lambda idx: u_syms[to_flat(idx)])
+    result = disc(sym_field)
+    rows: list[int] = []
+    cols: list[int] = []
+    vals: list[float] = []
+    for i in range(n):
+        expr = result(to_multi(i))
+        for j, sym in enumerate(u_syms):
+            coeff = float(expr.coeff(sym))
+            if coeff != 0.0:
+                rows.append(i)
+                cols.append(j)
+                vals.append(coeff)
+
+    class _AssembledOperator:
+        def apply(self, u: Tensor) -> Tensor:
+            backend = u.backend
+            raw = backend.spmv(rows, cols, vals, u._value, n)
+            return Tensor(raw, backend=backend)
+
+        def diagonal(self, backend: Any) -> Tensor:
+            diag = [0.0] * n
+            for row, col, val in zip(rows, cols, vals, strict=True):
+                if row == col:
+                    diag[row] += val
+            return Tensor(diag, backend=backend)
+
+        def row_abs_sums(self, backend: Any) -> Tensor:
+            sums = [0.0] * n
+            for row, val in zip(rows, vals, strict=True):
+                sums[row] += abs(val)
+            return Tensor(sums, backend=backend)
+
+    return _AssembledOperator()
 
 
 class _SolverClaim(Claim[float]):
@@ -64,7 +120,7 @@ class _SolverClaim(Claim[float]):
 
     def check(self, fma_rate: float) -> None:
         n = math.prod(self._mesh.shape)
-        op = assemble_linear_op(self._disc, self._mesh)
+        op = _assembled_op(self._disc, self._mesh)
         b = Tensor([1.0] * n, backend=_NP_BACKEND)
         u = self._solver.solve(op, b)
         residual = tensor.norm(b - op.apply(u)).get()
@@ -100,7 +156,7 @@ class _DirectSolverClaim(Claim[float]):
 
     def check(self, fma_rate: float) -> None:
         n = math.prod(self._mesh.shape)
-        op = assemble_linear_op(self._disc, self._mesh)
+        op = _assembled_op(self._disc, self._mesh)
         if isinstance(self._disc.boundary_condition, PeriodicGhostCells):
             shape = self._mesh.shape
             ndim = len(shape)

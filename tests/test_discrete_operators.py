@@ -53,7 +53,7 @@ from cosmic_foundry.theory.discrete import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.claims import SOLVER_CONVERGENCE_BUDGET_S, Claim, assemble_linear_op
+from tests.claims import SOLVER_CONVERGENCE_BUDGET_S, Claim
 
 # ---------------------------------------------------------------------------
 # Dimension and budget configuration
@@ -88,6 +88,61 @@ _MAX_PROBE_TIME_S = 1.5
 _CALIB_MANIFOLD = EuclideanManifold(1)
 
 
+def _assembled_op(disc: Any, mesh: CartesianMesh) -> Any:
+    n = mesh.n_cells
+    shape = mesh.shape
+
+    def to_flat(idx: tuple[int, ...]) -> int:
+        flat, stride = 0, 1
+        for axis, i in enumerate(idx):
+            flat += i * stride
+            stride *= shape[axis]
+        return flat
+
+    def to_multi(flat: int) -> tuple[int, ...]:
+        idx = []
+        for size in shape:
+            idx.append(flat % size)
+            flat //= size
+        return tuple(idx)
+
+    u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
+    sym_field = _CallableDiscreteField(mesh, lambda idx: u_syms[to_flat(idx)])
+    result = disc(sym_field)
+    rows: list[int] = []
+    cols: list[int] = []
+    vals: list[float] = []
+    for i in range(n):
+        expr = result(to_multi(i))
+        for j, sym in enumerate(u_syms):
+            coeff = float(expr.coeff(sym))
+            if coeff != 0.0:
+                rows.append(i)
+                cols.append(j)
+                vals.append(coeff)
+
+    class _AssembledOperator:
+        def apply(self, u: Tensor) -> Tensor:
+            backend = u.backend
+            raw = backend.spmv(rows, cols, vals, u._value, n)
+            return Tensor(raw, backend=backend)
+
+        def diagonal(self, backend: Any) -> Tensor:
+            diag = [0.0] * n
+            for row, col, val in zip(rows, cols, vals, strict=True):
+                if row == col:
+                    diag[row] += val
+            return Tensor(diag, backend=backend)
+
+        def row_abs_sums(self, backend: Any) -> Tensor:
+            sums = [0.0] * n
+            for row, val in zip(rows, vals, strict=True):
+                sums[row] += abs(val)
+            return Tensor(sums, backend=backend)
+
+    return _AssembledOperator()
+
+
 def _time_solve_at(solver_class: type, n: int) -> float:
     mesh = CartesianMesh(
         origin=(sympy.Rational(0),),
@@ -98,12 +153,12 @@ def _time_solve_at(solver_class: type, n: int) -> float:
     disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
     b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
     solver = solver_class()
-    op = assemble_linear_op(disc, mesh)
+    op = _assembled_op(disc, mesh)
     solver.solve(op, b_cal)
     best = float("inf")
     for _ in range(3):
         t0 = time.perf_counter()
-        op = assemble_linear_op(disc, mesh)
+        op = _assembled_op(disc, mesh)
         solver.solve(op, b_cal)
         best = min(best, time.perf_counter() - t0)
     return best
@@ -336,7 +391,7 @@ class _ConvergenceRateClaim(Claim[float]):
         for mesh in meshes:
             vol = float(mesh.cell_volume)
             n_cells = math.prod(mesh.shape)
-            op_m = assemble_linear_op(self._disc, mesh)
+            op_m = _assembled_op(self._disc, mesh)
             a_m = _assemble_from_op(op_m, n_cells, _NP_BACKEND)
             decomp = SVDFactorization().factorize(a_m)
             s_vec = decomp.s

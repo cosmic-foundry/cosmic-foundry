@@ -43,8 +43,9 @@ from cosmic_foundry.theory.discrete import (
     DirichletGhostCells,
     DivergenceFormDiscretization,
 )
+from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
-from tests.claims import Claim, assemble_linear_op
+from tests.claims import Claim
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
@@ -77,9 +78,43 @@ def _make_jit_op() -> Any:
         shape=(_JIT_N,),
     )
     flux = DiffusiveFlux(DiffusiveFlux.min_order, EuclideanManifold(1))
-    return assemble_linear_op(
-        DivergenceFormDiscretization(flux, DirichletGhostCells()), mesh
-    )
+    disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
+    n = mesh.n_cells
+    u_syms = [sympy.Symbol(f"_u{j}") for j in range(n)]
+    sym_field = _CallableDiscreteField(mesh, lambda idx: u_syms[idx[0]])
+    result = disc(sym_field)
+    rows: list[int] = []
+    cols: list[int] = []
+    vals: list[float] = []
+    for i in range(n):
+        expr = result((i,))
+        for j, sym in enumerate(u_syms):
+            coeff = float(expr.coeff(sym))
+            if coeff != 0.0:
+                rows.append(i)
+                cols.append(j)
+                vals.append(coeff)
+
+    class _JitLinearOperator:
+        def apply(self, u: Tensor) -> Tensor:
+            backend = u.backend
+            raw = backend.spmv(rows, cols, vals, u._value, n)
+            return Tensor(raw, backend=backend)
+
+        def diagonal(self, backend: Any) -> Tensor:
+            diag = [0.0] * n
+            for row, col, val in zip(rows, cols, vals, strict=True):
+                if row == col:
+                    diag[row] += val
+            return Tensor(diag, backend=backend)
+
+        def row_abs_sums(self, backend: Any) -> Tensor:
+            sums = [0.0] * n
+            for row, val in zip(rows, vals, strict=True):
+                sums[row] += abs(val)
+            return Tensor(sums, backend=backend)
+
+    return _JitLinearOperator()
 
 
 _JIT_OP = _make_jit_op()
