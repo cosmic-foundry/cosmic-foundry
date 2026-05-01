@@ -848,13 +848,13 @@ The sprint is complete when the following are true:
 - **Generalization path.**  The capability/ownership claim machinery is
   documented in code well enough for later PRs to add registries or maps for
   solvers, decompositions, discrete operators, geometry, and autotuning without
-  copying test logic.
+  copying test logic.  Shared capability primitives live in
+  `cosmic_foundry.computation.algorithm_capabilities`; package-local modules
+  provide domain vocabulary and selector names.
 
 Recommended PR sequence:
 
-1. Add capability/ownership maps for linear solvers and decompositions,
-   reusing the same claim machinery.
-2. Add capability/ownership maps for discrete operators and geometry/theory
+1. Add capability/ownership maps for discrete operators and geometry/theory
    boundaries, reusing the same claim machinery.
 
 ---

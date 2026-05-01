@@ -1,5 +1,12 @@
 """Linear solver classes: ABCs and concrete algorithms."""
 
+from cosmic_foundry.computation.solvers.capabilities import (
+    LinearSolverCapability,
+    LinearSolverRegistry,
+    LinearSolverRequest,
+    linear_solver_capabilities,
+    select_linear_solver,
+)
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
     DenseGaussSeidelSolver,
@@ -24,6 +31,11 @@ __all__ = [
     "DenseSVDSolver",
     "DirectSolver",
     "IterativeSolver",
+    "LinearSolverCapability",
     "LinearOperator",
+    "linear_solver_capabilities",
+    "LinearSolverRegistry",
+    "LinearSolverRequest",
     "LinearSolver",
+    "select_linear_solver",
 ]
