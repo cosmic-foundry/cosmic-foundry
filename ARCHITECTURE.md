@@ -771,9 +771,11 @@ Qualitative vocabulary remains useful only as a compact label derived from the
 space.  For example, `symmetric_positive_definite` is acceptable only if it is an
 alias for a region defined by bounded `symmetry_defect` and
 `coercivity_lower_bound` axes.  The validation home for these architecture
-claims remains `tests/test_structure.py`, while numerical test modules should
-own the descriptor estimators and problem fixtures needed to check the
-mathematics.
+claims remains `tests/test_structure.py`: the claim registry should hold the
+parameter-space schemas, coverage patches, derived aliases, invalid-cell rules,
+and gap annotations that feed both tests and documentation.  Numerical test
+modules should own the descriptor estimators and problem fixtures needed to
+check the mathematics.
 
 The same schema should generate capability coverage documentation.  A developer
 should be able to open one generated page and see the gridded parameter space
@@ -900,14 +902,16 @@ The sprint is complete when the following are true:
   coarse asymptotic coefficients such as dense `O(n^3)` factorization, dense
   `O(n^2)` solve, and iterative `iterations * matvec_cost`, but it must produce
   comparable numeric work and memory estimates for selection.
-- **Coverage atlas generation.**  Parameter-space schemas and capability
-  coverage patches expose enough structured data to generate a documentation
-  page from code.  The page projects the space onto readable axis pairs or
-  small tables, then overlays selected owners, intentional rejections, invalid
-  cells, and uncovered-but-valid cells.  It must include the predicate bounds,
-  the certificate sources accepted by the selector, the cost model, and the
-  priority rule for every owned overlap.  Uncovered cells remain visible even
-  before anyone has written a missing-capability note for them.
+- **Coverage atlas generation.**  `tests/test_structure.py` is the source of
+  truth for coverage documentation.  Parameter-space schemas and capability
+  coverage patches are declared as structural claims or claim inputs there, and
+  a generator renders the documentation page from that same data.  The page
+  projects the space onto readable axis pairs or small tables, then overlays
+  selected owners, intentional rejections, invalid cells, and
+  uncovered-but-valid cells.  It must include the predicate bounds, the
+  certificate sources accepted by the selector, the cost model, and the priority
+  rule for every owned overlap.  Uncovered cells remain visible even before
+  anyone has written a missing-capability note for them.
 - **Gaps are first-class regions.**  A missing algorithm can be represented as an
   explicitly named unowned descriptor region after the coverage atlas exposes
   it.  For example, the current solver coverage page should show blank coverage
@@ -939,7 +943,8 @@ The sprint is complete when the following are true:
   schema before any algorithm selection: every axis has bins or intervals; every
   descriptor field referenced by an axis exists; every coverage patch references
   declared axes; every invalid cell has a reason; every generated documentation
-  cell comes from the schema.  Then tests sample representative cells: SPD
+  cell comes from the schema; and the rendered coverage document is byte-for-byte
+  current with the claim registry.  Then tests sample representative cells: SPD
   well-conditioned dense systems select CG or LU only when priority data says
   why; rank-deficient minimum-norm requests select SVD; strictly diagonally
   dominant systems select Jacobi when the iteration budget is satisfied;
@@ -976,9 +981,10 @@ Recommended PR sequence:
    eigenproblem are derived regions over primitive axes, not primary axes, and
    that every generated coverage cell maps to a valid descriptor template.
 3. Generate a capability coverage document from the schemas and coverage patches,
-   checked by `tests/test_structure.py`, that visualizes owned, rejected,
-   invalid, and uncovered cells.  Seed it with the public nonlinear-solver gap
-   as an annotation on an already-visible uncovered nonlinear-root region.
+   all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
+   invalid, and uncovered cells.  The structural test should fail if the
+   generated documentation is stale.  Seed it with the public nonlinear-solver
+   gap as an annotation on an already-visible uncovered nonlinear-root region.
 4. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
