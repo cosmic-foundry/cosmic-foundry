@@ -500,10 +500,10 @@ MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moul
 VariableOrderNordsieckIntegrator — online order selection (OrderSelector)
 FamilySwitchingNordsieckIntegrator
                                  — runtime BDF ↔ Adams-Moulton switching (StiffnessSwitcher)
-ExponentialEulerIntegrator       — ETD-Euler, order 1; instance: etd_euler
-ETDRK2Integrator                 — order 2; instance: etdrk2
-CoxMatthewsETDRK4Integrator      — order 4 (classical); instance: cox_matthews_etdrk4
-KrogstadETDRK4Integrator         — order 4 (stiff-order-correct); instance: krogstad_etdrk4
+LawsonRungeKuttaIntegrator       — integrating-factor RK for semilinear systems
+                                   instances: lawson_rk1–lawson_rk6
+CoxMatthewsETDRK4Integrator      — order 4 ETD-RK (classical);
+                                   instance: cox_matthews_etdrk4
 SymplecticCompositionIntegrator  — position-Verlet family for separable Hamiltonian
                                    systems; inherits TimeIntegrator; accepts
                                    HamiltonianRHS with split_index

@@ -332,6 +332,36 @@ def _etd_check() -> None:
     assert _slope(errs, dts) >= 3.5
 
 
+def _semilinear_orders_check() -> None:
+    """Lawson RK semilinear integrators converge at orders 1 through 6."""
+    L = Tensor([[-2.0]])
+
+    def _N(t: float, u: Tensor) -> Tensor:
+        return Tensor([math.sin(t)], backend=u.backend)
+
+    def _exact(t: float) -> tuple[float]:
+        forced = (
+            math.exp(-2.0 * t)
+            * (math.exp(2.0 * t) * (2.0 * math.sin(t) - math.cos(t)) + 1.0)
+            / 5.0
+        )
+        return (math.exp(-2.0 * t) + forced,)
+
+    rhs = _ti.SemilinearRHS(L, _N)
+    for q in range(1, 7):
+        inst = _ti.LawsonRungeKuttaIntegrator(q)
+        dts = [0.2, 0.1, 0.05, 0.025]
+        errs = []
+        for dt in dts:
+            state = _run(inst, rhs, Tensor([1.0]), dt, t_end=1.0)
+            errs.append(_err(state.u, _exact, state.t))
+        assert _slope(errs, dts) >= q - 0.5, f"Lawson RK order {q}"
+
+        auto_state = _run(_ti.AutoIntegrator(q), rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        direct_state = _run(inst, rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        assert float(norm(auto_state.u - direct_state.u)) < 1e-14
+
+
 def _nordsieck_check() -> None:
     """NordsieckHistory change_order and rescale_step round-trip invariants."""
     nh = _ti.NordsieckHistory(
@@ -537,6 +567,7 @@ _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
     _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
     _BehaviorClaim(_etd_check, "etd/convergence"),
+    _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),
     _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
     _BehaviorClaim(_phi_check, "phi_function/coefficients"),
     _BehaviorClaim(_variable_order_check, "variable_order/climb_and_drop"),
