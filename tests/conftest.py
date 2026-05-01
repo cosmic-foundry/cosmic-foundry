@@ -54,9 +54,10 @@ def _measure_fma_rate() -> float:
     _CALIB_TRIALS repetitions.  Taking the minimum elapsed time eliminates OS
     scheduling noise while still catching algorithmic slowdowns.
 
-    Used only by PythonBackend performance claims.  Convergence-rate mesh-size
-    selection uses _calibrate_alpha in test_convergence.py, which calibrates
-    assembly+SVD+solve timing on NumpyBackend.
+    Used only by PythonBackend performance claims.  Discrete-operator
+    convergence-rate mesh-size selection uses _calibrate_alpha in
+    tests/calibration.py, which calibrates assembly+SVD+solve timing on
+    NumpyBackend.
     """
     n = _CALIB_N
     a = [float(i) * 0.001 + 1.0 for i in range(n)]

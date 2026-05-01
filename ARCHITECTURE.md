@@ -739,37 +739,30 @@ stress runs by selecting a higher walltime budget.
 
 Planned PR sequence:
 
-1. **Split global convergence coverage by module.**  Move discrete-operator
-   order and manufactured-solution convergence claims to
-   `tests/test_discrete_operators.py`.  Move solver residual, residual-rate,
-   and cost-to-solution claims to `tests/test_linear_solvers.py`.  Drop
-   standalone separability conformance checks unless they re-enter as
-   outcome-level claims for a fast-assembly module.  Delete the global
-   `tests/test_convergence.py`.
-2. **Move Tensor performance into the Tensor module tests.**  Merge the
+1. **Move Tensor performance into the Tensor module tests.**  Merge the
    Tensor/backend roofline claims from `tests/test_performance.py` into
    `tests/test_tensor.py` under `test_performance`; keep Tensor arithmetic
    and backend behavior under `test_correctness`.  Delete
    `tests/test_performance.py`.
-3. **Remove standalone selector and boundary conformance tests.**  Delete
+2. **Remove standalone selector and boundary conformance tests.**  Delete
    `tests/test_autotuning.py`; policy behavior is covered implicitly through
    problem regimes in the owning module's correctness, convergence, or
    performance claims.  Delete `tests/test_boundary_conditions.py`; boundary
    behavior should reappear only through outcome-level module claims.
-4. **Clean up shared test infrastructure.**  Delete or relocate
+3. **Clean up shared test infrastructure.**  Delete or relocate
    `tests/calibration.py`; its current contents are solver/discrete-operator
    convergence-sizing utilities, not shared harness infrastructure.  Keep
    only genuinely session-wide fixtures in `tests/conftest.py`, such as
    Tensor/device calibration.  Keep only the unified claim interface, shared
    constants, and genuinely shared helpers in `tests/claims.py`.
-5. **Standardize claim walltime budgeting.**  Add shared harness support for a
+4. **Standardize claim walltime budgeting.**  Add shared harness support for a
    per-claim expected walltime, defaulting to one second.  Remove explicit
    offline markers and environment-variable gates from migrated tests.  Provide
    a single way to raise the walltime budget for targeted stress runs.
-6. **Delete visual regression tests.**  Remove `tests/visual/` and its
+5. **Delete visual regression tests.**  Remove `tests/visual/` and its
    baselines rather than carrying a pytest-mpl exception to the module-owned
    claim harness.
-7. **Update structure enforcement.**  Keep `tests/test_structure.py` as
+6. **Update structure enforcement.**  Keep `tests/test_structure.py` as
    repository-governance coverage, but update its enforcement claims for the
    unified calibrated claim signature and the module-owned axis convention.
 
