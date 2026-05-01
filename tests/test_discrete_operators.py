@@ -44,7 +44,7 @@ from cosmic_foundry.theory.discrete import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.claims import Claim
+from tests.claims import BatchedFailure, Claim, ExecutionPlan
 
 # ---------------------------------------------------------------------------
 # Dimension and budget configuration
@@ -107,7 +107,7 @@ class _DiscreteApplyOperator:
 # ---------------------------------------------------------------------------
 
 
-class _OrderClaim(Claim[float]):
+class _OrderClaim(Claim[ExecutionPlan]):
     """Claim: discrete operator achieves O(h^p) convergence at order p.
 
     Verifies that the error polynomial has zeros at h⁰…h^{p-1} and a
@@ -139,7 +139,7 @@ class _OrderClaim(Claim[float]):
         ndim = len(manifold.atlas[0].symbols)
         return f"{type(self._instance).__name__}(order={self._instance.order})/{ndim}D"
 
-    def check(self, fma_rate: float) -> None:
+    def check(self, _execution_plan: ExecutionPlan) -> None:
         instance = self._instance
         h = sympy.Symbol("h", positive=True)
         order = instance.order
@@ -218,7 +218,29 @@ class _OrderClaim(Claim[float]):
         )
 
 
-class _ConvergenceRateClaim(Claim[float]):
+def _column(matrix: list[list[float]], col: int, backend: Any) -> Tensor:
+    return Tensor([row[col] for row in matrix], backend=backend)
+
+
+def _matrix_from_columns(columns: list[Tensor], backend: Any) -> Tensor:
+    return Tensor(
+        [
+            [float(columns[col][row]) for col in range(len(columns))]
+            for row in range(columns[0].shape[0])
+        ],
+        backend=backend,
+    )
+
+
+def _column_l2_errors(diff: Tensor, vol: float) -> list[float]:
+    n_cells, batch_size = diff.shape
+    return [
+        math.sqrt(vol * sum(float(diff[row, col]) ** 2 for row in range(n_cells)))
+        for col in range(batch_size)
+    ]
+
+
+class _ConvergenceRateClaim(Claim[ExecutionPlan]):
     """Claim: ‖φ_h − φ_exact‖_{L²_h} converges at O(h^p) over a mesh sequence.
 
     Manufactured solution: tensor-product sinusoidal modes
@@ -252,7 +274,7 @@ class _ConvergenceRateClaim(Claim[float]):
             f"convergence_rate{suffix}/{ndim}D"
         )
 
-    def check(self, fma_rate: float) -> None:
+    def check(self, execution_plan: ExecutionPlan) -> None:
         n_max = _CONVERGENCE_N_MAX
         cont_op = self._disc.continuous_operator
         manifold = cont_op.manifold
@@ -403,43 +425,58 @@ class _ConvergenceRateClaim(Claim[float]):
 
         assert phi_modes_F, "mode_range is empty — check step/k_max configuration"
 
-        errors: list[float] = []
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=max(
+                1.0, sum(n_cells * 64.0 for _, _, _, n_cells in assembled)
+            ),
+            min_batch=1,
+            max_batch=len(phi_modes_F),
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        selected_modes = [phi_modes_F[i] for i in lane_indices]
+
+        errors_by_lane: list[list[float]] = [[] for _ in lane_indices]
         for mesh, (decomp, null_vecs, vol, n_cells) in zip(
             meshes, assembled, strict=True
         ):
             mesh_shape = mesh.shape
 
-            phi_vals = []
-            b_vals = []
+            phi_vals: list[list[float]] = []
+            b_vals: list[list[float]] = []
             for i in range(n_cells):
                 idx = _to_multi(i, mesh_shape)
-                phi_sum = sum(_cell_avg(F_phi, mesh, idx) for F_phi, _ in phi_modes_F)
-                rho_sum = sum(_cell_avg(F_rho, mesh, idx) for _, F_rho in phi_modes_F)
-                phi_vals.append(phi_sum)
-                b_vals.append(rho_sum)
+                phi_vals.append(
+                    [_cell_avg(F_phi, mesh, idx) for F_phi, _ in selected_modes]
+                )
+                b_vals.append(
+                    [_cell_avg(F_rho, mesh, idx) for _, F_rho in selected_modes]
+                )
 
-            b_m = Tensor(b_vals, backend=_NP_BACKEND)
             phi_arr = Tensor(phi_vals, backend=_NP_BACKEND)
 
-            u_arr = decomp.solve(b_m)
-            for v in null_vecs:
-                u_arr = u_arr - float(u_arr @ v) * v
-            diff = u_arr - phi_arr
-            errors.append(math.sqrt(vol * (diff @ diff)))
+            solution_cols = []
+            for col in range(len(lane_indices)):
+                u_col = decomp.solve(_column(b_vals, col, _NP_BACKEND))
+                for v in null_vecs:
+                    u_col = u_col - float(u_col @ v) * v
+                solution_cols.append(u_col)
+            u_arr = _matrix_from_columns(solution_cols, _NP_BACKEND)
+
+            mesh_errors = _column_l2_errors(u_arr - phi_arr, vol)
+            for lane_errors, mesh_error in zip(
+                errors_by_lane, mesh_errors, strict=True
+            ):
+                lane_errors.append(mesh_error)
 
         # Effective mesh spacing: h = vol^(1/ndim) for a uniform Cartesian mesh.
         hs = [float(m.cell_volume) ** (1.0 / ndim) for m in meshes]
         log_h = [math.log(hv) for hv in hs]
-        log_e = [math.log(ev) for ev in errors]
         n_pts = len(log_h)
         sx = sum(log_h)
-        sy = sum(log_e)
-        sxy = sum(lh * le for lh, le in zip(log_h, log_e, strict=False))
         sxx = sum(lh * lh for lh in log_h)
-        syy = sum(le * le for le in log_e)
         denom_x = n_pts * sxx - sx**2
-        slope = (n_pts * sxy - sx * sy) / denom_x
-        r2 = (n_pts * sxy - sx * sy) ** 2 / (denom_x * (n_pts * syy - sy**2))
         # Multi-D periodic (sum-mode) claims use looser thresholds: budget constraints
         # force small meshes (N≈5–10 per axis) that sit in the pre-asymptotic regime
         # where the order-p stencil hasn't fully reached its asymptotic rate.
@@ -449,21 +486,55 @@ class _ConvergenceRateClaim(Claim[float]):
         # of magnitude — not flat, not regressing — which already catches real holes.
         slope_min = p - 0.35 if use_sum_modes else p - 0.1
         r2_min = 0.99 if use_sum_modes else 0.999
-        assert slope >= slope_min, (
-            f"Convergence rate {slope:.3f} < expected {slope_min:.2f} for "
-            f"{type(self._disc).__name__}(order={p})"
-        )
-        assert r2 >= r2_min, (
-            f"Convergence not clean power-law: R²={r2:.4f} for "
-            f"{type(self._disc).__name__}(order={p})"
-        )
+        for local_col, errors in enumerate(errors_by_lane):
+            log_e = [math.log(ev) for ev in errors]
+            sy = sum(log_e)
+            sxy = sum(lh * le for lh, le in zip(log_h, log_e, strict=False))
+            syy = sum(le * le for le in log_e)
+            slope = (n_pts * sxy - sx * sy) / denom_x
+            r2 = (n_pts * sxy - sx * sy) ** 2 / (denom_x * (n_pts * syy - sy**2))
+            batch_index = lane_indices[local_col]
+            parameters = {
+                "ndim": ndim,
+                "periodic": periodic,
+                "source_mode": batch_index,
+                "sum_modes": use_sum_modes,
+            }
+            assert slope >= slope_min, BatchedFailure(
+                claim=self.description,
+                device_kind=execution_plan.device_kind,
+                batch_size=source_batch,
+                batch_index=batch_index,
+                method="SVDFactorization",
+                order=p,
+                problem=type(self._disc._numerical_flux).__name__,
+                parameters=parameters,
+                actual=slope,
+                expected=slope_min,
+                error=max(0.0, slope_min - slope),
+                tolerance=0.0,
+            ).format()
+            assert r2 >= r2_min, BatchedFailure(
+                claim=self.description,
+                device_kind=execution_plan.device_kind,
+                batch_size=source_batch,
+                batch_index=batch_index,
+                method="SVDFactorization",
+                order=p,
+                problem=type(self._disc._numerical_flux).__name__,
+                parameters=parameters,
+                actual=r2,
+                expected=r2_min,
+                error=max(0.0, r2_min - r2),
+                tolerance=0.0,
+            ).format()
 
 
 # ---------------------------------------------------------------------------
 # Claim generation: discrete-operator order and manufactured-solution convergence
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[Claim[float]] = []
+_CLAIMS: list[Claim[ExecutionPlan]] = []
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)
@@ -503,5 +574,7 @@ for _ndim in _DIMS:
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_convergence(claim: Claim[float]) -> None:
-    claim.check(0.0)
+def test_convergence(
+    claim: Claim[ExecutionPlan], execution_plan: ExecutionPlan
+) -> None:
+    claim.check(execution_plan)
