@@ -739,10 +739,7 @@ stress runs by selecting a higher walltime budget.
 
 Planned PR sequence:
 
-1. **Delete visual regression tests.**  Remove `tests/visual/` and its
-   baselines rather than carrying a pytest-mpl exception to the module-owned
-   claim harness.
-2. **Update structure enforcement.**  Keep `tests/test_structure.py` as
+1. **Update structure enforcement.**  Keep `tests/test_structure.py` as
    repository-governance coverage, but update its enforcement claims for the
    unified calibrated claim signature and the module-owned axis convention.
 
