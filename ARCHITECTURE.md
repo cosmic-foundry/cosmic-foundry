@@ -739,20 +739,14 @@ stress runs by selecting a higher walltime budget.
 
 Planned PR sequence:
 
-1. **Clean up shared test infrastructure.**  Delete or relocate
-   `tests/calibration.py`; its current contents are solver/discrete-operator
-   convergence-sizing utilities, not shared harness infrastructure.  Keep
-   only genuinely session-wide fixtures in `tests/conftest.py`, such as
-   Tensor/device calibration.  Keep only the unified claim interface, shared
-   constants, and genuinely shared helpers in `tests/claims.py`.
-2. **Standardize claim walltime budgeting.**  Add shared harness support for a
+1. **Standardize claim walltime budgeting.**  Add shared harness support for a
    per-claim expected walltime, defaulting to one second.  Remove explicit
    offline markers and environment-variable gates from migrated tests.  Provide
    a single way to raise the walltime budget for targeted stress runs.
-3. **Delete visual regression tests.**  Remove `tests/visual/` and its
+2. **Delete visual regression tests.**  Remove `tests/visual/` and its
    baselines rather than carrying a pytest-mpl exception to the module-owned
    claim harness.
-4. **Update structure enforcement.**  Keep `tests/test_structure.py` as
+3. **Update structure enforcement.**  Keep `tests/test_structure.py` as
    repository-governance coverage, but update its enforcement claims for the
    unified calibrated claim signature and the module-owned axis convention.
 
