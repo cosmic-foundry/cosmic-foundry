@@ -11,6 +11,7 @@ from cosmic_foundry.computation.tensor import Tensor, einsum
 from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
 
 _LU = LUFactorization()
+_ABUNDANCE_ROUNDOFF_TOLERANCE = 1e-8
 
 
 def _left_null_space(s_tensor: Tensor) -> list[list[float]]:
@@ -168,7 +169,9 @@ class ReactionNetworkRHS:
         self._eps = eps
 
         n_species, n_reactions = stoichiometry_matrix.shape
-        self._state_domain = NonnegativeStateDomain(n_species)
+        self._state_domain = NonnegativeStateDomain(
+            n_species, roundoff_tolerance=_ABUNDANCE_ROUNDOFF_TOLERANCE
+        )
         backend = initial_state.backend
 
         null_rows = _left_null_space(stoichiometry_matrix)

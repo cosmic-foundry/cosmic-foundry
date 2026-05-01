@@ -400,7 +400,7 @@ def _domain_claims() -> list[_DomainClaim]:
         assert rhs.state_domain.check(
             Tensor([0.25, 0.75], backend=_TIME_BACKEND)
         ).accepted
-        result = rhs.state_domain.check(Tensor([0.25, -1e-8], backend=_TIME_BACKEND))
+        result = rhs.state_domain.check(Tensor([0.25, -1e-6], backend=_TIME_BACKEND))
 
         assert result.rejected
         assert result.violation is not None
@@ -966,27 +966,37 @@ def _nse_transient_correctness_spec() -> _CorrectnessSpec:
 RateFn = Callable[[float], list[tuple[int, int, float]]]
 
 
-def _linear_network_rhs(rate_fn: RateFn) -> _ti.JacobianRHS:
+def _linear_network_rhs(rate_fn: RateFn, n: int) -> _ti.ReactionNetworkRHS:
     """Build a mass-conserving linear reaction network RHS from edge rates."""
+    edges0 = rate_fn(0.0)
+    stoich = [[0.0 for _ in edges0] for _ in range(n)]
+    for j, (src, dst, _rate) in enumerate(edges0):
+        stoich[src][j] = -1.0
+        stoich[dst][j] = 1.0
 
-    def f(t: float, u: Tensor) -> Tensor:
-        n = u.shape[0]
-        out = [0.0] * n
-        for src, dst, rate in rate_fn(t):
-            flux = rate * float(u[src])
-            out[src] -= flux
-            out[dst] += flux
-        return Tensor(out, backend=u.backend)
+    def forward_rate(t: float, u: Tensor) -> Tensor:
+        return Tensor(
+            [rate * float(u[src]) for src, _dst, rate in rate_fn(t)],
+            backend=u.backend,
+        )
+
+    def reverse_rate(t: float, u: Tensor) -> Tensor:
+        return Tensor([0.0 for _ in edges0], backend=u.backend)
 
     def jac(t: float, u: Tensor) -> Tensor:
-        n = u.shape[0]
         mat = [[0.0 for _ in range(n)] for _ in range(n)]
         for src, dst, rate in rate_fn(t):
             mat[src][src] -= rate
             mat[dst][src] += rate
         return Tensor(mat, backend=u.backend)
 
-    return _ti.JacobianRHS(f=f, jac=jac)
+    return _ti.ReactionNetworkRHS(
+        Tensor(stoich, backend=_TIME_BACKEND),
+        forward_rate,
+        reverse_rate,
+        Tensor([1.0] + [0.0] * (n - 1), backend=_TIME_BACKEND),
+        jac=jac,
+    )
 
 
 def _alpha_chain_rates(n: int) -> RateFn:
@@ -1041,7 +1051,7 @@ def _assert_abundance_state(u: Tensor, *, label: str) -> None:
 
 def _alpha_chain_stress_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
-        rhs = _linear_network_rhs(_alpha_chain_rates(13))
+        rhs = _linear_network_rhs(_alpha_chain_rates(13), 13)
         controller = _vode_controller()
         state = controller.advance(
             rhs,
@@ -1068,7 +1078,7 @@ def _alpha_chain_stress_spec() -> _CorrectnessSpec:
 
 def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
-        rhs = _linear_network_rhs(_branched_hot_window_rates(16))
+        rhs = _linear_network_rhs(_branched_hot_window_rates(16), 16)
         coarse = _vode_controller()
         fine = _vode_controller()
         u0 = Tensor([1.0] + [0.0] * 15, backend=_TIME_BACKEND)
@@ -1080,6 +1090,8 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
         assert "bdf" in coarse.accepted_families
         assert coarse.family_switches >= 1
         assert max(coarse.accepted_stiffness) > 1.0
+        assert coarse.rejection_reasons.count("domain") > 0
+        assert coarse.rejected_steps < 80
         assert float(norm(coarse_state.u - fine_state.u)) < 5e-2
         return [coarse_state]
 
@@ -1089,10 +1101,41 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
         lambda t: (1.0,) * 16,
         float("inf"),
         expected_walltime_s=30.0,
-        xfail_reason=(
-            "current VODE controller does not enforce positivity; this branched "
-            "hot-window network exposes small negative abundances"
-        ),
+    )
+
+
+def _vode_domain_rejection_spec() -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rate = 300.0
+        rhs = _ti.ReactionNetworkRHS(
+            Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
+            lambda t, u: Tensor([rate * float(u[0])], backend=u.backend),
+            lambda t, u: Tensor([0.0], backend=u.backend),
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            jac=lambda t, u: Tensor([[-rate, 0.0], [rate, 0.0]], backend=u.backend),
+        )
+        controller = _vode_controller()
+        state = controller.advance(
+            rhs,
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            t0=0.0,
+            t_end=0.03,
+            dt0=0.005,
+        )
+
+        _assert_abundance_state(state.u, label="vode_domain_retry")
+        assert controller.rejection_reasons.count("domain") >= 1
+        assert controller.domain_violations
+        assert controller.domain_violations[0].component is not None
+        assert controller.domain_rejection_step_sizes[0] > 0.0
+        assert controller.rejected_steps < 20
+        return [state]
+
+    return _CorrectnessSpec(
+        "domain/vode_retries_negative_abundance",
+        run,
+        lambda t: (1.0, 1.0),
+        float("inf"),
     )
 
 
@@ -1206,6 +1249,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
+    _CorrectnessClaim(_vode_domain_rejection_spec()),
     *[
         _CorrectnessClaim(_nse_correctness_spec(s, expected_walltime_s=5.0))
         for s in _OFF_SPECS
