@@ -789,8 +789,7 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Generalize domain acceptance to the remaining adaptive controllers.
-2. Add domain-aware timestep prediction so controllers avoid most
+1. Add domain-aware timestep prediction so controllers avoid most
    positivity-violating attempts before rejection.
 
 ---

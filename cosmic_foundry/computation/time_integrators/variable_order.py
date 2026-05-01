@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Literal, NamedTuple
 
 from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.computation.time_integrators.domains import (
+    DomainViolation,
+    check_state_domain,
+)
 from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     MultistepIntegrator,
@@ -150,6 +154,9 @@ class VariableOrderNordsieckIntegrator:
         self.accepted_step_sizes: list[float] = []
         self.accepted_errors: list[float] = []
         self.accepted_times: list[float] = []
+        self.rejection_reasons: list[str] = []
+        self.domain_violations: list[DomainViolation] = []
+        self.domain_rejection_step_sizes: list[float] = []
         self.rejected_steps = 0
 
     @property
@@ -189,7 +196,8 @@ class VariableOrderNordsieckIntegrator:
         while True:
             candidate = MultistepIntegrator(self._family_name, q).step(rhs, state, dt)
             decision = self._selector.decide(candidate)
-            if decision.accepted:
+            domain_check = check_state_domain(rhs, candidate.u)
+            if decision.accepted and domain_check.accepted:
                 self._q = decision.q_next
                 self.accepted_orders.append(self._q)
                 self.accepted_step_sizes.append(decision.h_next)
@@ -204,10 +212,25 @@ class VariableOrderNordsieckIntegrator:
 
             rejections += 1
             self.rejected_steps += 1
+            if not decision.accepted:
+                self.rejection_reasons.append("error")
+            else:
+                self.rejection_reasons.append("domain")
+                assert domain_check.violation is not None
+                self.domain_violations.append(domain_check.violation)
+                self.domain_rejection_step_sizes.append(dt)
             if rejections > self._max_rejections:
                 raise RuntimeError("variable-order step exceeded rejection limit.")
-            q = decision.q_next
-            dt = decision.h_next
+            q = (
+                decision.q_next
+                if not decision.accepted
+                else max(self._selector.q_min, q - 1)
+            )
+            dt = (
+                decision.h_next
+                if not decision.accepted
+                else dt * self._selector.factor_min
+            )
             nh = state.history.change_order(q).rescale_step(dt)
             state = ODEState(state.t, state.u, dt, state.err, nh)
 

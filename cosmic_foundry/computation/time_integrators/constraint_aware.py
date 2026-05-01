@@ -18,6 +18,10 @@ from __future__ import annotations
 
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
+from cosmic_foundry.computation.time_integrators.domains import (
+    DomainViolation,
+    check_state_domain,
+)
 from cosmic_foundry.computation.time_integrators.implicit import (
     ImplicitRungeKuttaIntegrator,
 )
@@ -317,6 +321,7 @@ class ConstraintAwareController:
         eps_activate: float = 0.01,
         eps_deactivate: float = 0.1,
         eps_grad: float = 1e-7,
+        max_rejections: int = 20,
     ) -> None:
         if eps_deactivate <= eps_activate:
             raise ValueError("eps_deactivate must exceed eps_activate for hysteresis.")
@@ -326,6 +331,7 @@ class ConstraintAwareController:
         self._eps_activate = eps_activate
         self._eps_deactivate = eps_deactivate
         self._eps_grad = eps_grad
+        self._max_rejections = max_rejections
 
         self._n_eligible = rhs.constraint_basis.shape[0]
 
@@ -333,6 +339,10 @@ class ConstraintAwareController:
         self.activation_events: list[tuple[float, frozenset[int]]] = []
         self.deactivation_events: list[tuple[float, frozenset[int]]] = []
         self.nse_events: list[tuple[float, frozenset[int]]] = []
+        self.rejection_reasons: list[str] = []
+        self.domain_violations: list[DomainViolation] = []
+        self.domain_rejection_step_sizes: list[float] = []
+        self.rejected_steps = 0
 
     def advance(
         self,
@@ -364,6 +374,7 @@ class ConstraintAwareController:
         )
         state = ODEState(t0, u0, active_constraints=active)
         dt = self._inner.suggest(state, accepted=True)
+        rejections = 0
 
         while state.t < t_end:
             dt_try = min(dt, t_end - state.t)
@@ -377,10 +388,28 @@ class ConstraintAwareController:
             candidate = self._integrator.step(
                 self._rhs, state, dt_try, constraint_gradients=cg
             )
-            accepted = self._inner.accept(candidate)
-            dt = self._inner.suggest(candidate, accepted=accepted)
+            error_accepted = self._inner.accept(candidate)
+            domain_check = check_state_domain(self._rhs, candidate.u)
+            accepted = error_accepted and domain_check.accepted
             if not accepted:
+                rejections += 1
+                self.rejected_steps += 1
+                if rejections > self._max_rejections:
+                    raise RuntimeError(
+                        "constraint-aware step exceeded rejection limit."
+                    )
+                if not error_accepted:
+                    self.rejection_reasons.append("error")
+                    dt = self._inner.suggest(candidate, accepted=False)
+                    continue
+                self.rejection_reasons.append("domain")
+                assert domain_check.violation is not None
+                self.domain_violations.append(domain_check.violation)
+                self.domain_rejection_step_sizes.append(dt_try)
+                dt = dt_try * self._inner.factor_min
                 continue
+            rejections = 0
+            dt = self._inner.suggest(candidate, accepted=True)
 
             # Enforce conservation laws on accepted u.
             u_proj = (
