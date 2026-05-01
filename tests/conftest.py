@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 
 import numpy as np
@@ -10,6 +11,7 @@ import pytest
 from cosmic_foundry.computation.backends import JaxBackend
 from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import (
+    BATCH_REPLAY_INDEX_ENV,
     BUDGET_TOLERANCE,
     CLAIM_WALLTIME_BUDGET_S,
     FIXED_SESSION_OVERHEAD_S,
@@ -152,8 +154,12 @@ def execution_plan(device_calibration: DeviceCalibration) -> ExecutionPlan:
 
     GPU is selected opportunistically when calibration found a functional GPU.
     Otherwise the same claims run on the CPU backend with smaller extents.
+    Setting CF_TEST_BATCH_INDEX forces CPU execution for scalar lane replay.
     """
-    if device_calibration.gpu_backend is not None:
+    if (
+        BATCH_REPLAY_INDEX_ENV not in os.environ
+        and device_calibration.gpu_backend is not None
+    ):
         return ExecutionPlan(
             backend=device_calibration.gpu_backend,
             device_kind="gpu",

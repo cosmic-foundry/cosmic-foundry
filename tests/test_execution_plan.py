@@ -6,7 +6,13 @@ from collections.abc import Callable
 
 import pytest
 
-from tests.claims import Claim, DeviceCalibration, ExecutionPlan
+from tests.claims import (
+    BATCH_REPLAY_INDEX_ENV,
+    BatchedFailure,
+    Claim,
+    DeviceCalibration,
+    ExecutionPlan,
+)
 
 _CPU_BACKEND = object()
 _GPU_BACKEND = object()
@@ -151,6 +157,64 @@ def _check_extent_rejects_nonpositive_work_estimate() -> None:
         plan.problem_size_for(work_fmas=lambda n: 0.0, min_size=1, max_size=4)
 
 
+def _check_batch_indices_default_to_full_batch() -> None:
+    plan = _plan()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.delenv(BATCH_REPLAY_INDEX_ENV, raising=False)
+        assert plan.batch_indices_for(4, label="claim") == (0, 1, 2, 3)
+
+
+def _check_batch_indices_select_replay_lane() -> None:
+    plan = _plan()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv(BATCH_REPLAY_INDEX_ENV, "2")
+        assert plan.batch_indices_for(4, label="claim") == (2,)
+
+
+def _check_batch_indices_reject_noninteger_replay_lane() -> None:
+    plan = _plan()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv(BATCH_REPLAY_INDEX_ENV, "two")
+        with pytest.raises(ValueError, match=BATCH_REPLAY_INDEX_ENV):
+            plan.batch_indices_for(4, label="claim")
+
+
+def _check_batch_indices_reject_out_of_range_replay_lane() -> None:
+    plan = _plan()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv(BATCH_REPLAY_INDEX_ENV, "4")
+        with pytest.raises(ValueError, match="outside batch index range"):
+            plan.batch_indices_for(4, label="claim")
+
+
+def _check_batched_failure_message_contains_replay_metadata() -> None:
+    message = BatchedFailure(
+        claim="claim",
+        device_kind="cpu",
+        batch_size=8,
+        batch_index=3,
+        method="method",
+        order=4,
+        problem="problem",
+        parameters={"rate": 1.5},
+        actual=0.1,
+        expected=0.2,
+        error=0.1,
+        tolerance=0.01,
+    ).format()
+
+    assert "batch_index=3" in message
+    assert "method=method" in message
+    assert "order=4" in message
+    assert "problem=problem" in message
+    assert "rate=1.5" in message
+    assert f"{BATCH_REPLAY_INDEX_ENV}=3" in message
+
+
 _CORRECTNESS_CLAIMS: list[Claim[None]] = [
     _ExecutionPlanClaim(
         "extent/batch_budget_safety_roofline",
@@ -188,6 +252,26 @@ _CORRECTNESS_CLAIMS: list[Claim[None]] = [
     _ExecutionPlanClaim(
         "extent/reject_work_estimate",
         _check_extent_rejects_nonpositive_work_estimate,
+    ),
+    _ExecutionPlanClaim(
+        "replay/full_batch_without_override",
+        _check_batch_indices_default_to_full_batch,
+    ),
+    _ExecutionPlanClaim(
+        "replay/select_lane",
+        _check_batch_indices_select_replay_lane,
+    ),
+    _ExecutionPlanClaim(
+        "replay/reject_noninteger_lane",
+        _check_batch_indices_reject_noninteger_replay_lane,
+    ),
+    _ExecutionPlanClaim(
+        "replay/reject_out_of_range_lane",
+        _check_batch_indices_reject_out_of_range_replay_lane,
+    ),
+    _ExecutionPlanClaim(
+        "replay/failure_metadata",
+        _check_batched_failure_message_contains_replay_metadata,
     ),
 ]
 
