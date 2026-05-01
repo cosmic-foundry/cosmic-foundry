@@ -733,128 +733,127 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Sprint: Algorithm structure and capability selection
+### Sprint: Quantitative algorithm ownership contracts
 
-Goal: make algorithm ownership executable.  Calling code should be able to
-express the properties it needs from an algorithm, then let the package select
-the implementation whose declared capabilities satisfy those properties.
-Numerical claims verify that an algorithm is correct on a problem; capability
-ownership claims verify that implementations make truthful, non-overlapping
-claims about the domain they own.  The validation home for these architecture
-checks is `tests/test_structure.py`; feature-specific tests may remain in their
-existing files, but capability maps, dispatch uniqueness checks, and
-anti-duplication checks belong in the structural claim registry.
+Goal: replace qualitative algorithm ownership tags with quantitative
+predicates over measured or certified problem descriptors.  The previous
+capability maps made ownership executable, but many fields are still prose-like
+labels such as `symmetric_positive_definite`, `rank_deficient`, or
+`domain_aware_acceptance`.  This sprint should make those claims inspectable as
+numeric bounds, boolean certificates with stated tolerances, cost estimates, or
+explicitly unknown descriptor values.
 
-This is the computation-layer counterpart to the `theory/` formalism.  The
-theory layer makes mathematical structure explicit so valid operations follow
-from declared structure.  Computation should do the same for algorithms:
-selectable implementations declare the input structure they require and the
-algorithmic properties they provide, and selection becomes the act of finding an
-implementation that inhabits a requested contract.
+The first application is the linear solver and decomposition stack because its
+ownership range has the least subjective mathematical vocabulary.  A solver
+should not merely claim to own "SPD systems"; it should declare a predicate over
+a descriptor such as:
 
-The first application is the time-integration layer.  The recent Nordsieck
-cleanup made `AdaptiveNordsieckController` the single public adaptive Nordsieck controller,
-with `OrderSelector` and `StiffnessSwitcher` retained as reusable policies.
-This sprint should encode that decision as declared capabilities rather than
-only prose: callers request adaptive, domain-aware, stiffness-switching
-Nordsieck integration, and the registry resolves that request to the single
-implementation that owns it.  Future packages should be able to reuse the same
-pattern for solvers, decompositions, discretizations, and autotuning.
+```
+symmetry_defect(A) <= eps_sym
+coercivity_lower_bound(A) >= alpha_min
+condition_estimate(A) <= kappa_max
+rhs_consistency_defect(A, b) <= eps_rhs
+predicted_memory_bytes(A, b) <= budget.memory_bytes
+predicted_work_fmas(A, b, tol) <= budget.work_fmas
+```
+
+Qualitative vocabulary remains useful only as a compact name for a predicate
+whose measurements are defined in data.  For example, `symmetric_positive_definite`
+is acceptable as a request shortcut only if it expands to bounded
+`symmetry_defect` and `coercivity_lower_bound` requirements.  The validation home
+for these architecture claims remains `tests/test_structure.py`, while numerical
+test modules should own the descriptor estimators and problem fixtures needed to
+check the mathematics.
 
 The sprint is complete when the following are true:
 
-- **Capability declaration model.**  Each selectable implementation can declare
-  the properties it satisfies: method family, supported RHS structure,
-  adaptivity, variable order, stiffness switching, domain awareness, constraint
-  lifecycle support, order range, required derivative information, and similar
-  package-local properties.  The declaration should be data, not prose, so
-  tests and dispatch can inspect it.
-- **Algorithm structure contracts.**  Capability declarations distinguish
-  required input structure from provided algorithmic properties.  For time
-  integration, requirements include RHS structure such as plain, Jacobian,
-  split, Hamiltonian, or reaction-network RHS, plus optional state-domain or
-  conservation-constraint structure.  Provided properties include explicit or
-  implicit stepping, adaptive timestep control, variable order, stiffness
-  switching, domain-aware acceptance, and constraint lifecycle management.
-- **Capability request model.**  Calling code can express required properties
-  without naming the concrete implementation.  A request can be exact or
-  partial: for example, "adaptive, domain-aware Nordsieck integration with
-  stiffness switching" should resolve to the implementation that declares those
-  capabilities.
-- **Selection and ambiguity rules.**  A package-local registry can select an
-  implementation from a capability request.  If multiple implementations satisfy
-  the same request, the registry must either use an explicit priority/ranking
-  encoded in data or fail as an architectural ambiguity.  Silent first-match
-  dispatch is not acceptable for ownership-sensitive paths.
-- **Inhabitation checks.**  Structural claims verify that expected requests have
-  at least one declared implementation and that ownership-sensitive requests
-  have exactly one selected implementation unless explicit priority data says
-  otherwise.  Missing inhabitants expose unsupported regions of the claimed
-  algorithm domain; duplicate inhabitants expose competing implementations.
-- **Reusable ownership claim type.**  `tests/test_structure.py` exposes
-  declarative claims for capability-based architecture ownership.  A claim can
-  categorize public symbols, verify declared capabilities, assert dispatch
-  uniqueness or explicit priority, list forbidden public symbols, and fail with
-  diagnostics that identify the mismatched symbol, capability, or request.
-- **Public-category maps.**  Ownership claims can still assert that each public
-  export in a package belongs to an expected category such as integrator,
-  controller, policy, RHS wrapper, decomposition, solver, result object, or
-  helper.  The categories are deliberately local to each package so the
-  mechanism is general without imposing a global taxonomy too early.
-- **Exclusive-owner checks.**  Ownership claims can assert that a named
-  responsibility has exactly one public owner or exactly one selected owner for
-  a capability request.  This is the guard against parallel implementations at
-  the same abstraction level: if a new class claims the same role, the
-  structural test fails until the registry declares an intentional priority or
-  the duplication is removed.
-- **Forbidden-symbol checks.**  Ownership claims can assert that retired public
-  names remain absent.  This catches accidental reintroduction of wrappers or
-  compatibility aliases when the project has explicitly consolidated a
-  responsibility.
-- **Ownership-revealing class names.**  Public class names should resemble the
-  architectural claim they make.  Avoid generic, acronym-only, or historical
-  names when they obscure ownership; for example, a controller name should say
-  what kind of control it owns rather than relying on a shorthand such as
-  `VODE`.  The structural claim should make these naming expectations explicit
-  enough that unclear new public names require either a rename or an intentional
-  ownership-map update.
-- **Primary-class module names.**  Module filenames should resemble the primary
-  public class or concept they house.  A class such as `Integrator` should not
-  live in a vaguely named module such as `stepper.py` when `integrator.py` is
-  the ownership-revealing home.  The ownership machinery should flag public
-  classes whose defining module name does not match the class responsibility,
-  while still allowing explicitly mapped policy/helper modules.
-- **Time-integrator ownership map.**  The first concrete map covers
-  `cosmic_foundry.computation.time_integrators`.  It should classify public
-  method families, drivers/controllers, policies, RHS wrappers, domains,
-  coefficient/history objects, and helpers.  It should encode at least:
-  adaptive Nordsieck control with stiffness switching resolves to the single
-  adaptive Nordsieck controller; `IntegrationDriver` owns the generic
-  integrator/controller advance loop; `ConstraintAwareController` owns
-  reaction-network constraint lifecycle advancement; `OrderSelector` and
-  `StiffnessSwitcher` are policies, not selectable competing controllers.
-- **Time-integrator capability registry.**  The first implementation PR should
-  introduce the time-integrator capability declarations and selection API in the
-  smallest useful form.  It may start by wrapping or replacing the current
-  `AutoIntegrator` dispatch so branch choice follows declared properties rather
-  than ad hoc class names and `isinstance` ordering.  The registry should be
-  narrow enough to avoid speculative generality but general enough that solvers
-  and decompositions can reuse the pattern later.
-- **Time-integrator anti-duplication guard.**  The time-integrator map forbids
-  retired wrapper names including `VariableOrderNordsieckIntegrator` and
-  `FamilySwitchingNordsieckIntegrator`.  If the first implementation discovers
-  other same-level overlaps or ambiguous ownership, fix the code or update the
-  map in the same PR rather than documenting the ambiguity as acceptable.
-- **Generalization path.**  The capability/ownership claim machinery is
-  documented in code well enough for later PRs to add registries or maps for
-  solvers, decompositions, discrete operators, geometry, and autotuning without
-  copying test logic.  Shared capability primitives live in
-  `cosmic_foundry.computation.algorithm_capabilities`; package-local modules
-  provide domain vocabulary and selector names.
+- **Descriptor-first contracts.**  `AlgorithmRequest` and `AlgorithmCapability`
+  can be evaluated against a typed descriptor object instead of only string-set
+  structure.  Unknown descriptor values are explicit: selection must either
+  reject the request, choose a capability that can certify the value internally,
+  or require an explicit fallback policy.
+- **Bound vocabulary is finite and inspectable.**  Bounds are structured data,
+  not ad hoc lambdas or prose.  The initial operators should include only
+  comparison predicates over named descriptor fields, membership predicates for
+  finite sets, and simple affine/cost comparisons.  If a contract needs a new
+  predicate kind, the PR adding it must also add structural tests for that kind.
+- **Linear operator descriptor.**  Add a descriptor for `LinearOperator` solve
+  requests with fields that can be measured, estimated, or certified:
+  dimension `n`; matrix availability; assembly cost; matvec cost; memory
+  estimate; square-system flag; symmetry defect; skew-symmetry defect;
+  diagonal nonzero margin; diagonal dominance margin; coercivity lower bound;
+  singular-value lower bound; condition estimate; rank estimate; nullity
+  estimate; RHS consistency defect; requested residual tolerance; requested
+  solution tolerance; backend kind; device kind; and work/memory budgets.
+- **Norm definitions are fixed.**  Descriptor fields that use norms must name
+  the norm and scaling.  The default matrix defect is relative Frobenius norm:
+  `||A - A.T||_F / max(||A||_F, eps)`.  The default residual defect is
+  `||b - A x||_2 / max(||b||_2, eps)`.  Any different norm must be encoded in
+  the descriptor field name or metadata rather than implied by prose.
+- **Certificate source is explicit.**  Every descriptor field records whether it
+  is exact, estimated, bounded from above, bounded from below, assumed by the
+  caller, or unavailable.  Selection may trust exact and certified bounds;
+  caller assumptions are allowed only when the request explicitly permits them,
+  and tests must cover that policy.
+- **Solver ownership predicates.**  Linear solver capabilities use quantitative
+  ownership predicates.  Examples: `DenseCGSolver` requires a symmetry defect
+  below tolerance and a positive coercivity lower bound; `DenseJacobiSolver`
+  requires nonzero diagonal margin and a convergence certificate such as strict
+  diagonal dominance or an estimated iteration-matrix spectral radius below one;
+  `DenseLUSolver` requires square dense assembly within budget and enough rank
+  margin for exact solve ownership; `DenseSVDSolver` owns rank-deficient or
+  minimum-norm requests when dense factorization fits memory/work budgets;
+  `DenseGMRESSolver` owns nonsymmetric matrix-free systems only under restart,
+  memory, and predicted-work bounds.
+- **Decomposition ownership predicates.**  Decomposition capabilities distinguish
+  exact direct solves from pseudoinverse/minimum-norm semantics with numeric
+  rank thresholds.  LU owns full-rank square dense matrices within cost budget;
+  SVD owns rank-deficient, ill-conditioned, least-squares, or minimum-norm
+  requests within dense factorization budget.
+- **Cost models are contracts too.**  Capabilities declare a conservative
+  symbolic cost model in terms of descriptor fields.  The first version can use
+  coarse asymptotic coefficients such as dense `O(n^3)` factorization, dense
+  `O(n^2)` solve, and iterative `iterations * matvec_cost`, but it must produce
+  comparable numeric work and memory estimates for selection.
+- **Overlap is numeric, not rhetorical.**  Structural tests construct descriptor
+  examples for expected regions: SPD well-conditioned dense systems select CG or
+  LU only when priority data says why; rank-deficient minimum-norm requests
+  select SVD; strictly diagonally dominant systems select Jacobi when the
+  iteration budget is satisfied; nonsymmetric matrix-free systems select GMRES;
+  unsupported descriptors reject.  Ambiguous overlap without explicit priority
+  remains a test failure.
+- **Qualitative tags become derived aliases.**  Existing string-set capability
+  tags may remain temporarily, but the sprint should move high-value tags onto
+  descriptor aliases.  An alias such as `full_rank` must expand to a rank or
+  singular-value predicate; `matrix_free` must expand to matrix availability and
+  matvec/assembly cost fields; `domain_aware_acceptance` must later expand to
+  domain-distance and retry-policy predicates.
+- **Generalization path.**  After the linear solver/decomposition version is in
+  place, time integrators should receive descriptors for domain distance,
+  stiffness estimates, Jacobian availability, local error target, step retry
+  budget, and RHS evaluation cost.  Discrete operators should receive descriptors
+  for mesh regularity, geometry type, stencil width, formal order, boundary
+  closure, conservation form, and smoothness assumptions.  These later maps reuse
+  the same bound and descriptor machinery rather than introducing package-local
+  predicate systems.
 
 Recommended PR sequence:
 
-No queued implementation items remain in this sprint.
+1. Add the generic quantitative descriptor and bound machinery to
+   `cosmic_foundry.computation.algorithm_capabilities`, with structural tests
+   proving that bounds reference real descriptor fields, unknown values are
+   handled explicitly, and unsupported predicate kinds fail closed.
+2. Add `LinearOperatorDescriptor` construction for small assembled operators and
+   direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
+   conservative and deterministic; do not use performance timing as a source of
+   truth for ownership.
+3. Convert linear solver capabilities to quantitative predicates and update
+   selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
+   matrix-free, over-budget, and unknown-descriptor cases.
+4. Convert decomposition capabilities to quantitative predicates, including
+   rank threshold, minimum-norm semantics, dense memory budget, and work budget.
+5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+   the solver/decomposition predicates have stabilized.
 
 ---
 
