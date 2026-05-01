@@ -733,9 +733,69 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-No active sprint items are queued.  Before starting the next implementation
-sprint, choose the next fully specified item from the roadmap and record its
-implementation queue here.
+### Sprint: Domain-preserving adaptive integration
+
+Goal: make adaptive time integrators respect known state domains without
+post-step clipping.  For reaction-network abundances the valid domain is the
+nonnegative orthant intersected with the conservation manifold.  A candidate
+step that leaves that domain is not a valid accepted state: the controller must
+reject the internal step, reduce the step size, and retry from the previous
+state.  Projection remains for exact conservation and algebraic constraint
+initialization; it must not be used to hide a negative-abundance candidate.
+
+The sprint is complete when the following are true:
+
+- **Domain abstraction.**  The computation layer exposes a small domain
+  predicate/protocol for integrator state validity.  It supports at least:
+  membership testing for a candidate `Tensor`, a roundoff floor for tiny
+  negative values, and failure metadata identifying the violated component and
+  margin.  Generic integrators know only that a domain accepted or rejected a
+  candidate; reaction-network-specific meaning stays in `ReactionNetworkRHS` or
+  a companion domain object.
+- **Reaction-network domain.**  `ReactionNetworkRHS` can provide the abundance
+  domain implied by its species vector: all abundances must be nonnegative
+  within an explicit roundoff tolerance.  Conservation laws remain separate
+  equality constraints enforced by `project_conserved`; positivity is an
+  acceptance criterion, not a clipping operation.
+- **Retry on domain failure.**  `VODEController` composes local error
+  acceptance with domain acceptance.  If either fails, the controller rejects
+  the step, leaves the previous state/history unchanged, shrinks the internal
+  timestep, rebuilds the Nordsieck history for the retry, and records the
+  rejection reason.  Domain rejection counts toward the existing rejection
+  limit.
+- **Known failure promoted.**  The branched hot-window reaction-network stress
+  claim no longer xfails.  It asserts nonnegative accepted abundances, tight
+  conservation, bounded rejection count, family switching, and coarse/fine
+  self-consistency.
+- **No clipping guard.**  Tests include a targeted network where a large
+  attempted step would produce a negative abundance.  The accepted solution
+  must be nonnegative because at least one retry happened, not because a
+  negative component was clamped after the step.
+- **General controller path.**  After VODE is proven on the known failure, the
+  same domain-acceptance mechanism is made available to other adaptive
+  controllers (`Integrator`/`PIController`, `VariableOrderNordsieckIntegrator`,
+  and `ConstraintAwareController`) where they own candidate acceptance.
+- **Domain-aware timestep prediction.**  The algorithm uses the known domain to
+  choose less reckless initial and retry timesteps.  For positivity domains this
+  can start with a conservative time-to-bound estimate from the current state
+  and RHS direction, then evolve toward richer domain hooks that provide
+  controller-specific step limits or safety factors.  The controller should
+  still verify every candidate; predictive bounds reduce avoidable rejections
+  but do not replace acceptance checks.
+- **Diagnostics.**  Rejection logs distinguish local truncation error,
+  stiffness/family changes, and domain violations.  Failed tests must report the
+  violated component, candidate value, tolerance, attempted `dt`, and retry
+  count so the single failing step can be reconstructed.
+
+Recommended PR sequence:
+
+1. Add the domain predicate/protocol and reaction-network nonnegative-abundance
+   domain with focused tests.
+2. Wire domain rejection into `VODEController` and promote the branched
+   hot-window stress claim from xfail to passing.
+3. Generalize domain acceptance to the remaining adaptive controllers.
+4. Add domain-aware timestep prediction so controllers avoid most
+   positivity-violating attempts before rejection.
 
 ---
 
