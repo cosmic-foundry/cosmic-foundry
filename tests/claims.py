@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
@@ -58,6 +59,39 @@ CLAIM_WALLTIME_BUDGET_S: float = float(
 # debug case while preserving the original lane's parameterization.
 BATCH_REPLAY_INDEX_ENV = "CF_TEST_BATCH_INDEX"
 
+# GPU calibration is trusted only when its compute-bound Tensor roofline is
+# materially faster than the CPU JIT roofline.  Otherwise GPU tests skip and
+# ExecutionPlan stays on CPU so module tests do not run on a misconfigured or
+# CPU-fallback device.
+DEVICE_GPU_CPU_MIN_SPEEDUP = 2.0
+
+
+def invalid_fma_rate_reason(label: str, rate: float | None) -> str | None:
+    if rate is None:
+        return f"{label} calibration did not produce a rate"
+    if not math.isfinite(rate) or rate <= 0.0:
+        return f"{label} calibration produced invalid rate {rate!r}"
+    return None
+
+
+def gpu_trust_skip_reason(cpu_rate: float, gpu_rate: float | None) -> str | None:
+    """Return None when GPU calibration is trusted, otherwise the skip reason."""
+    invalid_cpu = invalid_fma_rate_reason("CPU", cpu_rate)
+    if invalid_cpu is not None:
+        raise RuntimeError(invalid_cpu)
+    invalid_gpu = invalid_fma_rate_reason("GPU", gpu_rate)
+    if invalid_gpu is not None:
+        return invalid_gpu
+    assert gpu_rate is not None
+    speedup = gpu_rate / cpu_rate
+    if speedup < DEVICE_GPU_CPU_MIN_SPEEDUP:
+        return (
+            f"GPU roofline {gpu_rate:.2e} FMAs/s is only {speedup:.1f}x CPU "
+            f"roofline {cpu_rate:.2e} FMAs/s; requires "
+            f"{DEVICE_GPU_CPU_MIN_SPEEDUP:.1f}x"
+        )
+    return None
+
 
 class Claim(ABC, Generic[C]):
     """Base for every test claim.
@@ -94,7 +128,9 @@ class DeviceCalibration:
 
     cpu_backend and cpu_fma_rate always refer to the CPU device.
     gpu_backend and gpu_fma_rate are None when no functional GPU backend is
-    available (no device found, or XLA/driver error during measurement).
+    available (no device found, XLA/driver error during measurement, invalid
+    timing result, or GPU roofline too close to CPU roofline).  gpu_skip_reason
+    records the reason GPU execution is unavailable for skip messages.
 
     The backends stored here are the exact instances used during calibration;
     performance claims should use them for benchmarking so that the measured
@@ -105,6 +141,7 @@ class DeviceCalibration:
     gpu_backend: Any | None
     cpu_fma_rate: float
     gpu_fma_rate: float | None
+    gpu_skip_reason: str | None = None
 
 
 @dataclass(frozen=True)

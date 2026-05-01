@@ -8,10 +8,12 @@ import pytest
 
 from tests.claims import (
     BATCH_REPLAY_INDEX_ENV,
+    DEVICE_GPU_CPU_MIN_SPEEDUP,
     BatchedFailure,
     Claim,
     DeviceCalibration,
     ExecutionPlan,
+    gpu_trust_skip_reason,
 )
 
 _CPU_BACKEND = object()
@@ -111,6 +113,38 @@ def _check_gpu_plan_uses_gpu_roofline() -> None:
         plan.batch_size_for(fmas_per_case=100.0, min_batch=1, max_batch=32, safety=1.0)
         == 10
     )
+
+
+def _check_gpu_trust_accepts_material_speedup() -> None:
+    assert (
+        gpu_trust_skip_reason(
+            cpu_rate=100.0, gpu_rate=DEVICE_GPU_CPU_MIN_SPEEDUP * 100.0
+        )
+        is None
+    )
+
+
+def _check_gpu_trust_rejects_missing_rate() -> None:
+    reason = gpu_trust_skip_reason(100.0, None)
+
+    assert reason is not None
+    assert "did not produce a rate" in reason
+
+
+def _check_gpu_trust_rejects_invalid_rate() -> None:
+    reason = gpu_trust_skip_reason(100.0, 0.0)
+
+    assert reason is not None
+    assert "invalid rate" in reason
+
+
+def _check_gpu_trust_rejects_cpu_speed_device() -> None:
+    reason = gpu_trust_skip_reason(
+        cpu_rate=100.0, gpu_rate=(DEVICE_GPU_CPU_MIN_SPEEDUP * 100.0) - 1.0
+    )
+
+    assert reason is not None
+    assert "requires" in reason
 
 
 def _check_extent_rejects_min_extent_below_one() -> None:
@@ -237,6 +271,22 @@ _CORRECTNESS_CLAIMS: list[Claim[None]] = [
         _check_extent_skips_when_smallest_debug_extent_exceeds_budget,
     ),
     _ExecutionPlanClaim("extent/gpu_roofline", _check_gpu_plan_uses_gpu_roofline),
+    _ExecutionPlanClaim(
+        "calibration/gpu_trust_accepts_speedup",
+        _check_gpu_trust_accepts_material_speedup,
+    ),
+    _ExecutionPlanClaim(
+        "calibration/gpu_trust_rejects_missing_rate",
+        _check_gpu_trust_rejects_missing_rate,
+    ),
+    _ExecutionPlanClaim(
+        "calibration/gpu_trust_rejects_invalid_rate",
+        _check_gpu_trust_rejects_invalid_rate,
+    ),
+    _ExecutionPlanClaim(
+        "calibration/gpu_trust_rejects_cpu_speed_device",
+        _check_gpu_trust_rejects_cpu_speed_device,
+    ),
     _ExecutionPlanClaim(
         "extent/reject_min_extent",
         _check_extent_rejects_min_extent_below_one,
