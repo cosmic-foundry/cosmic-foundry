@@ -746,9 +746,17 @@ inside that space using numeric predicates, certificates with stated tolerances,
 and cost estimates.
 
 The first application is the linear solver and decomposition stack because its
-ownership range has the least subjective mathematical vocabulary.  A solver
-should not merely claim to own "SPD systems"; it should declare a predicate over
-a descriptor such as:
+ownership range has the least subjective mathematical vocabulary.  Even there,
+the atlas should not start with a prose `problem_kind = linear_system` axis.
+The underlying mathematical object is a solve relation: find an unknown
+`x ∈ X` such that a residual/objective/constraint relation involving a map
+`R : X -> Y` satisfies an acceptance predicate.  Named classes such as "linear
+system", "least squares", "nonlinear root", and "eigenproblem" are derived
+regions over axes describing `X`, `Y`, `R`, available oracles, targets,
+constraints, and acceptance semantics.
+
+A solver should not merely claim to own "SPD systems"; it should declare a
+predicate over primitive descriptor coordinates such as:
 
 ```
 symmetry_defect(A) <= eps_sym
@@ -803,34 +811,66 @@ The sprint is complete when the following are true:
   comparison predicates over named descriptor fields, membership predicates for
   finite sets, and simple affine/cost comparisons.  If a contract needs a new
   predicate kind, the PR adding it must also add structural tests for that kind.
-- **Linear operator descriptor.**  Add a descriptor for `LinearOperator` solve
-  requests with fields that can be measured, estimated, or certified:
-  dimension `n`; matrix availability; assembly cost; matvec cost; memory
-  estimate; square-system flag; symmetry defect; skew-symmetry defect;
-  diagonal nonzero margin; diagonal dominance margin; coercivity lower bound;
-  singular-value lower bound; condition estimate; rank estimate; nullity
-  estimate; RHS consistency defect; requested residual tolerance; requested
-  solution tolerance; backend kind; device kind; and work/memory budgets.
-- **Linear solver schema.**  The linear-solver parameter space should start with
-  orthogonal axes for problem kind (`linear_system`, `linear_least_squares`,
-  `nonlinear_system`, `eigenproblem`); operator representation (`matrix_free`,
-  `assembled_dense`, `assembled_sparse`); shape (`square`,
-  `rectangular_overdetermined`, `rectangular_underdetermined`); rank regime
-  (`full_rank`, `rank_deficient`, `unknown_rank`); symmetry regime
-  (`symmetric`, `skew_symmetric`, `nonsymmetric`, `unknown_symmetry`);
-  definiteness/coercivity (`positive_definite`, `indefinite`,
-  `singular_semidefinite`, `unknown`); conditioning (`well_conditioned`,
-  `ill_conditioned`, `unknown_condition`); RHS consistency (`consistent`,
-  `inconsistent`, `unknown_consistency`); and resource regime
-  (`within_dense_budget`, `matrix_free_only`, `over_budget`).  Axes are declared
+- **Solve-relation descriptor.**  Add a descriptor for solve requests whose
+  primitive coordinates can be measured, estimated, or certified: unknown-space
+  dimension `dim_x`; residual/target-space dimension `dim_y`; number of scalar
+  auxiliary unknowns; number of equality constraints; number of normalization
+  constraints; residual target availability; map linearity defect; matrix
+  representation availability; operator-application availability; derivative
+  oracle kind (`none`, `matrix`, `jvp`, `vjp`, `jacobian_callback`);
+  objective relation (`none`, `residual_norm`, `least_squares`, `spectral_residual`);
+  acceptance relation (`residual_below_tolerance`, `objective_minimum`,
+  `stationary_point`, `eigenpair_residual`); requested residual tolerance;
+  requested solution tolerance; backend kind; device kind; and work/memory
+  budgets.
+- **Linear-operator sub-descriptor.**  When the solve relation contains a linear
+  map or a linearized derivative, add numeric coordinates for matrix
+  availability; assembly cost; matvec cost; memory estimate; symmetry defect;
+  skew-symmetry defect; diagonal nonzero margin; diagonal dominance margin;
+  coercivity lower bound; singular-value lower bound; condition estimate; rank
+  estimate; nullity estimate; and RHS consistency defect.  Derived categories
+  such as square, overdetermined, full rank, rank deficient, SPD, and
+  matrix-free are aliases over these primitive coordinates.
+- **Linear solver schema.**  The solver parameter space should start with
+  orthogonal axes for solve-relation structure rather than named problem kinds:
+  `dim_x`, `dim_y`, auxiliary scalar count, residual map linearity defect,
+  target availability, objective relation, acceptance relation, constraint
+  counts, derivative/oracle availability, operator representation, rank/nullity
+  estimates, symmetry/skew-symmetry defects, coercivity lower bound, condition
+  estimate, RHS consistency defect, and resource budgets.  Axes are declared
   independently of current implementations so an empty cell is a real absence,
-  not an omitted example.
+  not an omitted example.  Named regions are derived:
+
+  ```
+  linear system:
+    map_linearity_defect <= eps
+    dim_x == dim_y
+    residual_target_available = true
+    acceptance_relation = residual_below_tolerance
+
+  least squares:
+    map_linearity_defect <= eps
+    objective_relation = least_squares
+    residual_target_available = true
+
+  nonlinear root:
+    map_linearity_defect > eps or unknown
+    residual_target_available = false or target_is_zero = true
+    acceptance_relation = residual_below_tolerance
+
+  eigenproblem:
+    auxiliary_scalar_count >= 1
+    normalization_constraint_count >= 1
+    acceptance_relation = eigenpair_residual
+  ```
 - **Schema validity is explicit.**  The atlas records which axis products are
-  meaningful and which are invalid.  For example, `nonlinear_system` does not
-  use matrix symmetry in the same way a linear system does; rectangular systems
-  do not use SPD/coercivity ownership in the same way square systems do.
-  Invalid cells are rendered separately from uncovered-but-valid cells so the
-  documentation distinguishes impossible combinations from missing algorithms.
+  meaningful and which are invalid.  For example, symmetry and coercivity axes
+  apply to linear maps or derivative maps, not to an arbitrary residual relation
+  without a chosen linearization; SPD/coercivity ownership requires
+  `dim_x == dim_y`; eigenpair regions require a normalization constraint and an
+  auxiliary spectral parameter.  Invalid cells are rendered separately from
+  uncovered-but-valid cells so the documentation distinguishes impossible
+  combinations from missing algorithms.
 - **Norm definitions are fixed.**  Descriptor fields that use norms must name
   the norm and scaling.  The default matrix defect is relative Frobenius norm:
   `||A - A.T||_F / max(||A||_F, eps)`.  The default residual defect is
@@ -842,13 +882,14 @@ The sprint is complete when the following are true:
   caller assumptions are allowed only when the request explicitly permits them,
   and tests must cover that policy.
 - **Solver coverage patches.**  Linear solver capabilities are coverage patches
-  over the schema.  Examples: `DenseCGSolver` covers square linear systems whose
-  descriptor lies in the symmetric, positive-definite, sufficiently conditioned,
-  matrix-free or assembled region under iteration budget; `DenseJacobiSolver`
-  covers the diagonally dominant stationary-iteration region; `DenseLUSolver`
-  covers full-rank square dense systems inside memory/work budget;
-  `DenseSVDSolver` covers rank-deficient or minimum-norm dense regions;
-  `DenseGMRESSolver` covers nonsymmetric matrix-free linear systems only under
+  over the schema.  Examples: `DenseCGSolver` covers descriptors whose residual
+  map is certified linear, `dim_x == dim_y`, symmetry defect is below tolerance,
+  coercivity lower bound is positive, condition estimate and iteration cost fit
+  budget, and a matrix-free or assembled matvec is available.  `DenseJacobiSolver`
+  covers the diagonally dominant stationary-iteration region.  `DenseLUSolver`
+  covers full-rank square dense linear maps inside memory/work budget.
+  `DenseSVDSolver` covers rank-deficient or minimum-norm dense regions.
+  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps only under
   restart, memory, and predicted-work bounds.
 - **Decomposition coverage patches.**  Decomposition capabilities are coverage
   patches over the dense-matrix subspace.  LU covers full-rank square dense
@@ -870,17 +911,17 @@ The sprint is complete when the following are true:
 - **Gaps are first-class regions.**  A missing algorithm can be represented as an
   explicitly named unowned descriptor region after the coverage atlas exposes
   it.  For example, the current solver coverage page should show blank coverage
-  over the `problem_kind = nonlinear_system` slice; that blank can then be
+  over the derived nonlinear-root region; that blank can then be
   tagged as:
 
   ```
   Region: nonlinear algebraic solve F(x) = 0
   Descriptor:
-    problem_kind = nonlinear_system
-    residual_available = true
+    map_linearity_defect > eps or unknown
+    residual_target_available = false or target_is_zero = true
     jacobian_available in {true, false}
-    requested_solution = root
-    requested_tolerance = finite
+    acceptance_relation = residual_below_tolerance
+    requested_residual_tolerance = finite
   Selected owner: none
   Existing partial owners:
     time_integrators._newton.nonlinear_solve is internal stage machinery, not a
@@ -891,9 +932,9 @@ The sprint is complete when the following are true:
     or trust-region safeguards, max residual evaluations, and failure reporting.
   ```
 
-  The important point is that the blank `nonlinear_system` column exists before
-  this note is written.  The note records a known gap; the axis grid is what
-  gives us a chance to find unknown gaps.
+  The important point is that the nonlinear-root region is derived from
+  primitive axes before this note is written.  The note records a known gap; the
+  axis grid is what gives us a chance to find unknown gaps.
 - **Coverage is tested at the schema level.**  Structural tests validate the
   schema before any algorithm selection: every axis has bins or intervals; every
   descriptor field referenced by an axis exists; every coverage patch references
@@ -908,8 +949,10 @@ The sprint is complete when the following are true:
   tags may remain temporarily, but the sprint should move high-value tags onto
   schema aliases.  An alias such as `full_rank` must expand to a rank or
   singular-value interval; `matrix_free` must expand to operator-representation
-  and assembly-cost axes; `domain_aware_acceptance` must later expand to
-  domain-distance and retry-policy axes.
+  and assembly-cost axes; `linear_system`, `least_squares`, `nonlinear_root`,
+  and `eigenproblem` must expand to solve-relation regions; and
+  `domain_aware_acceptance` must later expand to domain-distance and
+  retry-policy axes.
 - **Generalization path.**  After the linear solver/decomposition version is in
   place, time integrators should receive descriptors for domain distance,
   stiffness estimates, Jacobian availability, local error target, step retry
@@ -927,15 +970,15 @@ Recommended PR sequence:
    proving that coverage patches reference declared axes, unknown values are
    handled explicitly, unsupported predicate kinds fail closed, and invalid
    cells are distinguishable from uncovered valid cells.
-2. Add the linear solver and decomposition parameter-space schemas before
-   changing any solver ownership.  Tests should prove that the axes exist
-   independently of current capabilities and that every generated coverage cell
-   maps to a valid descriptor template.
+2. Add the solve-relation, linear-solver, and decomposition parameter-space
+   schemas before changing any solver ownership.  Tests should prove that named
+   problem classes such as linear system, least squares, nonlinear root, and
+   eigenproblem are derived regions over primitive axes, not primary axes, and
+   that every generated coverage cell maps to a valid descriptor template.
 3. Generate a capability coverage document from the schemas and coverage patches,
    checked by `tests/test_structure.py`, that visualizes owned, rejected,
-   invalid, and uncovered cells.  Seed it with the public
-   nonlinear-system-solver gap as an annotation on an already-visible uncovered
-   `nonlinear_system` region.
+   invalid, and uncovered cells.  Seed it with the public nonlinear-solver gap
+   as an annotation on an already-visible uncovered nonlinear-root region.
 4. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
