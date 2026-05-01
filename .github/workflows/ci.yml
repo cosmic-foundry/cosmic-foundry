@@ -75,12 +75,16 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           targets=$(python scripts/ci/select_tests.py --base origin/main --head HEAD)
+          targets=${targets:-tests}
+          echo "Selected pytest targets: $targets"
           echo "PYTEST_TARGETS=$targets" >> "$GITHUB_ENV"
       - name: Run pytest
         env:
           CF_SOLVER_CONVERGENCE_BUDGET_S: "60"
           CF_INTEGRATOR_SESSION_BUDGET_S: "90"
-        run: bash run_tests.sh -q ${PYTEST_TARGETS:-tests}
+        run: |
+          echo "Running pytest targets: ${PYTEST_TARGETS:-tests}"
+          bash run_tests.sh -v ${PYTEST_TARGETS:-tests}
 
   docs:
     runs-on: ubuntu-latest
