@@ -852,13 +852,9 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Move `AutoIntegrator` onto the capability-selection path, or remove any
-   remaining ad hoc dispatch that competes with the registry.  Rename ambiguous
-   time-integrator classes or modules if the ownership claims expose unclear
-   names.
-2. Add capability/ownership maps for linear solvers and decompositions,
+1. Add capability/ownership maps for linear solvers and decompositions,
    reusing the same claim machinery.
-3. Add capability/ownership maps for discrete operators and geometry/theory
+2. Add capability/ownership maps for discrete operators and geometry/theory
    boundaries, reusing the same claim machinery.
 
 ---

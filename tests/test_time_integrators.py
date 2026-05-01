@@ -406,6 +406,23 @@ def _domain_claims() -> list[_DomainClaim]:
         assert result.violation is not None
         assert result.violation.component == 1
 
+    def _auto_selects_capability_registry_branches() -> None:
+        expected = {
+            "base2": "RungeKuttaIntegrator",
+            "jac_decay1": "ImplicitRungeKuttaIntegrator",
+            "split_decay1": "AdditiveRungeKuttaIntegrator",
+            "semilinear1": "LawsonRungeKuttaIntegrator",
+            "osc2": "CompositionIntegrator",
+            "ham2": "SymplecticCompositionIntegrator",
+        }
+        auto = _ti.AutoIntegrator(4)
+        by_name = {name: rhs for name, _u0, _n, _exact, _mass, rhs in _PROBS}
+        for name, implementation in expected.items():
+            assert auto.select(by_name[name]).implementation == implementation
+
+        with pytest.raises(ValueError, match="no time integrator"):
+            _ti.AutoIntegrator(3).select(by_name["ham2"])
+
     def _predicts_time_to_nonnegative_boundary() -> None:
         domain = _ti.NonnegativeStateDomain(3, roundoff_tolerance=1e-12)
 
@@ -430,6 +447,10 @@ def _domain_claims() -> list[_DomainClaim]:
         _DomainClaim(
             "reaction_network_exposes_abundance_domain",
             _reaction_network_exposes_abundance_domain,
+        ),
+        _DomainClaim(
+            "auto_selects_capability_registry_branches",
+            _auto_selects_capability_registry_branches,
         ),
     ]
 
