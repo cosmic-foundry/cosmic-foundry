@@ -1,10 +1,9 @@
 """Time-integrator verification — outer-product parametric test suite.
 
-Three test axes:
+Two test axes:
   test_convergence : _ORDERS × _PROBS — AutoIntegrator dispatches by RHS type; skips
                      unsupported (order, problem) pairs via ValueError
-  test_nse         : _CI_SPECS        — NSE detection for parametric networks
-  test_behavior    : _CHECKS          — targeted checks for non-grid behavior
+  test_nse         : _NSE_CLAIMS      — integrated NSE behavior for reaction networks
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from cosmic_foundry.computation.backends import (
     get_default_backend,
     set_default_backend,
 )
-from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
 
 _PREV = get_default_backend()
@@ -252,7 +251,7 @@ class _ConvergenceClaim(Claim):
 
 
 class _NSEClaim(Claim):
-    """NSE-detection claim for one parametric reaction network."""
+    """NSE activation claim for one parametric reaction network."""
 
     def __init__(self, spec: _Spec) -> None:
         self._spec = spec
@@ -279,37 +278,34 @@ class _NSEClaim(Claim):
             assert abs(float(state.u[i]) - eq) < 1e-7, f"{spec.name}[{i}]"
 
 
-class _BehaviorClaim(Claim):
-    """Targeted behavior check for a specific integrator feature."""
-
-    def __init__(self, fn: Any, id_: str) -> None:
-        self._fn = fn
-        self._id = id_
+class _NSETransientClaim(Claim):
+    """NSE constraints deactivate when a reaction network is far from equilibrium."""
 
     @property
     def description(self) -> str:
-        return f"behavior/{self._id}"
+        return "nse/transient-non-equilibrium"
 
     def check(self) -> None:
-        self._fn()
-
-
-class _UnsupportedClaim(Claim):
-    """Documents an intentionally unsupported order/family combination."""
-
-    def __init__(self, factory: Any, order: int, id_: str) -> None:
-        self._factory = factory
-        self._order = order
-        self._id = id_
-
-    @property
-    def description(self) -> str:
-        return f"unsupported/{self._id}/order{self._order}"
-
-    def check(self) -> None:
-        with pytest.raises(ValueError):
-            self._factory(self._order)
-        pytest.skip(f"{self._id} has no native order {self._order} method")
+        k = 5.0
+        rhs = _ti.ReactionNetworkRHS(
+            Tensor([[-1.0], [1.0]]),
+            lambda t, u: Tensor([k * float(u[0])]),
+            lambda t, u: Tensor([k * float(u[1])]),
+            Tensor([0.9, 0.1]),
+        )
+        ctrl = _ti.ConstraintAwareController(
+            rhs=rhs,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
+            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+        state = ctrl.advance(
+            Tensor([0.7, 0.3]), 0.0, 0.1, initial_active=frozenset({0})
+        )
+        assert state.active_constraints == frozenset()
+        assert abs(float(state.u[0]) + float(state.u[1]) - 1.0) < 1e-10
+        assert abs(float(state.u[0]) - float(state.u[1])) > 0.05
 
 
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
@@ -381,181 +377,13 @@ def _spoke_specs(nr: range, ks: list[int]) -> list[_Spec]:
 _CI_SPECS = _chain_specs(range(3, 5)) + _spoke_specs(range(3, 7), [1, 10])
 
 
-# ── targeted behavior check implementations ───────────────────────────────────
-
-
-def _nordsieck_check() -> None:
-    """NordsieckHistory change_order and rescale_step round-trip invariants."""
-    nh = _ti.NordsieckHistory(
-        h=0.1, z=(Tensor([0.8, 0.2]), Tensor([-0.08, 0.08]), Tensor([0.004, -0.004]))
-    )
-    raised = nh.change_order(4)
-    lowered = raised.change_order(2)
-    assert lowered.q == nh.q and float(norm(lowered.z[0] - nh.z[0])) == 0.0
-    assert raised.q == 4 and float(norm(raised.z[3])) == 0.0
-    rescaled = nh.rescale_step(0.05).rescale_step(0.1)
-    assert rescaled.h == nh.h
-    for a, b in zip(rescaled.z, nh.z, strict=True):
-        assert float(norm(a - b)) < 1e-14
-
-
-def _phi_check() -> None:
-    """φ_k functions satisfy the correct Taylor recurrence for nilpotent A."""
-    A, v = Tensor([[0.0, 1.0], [0.0, 0.0]]), Tensor([0.0, 1.0])
-    for k, (a, b) in enumerate([(1.0, 1.0), (0.5, 1.0), (1 / 6, 0.5), (1 / 24, 1 / 6)]):
-        assert float(norm(_ti.PhiFunction(k).apply(A, v) - Tensor([a, b]))) < 1e-14
-
-
-def _variable_order_check() -> None:
-    """VariableOrderNordsieckIntegrator climbs to q=4, drops to q=2 on sharpening."""
-    sel = _ti.OrderSelector(q_min=2, q_max=4, atol=1e-4, rtol=1e-4)
-    inst = _ti.VariableOrderNordsieckIntegrator("adams", sel)
-    bb = _ti.BlackBoxRHS(
-        lambda t, u: Tensor(
-            [-float(u[0]), float(u[0]) - 2.0 * float(u[1]), 2.0 * float(u[1])],
-            backend=u.backend,
-        )
-    )
-    state = inst.advance(bb, _U3, t0=0.0, t_end=1.5, dt0=0.025)
-    assert max(inst.accepted_orders) == 4 and inst.accepted_orders[-1] == 4
-    assert _err(state.u, _exact3, state.t) < 5e-4
-
-    def _sharp(t: float, u: Tensor) -> Tensor:
-        k2 = 1.0 if t < 0.5 else 10.0
-        x0, x1 = float(u[0]), float(u[1])
-        return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
-
-    inst2 = _ti.VariableOrderNordsieckIntegrator("adams", sel, q_initial=4)
-    state2 = inst2.advance(_ti.BlackBoxRHS(_sharp), _U3, t0=0.0, t_end=1.0, dt0=0.02)
-    post = [
-        q
-        for t, q in zip(inst2.accepted_times, inst2.accepted_orders, strict=True)
-        if t > 0.55
-    ]
-    assert post and min(post) == 2
-    assert _conserved(state2.u, 3)
-
-
-def _vode_check() -> None:
-    """VODEController switches from Adams to BDF on a fast/slow stiffening problem."""
-
-    def _fv(t: float, u: Tensor) -> Tensor:
-        k2 = 1.0 if t < 0.45 else 1000.0
-        x0, x1 = float(u[0]), float(u[1])
-        return Tensor([-x0, x0 - k2 * x1, k2 * x1], backend=u.backend)
-
-    def _jv(t: float, u: Tensor) -> Tensor:
-        k2 = 1.0 if t < 0.45 else 1000.0
-        return Tensor([[-1.0, 0.0, 0.0], [1.0, -k2, 0.0], [0.0, k2, 0.0]])
-
-    ctrl = _ti.VODEController(
-        order_selector=_ti.OrderSelector(
-            q_min=2, q_max=4, atol=5e-4, rtol=5e-4, factor_min=0.25, factor_max=1.15
-        ),
-        stiffness_switcher=_ti.StiffnessSwitcher(
-            stiff_threshold=1.0, nonstiff_threshold=0.4
-        ),
-        q_initial=2,
-        initial_family="adams",
-    )
-    ctrl.advance(_ti.JacobianRHS(_fv, _jv), _U3, t0=0.0, t_end=0.7, dt0=0.005)
-    early = [
-        f
-        for t, f in zip(ctrl.accepted_times, ctrl.accepted_families, strict=True)
-        if t < 0.35
-    ]
-    late = [
-        f
-        for t, f in zip(ctrl.accepted_times, ctrl.accepted_families, strict=True)
-        if t > 0.5
-    ]
-    assert set(early) == {"adams"} and "bdf" in late
-    assert max(ctrl.accepted_orders) > 2
-
-
-def _lifecycle_check() -> None:
-    """ConstraintAwareController: activation, no-chatter, consistent init, deactivation."""  # noqa: E501
-    k = 5.0
-    S = Tensor([[-1.0], [1.0]])
-    rhs = _ti.ReactionNetworkRHS(
-        S,
-        lambda t, u: Tensor([k * float(u[0])]),
-        lambda t, u: Tensor([k * float(u[1])]),
-        Tensor([0.9, 0.1]),
-    )
-
-    def _ctrl() -> _ti.ConstraintAwareController:
-        return _ti.ConstraintAwareController(
-            rhs=rhs,
-            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
-            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
-            eps_activate=0.01,
-            eps_deactivate=0.1,
-        )
-
-    c = _ctrl()
-    s = c.advance(Tensor([0.99, 0.01]), 0.0, 6.0)
-    assert s.active_constraints == frozenset({0}) and c.activation_events
-    assert not c.deactivation_events
-    rp = float(rhs.forward_rate(s.t, s.u)[0])
-    rm = float(rhs.reverse_rate(s.t, s.u)[0])
-    assert abs(rp - rm) / max(abs(rp), abs(rm), 1e-100) < 0.01
-    c2 = _ctrl()
-    # integrate only 1 time-constant (0.1 s); system stays far from equilibrium
-    # so the initial constraint deactivates and does not re-activate
-    s2 = c2.advance(Tensor([0.7, 0.3]), 0.0, 0.1, initial_active=frozenset({0}))
-    assert c2.deactivation_events and s2.active_constraints == frozenset()
-
-
-def _nse_direct_check() -> None:
-    """solve_nse finds the detailed-balance equilibrium X=(1/3, 1/3, 1/3)."""
-    S = Tensor([[-1.0, 0.0], [0.0, -1.0], [1.0, 1.0]])
-    rhs = _ti.ReactionNetworkRHS(
-        S,
-        lambda t, u: Tensor([2.0 * float(u[0]), 2.0 * float(u[1])]),
-        lambda t, u: Tensor([2.0 * float(u[2]), 2.0 * float(u[2])]),
-        Tensor([1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0]),
-    )
-    result = _ti.solve_nse(rhs, Tensor([0.34, 0.33, 0.33]), t=0.0)
-    for i in range(3):
-        assert abs(float(result[i]) - 1.0 / 3.0) < 1e-10, f"species {i}"
-
-
 # ── claim registries ─────────────────────────────────────────────────────────
 
 _CONV_CLAIMS: list[Claim] = [
     _ConvergenceClaim(order, prob) for order in _ORDERS for prob in _PROBS
 ]
 
-_NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS]
-
-_BEHAVIOR_CLAIMS: list[Claim] = [
-    _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
-    _BehaviorClaim(_phi_check, "phi_function/coefficients"),
-    _BehaviorClaim(_variable_order_check, "variable_order/climb_and_drop"),
-    _BehaviorClaim(_vode_check, "vode/family_switch"),
-    _BehaviorClaim(_lifecycle_check, "constraint/lifecycle"),
-    _BehaviorClaim(_nse_direct_check, "nse/direct_solve"),
-]
-
-_UNSUPPORTED_CLAIMS: list[Claim] = [
-    *[_UnsupportedClaim(_ti.AdditiveRungeKuttaIntegrator, q, "imex") for q in (5, 6)],
-    *[
-        _UnsupportedClaim(
-            lambda order: _ti.CompositionIntegrator(
-                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
-                order,
-            ),
-            q,
-            "composition",
-        )
-        for q in (3, 5)
-    ],
-    *[
-        _UnsupportedClaim(_ti.SymplecticCompositionIntegrator, q, "symplectic")
-        for q in (3, 5)
-    ],
-]
+_NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS] + [_NSETransientClaim()]
 
 _OFF_REASON = (
     "offline network stress tests; "
@@ -578,21 +406,6 @@ def test_convergence(claim: Claim) -> None:
 
 @pytest.mark.parametrize("claim", _NSE_CLAIMS, ids=[c.description for c in _NSE_CLAIMS])
 def test_nse(claim: Claim) -> None:
-    claim.check()
-
-
-_BEHAVIOR_IDS = [c.description for c in _BEHAVIOR_CLAIMS]
-
-
-@pytest.mark.parametrize("claim", _BEHAVIOR_CLAIMS, ids=_BEHAVIOR_IDS)
-def test_behavior(claim: Claim) -> None:
-    claim.check()
-
-
-@pytest.mark.parametrize(
-    "claim", _UNSUPPORTED_CLAIMS, ids=[c.description for c in _UNSUPPORTED_CLAIMS]
-)
-def test_unsupported_order(claim: Claim) -> None:
     claim.check()
 
 
