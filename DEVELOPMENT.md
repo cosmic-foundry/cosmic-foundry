@@ -115,6 +115,43 @@ Before opening or pushing to a PR:
 Run `./scripts/agent_health_check.sh` at the start of every session. If it
 fails, run `bash scripts/setup_environment.sh` to repair the environment.
 
+## Test Harness
+
+Tests are organized as claim registries.  A claim is a small object with a
+description and one `check(...)` method; top-level pytest functions only
+parametrize claim lists and call `claim.check(...)`.
+
+The three standard axes are:
+
+- `test_correctness`: semantic, algebraic, structural, or residual claims.
+- `test_convergence`: mesh/refinement claims against analytical expectations.
+- `test_performance`: roofline or cost-to-accuracy claims.
+
+Scalable Tensor-backed claims receive `ExecutionPlan` from `tests/claims.py`.
+The plan carries the chosen backend, device kind, device calibration, and
+`CF_CLAIM_WALLTIME_BUDGET_S`.  Claims use `batch_size_for`,
+`problem_size_for`, or `refinement_count_for` to choose the largest
+conservative extent that fits the active budget.  The budget changes extent
+only; it must not change the mathematical assertion.
+
+Scalar/debug shapes remain appropriate for symbolic structure checks and for
+control-flow-heavy assertions where batching obscures diagnostics.  Batched
+claims must report failed-lane metadata with `BatchedFailure`: batch index,
+method/order/problem identifiers, parameters, actual and expected values,
+error, and tolerance.  Rerun one lane by setting `CF_TEST_BATCH_INDEX=<index>`;
+this forces CPU execution for replay.
+
+`tests/conftest.py` calibrates CPU and optional GPU Tensor rooflines at session
+start.  GPU execution is selected only when a GPU backend calibrates
+successfully and its compute-bound roofline clears the shared CPU/GPU trust
+threshold.  Otherwise GPU-specific claims skip with the recorded reason and
+all `ExecutionPlan` claims run on CPU.
+
+`tests/test_tensor.py` is the only test file allowed to use raw NumPy or JAX
+directly for parity, calibration, and roofline trust checks.  Other module
+tests use `Tensor` for states, RHS values, residuals, norms, and batched
+comparisons, materializing Python values only at the final assertion boundary.
+
 ---
 
 ## Roadmap position

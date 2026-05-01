@@ -25,7 +25,7 @@ import pytest
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.backends import JaxBackend, NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
-from tests.claims import Claim, DeviceCalibration
+from tests.claims import DEVICE_GPU_CPU_MIN_SPEEDUP, Claim, DeviceCalibration
 
 _PY = PythonBackend()
 _NP = NumpyBackend()
@@ -673,9 +673,6 @@ class _BackendSpeedupClaim(Claim[_TensorPerformanceCalibration]):
 # catches catastrophic regressions (e.g. accidental CPU fallback on GPU).
 _DEVICE_EFFICIENCY_FACTOR = 10
 
-# GPU JIT roofline must be at least this many times the CPU JIT roofline.
-_DEVICE_GPU_CPU_MIN_SPEEDUP = 2
-
 # Warmup calls to issue before timed trials so the dispatch cache is warm.
 _DEVICE_WARMUP = 3
 
@@ -750,7 +747,7 @@ class _DeviceGpuPerfClaim(Claim[_TensorPerformanceCalibration]):
     def check(self, calibration: _TensorPerformanceCalibration) -> None:
         device_calibration = calibration.device_calibration
         if device_calibration.gpu_fma_rate is None:
-            pytest.skip("no GPU device available")
+            pytest.skip(device_calibration.gpu_skip_reason or "no GPU device available")
         backend = device_calibration.gpu_backend
         n = self._n
         if self._op == "matmul":
@@ -796,7 +793,7 @@ class _DeviceGpuVsCpuRooflineClaim(Claim[_TensorPerformanceCalibration]):
     Skipped when no GPU device is available.
     """
 
-    def __init__(self, min_speedup: int) -> None:
+    def __init__(self, min_speedup: float) -> None:
         self._min_speedup = min_speedup
 
     @property
@@ -806,7 +803,7 @@ class _DeviceGpuVsCpuRooflineClaim(Claim[_TensorPerformanceCalibration]):
     def check(self, calibration: _TensorPerformanceCalibration) -> None:
         device_calibration = calibration.device_calibration
         if device_calibration.gpu_fma_rate is None:
-            pytest.skip("no GPU device available")
+            pytest.skip(device_calibration.gpu_skip_reason or "no GPU device available")
         speedup = device_calibration.gpu_fma_rate / device_calibration.cpu_fma_rate
         assert speedup >= self._min_speedup, (
             f"GPU roofline {device_calibration.gpu_fma_rate:.2e} FMAs/s is only "
@@ -840,7 +837,7 @@ _PERF_CLAIMS: list[Claim[_TensorPerformanceCalibration]] = [
     # the tiny matvec compute, making the ratio meaninglessly large.
     *[_DeviceGpuPerfClaim("matmul", n) for n in [256, 512, 1024]],
     # Cross-device sanity check: GPU compute roofline ≥ 2× CPU dispatch-limited baseline
-    _DeviceGpuVsCpuRooflineClaim(min_speedup=_DEVICE_GPU_CPU_MIN_SPEEDUP),
+    _DeviceGpuVsCpuRooflineClaim(min_speedup=DEVICE_GPU_CPU_MIN_SPEEDUP),
 ]
 
 

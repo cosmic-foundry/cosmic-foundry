@@ -19,6 +19,8 @@ from tests.claims import (
     SOLVER_CONVERGENCE_BUDGET_S,
     DeviceCalibration,
     ExecutionPlan,
+    gpu_trust_skip_reason,
+    invalid_fma_rate_reason,
 )
 
 
@@ -133,18 +135,28 @@ def device_calibration() -> DeviceCalibration:
     """
     cpu_backend = JaxBackend()
     cpu_rate = _measure_backend_fma_rate(cpu_backend, is_gpu=False)
+    invalid_cpu = invalid_fma_rate_reason("CPU", cpu_rate)
+    if invalid_cpu is not None:
+        raise RuntimeError(invalid_cpu)
     gpu_backend: JaxBackend | None = None
     gpu_rate: float | None = None
+    gpu_skip_reason: str | None = None
     try:
         gpu_backend = JaxBackend(device="gpu")
         gpu_rate = _measure_backend_fma_rate(gpu_backend, is_gpu=True)
+        gpu_skip_reason = gpu_trust_skip_reason(cpu_rate, gpu_rate)
+        if gpu_skip_reason is not None:
+            gpu_backend = None
+            gpu_rate = None
     except Exception:  # noqa: BLE001
         gpu_backend = None
+        gpu_skip_reason = "GPU calibration unavailable"
     return DeviceCalibration(
         cpu_backend=cpu_backend,
         gpu_backend=gpu_backend,
         cpu_fma_rate=cpu_rate,
         gpu_fma_rate=gpu_rate,
+        gpu_skip_reason=gpu_skip_reason,
     )
 
 
