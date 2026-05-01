@@ -239,6 +239,24 @@ class _BehaviorClaim(Claim):
         self._fn()
 
 
+class _UnsupportedClaim(Claim):
+    """Documents an intentionally unsupported order/family combination."""
+
+    def __init__(self, factory: Any, order: int, id_: str) -> None:
+        self._factory = factory
+        self._order = order
+        self._id = id_
+
+    @property
+    def description(self) -> str:
+        return f"unsupported/{self._id}/order{self._order}"
+
+    def check(self) -> None:
+        with pytest.raises(ValueError):
+            self._factory(self._order)
+        pytest.skip(f"{self._id} has no native order {self._order} method")
+
+
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
 
 
@@ -485,6 +503,27 @@ def _nordsieck_fixed_orders_check() -> None:
         assert bdf.step(jac, bdf_state, 0.01).history.q == q
 
 
+def _family_switching_nordsieck_orders_check() -> None:
+    """FamilySwitchingNordsieckIntegrator accepts fixed orders 1 through 6."""
+    rhs = _scalar_decay_jacobian_rhs()
+    switcher = _ti.StiffnessSwitcher(stiff_threshold=0.2, nonstiff_threshold=0.05)
+    for q in range(1, 7):
+        for family in ("adams", "bdf"):
+            inst = _ti.FamilySwitchingNordsieckIntegrator(
+                switcher=switcher,
+                q=q,
+                initial_family=family,
+            )
+            state = inst.init_state(rhs, 0.0, Tensor([1.0]), 0.01)
+            stepped = inst.step(rhs, state, 0.01)
+            assert inst.order == q
+            assert stepped.history.q == q
+            assert inst.accepted_families
+
+    with pytest.raises(ValueError):
+        _ti.FamilySwitchingNordsieckIntegrator(switcher=switcher, q=7)
+
+
 def _phi_check() -> None:
     """φ_k functions satisfy the correct Taylor recurrence for nilpotent A."""
     A, v = Tensor([[0.0, 1.0], [0.0, 0.0]]), Tensor([0.0, 1.0])
@@ -620,6 +659,10 @@ _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_implicit_rk_orders_check, "implicit_rk/orders_1_6"),
     _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
     _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
+    _BehaviorClaim(
+        _family_switching_nordsieck_orders_check,
+        "family_switching_nordsieck/orders_1_6",
+    ),
     _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),
     _BehaviorClaim(_imex_orders_check, "imex/orders_1_4"),
     _BehaviorClaim(_composition_orders_check, "composition/orders_1_2_4_6"),
@@ -629,6 +672,25 @@ _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_vode_check, "vode/family_switch"),
     _BehaviorClaim(_lifecycle_check, "constraint/lifecycle"),
     _BehaviorClaim(_nse_direct_check, "nse/direct_solve"),
+]
+
+_UNSUPPORTED_CLAIMS: list[Claim] = [
+    *[_UnsupportedClaim(_ti.AdditiveRungeKuttaIntegrator, q, "imex") for q in (5, 6)],
+    *[
+        _UnsupportedClaim(
+            lambda order: _ti.CompositionIntegrator(
+                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+                order,
+            ),
+            q,
+            "composition",
+        )
+        for q in (3, 5)
+    ],
+    *[
+        _UnsupportedClaim(_ti.SymplecticCompositionIntegrator, q, "symplectic")
+        for q in (3, 5)
+    ],
 ]
 
 _OFF_REASON = (
@@ -660,6 +722,13 @@ _BEHAVIOR_IDS = [c.description for c in _BEHAVIOR_CLAIMS]
 
 @pytest.mark.parametrize("claim", _BEHAVIOR_CLAIMS, ids=_BEHAVIOR_IDS)
 def test_behavior(claim: Claim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim", _UNSUPPORTED_CLAIMS, ids=[c.description for c in _UNSUPPORTED_CLAIMS]
+)
+def test_unsupported_order(claim: Claim) -> None:
     claim.check()
 
 
