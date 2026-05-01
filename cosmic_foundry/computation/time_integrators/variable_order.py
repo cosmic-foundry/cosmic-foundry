@@ -1,20 +1,12 @@
-"""Variable-order Nordsieck integration within a single multistep family."""
+"""Variable-order policy for adaptive Nordsieck integration."""
 
 from __future__ import annotations
 
-from typing import Literal, NamedTuple
+from typing import NamedTuple
 
-from cosmic_foundry.computation.tensor import Tensor, norm
-from cosmic_foundry.computation.time_integrators.domains import (
-    DomainViolation,
-    check_state_domain,
-    predict_domain_step_limit,
-)
-from cosmic_foundry.computation.time_integrators.integrator import ODEState, RHSProtocol
-from cosmic_foundry.computation.time_integrators.nordsieck import (
-    MultistepIntegrator,
-    NordsieckHistory,
-)
+from cosmic_foundry.computation.tensor import norm
+from cosmic_foundry.computation.time_integrators.integrator import ODEState
+from cosmic_foundry.computation.time_integrators.nordsieck import NordsieckHistory
 
 
 class OrderDecision(NamedTuple):
@@ -126,148 +118,7 @@ class OrderSelector:
         return h * factor
 
 
-class VariableOrderNordsieckIntegrator:
-    """Variable-order wrapper around fixed-order Nordsieck integrators.
-
-    The fixed-order `MultistepIntegrator` remains responsible for the actual
-    BDF or Adams corrector.  This wrapper only attempts a step, asks an
-    `OrderSelector` whether to accept it, and applies the Phase-9
-    Nordsieck-state order/step transformations before the next attempt.
-    """
-
-    def __init__(
-        self,
-        family: Literal["bdf", "adams"],
-        selector: OrderSelector,
-        *,
-        q_initial: int | None = None,
-        max_rejections: int = 20,
-    ) -> None:
-        if selector.q_max > 6:
-            raise ValueError("selector q_max exceeds family q_max (6).")
-        self._family_name = family
-        self._selector = selector
-        self._q = selector.q_min if q_initial is None else q_initial
-        if not selector.q_min <= self._q <= selector.q_max:
-            raise ValueError("q_initial must lie inside the selector range.")
-        self._max_rejections = max_rejections
-        self.accepted_orders: list[int] = []
-        self.accepted_step_sizes: list[float] = []
-        self.accepted_errors: list[float] = []
-        self.accepted_times: list[float] = []
-        self.rejection_reasons: list[str] = []
-        self.domain_violations: list[DomainViolation] = []
-        self.domain_rejection_step_sizes: list[float] = []
-        self.domain_limited_step_sizes: list[float] = []
-        self.rejected_steps = 0
-
-    @property
-    def order(self) -> int:
-        """Current selected order."""
-        return self._q
-
-    @property
-    def selector(self) -> OrderSelector:
-        """Order-selection policy."""
-        return self._selector
-
-    def init_state(
-        self,
-        rhs: RHSProtocol,
-        t0: float,
-        u0: Tensor,
-        dt: float,
-    ) -> ODEState:
-        """Initialize a Nordsieck state at the current starting order."""
-        return MultistepIntegrator(self._family_name, self._q).init_state(
-            rhs, t0, u0, dt
-        )
-
-    def step(
-        self,
-        rhs: RHSProtocol,
-        state: ODEState,
-        dt: float,
-    ) -> ODEState:
-        """Advance by one accepted variable-order step."""
-        nh: NordsieckHistory = state.history
-        q = min(self._q, nh.q, self._selector.q_max)
-        dt = self._limit_step_to_domain(rhs, state, dt)
-        nh = nh.change_order(q).rescale_step(dt)
-        state = ODEState(state.t, state.u, dt, state.err, nh)
-        rejections = 0
-        while True:
-            candidate = MultistepIntegrator(self._family_name, q).step(rhs, state, dt)
-            decision = self._selector.decide(candidate)
-            domain_check = check_state_domain(rhs, candidate.u)
-            if decision.accepted and domain_check.accepted:
-                self._q = decision.q_next
-                self.accepted_orders.append(self._q)
-                self.accepted_step_sizes.append(decision.h_next)
-                self.accepted_errors.append(decision.error)
-                self.accepted_times.append(candidate.t)
-                nh_out = candidate.history.change_order(self._q).rescale_step(
-                    decision.h_next
-                )
-                return ODEState(
-                    candidate.t, candidate.u, decision.h_next, candidate.err, nh_out
-                )
-
-            rejections += 1
-            self.rejected_steps += 1
-            if not decision.accepted:
-                self.rejection_reasons.append("error")
-            else:
-                self.rejection_reasons.append("domain")
-                assert domain_check.violation is not None
-                self.domain_violations.append(domain_check.violation)
-                self.domain_rejection_step_sizes.append(dt)
-            if rejections > self._max_rejections:
-                raise RuntimeError("variable-order step exceeded rejection limit.")
-            q = (
-                decision.q_next
-                if not decision.accepted
-                else max(self._selector.q_min, q - 1)
-            )
-            dt = (
-                decision.h_next
-                if not decision.accepted
-                else dt * self._selector.factor_min
-            )
-            dt = self._limit_step_to_domain(rhs, state, dt)
-            nh = state.history.change_order(q).rescale_step(dt)
-            state = ODEState(state.t, state.u, dt, state.err, nh)
-
-    def advance(
-        self,
-        rhs: RHSProtocol,
-        u0: Tensor,
-        t0: float,
-        t_end: float,
-        dt0: float,
-    ) -> ODEState:
-        """Advance from ``t0`` to ``t_end`` using variable order and step size."""
-        state = self.init_state(rhs, t0, u0, dt0)
-        while state.t < t_end:
-            dt = min(state.dt, t_end - state.t)
-            state = self.step(rhs, state, dt)
-        return state
-
-    def _limit_step_to_domain(
-        self,
-        rhs: RHSProtocol,
-        state: ODEState,
-        dt: float,
-    ) -> float:
-        limit = predict_domain_step_limit(rhs, state.t, state.u)
-        if limit is None or limit <= 0.0 or limit >= dt:
-            return dt
-        self.domain_limited_step_sizes.append(limit)
-        return limit
-
-
 __all__ = [
     "OrderDecision",
     "OrderSelector",
-    "VariableOrderNordsieckIntegrator",
 ]

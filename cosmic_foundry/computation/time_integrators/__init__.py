@@ -75,10 +75,8 @@ from cosmic_foundry.computation.time_integrators.stepper import (
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
     FamilySwitch,
-    FamilySwitchingNordsieckIntegrator,
     StiffnessDiagnostic,
     StiffnessSwitcher,
-    nordsieck_solution_distance,
 )
 from cosmic_foundry.computation.time_integrators.symplectic import (
     HamiltonianRHS,
@@ -88,7 +86,6 @@ from cosmic_foundry.computation.time_integrators.symplectic import (
 from cosmic_foundry.computation.time_integrators.variable_order import (
     OrderDecision,
     OrderSelector,
-    VariableOrderNordsieckIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.vode import VODEController
 
@@ -144,12 +141,9 @@ __all__ = [
     "NordsieckHistory",
     "OrderDecision",
     "OrderSelector",
-    "VariableOrderNordsieckIntegrator",
     "FamilyName",
     "FamilySwitch",
-    "FamilySwitchingNordsieckIntegrator",
     "StiffnessDiagnostic",
     "StiffnessSwitcher",
-    "nordsieck_solution_distance",
     "VODEController",
 ]
