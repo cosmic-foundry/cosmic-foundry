@@ -24,7 +24,7 @@ from cosmic_foundry.computation.backends import (
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
-from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
+from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim, ExecutionPlan
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
@@ -311,7 +311,7 @@ class _ConvergenceClaim(Claim[None]):
                 ), f"order{self._order}/{pid}: u[{i}] negative"
 
 
-class _CorrectnessClaim(Claim[None]):
+class _CorrectnessClaim(Claim[Any]):
     """Accuracy claim for one numerical history against an analytical f(t)."""
 
     def __init__(self, spec: _CorrectnessSpec) -> None:
@@ -325,7 +325,7 @@ class _CorrectnessClaim(Claim[None]):
     def expected_walltime_s(self) -> float:
         return self._spec.expected_walltime_s
 
-    def check(self, _calibration: None) -> None:
+    def check(self, _calibration: Any) -> None:
         self.skip_if_over_walltime_budget()
         if self._spec.xfail_reason is not None:
             try:
@@ -338,6 +338,52 @@ class _CorrectnessClaim(Claim[None]):
     def _check_history(self) -> None:
         for state in self._spec.run():
             assert _err(state.u, self._spec.expected, state.t) < self._spec.tol
+
+
+class _BatchedDecayCorrectnessClaim(Claim[ExecutionPlan]):
+    """Accuracy claim for many independent scalar decays in one Tensor state."""
+
+    _DT = 0.02
+    _T_END = 0.4
+    _ORDER = 4
+    _TOL = 1e-6
+    _FMAS_PER_LANE_STEP = 64.0
+
+    @property
+    def description(self) -> str:
+        return "correctness/batched_tensor/rk4_decay"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        steps = round(self._T_END / self._DT)
+        max_batch = 512 if execution_plan.device_kind == "gpu" else 32
+        batch = execution_plan.batch_size_for(
+            fmas_per_case=steps * self._ORDER * self._FMAS_PER_LANE_STEP,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        backend = execution_plan.backend
+        rates_values = [0.2 + 1.8 * i / max(batch - 1, 1) for i in range(batch)]
+        rates = Tensor(rates_values, backend=backend)
+        u0_values = [1.0 + 0.1 * math.sin(i) for i in range(batch)]
+        u0 = Tensor(u0_values, backend=backend)
+        rhs = _ti.BlackBoxRHS(lambda t, u: -(rates * u))
+        state = _run(
+            _ti.RungeKuttaIntegrator(self._ORDER), rhs, u0, self._DT, self._T_END
+        )
+        state.u.sync()
+        actual = state.u.to_list()
+        expected = [
+            u0_i * math.exp(-rate_i * state.t)
+            for u0_i, rate_i in zip(u0_values, rates_values, strict=True)
+        ]
+        errors = [abs(float(a) - e) for a, e in zip(actual, expected, strict=True)]
+        worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        assert worst_error < self._TOL, (
+            f"{self.description}/{execution_plan.device_kind}: "
+            f"batch={batch}, lane={worst_i}, rate={rates_values[worst_i]:.6g}, "
+            f"actual={actual[worst_i]:.12g}, expected={expected[worst_i]:.12g}, "
+            f"error={worst_error:.3e} >= {self._TOL:.3e}"
+        )
 
 
 class _PerformanceClaim(Claim[_IntegratorCalibration]):
@@ -719,7 +765,8 @@ _CONV_CLAIMS: list[Claim[None]] = [
 ]
 
 _OFF_SPECS = _chain_specs(range(5, 12)) + _spoke_specs(range(7, 22), [1, 10, 100])
-_CORRECT_CLAIMS: list[Claim[None]] = [
+_CORRECT_CLAIMS: list[Claim[Any]] = [
+    _BatchedDecayCorrectnessClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
@@ -750,8 +797,8 @@ def test_convergence(claim: Claim[None]) -> None:
 @pytest.mark.parametrize(
     "claim", _CORRECT_CLAIMS, ids=[c.description for c in _CORRECT_CLAIMS]
 )
-def test_correctness(claim: Claim[None]) -> None:
-    claim.check(None)
+def test_correctness(claim: Claim[Any], execution_plan: ExecutionPlan) -> None:
+    claim.check(execution_plan)
 
 
 @pytest.mark.parametrize(

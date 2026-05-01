@@ -11,10 +11,12 @@ from cosmic_foundry.computation.backends import JaxBackend
 from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import (
     BUDGET_TOLERANCE,
+    CLAIM_WALLTIME_BUDGET_S,
     FIXED_SESSION_OVERHEAD_S,
     INTEGRATOR_SESSION_BUDGET_S,
     SOLVER_CONVERGENCE_BUDGET_S,
     DeviceCalibration,
+    ExecutionPlan,
 )
 
 
@@ -141,4 +143,26 @@ def device_calibration() -> DeviceCalibration:
         gpu_backend=gpu_backend,
         cpu_fma_rate=cpu_rate,
         gpu_fma_rate=gpu_rate,
+    )
+
+
+@pytest.fixture(scope="session")
+def execution_plan(device_calibration: DeviceCalibration) -> ExecutionPlan:
+    """Execution policy for scalable Tensor tests.
+
+    GPU is selected opportunistically when calibration found a functional GPU.
+    Otherwise the same claims run on the CPU backend with smaller extents.
+    """
+    if device_calibration.gpu_backend is not None:
+        return ExecutionPlan(
+            backend=device_calibration.gpu_backend,
+            device_kind="gpu",
+            claim_walltime_budget_s=CLAIM_WALLTIME_BUDGET_S,
+            device_calibration=device_calibration,
+        )
+    return ExecutionPlan(
+        backend=device_calibration.cpu_backend,
+        device_kind="cpu",
+        claim_walltime_budget_s=CLAIM_WALLTIME_BUDGET_S,
+        device_calibration=device_calibration,
     )

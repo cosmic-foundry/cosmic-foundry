@@ -99,3 +99,35 @@ class DeviceCalibration:
     gpu_backend: Any | None
     cpu_fma_rate: float
     gpu_fma_rate: float | None
+
+
+@dataclass(frozen=True)
+class ExecutionPlan:
+    """Device choice and walltime budget for scalable Tensor-backed claims."""
+
+    backend: Any
+    device_kind: str
+    claim_walltime_budget_s: float
+    device_calibration: DeviceCalibration
+
+    @property
+    def fma_rate(self) -> float:
+        if self.device_kind == "gpu":
+            assert self.device_calibration.gpu_fma_rate is not None
+            return self.device_calibration.gpu_fma_rate
+        return self.device_calibration.cpu_fma_rate
+
+    def batch_size_for(
+        self,
+        *,
+        fmas_per_case: float,
+        min_batch: int,
+        max_batch: int,
+        safety: float = 0.5,
+    ) -> int:
+        """Largest batch expected to fit the claim budget, clamped to bounds."""
+        budget = self.claim_walltime_budget_s * safety
+        if fmas_per_case <= 0.0:
+            return min_batch
+        estimated = int(budget * self.fma_rate / fmas_per_case)
+        return max(min_batch, min(max_batch, estimated))
