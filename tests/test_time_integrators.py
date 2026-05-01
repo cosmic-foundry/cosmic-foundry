@@ -4,7 +4,7 @@ Three test axes:
   test_convergence : _ORDERS × _PROBS — AutoIntegrator dispatches by RHS type; skips
                      unsupported (order, problem) pairs via ValueError
   test_correctness : _CORRECT_CLAIMS  — integration histories match analytical f(t)
-  test_performance : _PERF_CLAIMS     — self-calibrated cost-to-accuracy rooflines
+  test_performance : _PERF_CLAIMS     — execution-plan Tensor roofline checks
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from cosmic_foundry.computation.backends import (
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
 from tests.claims import (
-    INTEGRATOR_CLAIM_BUDGET_S,
     BatchedFailure,
     Claim,
     ExecutionPlan,
@@ -33,11 +32,9 @@ from tests.claims import (
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
-_BUDGET = INTEGRATOR_CLAIM_BUDGET_S
-_U2, _U3 = Tensor([1.0, 0.0]), Tensor([1.0, 0.0, 0.0])
 _PERF_TRIALS = 10
-_PERF_BATCH = 200
 _PERF_OVERHEAD = 80.0
+_GPU_MIN_PERF_FMAS = 1.0e6
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -72,16 +69,6 @@ def _history(inst: Any, rhs: Any, u0: Tensor, dt: float, t_end: float) -> list:
         state = inst.step(rhs, state, min(dt, t_end - state.t))
         states.append(state)
     return states
-
-
-def _best_per_call(fn: Any, *, batch: int = _PERF_BATCH) -> float:
-    best = float("inf")
-    for _ in range(_PERF_TRIALS):
-        t0 = time.perf_counter()
-        for _ in range(batch):
-            fn()
-        best = min(best, time.perf_counter() - t0)
-    return best / batch
 
 
 def _best_elapsed(fn: Any) -> tuple[float, Any]:
@@ -167,7 +154,10 @@ def _scalar_decay_jacobian_rhs() -> _ti.JacobianRHS:
 # (id, u0, n_species, exact_fn, mass_conserved, rhs)
 
 
-def _build_probs() -> list:
+def _build_probs(backend: Any | None = None) -> list:
+    def tensor(data: Any) -> Tensor:
+        return Tensor(data, backend=backend) if backend is not None else Tensor(data)
+
     def f2(t, u):  # type: ignore[misc]
         return Tensor([-float(u[0]), float(u[0])], backend=u.backend)
 
@@ -194,11 +184,18 @@ def _build_probs() -> list:
         return Tensor([math.sin(t)], backend=u.backend)
 
     return [
-        ("base2", _U2, 2, _exact2, True, _ti.BlackBoxRHS(f2)),
-        ("decay3", _U3, 3, _exact3, True, _ti.BlackBoxRHS(f3)),
+        ("base2", tensor([1.0, 0.0]), 2, _exact2, True, _ti.BlackBoxRHS(f2)),
+        (
+            "decay3",
+            tensor([1.0, 0.0, 0.0]),
+            3,
+            _exact3,
+            True,
+            _ti.BlackBoxRHS(f3),
+        ),
         (
             "jac_decay1",
-            Tensor([1.0]),
+            tensor([1.0]),
             1,
             _exact_scalar_decay,
             False,
@@ -206,7 +203,7 @@ def _build_probs() -> list:
         ),
         (
             "split_decay1",
-            Tensor([1.0]),
+            tensor([1.0]),
             1,
             _exact_scalar_decay,
             False,
@@ -214,15 +211,15 @@ def _build_probs() -> list:
         ),
         (
             "semilinear1",
-            Tensor([1.0]),
+            tensor([1.0]),
             1,
             _exact_semilinear,
             False,
-            _ti.SemilinearRHS(Tensor([[-2.0]]), semilinear_forcing),
+            _ti.SemilinearRHS(tensor([[-2.0]]), semilinear_forcing),
         ),
         (
             "osc2",
-            _U2,
+            tensor([1.0, 0.0]),
             2,
             _exact_osc,
             False,
@@ -230,7 +227,7 @@ def _build_probs() -> list:
         ),
         (
             "ham2",
-            _U2,
+            tensor([1.0, 0.0]),
             2,
             _exact_ham,
             False,
@@ -241,6 +238,13 @@ def _build_probs() -> list:
 
 _ORDERS = [1, 2, 3, 4, 5, 6]
 _PROBS = _build_probs()
+
+
+def _prob_on_backend(pid: str, backend: Any) -> tuple:
+    for prob in _build_probs(backend):
+        if prob[0] == pid:
+            return prob
+    raise KeyError(pid)
 
 
 # ── Claim wrappers ────────────────────────────────────────────────────────────
@@ -257,22 +261,13 @@ class _CorrectnessSpec:
 
 
 @dataclass(frozen=True)
-class _IntegratorCalibration:
-    scalar_rhs_s: float
-    semilinear_nonlinear_s: float
-    exp_action_s: float
-
-
-@dataclass(frozen=True)
 class _PerformanceSpec:
     name: str
-    run: Any
-    expected: Any
+    run: Callable[[ExecutionPlan], tuple[float, float, int, float]]
     tol: float
-    roofline: Any
 
 
-class _ConvergenceClaim(Claim[None]):
+class _ConvergenceClaim(Claim[ExecutionPlan]):
     """Convergence + conservation claim for one (order, problem) pair."""
 
     def __init__(self, order: int, prob: tuple) -> None:
@@ -283,37 +278,42 @@ class _ConvergenceClaim(Claim[None]):
     def description(self) -> str:
         return f"convergence/order{self._order}/{self._prob[0]}"
 
-    def check(self, _calibration: None) -> None:
-        pid, u0, n, exact, mass_cons, rhs = self._prob
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        pid = self._prob[0]
+        pid, u0, n, exact, mass_cons, rhs = _prob_on_backend(
+            pid, execution_plan.backend
+        )
         inst = _ti.AutoIntegrator(self._order)
-        t0 = time.perf_counter()
         dts: list[float] = []
         errs: list[float] = []
         dt = 0.1
         state: _ti.ODEState | None = None
-        while len(dts) < 8:
+        refinements = execution_plan.refinement_count_for(
+            work_fmas=lambda count: count * execution_plan.fma_rate / 8.0,
+            min_refinements=4,
+            max_refinements=8,
+            label=self.description,
+            safety=0.5,
+        )
+        for _ in range(refinements):
             try:
                 state = _run(inst, rhs, u0, dt)
             except ValueError as e:
                 pytest.skip(str(e))
+            state.u.sync()
             errs.append(_err(state.u, exact, state.t))
             dts.append(dt)
             dt /= 2.0
             if errs[-1] == 0.0:
                 break
-            if time.perf_counter() - t0 > _BUDGET:
-                break
         assert (
             _slope(errs, dts) >= self._order - 0.3
-        ), f"order{self._order}/{pid}: slope too low"
+        ), f"order{self._order}/{pid}/{execution_plan.device_kind}: slope too low"
         if mass_cons and state is not None:
-            assert _conserved(
-                state.u, n
-            ), f"order{self._order}/{pid}: mass not conserved"
+            label = f"order{self._order}/{pid}/{execution_plan.device_kind}"
+            assert _conserved(state.u, n), f"{label}: mass not conserved"
             for i in range(n):
-                assert (
-                    float(state.u[i]) >= -1e-10
-                ), f"order{self._order}/{pid}: u[{i}] negative"
+                assert float(state.u[i]) >= -1e-10, f"{label}: u[{i}] negative"
 
 
 class _CorrectnessClaim(Claim[Any]):
@@ -708,8 +708,8 @@ class _BatchedAdaptiveDecayCorrectnessClaim(Claim[ExecutionPlan]):
         ).format()
 
 
-class _PerformanceClaim(Claim[_IntegratorCalibration]):
-    """Cost-to-accuracy claim against locally measured primitive rooflines."""
+class _PerformanceClaim(Claim[ExecutionPlan]):
+    """Cost-to-accuracy claim against the execution plan's Tensor roofline."""
 
     def __init__(self, spec: _PerformanceSpec) -> None:
         self._spec = spec
@@ -718,15 +718,24 @@ class _PerformanceClaim(Claim[_IntegratorCalibration]):
     def description(self) -> str:
         return f"performance/{self._spec.name}"
 
-    def check(self, calibration: _IntegratorCalibration) -> None:
-        elapsed, state = _best_elapsed(self._spec.run)
-        err = _err(state.u, self._spec.expected, state.t)
-        assert err < self._spec.tol
-        roofline = self._spec.roofline(calibration)
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        elapsed, err, extent, fmas = self._spec.run(execution_plan)
+        assert err < self._spec.tol, (
+            f"{self.description}/{execution_plan.device_kind}: "
+            f"extent={extent}, error={err:.3e} >= {self._spec.tol:.3e}"
+        )
+        if execution_plan.device_kind == "gpu" and fmas < _GPU_MIN_PERF_FMAS:
+            pytest.skip(
+                f"{self.description}/gpu: extent={extent} gives {fmas:.3g} FMAs, "
+                f"below compute-bound threshold {_GPU_MIN_PERF_FMAS:.3g}"
+            )
+        roofline = fmas / execution_plan.fma_rate
+        ratio = elapsed / roofline
         assert elapsed <= _PERF_OVERHEAD * roofline, (
-            f"{self.description}: {elapsed:.3e}s actual, "
-            f"{roofline:.3e}s calibrated roofline, "
-            f"{elapsed / roofline:.1f}x > {_PERF_OVERHEAD:.1f}x"
+            f"{self.description}/{execution_plan.device_kind}: "
+            f"extent={extent}, fmas={fmas:.3g}, "
+            f"{elapsed:.3e}s actual, {roofline:.3e}s Tensor roofline, "
+            f"ratio={ratio:.1f}x > {_PERF_OVERHEAD:.1f}x"
         )
 
 
@@ -1015,77 +1024,101 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
 
 
 def _explicit_rk4_performance_spec() -> _PerformanceSpec:
-    rhs = _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend))
     dt, t_end, order = 0.02, 1.0, 4
     n_steps = round(t_end / dt)
 
-    def run() -> _ti.ODEState:
-        return _run(_ti.RungeKuttaIntegrator(order), rhs, Tensor([1.0]), dt, t_end)
+    def run(execution_plan: ExecutionPlan) -> tuple[float, float, int, float]:
+        max_batch = 512 if execution_plan.device_kind == "gpu" else 32
+        batch = execution_plan.batch_size_for(
+            fmas_per_case=n_steps * order * 64.0,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        backend = execution_plan.backend
+        rates = Tensor(
+            [0.2 + 1.8 * i / max(batch - 1, 1) for i in range(batch)],
+            backend=backend,
+        )
+        u0_values = [1.0 + 0.1 * math.sin(i) for i in range(batch)]
+        rhs = _ti.BlackBoxRHS(lambda t, u: -(rates * u))
 
-    def roofline(cal: _IntegratorCalibration) -> float:
-        return n_steps * order * cal.scalar_rhs_s
+        def execute() -> _ti.ODEState:
+            state = _run(
+                _ti.RungeKuttaIntegrator(order),
+                rhs,
+                Tensor(u0_values, backend=backend),
+                dt,
+                t_end,
+            )
+            state.u.sync()
+            return state
+
+        elapsed, state = _best_elapsed(execute)
+        actual = state.u.to_list()
+        expected = [
+            u0_i * math.exp(-rate_i * state.t)
+            for u0_i, rate_i in zip(u0_values, rates.to_list(), strict=True)
+        ]
+        err = max(abs(float(a) - e) for a, e in zip(actual, expected, strict=True))
+        return elapsed, err, batch, batch * n_steps * order * 64.0
 
     return _PerformanceSpec(
         "explicit_rk4/scalar_decay",
         run,
-        _exact_scalar_decay,
         1e-7,
-        roofline,
     )
 
 
 def _semilinear_lawson4_performance_spec() -> _PerformanceSpec:
-    linear = Tensor([[-2.0]])
-
-    def nonlinear(t: float, u: Tensor) -> Tensor:
-        return Tensor([math.sin(t)], backend=u.backend)
-
-    rhs = _ti.SemilinearRHS(linear, nonlinear)
     dt, t_end, order = 0.02, 0.4, 4
     n_steps = round(t_end / dt)
 
-    def run() -> _ti.ODEState:
-        return _run(
-            _ti.LawsonRungeKuttaIntegrator(order), rhs, Tensor([1.0]), dt, t_end
+    def run(execution_plan: ExecutionPlan) -> tuple[float, float, int, float]:
+        max_batch = 128 if execution_plan.device_kind == "gpu" else 16
+        batch = execution_plan.batch_size_for(
+            fmas_per_case=n_steps * order * 384.0,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        backend = execution_plan.backend
+        linear = Tensor(
+            [[-2.0 if i == j else 0.0 for j in range(batch)] for i in range(batch)],
+            backend=backend,
+        )
+        u0_values = [1.0 + 0.05 * math.sin(i) for i in range(batch)]
+        rhs = _ti.SemilinearRHS(
+            linear,
+            lambda t, u: Tensor([math.sin(t)] * batch, backend=u.backend),
         )
 
-    def roofline(cal: _IntegratorCalibration) -> float:
-        # Lawson RK4 stages require nonlinear evaluations plus dense linear-flow
-        # actions; both primitives are calibrated on this device before testing.
-        return n_steps * (4 * cal.semilinear_nonlinear_s + 12 * cal.exp_action_s)
+        def execute() -> _ti.ODEState:
+            state = _run(
+                _ti.LawsonRungeKuttaIntegrator(order),
+                rhs,
+                Tensor(u0_values, backend=backend),
+                dt,
+                t_end,
+            )
+            state.u.sync()
+            return state
+
+        elapsed, state = _best_elapsed(execute)
+        actual = state.u.to_list()
+        forced = _exact_semilinear(state.t)[0] - math.exp(-2.0 * state.t)
+        expected = [u0_i * math.exp(-2.0 * state.t) + forced for u0_i in u0_values]
+        err = max(abs(float(a) - e) for a, e in zip(actual, expected, strict=True))
+        return elapsed, err, batch, batch * n_steps * order * 384.0
 
     return _PerformanceSpec(
         "lawson_rk4/semilinear_forcing",
         run,
-        _exact_semilinear,
         1e-7,
-        roofline,
-    )
-
-
-@pytest.fixture(scope="module")
-def integrator_calibration() -> _IntegratorCalibration:
-    u = Tensor([1.0])
-
-    def scalar_rhs() -> Tensor:
-        return Tensor([-float(u[0])], backend=u.backend)
-
-    def nonlinear() -> Tensor:
-        return Tensor([math.sin(0.2)], backend=u.backend)
-
-    def exp_action() -> Tensor:
-        return _ti.PhiFunction(0).apply(Tensor([[-0.04]]), u)
-
-    return _IntegratorCalibration(
-        scalar_rhs_s=_best_per_call(scalar_rhs),
-        semilinear_nonlinear_s=_best_per_call(nonlinear),
-        exp_action_s=_best_per_call(exp_action),
     )
 
 
 # ── claim registries ─────────────────────────────────────────────────────────
 
-_CONV_CLAIMS: list[Claim[None]] = [
+_CONV_CLAIMS: list[Claim[ExecutionPlan]] = [
     _ConvergenceClaim(order, prob) for order in _ORDERS for prob in _PROBS
 ]
 
@@ -1106,7 +1139,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _CorrectnessClaim(_alpha_chain_stress_spec()),
     _CorrectnessClaim(_branched_hot_window_stress_spec()),
 ]
-_PERF_CLAIMS: list[Claim[_IntegratorCalibration]] = [
+_PERF_CLAIMS: list[Claim[ExecutionPlan]] = [
     _PerformanceClaim(_explicit_rk4_performance_spec()),
     _PerformanceClaim(_semilinear_lawson4_performance_spec()),
 ]
@@ -1119,8 +1152,10 @@ _CONV_IDS = [c.description for c in _CONV_CLAIMS]
 
 
 @pytest.mark.parametrize("claim", _CONV_CLAIMS, ids=_CONV_IDS)
-def test_convergence(claim: Claim[None]) -> None:
-    claim.check(None)
+def test_convergence(
+    claim: Claim[ExecutionPlan], execution_plan: ExecutionPlan
+) -> None:
+    claim.check(execution_plan)
 
 
 @pytest.mark.parametrize(
@@ -1134,7 +1169,6 @@ def test_correctness(claim: Claim[Any], execution_plan: ExecutionPlan) -> None:
     "claim", _PERF_CLAIMS, ids=[c.description for c in _PERF_CLAIMS]
 )
 def test_performance(
-    claim: Claim[_IntegratorCalibration],
-    integrator_calibration: _IntegratorCalibration,
+    claim: Claim[ExecutionPlan], execution_plan: ExecutionPlan
 ) -> None:
-    claim.check(integrator_calibration)
+    claim.check(execution_plan)
