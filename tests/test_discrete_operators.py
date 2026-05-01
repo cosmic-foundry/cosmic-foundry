@@ -2,37 +2,27 @@
 
 The module owns two convergence checks:
   _OrderClaim(instance) — symbolic stencil check for the declared order.
-  _ConvergenceRateClaim(solver, disc) — manufactured-solution solve whose
+  _ConvergenceRateClaim(disc) — manufactured-solution solve whose
       L2_h error must converge at the discretization's declared order.
 
-The manufactured-solution claim uses solvers as execution machinery, but the
-asserted convergence rate is the discrete operator's mathematical order. Solver
-residual claims live in tests/test_linear_solvers.py.
+The manufactured-solution claim uses a single SVD factorization path as
+execution machinery, but the asserted convergence rate is the discrete
+operator's mathematical order. Solver residual claims live in
+tests/test_linear_solvers.py.
 """
 
 from __future__ import annotations
 
-import functools
 import math
 import sys
-import time
 from itertools import product as iproduct
 from typing import Any
 
 import pytest
 import sympy
 
-from cosmic_foundry.computation.autotuning.benchmarker import fit_log_log
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
-from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
-from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
-    DenseGaussSeidelSolver,
-)
-from cosmic_foundry.computation.solvers.dense_gmres_solver import DenseGMRESSolver
-from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSolver
-from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
-from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
@@ -54,7 +44,7 @@ from cosmic_foundry.theory.discrete import (
     PeriodicGhostCells,
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
-from tests.claims import SOLVER_CONVERGENCE_BUDGET_S, Claim
+from tests.claims import Claim
 
 # ---------------------------------------------------------------------------
 # Dimension and budget configuration
@@ -70,13 +60,7 @@ _DIMS = [1, 2, 3]
 # a convergence rate.
 _MAX_CONVERGENCE_RATE_DIM = 2
 
-# Cells per axis for solver-claim meshes; chosen so total cell count (n^ndim)
-# stays small enough for sympy assembly to remain fast.
-_SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
-
-# NumpyBackend for convergence claims: numpy SVD/solve are LAPACK-backed and
-# the dominant cost is the O(N²) Python-loop assembly, so the cost model fits
-# cleanly.  PythonBackend SVD is superlinear at N>64, making calibration noisy.
+# NumpyBackend for convergence claims: numpy SVD/solve are LAPACK-backed.
 _NP_BACKEND = NumpyBackend()
 
 # Mesh fractions for each convergence-rate sweep.  Fractions are exact over
@@ -84,9 +68,7 @@ _NP_BACKEND = NumpyBackend()
 # of 8.
 _MESH_FRACTIONS = (0.25, 0.375, 0.5, 0.75, 1.0)
 
-_CALIB_N = 64
-_MAX_PROBE_TIME_S = 1.5
-_CALIB_MANIFOLD = EuclideanManifold(1)
+_CONVERGENCE_N_MAX = 40
 _ASSEMBLER = DirectSolver(SVDFactorization())
 
 
@@ -118,83 +100,6 @@ class _DiscreteApplyOperator:
         result = self._disc(field)
         values = [float(result(self._to_multi(i))) for i in range(self._n)]
         return Tensor(values, backend=u.backend)
-
-
-class _DiscreteLinearOperator:
-    """LinearOperator whose matrix is assembled through DirectSolver._assemble."""
-
-    def __init__(self, disc: Any, mesh: CartesianMesh) -> None:
-        self._n = mesh.n_cells
-        self._apply_op = _DiscreteApplyOperator(disc, mesh)
-        self._matrices: dict[int, Tensor] = {}
-
-    def _matrix(self, backend: Any) -> Tensor:
-        key = id(backend)
-        if key not in self._matrices:
-            self._matrices[key] = _ASSEMBLER._assemble(
-                self._apply_op, Tensor.zeros(self._n, backend=backend)
-            )
-        return self._matrices[key]
-
-    def apply(self, u: Tensor) -> Tensor:
-        return self._matrix(u.backend) @ u
-
-    def diagonal(self, backend: Any) -> Tensor:
-        matrix = self._matrix(backend)
-        return Tensor([float(matrix[i, i]) for i in range(self._n)], backend=backend)
-
-    def row_abs_sums(self, backend: Any) -> Tensor:
-        matrix = self._matrix(backend)
-        return Tensor(
-            [
-                sum(abs(float(matrix[i, j])) for j in range(self._n))
-                for i in range(self._n)
-            ],
-            backend=backend,
-        )
-
-
-def _time_solve_at(solver_class: type, n: int) -> float:
-    mesh = CartesianMesh(
-        origin=(sympy.Rational(0),),
-        spacing=(sympy.Rational(1, n),),
-        shape=(n,),
-    )
-    flux = DiffusiveFlux(DiffusiveFlux.min_order, _CALIB_MANIFOLD)
-    disc = DivergenceFormDiscretization(flux, DirichletGhostCells())
-    b_cal = Tensor([1.0] * n, backend=_NP_BACKEND)
-    solver = solver_class()
-    op = _DiscreteLinearOperator(disc, mesh)
-    solver.solve(op, b_cal)
-    best = float("inf")
-    for _ in range(3):
-        t0 = time.perf_counter()
-        op = _DiscreteLinearOperator(disc, mesh)
-        solver.solve(op, b_cal)
-        best = min(best, time.perf_counter() - t0)
-    return best
-
-
-@functools.cache
-def _calibrate_alpha(solver_class: type, fma_rate: float) -> tuple[float, float]:
-    """Fit T ~= alpha * N^p / fma_rate for the solver-backed convergence sweep."""
-    n2 = _CALIB_N
-    wall0 = time.perf_counter()
-    t1 = _time_solve_at(solver_class, n2 // 2)
-    if time.perf_counter() - wall0 > _MAX_PROBE_TIME_S:
-        n2 //= 2
-        t1 = _time_solve_at(solver_class, n2 // 2)
-    t2 = _time_solve_at(solver_class, n2)
-    alpha_raw, exponent = fit_log_log([(n2 // 2, t1), (n2, t2)])
-    return alpha_raw * fma_rate, exponent
-
-
-def _convergence_n_max(fma_rate: float, n_convergence_claims: int, solver: Any) -> int:
-    alpha, p = _calibrate_alpha(type(solver), fma_rate)
-    sum_fp = sum(f**p for f in _MESH_FRACTIONS)
-    budget_per_claim = SOLVER_CONVERGENCE_BUDGET_S / n_convergence_claims
-    n_raw = (budget_per_claim * fma_rate / (alpha * sum_fp)) ** (1 / p)
-    return max(16, round(n_raw / 8) * 8)
 
 
 # ---------------------------------------------------------------------------
@@ -331,8 +236,7 @@ class _ConvergenceRateClaim(Claim[float]):
     assembly cost remain roughly constant across dimensions.
     """
 
-    def __init__(self, solver: Any, disc: Any) -> None:
-        self._solver = solver
+    def __init__(self, disc: Any) -> None:
         self._disc = disc
 
     @property
@@ -341,14 +245,15 @@ class _ConvergenceRateClaim(Claim[float]):
         suffix = "/periodic" if periodic else ""
         manifold = self._disc.continuous_operator.manifold
         ndim = len(manifold.atlas[0].symbols)
+        flux_name = type(self._disc._numerical_flux).__name__
         return (
-            f"{type(self._solver).__name__}/"
+            f"SVDFactorization/{flux_name}/"
             f"{type(self._disc).__name__}(order={self._disc.order})/"
             f"convergence_rate{suffix}/{ndim}D"
         )
 
     def check(self, fma_rate: float) -> None:
-        n_max = _convergence_n_max(fma_rate, _N_CONVERGENCE_CLAIMS, self._solver)
+        n_max = _CONVERGENCE_N_MAX
         cont_op = self._disc.continuous_operator
         manifold = cont_op.manifold
         symbols = manifold.atlas[0].symbols
@@ -397,19 +302,21 @@ class _ConvergenceRateClaim(Claim[float]):
             for n_k in n_per_axes
         ]
 
-        # Pre-build operators and SVD decompositions for null-space extraction.
+        # Pre-build SVD decompositions from the same assembled matrices used to solve.
         assembled: list[tuple[Any, list[Any], float, int]] = []
         for mesh in meshes:
             vol = float(mesh.cell_volume)
             n_cells = math.prod(mesh.shape)
-            op_m = _DiscreteLinearOperator(self._disc, mesh)
-            a_m = _ASSEMBLER._assemble(op_m, Tensor.zeros(n_cells, backend=_NP_BACKEND))
+            apply_op = _DiscreteApplyOperator(self._disc, mesh)
+            a_m = _ASSEMBLER._assemble(
+                apply_op, Tensor.zeros(n_cells, backend=_NP_BACKEND)
+            )
             decomp = SVDFactorization().factorize(a_m)
             s_vec = decomp.s
             vt = decomp.vt
             null_tol = float(s_vec[0]) * n_cells * sys.float_info.epsilon**0.5
             null_vecs = [vt[j] for j in range(n_cells) if float(s_vec[j]) < null_tol]
-            assembled.append((op_m, null_vecs, vol, n_cells))
+            assembled.append((decomp, null_vecs, vol, n_cells))
 
         def _to_multi(flat: int, shape: tuple[int, ...]) -> tuple[int, ...]:
             out = []
@@ -497,7 +404,7 @@ class _ConvergenceRateClaim(Claim[float]):
         assert phi_modes_F, "mode_range is empty — check step/k_max configuration"
 
         errors: list[float] = []
-        for mesh, (op_m, null_vecs, vol, n_cells) in zip(
+        for mesh, (decomp, null_vecs, vol, n_cells) in zip(
             meshes, assembled, strict=True
         ):
             mesh_shape = mesh.shape
@@ -514,7 +421,7 @@ class _ConvergenceRateClaim(Claim[float]):
             b_m = Tensor(b_vals, backend=_NP_BACKEND)
             phi_arr = Tensor(phi_vals, backend=_NP_BACKEND)
 
-            u_arr = self._solver.solve(op_m, b_m)
+            u_arr = decomp.solve(b_m)
             for v in null_vecs:
                 u_arr = u_arr - float(u_arr @ v) * v
             diff = u_arr - phi_arr
@@ -553,22 +460,6 @@ class _ConvergenceRateClaim(Claim[float]):
 
 
 # ---------------------------------------------------------------------------
-# Solver registries
-# ---------------------------------------------------------------------------
-
-# DiffusiveFlux → SPD matrix (DirichletBC): all solvers including CG.
-# AdvectiveFlux → rank-(N-1) circulant (PeriodicBC): direct solvers only.
-# AdvectionDiffusionFlux → non-symmetric (DirichletBC): no CG.
-_SOLVERS = [
-    DenseJacobiSolver(tol=1e-8),
-    DenseGaussSeidelSolver(tol=1e-8),
-    DenseGMRESSolver(tol=1e-8),
-]
-_SPD_SOLVERS = [DenseCGSolver(tol=1e-8)]
-_DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
-
-
-# ---------------------------------------------------------------------------
 # Claim generation: discrete-operator order and manufactured-solution convergence
 # ---------------------------------------------------------------------------
 
@@ -602,22 +493,15 @@ for _ndim in _DIMS:
     if _ndim <= _MAX_CONVERGENCE_RATE_DIM:
         for _f in _diff_fluxes:
             _disc = DivergenceFormDiscretization(_f, DirichletGhostCells())
-            for _s in [*_SOLVERS, *_SPD_SOLVERS, *_DIRECT_SOLVERS]:
-                _CLAIMS.append(_ConvergenceRateClaim(_s, _disc))
+            _CLAIMS.append(_ConvergenceRateClaim(_disc))
         for _f in _adv_fluxes:
             _disc = DivergenceFormDiscretization(_f, PeriodicGhostCells())
-            for _s in _DIRECT_SOLVERS:
-                _CLAIMS.append(_ConvergenceRateClaim(_s, _disc))
+            _CLAIMS.append(_ConvergenceRateClaim(_disc))
         for _f in _adv_diff_fluxes:
             _disc = DivergenceFormDiscretization(_f, DirichletGhostCells())
-            for _s in [*_SOLVERS, *_DIRECT_SOLVERS]:
-                _CLAIMS.append(_ConvergenceRateClaim(_s, _disc))
-
-_N_CONVERGENCE_CLAIMS: int = sum(
-    1 for c in _CLAIMS if isinstance(c, _ConvergenceRateClaim)
-)
+            _CLAIMS.append(_ConvergenceRateClaim(_disc))
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_convergence(claim: Claim[float], fma_rate: float) -> None:
-    claim.check(fma_rate)
+def test_convergence(claim: Claim[float]) -> None:
+    claim.check(0.0)
