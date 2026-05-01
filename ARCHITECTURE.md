@@ -733,41 +733,61 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Sprint: Architecture ownership structural claims
+### Sprint: Capability-selected architecture ownership
 
-Goal: make architecture ownership a reusable, machine-checkable capability in
-the test suite.  Numerical claims verify that an algorithm is correct on a
-problem.  Architecture ownership claims verify that the codebase has one
-intended owner for a responsibility, that public exports are deliberately
-categorized, and that helper/policy objects do not quietly become competing
-implementations.  The validation home for this capability is
-`tests/test_structure.py`; feature-specific tests may remain in their existing
-files, but ownership maps and anti-duplication checks belong in the structural
-claim registry.
+Goal: make algorithm ownership executable.  Calling code should be able to
+express the properties it needs from an algorithm, then let the package select
+the implementation whose declared capabilities satisfy those properties.
+Numerical claims verify that an algorithm is correct on a problem; capability
+ownership claims verify that implementations make truthful, non-overlapping
+claims about the domain they own.  The validation home for these architecture
+checks is `tests/test_structure.py`; feature-specific tests may remain in their
+existing files, but capability maps, dispatch uniqueness checks, and
+anti-duplication checks belong in the structural claim registry.
 
 The first application is the time-integration layer.  The recent Nordsieck
 cleanup made `VODEController` the single public adaptive Nordsieck controller,
 with `OrderSelector` and `StiffnessSwitcher` retained as reusable policies.
-This sprint should encode that decision structurally so the wrappers cannot
-reappear accidentally, and so future packages can reuse the same pattern.
+This sprint should encode that decision as declared capabilities rather than
+only prose: callers request adaptive, domain-aware, stiffness-switching
+Nordsieck integration, and the registry resolves that request to the single
+implementation that owns it.  Future packages should be able to reuse the same
+pattern for solvers, decompositions, discretizations, and autotuning.
 
 The sprint is complete when the following are true:
 
-- **Reusable ownership claim type.**  `tests/test_structure.py` exposes a
-  declarative claim for package-level architecture ownership.  A claim can
-  categorize public symbols, name exclusive responsibility owners, list
-  forbidden public symbols, and fail with diagnostics that identify the
-  mismatched symbol or responsibility.
-- **Public-category maps.**  Ownership claims can assert that each public export
-  in a package belongs to an expected category such as integrator, controller,
-  policy, RHS wrapper, decomposition, solver, result object, or helper.  The
-  categories are deliberately local to each package so the mechanism is general
-  without imposing a global taxonomy too early.
+- **Capability declaration model.**  Each selectable implementation can declare
+  the properties it satisfies: method family, supported RHS structure,
+  adaptivity, variable order, stiffness switching, domain awareness, constraint
+  lifecycle support, order range, required derivative information, and similar
+  package-local properties.  The declaration should be data, not prose, so
+  tests and dispatch can inspect it.
+- **Capability request model.**  Calling code can express required properties
+  without naming the concrete implementation.  A request can be exact or
+  partial: for example, "adaptive, domain-aware Nordsieck integration with
+  stiffness switching" should resolve to the implementation that declares those
+  capabilities.
+- **Selection and ambiguity rules.**  A package-local registry can select an
+  implementation from a capability request.  If multiple implementations satisfy
+  the same request, the registry must either use an explicit priority/ranking
+  encoded in data or fail as an architectural ambiguity.  Silent first-match
+  dispatch is not acceptable for ownership-sensitive paths.
+- **Reusable ownership claim type.**  `tests/test_structure.py` exposes
+  declarative claims for capability-based architecture ownership.  A claim can
+  categorize public symbols, verify declared capabilities, assert dispatch
+  uniqueness or explicit priority, list forbidden public symbols, and fail with
+  diagnostics that identify the mismatched symbol, capability, or request.
+- **Public-category maps.**  Ownership claims can still assert that each public
+  export in a package belongs to an expected category such as integrator,
+  controller, policy, RHS wrapper, decomposition, solver, result object, or
+  helper.  The categories are deliberately local to each package so the
+  mechanism is general without imposing a global taxonomy too early.
 - **Exclusive-owner checks.**  Ownership claims can assert that a named
-  responsibility has exactly one public owner.  This is the guard against
-  parallel implementations at the same abstraction level: if a new class claims
-  the same role, the structural test fails until the architecture map is
-  consciously updated or the duplication is removed.
+  responsibility has exactly one public owner or exactly one selected owner for
+  a capability request.  This is the guard against parallel implementations at
+  the same abstraction level: if a new class claims the same role, the
+  structural test fails until the registry declares an intentional priority or
+  the duplication is removed.
 - **Forbidden-symbol checks.**  Ownership claims can assert that retired public
   names remain absent.  This catches accidental reintroduction of wrappers or
   compatibility aliases when the project has explicitly consolidated a
@@ -789,29 +809,43 @@ The sprint is complete when the following are true:
   `cosmic_foundry.computation.time_integrators`.  It should classify public
   method families, drivers/controllers, policies, RHS wrappers, domains,
   coefficient/history objects, and helpers.  It should encode at least:
-  `VODEController` owns adaptive Nordsieck control; `Integrator` owns the
-  generic integrator/controller advance loop; `ConstraintAwareController` owns
+  adaptive Nordsieck control with stiffness switching resolves to the single
+  adaptive Nordsieck controller; `Integrator` owns the generic
+  integrator/controller advance loop; `ConstraintAwareController` owns
   reaction-network constraint lifecycle advancement; `OrderSelector` and
-  `StiffnessSwitcher` are policies, not competing controllers.
+  `StiffnessSwitcher` are policies, not selectable competing controllers.
+- **Time-integrator capability registry.**  The first implementation PR should
+  introduce the time-integrator capability declarations and selection API in the
+  smallest useful form.  It may start by wrapping or replacing the current
+  `AutoIntegrator` dispatch so branch choice follows declared properties rather
+  than ad hoc class names and `isinstance` ordering.  The registry should be
+  narrow enough to avoid speculative generality but general enough that solvers
+  and decompositions can reuse the pattern later.
 - **Time-integrator anti-duplication guard.**  The time-integrator map forbids
   retired wrapper names including `VariableOrderNordsieckIntegrator` and
   `FamilySwitchingNordsieckIntegrator`.  If the first implementation discovers
   other same-level overlaps or ambiguous ownership, fix the code or update the
   map in the same PR rather than documenting the ambiguity as acceptable.
-- **Generalization path.**  The structure-claim machinery is documented in code
-  well enough for later PRs to add maps for solvers, decompositions, discrete
-  operators, geometry, and autotuning without copying test logic.
+- **Generalization path.**  The capability/ownership claim machinery is
+  documented in code well enough for later PRs to add registries or maps for
+  solvers, decompositions, discrete operators, geometry, and autotuning without
+  copying test logic.
 
 Recommended PR sequence:
 
-1. Add the reusable ownership-claim machinery to `tests/test_structure.py` and
-   implement the time-integrator ownership map.  Fix any time-integrator
-   ownership gaps, overlaps, unclear public class names, or class/module naming
-   mismatches the claim exposes.
-2. Add ownership maps for linear solvers and decompositions, reusing the same
-   claim machinery.
-3. Add ownership maps for discrete operators and geometry/theory boundaries,
+1. Add time-integrator capability declarations, a minimal capability-selection
+   API, and reusable structure claims in `tests/test_structure.py` that verify
+   category coverage, dispatch uniqueness or explicit priority, forbidden
+   symbols, ownership-revealing class names, and class/module naming alignment.
+   Fix any time-integrator ownership gaps or overlaps the claims expose.
+2. Move `AutoIntegrator` onto the capability-selection path, or remove any
+   remaining ad hoc dispatch that competes with the registry.  Rename ambiguous
+   time-integrator classes or modules if the ownership claims expose unclear
+   names.
+3. Add capability/ownership maps for linear solvers and decompositions,
    reusing the same claim machinery.
+4. Add capability/ownership maps for discrete operators and geometry/theory
+   boundaries, reusing the same claim machinery.
 
 ---
 
