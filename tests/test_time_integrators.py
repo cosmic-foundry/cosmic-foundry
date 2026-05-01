@@ -408,6 +408,306 @@ class _BatchedDecayCorrectnessClaim(Claim[ExecutionPlan]):
         ).format()
 
 
+class _BatchedOscillatorCorrectnessClaim(Claim[ExecutionPlan]):
+    """Accuracy claim for independent harmonic oscillators in one Tensor state."""
+
+    _DT = 0.01
+    _T_END = 0.4
+    _ORDER = 4
+    _TOL = 1e-6
+    _FMAS_PER_LANE_STEP = 128.0
+
+    @property
+    def description(self) -> str:
+        return "correctness/batched_tensor/rk4_oscillator"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        steps = round(self._T_END / self._DT)
+        max_batch = 512 if execution_plan.device_kind == "gpu" else 32
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=steps * self._ORDER * self._FMAS_PER_LANE_STEP,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        batch = len(lane_indices)
+        backend = execution_plan.backend
+        matrix = [[0.0 for _ in range(2 * batch)] for _ in range(2 * batch)]
+        for i in range(batch):
+            matrix[i][batch + i] = -1.0
+            matrix[batch + i][i] = 1.0
+        q0 = [1.0 + 0.05 * math.sin(i) for i in lane_indices]
+        p0 = [0.1 * math.cos(i) for i in lane_indices]
+        u0 = Tensor(q0 + p0, backend=backend)
+        operator = Tensor(matrix, backend=backend)
+        rhs = _ti.BlackBoxRHS(lambda t, u: operator @ u)
+        state = _run(
+            _ti.RungeKuttaIntegrator(self._ORDER), rhs, u0, self._DT, self._T_END
+        )
+        state.u.sync()
+        actual = state.u.to_list()
+        cos_t = math.cos(state.t)
+        sin_t = math.sin(state.t)
+        errors = []
+        expected_pairs = []
+        actual_pairs = []
+        for i, (q_initial, p_initial) in enumerate(zip(q0, p0, strict=True)):
+            expected_q = q_initial * cos_t - p_initial * sin_t
+            expected_p = q_initial * sin_t + p_initial * cos_t
+            actual_q = float(actual[i])
+            actual_p = float(actual[batch + i])
+            expected_pairs.append((expected_q, expected_p))
+            actual_pairs.append((actual_q, actual_p))
+            errors.append(max(abs(actual_q - expected_q), abs(actual_p - expected_p)))
+        local_worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        batch_index = lane_indices[local_worst_i]
+        assert worst_error < self._TOL, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=batch_index,
+            method="RungeKuttaIntegrator",
+            order=self._ORDER,
+            problem="harmonic_oscillator",
+            parameters={
+                "dt": self._DT,
+                "t_end": self._T_END,
+                "q0": q0[local_worst_i],
+                "p0": p0[local_worst_i],
+            },
+            actual=actual_pairs[local_worst_i],
+            expected=expected_pairs[local_worst_i],
+            error=worst_error,
+            tolerance=self._TOL,
+        ).format()
+
+
+class _BatchedStiffDecayCorrectnessClaim(Claim[ExecutionPlan]):
+    """Accuracy claim for independent IMEX stiff decays in one Tensor state."""
+
+    _DT = 0.005
+    _T_END = 0.1
+    _ORDER = 2
+    _TOL = 5e-4
+    _FMAS_PER_LANE_STEP = 512.0
+
+    @property
+    def description(self) -> str:
+        return "correctness/batched_tensor/imex_stiff_decay"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        steps = round(self._T_END / self._DT)
+        max_batch = 128 if execution_plan.device_kind == "gpu" else 16
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=steps * self._ORDER * self._FMAS_PER_LANE_STEP,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        backend = execution_plan.backend
+        rates = [8.0 + 24.0 * i / max(source_batch - 1, 1) for i in lane_indices]
+        u0_values = [1.0 + 0.05 * math.sin(i) for i in lane_indices]
+        explicit = Tensor(
+            [
+                [-0.2 * rate if i == j else 0.0 for j, rate in enumerate(rates)]
+                for i in range(len(rates))
+            ],
+            backend=backend,
+        )
+        implicit = Tensor(
+            [
+                [-0.8 * rate if i == j else 0.0 for j, rate in enumerate(rates)]
+                for i in range(len(rates))
+            ],
+            backend=backend,
+        )
+        rhs = _ti.SplitRHS(
+            lambda t, u: explicit @ u,
+            lambda t, u: implicit @ u,
+            lambda t, u: implicit,
+        )
+        state = _run(
+            _ti.AdditiveRungeKuttaIntegrator(self._ORDER),
+            rhs,
+            Tensor(u0_values, backend=backend),
+            self._DT,
+            self._T_END,
+        )
+        state.u.sync()
+        actual = state.u.to_list()
+        expected = [
+            u0_i * math.exp(-rate_i * state.t)
+            for u0_i, rate_i in zip(u0_values, rates, strict=True)
+        ]
+        errors = [abs(float(a) - e) for a, e in zip(actual, expected, strict=True)]
+        local_worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        batch_index = lane_indices[local_worst_i]
+        assert worst_error < self._TOL, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=batch_index,
+            method="AdditiveRungeKuttaIntegrator",
+            order=self._ORDER,
+            problem="stiff_decay",
+            parameters={
+                "dt": self._DT,
+                "t_end": self._T_END,
+                "rate": rates[local_worst_i],
+                "u0": u0_values[local_worst_i],
+            },
+            actual=actual[local_worst_i],
+            expected=expected[local_worst_i],
+            error=worst_error,
+            tolerance=self._TOL,
+        ).format()
+
+
+class _BatchedSemilinearCorrectnessClaim(Claim[ExecutionPlan]):
+    """Accuracy claim for independent Lawson semilinear forcing lanes."""
+
+    _DT = 0.02
+    _T_END = 0.4
+    _ORDER = 4
+    _TOL = 1e-6
+    _FMAS_PER_LANE_STEP = 384.0
+
+    @property
+    def description(self) -> str:
+        return "correctness/batched_tensor/lawson_semilinear_forcing"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        steps = round(self._T_END / self._DT)
+        max_batch = 128 if execution_plan.device_kind == "gpu" else 16
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=steps * self._ORDER * self._FMAS_PER_LANE_STEP,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        backend = execution_plan.backend
+        batch = len(lane_indices)
+        linear = Tensor(
+            [[-2.0 if i == j else 0.0 for j in range(batch)] for i in range(batch)],
+            backend=backend,
+        )
+        u0_values = [1.0 + 0.05 * math.sin(i) for i in lane_indices]
+        rhs = _ti.SemilinearRHS(
+            linear,
+            lambda t, u: Tensor([math.sin(t)] * batch, backend=u.backend),
+        )
+        state = _run(
+            _ti.LawsonRungeKuttaIntegrator(self._ORDER),
+            rhs,
+            Tensor(u0_values, backend=backend),
+            self._DT,
+            self._T_END,
+        )
+        state.u.sync()
+        actual = state.u.to_list()
+        forced = _exact_semilinear(state.t)[0] - math.exp(-2.0 * state.t)
+        expected = [u0_i * math.exp(-2.0 * state.t) + forced for u0_i in u0_values]
+        errors = [abs(float(a) - e) for a, e in zip(actual, expected, strict=True)]
+        local_worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        batch_index = lane_indices[local_worst_i]
+        assert worst_error < self._TOL, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=batch_index,
+            method="LawsonRungeKuttaIntegrator",
+            order=self._ORDER,
+            problem="semilinear_forcing",
+            parameters={
+                "dt": self._DT,
+                "t_end": self._T_END,
+                "u0": u0_values[local_worst_i],
+            },
+            actual=actual[local_worst_i],
+            expected=expected[local_worst_i],
+            error=worst_error,
+            tolerance=self._TOL,
+        ).format()
+
+
+class _BatchedAdaptiveDecayCorrectnessClaim(Claim[ExecutionPlan]):
+    """Accuracy claim for an embedded RK method driven by PIController."""
+
+    _T_END = 0.4
+    _ORDER = 5
+    _TOL = 5e-6
+    _FMAS_PER_LANE = 4096.0
+
+    @property
+    def description(self) -> str:
+        return "correctness/batched_tensor/pi_adaptive_decay"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        max_batch = 128 if execution_plan.device_kind == "gpu" else 16
+        source_batch = execution_plan.batch_size_for(
+            fmas_per_case=self._FMAS_PER_LANE,
+            min_batch=4,
+            max_batch=max_batch,
+        )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
+        backend = execution_plan.backend
+        rates = [0.2 + 1.8 * i / max(source_batch - 1, 1) for i in lane_indices]
+        u0_values = [1.0 + 0.1 * math.sin(i) for i in lane_indices]
+        matrix = Tensor(
+            [
+                [-rate if i == j else 0.0 for j, rate in enumerate(rates)]
+                for i in range(len(rates))
+            ],
+            backend=backend,
+        )
+        rhs = _ti.BlackBoxRHS(lambda t, u: matrix @ u)
+        controller = _ti.PIController(
+            alpha=0.7 / self._ORDER,
+            beta=0.4 / self._ORDER,
+            tol=self._TOL,
+            dt0=0.05,
+            factor_max=2.0,
+        )
+        state = _ti.Integrator(
+            _ti.RungeKuttaIntegrator(self._ORDER), controller=controller
+        ).advance(rhs, Tensor(u0_values, backend=backend), 0.0, self._T_END)
+        state.u.sync()
+        actual = state.u.to_list()
+        expected = [
+            u0_i * math.exp(-rate_i * state.t)
+            for u0_i, rate_i in zip(u0_values, rates, strict=True)
+        ]
+        errors = [abs(float(a) - e) for a, e in zip(actual, expected, strict=True)]
+        local_worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        batch_index = lane_indices[local_worst_i]
+        assert worst_error < self._TOL, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=batch_index,
+            method="RungeKuttaIntegrator+PIController",
+            order=self._ORDER,
+            problem="adaptive_scalar_decay",
+            parameters={
+                "t_end": self._T_END,
+                "rate": rates[local_worst_i],
+                "u0": u0_values[local_worst_i],
+            },
+            actual=actual[local_worst_i],
+            expected=expected[local_worst_i],
+            error=worst_error,
+            tolerance=self._TOL,
+        ).format()
+
+
 class _PerformanceClaim(Claim[_IntegratorCalibration]):
     """Cost-to-accuracy claim against locally measured primitive rooflines."""
 
@@ -501,7 +801,10 @@ _CI_SPECS = _chain_specs(range(3, 5)) + _spoke_specs(range(3, 7), [1, 10])
 
 def _ode_correctness_specs() -> list[_CorrectnessSpec]:
     specs = []
+    batched_names = {"jac_decay1", "split_decay1", "semilinear1", "osc2"}
     for name, u0, _n, exact, _mass, rhs in _PROBS:
+        if name in batched_names:
+            continue
         specs.append(
             _CorrectnessSpec(
                 name=name,
@@ -789,6 +1092,10 @@ _CONV_CLAIMS: list[Claim[None]] = [
 _OFF_SPECS = _chain_specs(range(5, 12)) + _spoke_specs(range(7, 22), [1, 10, 100])
 _CORRECT_CLAIMS: list[Claim[Any]] = [
     _BatchedDecayCorrectnessClaim(),
+    _BatchedOscillatorCorrectnessClaim(),
+    _BatchedStiffDecayCorrectnessClaim(),
+    _BatchedSemilinearCorrectnessClaim(),
+    _BatchedAdaptiveDecayCorrectnessClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
