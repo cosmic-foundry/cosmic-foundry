@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+import sympy
 
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.backends import (
@@ -365,6 +366,22 @@ def _rk_order_conditions_check() -> None:
             ), f"RK{q}: failed tree {tree}"
 
 
+def _implicit_rk_orders_check() -> None:
+    """Implicit RK tableaux and stage solvers converge at orders 1 through 6."""
+    rhs = _scalar_decay_jacobian_rhs()
+    for q in range(1, 7):
+        inst = _ti.ImplicitRungeKuttaIntegrator(q)
+        for tree in _ti.trees_up_to_order(q):
+            assert (
+                sympy.simplify(
+                    _ti.elementary_weight(tree, inst.A_sym, inst.b_sym)
+                    - 1 / _ti.gamma(tree)
+                )
+                == 0
+            ), f"implicit RK{q}: failed tree {tree}"
+        _assert_scalar_decay_order(inst, rhs, q)
+
+
 def _scalar_decay_rhs() -> _ti.BlackBoxRHS:
     return _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend))
 
@@ -542,6 +559,7 @@ _NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS]
 
 _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_rk_order_conditions_check, "rk/order_conditions_1_6"),
+    _BehaviorClaim(_implicit_rk_orders_check, "implicit_rk/orders_1_6"),
     _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
     _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
     _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),

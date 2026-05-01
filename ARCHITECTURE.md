@@ -487,9 +487,10 @@ RungeKuttaIntegrator             — Butcher-tableau explicit RK (orders 1–6)
                                    instances: forward_euler(1), midpoint(2), heun(2),
                                    ralston(2), rk4(4), bogacki_shampine(3,embedded),
                                    dormand_prince(5,embedded), butcher_6(6)
-ImplicitRungeKuttaIntegrator     — diagonally implicit RK
+ImplicitRungeKuttaIntegrator     — implicit RK
                                    instances: backward_euler(1), implicit_midpoint(2),
-                                   crouzeix_3(3)
+                                   crouzeix_3(3), gauss_legendre_2_stage(4),
+                                   radau_iia_3_stage(5), gauss_legendre_3_stage(6)
 AdditiveRungeKuttaIntegrator     — additive RK (paired explicit + implicit tableaux)
                                    instances: ars222(2)
 ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
