@@ -1,7 +1,7 @@
-"""Diagonally Implicit Runge-Kutta (DIRK / SDIRK) integrators.
+"""Implicit Runge-Kutta integrators.
 
-DIRK methods share the same Butcher tableau structure as explicit RK but allow
-non-zero diagonal entries in A.  Each stage kᵢ solves the implicit equation
+Orders 1-3 use diagonally implicit RK (DIRK / SDIRK) tableaux, where each stage
+kᵢ solves the implicit equation
 
     kᵢ = f(tₙ + cᵢh, uₙ + h·Σⱼ≤ᵢ Aᵢⱼkⱼ)
 
@@ -12,25 +12,32 @@ system at each stage is
 
 where γᵢ = Aᵢᵢ and y_exp = uₙ + h·Σⱼ<ᵢ Aᵢⱼkⱼ is the explicit part.
 
+Orders 4-6 use coupled collocation implicit RK methods.  The unknowns are the
+stage values Yᵢ themselves and Newton iteration solves the full block system
+
+    Yᵢ − uₙ − h·Σⱼ Aᵢⱼ f(tₙ + cⱼh, Yⱼ) = 0.
+
 B-series order conditions are identical to explicit RK — the same rooted-tree
-framework from bseries.py applies unchanged, since the algebraic order
-conditions depend only on the tableau entries (A, b, c), not on the implicit
-vs. explicit character of individual stages.
+framework from bseries.py applies unchanged.
 
 The canonical tableau for each order is:
     1 — backward Euler (L-stable)
     2 — implicit midpoint (A-stable, energy-conserving; Gauss-Legendre)
     3 — Crouzeix 1979, 2-stage L-stable SDIRK, γ = (3 + √3) / 6
+    4 — 2-stage Gauss-Legendre collocation
+    5 — 3-stage Radau IIA collocation
+    6 — 3-stage Gauss-Legendre collocation
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
+from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators._newton import newton_solve
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -139,13 +146,79 @@ def _build_dirk_tableaux() -> dict:
 
 
 _DIRK_TABLEAUX = _build_dirk_tableaux()
+_LU = LUFactorization()
+
+
+def _build_collocation_tableaux() -> dict:
+    sqrt3 = sympy.sqrt(3)
+    sqrt6 = sympy.sqrt(6)
+    sqrt15 = sympy.sqrt(15)
+    return {
+        4: dict(
+            A=[
+                [sympy.Rational(1, 4), sympy.Rational(1, 4) - sqrt3 / 6],
+                [sympy.Rational(1, 4) + sqrt3 / 6, sympy.Rational(1, 4)],
+            ],
+            b=[sympy.Rational(1, 2), sympy.Rational(1, 2)],
+            c=[sympy.Rational(1, 2) - sqrt3 / 6, sympy.Rational(1, 2) + sqrt3 / 6],
+        ),
+        5: dict(
+            A=[
+                [
+                    (88 - 7 * sqrt6) / 360,
+                    (296 - 169 * sqrt6) / 1800,
+                    (-2 + 3 * sqrt6) / 225,
+                ],
+                [
+                    (296 + 169 * sqrt6) / 1800,
+                    (88 + 7 * sqrt6) / 360,
+                    (-2 - 3 * sqrt6) / 225,
+                ],
+                [
+                    (16 - sqrt6) / 36,
+                    (16 + sqrt6) / 36,
+                    sympy.Rational(1, 9),
+                ],
+            ],
+            b=[(16 - sqrt6) / 36, (16 + sqrt6) / 36, sympy.Rational(1, 9)],
+            c=[(4 - sqrt6) / 10, (4 + sqrt6) / 10, sympy.Integer(1)],
+        ),
+        6: dict(
+            A=[
+                [
+                    sympy.Rational(5, 36),
+                    sympy.Rational(2, 9) - sqrt15 / 15,
+                    sympy.Rational(5, 36) - sqrt15 / 30,
+                ],
+                [
+                    sympy.Rational(5, 36) + sqrt15 / 24,
+                    sympy.Rational(2, 9),
+                    sympy.Rational(5, 36) - sqrt15 / 24,
+                ],
+                [
+                    sympy.Rational(5, 36) + sqrt15 / 30,
+                    sympy.Rational(2, 9) + sqrt15 / 15,
+                    sympy.Rational(5, 36),
+                ],
+            ],
+            b=[sympy.Rational(5, 18), sympy.Rational(4, 9), sympy.Rational(5, 18)],
+            c=[
+                sympy.Rational(1, 2) - sqrt15 / 10,
+                sympy.Rational(1, 2),
+                sympy.Rational(1, 2) + sqrt15 / 10,
+            ],
+        ),
+    }
+
+
+_COLLOCATION_TABLEAUX = _build_collocation_tableaux()
 
 
 class ImplicitRungeKuttaIntegrator(TimeIntegrator):
-    """Diagonally Implicit Runge-Kutta method selected by convergence order.
+    """Implicit Runge-Kutta method selected by convergence order.
 
-    Each stage of a DIRK step is solved by Newton iteration using the
-    supplied LU factorizer to resolve the linear system at each Newton step.
+    Orders 1-3 use sequential DIRK stage solves.  Orders 4-6 use coupled
+    collocation stage solves over the full block system.
     Coefficients are stored as sympy.Rational (or general sympy expressions
     for irrational entries) for B-series verification, and as Python floats
     for numerical evaluation.
@@ -154,20 +227,24 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         1 — backward Euler (L-stable)
         2 — implicit midpoint (A-stable, energy-conserving)
         3 — Crouzeix 1979, 2-stage L-stable SDIRK
+        4 — 2-stage Gauss-Legendre collocation
+        5 — 3-stage Radau IIA collocation
+        6 — 3-stage Gauss-Legendre collocation
 
     Parameters
     ----------
     order:
-        Convergence order.  Must be one of {1, 2, 3}.
+        Convergence order.  Must be one of {1, 2, 3, 4, 5, 6}.
     """
 
     def __init__(self, order: int) -> None:
-        if order not in _DIRK_TABLEAUX:
+        tableaux = _DIRK_TABLEAUX | _COLLOCATION_TABLEAUX
+        if order not in tableaux:
             raise ValueError(
                 f"ImplicitRungeKuttaIntegrator order must be one of "
-                f"{sorted(_DIRK_TABLEAUX)}, got {order}"
+                f"{sorted(tableaux)}, got {order}"
             )
-        tab = _DIRK_TABLEAUX[order]
+        tab = tableaux[order]
         A, b, c = tab["A"], tab["b"], tab["c"]
 
         self._A_sym = [[sympy.sympify(a) for a in row] for row in A]
@@ -179,6 +256,7 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         self._b_f = [float(bi) for bi in self._b_sym]
         self._c_f = [float(ci) for ci in self._c_sym]
         self._s = len(b)
+        self._coupled = order in _COLLOCATION_TABLEAUX
 
     @property
     def order(self) -> int:
@@ -228,6 +306,13 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
                 "ImplicitRungeKuttaIntegrator requires a WithJacobianRHSProtocol; "
                 f"got {type(rhs)}"
             )
+        if self._coupled:
+            if constraint_gradients is not None:
+                raise ValueError(
+                    "constraint-projected Newton is only implemented for DIRK orders"
+                )
+            return self._step_coupled(rhs, state, dt)
+
         t, u = state.t, state.u
         k: list[Tensor] = []
 
@@ -252,6 +337,93 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         for i in range(self._s):
             u_new = u_new + (self._b_f[i] * dt) * k[i]
         return state._replace(t=t + dt, u=u_new, dt=dt, err=0.0, history=None)
+
+    def _step_coupled(
+        self,
+        rhs: WithJacobianRHSProtocol,
+        state: ODEState,
+        dt: float,
+    ) -> ODEState:
+        """Advance one fully implicit collocation step by block Newton."""
+        t, u = state.t, state.u
+        n = u.shape[0]
+        s = self._s
+        backend = u.backend
+        f0 = rhs(t, u)
+        stages = [u + (self._c_f[i] * dt) * f0 for i in range(s)]
+        stage_times = [t + c_i * dt for c_i in self._c_f]
+
+        for _ in range(50):
+            f_vals = [rhs(stage_times[i], stages[i]) for i in range(s)]
+            jac_vals = [rhs.jacobian(stage_times[i], stages[i]) for i in range(s)]
+
+            residual_blocks: list[Tensor] = []
+            for i in range(s):
+                residual = stages[i] - u
+                for j in range(s):
+                    residual = residual - (self._A_f[i][j] * dt) * f_vals[j]
+                residual_blocks.append(residual)
+            residual_vec = _flatten_blocks(residual_blocks)
+            if float(norm(residual_vec)) < 1e-12 * (
+                1.0 + sum(float(norm(stage)) for stage in stages)
+            ):
+                break
+
+            matrix_rows: list[list[float]] = []
+            for i in range(s):
+                for row in range(n):
+                    matrix_row: list[float] = []
+                    for j in range(s):
+                        a_ij = self._A_f[i][j]
+                        J_j = jac_vals[j]
+                        for col in range(n):
+                            identity = 1.0 if i == j and row == col else 0.0
+                            matrix_row.append(
+                                identity - dt * a_ij * float(J_j[row, col])
+                            )
+                    matrix_rows.append(matrix_row)
+
+            delta_vec = _LU.factorize(Tensor(matrix_rows, backend=backend)).solve(
+                Tensor.zeros(s * n, backend=backend) - residual_vec
+            )
+            deltas = _unflatten_blocks(delta_vec, s, n, backend=backend)
+            stages = [
+                stage + delta for stage, delta in zip(stages, deltas, strict=True)
+            ]
+            if float(norm(delta_vec)) < 1e-12 * (
+                1.0 + sum(float(norm(stage)) for stage in stages)
+            ):
+                break
+
+        f_vals = [rhs(stage_times[i], stages[i]) for i in range(s)]
+        u_new = u
+        for i in range(s):
+            u_new = u_new + (self._b_f[i] * dt) * f_vals[i]
+        return state._replace(t=t + dt, u=u_new, dt=dt, err=0.0, history=None)
+
+
+def _flatten_blocks(blocks: list[Tensor]) -> Tensor:
+    backend = blocks[0].backend
+    return Tensor(
+        [float(block[i]) for block in blocks for i in range(block.shape[0])],
+        backend=backend,
+    )
+
+
+def _unflatten_blocks(
+    vec: Tensor,
+    n_blocks: int,
+    block_size: int,
+    *,
+    backend: Any,
+) -> list[Tensor]:
+    return [
+        Tensor(
+            [float(vec[b * block_size + i]) for i in range(block_size)],
+            backend=backend,
+        )
+        for b in range(n_blocks)
+    ]
 
 
 # ---------------------------------------------------------------------------

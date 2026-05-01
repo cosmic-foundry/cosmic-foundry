@@ -9,7 +9,7 @@ from cosmic_foundry.computation.time_integrators.constraint_aware import (
     build_constraint_gradients,
 )
 from cosmic_foundry.computation.time_integrators.exponential import (
-    CoxMatthewsETDRK4Integrator,
+    LawsonRungeKuttaIntegrator,
     SemilinearRHSProtocol,
 )
 from cosmic_foundry.computation.time_integrators.imex import (
@@ -79,13 +79,13 @@ class AutoIntegrator(TimeIntegrator):
     ----------
     order:
         Convergence order threaded through all branches.  Branches whose
-        algorithm family does not support this order (e.g. ETD4RK only at
-        order 4, IMEX only at order 2, symplectic only at {1,2,4,6,8}) are
+        algorithm family does not support this order (e.g. IMEX only through
+        order 4, symplectic only at {1,2,4,6}) are
         unavailable and raise ``ValueError`` on dispatch.
     explicit:
         Override for the explicit RK branch.
     semilinear:
-        Override for the ETD exponential branch.
+        Override for the semilinear exponential branch.
     symplectic:
         Override for the symplectic Hamiltonian branch.
     composition:
@@ -101,7 +101,7 @@ class AutoIntegrator(TimeIntegrator):
         order: int,
         *,
         explicit: RungeKuttaIntegrator | None = None,
-        semilinear: CoxMatthewsETDRK4Integrator | None = None,
+        semilinear: LawsonRungeKuttaIntegrator | None = None,
         symplectic: SymplecticCompositionIntegrator | None = None,
         composition: CompositionIntegrator | None = None,
         split: AdditiveRungeKuttaIntegrator | None = None,
@@ -111,10 +111,10 @@ class AutoIntegrator(TimeIntegrator):
         self._explicit: RungeKuttaIntegrator | None = (
             explicit if explicit is not None else _try(RungeKuttaIntegrator, order)
         )
-        self._semilinear: CoxMatthewsETDRK4Integrator | None = (
+        self._semilinear: LawsonRungeKuttaIntegrator | None = (
             semilinear
             if semilinear is not None
-            else _try(CoxMatthewsETDRK4Integrator, order)
+            else _try(LawsonRungeKuttaIntegrator, order)
         )
         self._symplectic: SymplecticCompositionIntegrator | None = (
             symplectic
@@ -141,9 +141,13 @@ class AutoIntegrator(TimeIntegrator):
     def step(self, rhs: RHSProtocol, state: ODEState, dt: float) -> ODEState:
         """Advance one step with the branch selected by ``rhs`` structure."""
         if isinstance(rhs, SemilinearRHSProtocol):
-            return _require(self._semilinear, "semilinear", self._order).step(
-                rhs, state, dt
-            )
+            branch = self._semilinear
+            if branch is None:
+                raise ValueError(
+                    f"AutoIntegrator(order={self._order}) has no semilinear "
+                    "branch at this order"
+                )
+            return branch.step(rhs, state, dt)
         if isinstance(rhs, HamiltonianRHSProtocol):
             return _require(self._symplectic, "symplectic", self._order).step(
                 rhs, state, dt

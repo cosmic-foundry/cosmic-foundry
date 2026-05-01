@@ -56,6 +56,20 @@ def _build_rk_tableaux() -> dict:
             ],
             c=[0, "1/5", "3/10", "4/5", "8/9", 1, 1],
         ),
+        # Butcher's 7-stage sixth-order explicit RK method.
+        6: dict(
+            A=[
+                [0, 0, 0, 0, 0, 0, 0],
+                ["1/3", 0, 0, 0, 0, 0, 0],
+                [0, "2/3", 0, 0, 0, 0, 0],
+                ["1/12", "1/3", "-1/12", 0, 0, 0, 0],
+                ["-1/16", "9/8", "-3/16", "-3/8", 0, 0, 0],
+                [0, "9/8", "-3/8", "-3/4", "1/2", 0, 0],
+                ["9/44", "-9/11", "63/44", "18/11", 0, "-16/11", 0],
+            ],
+            b=["11/120", 0, "27/40", "27/40", "-4/15", "-4/15", "11/120"],
+            c=[0, "1/3", "2/3", "1/3", "1/2", "1/2", 1],
+        ),
     }
 
 
@@ -76,6 +90,7 @@ class RungeKuttaIntegrator(TimeIntegrator):
         3 — Bogacki-Shampine BS23 (4-stage FSAL, embedded pair at order 2)
         4 — classical RK4
         5 — Dormand-Prince DOPRI5 (7-stage FSAL, embedded pair at order 4)
+        6 — Butcher 7-stage sixth-order method
 
     For orders 3 and 5, the embedded lower-order solution is computed during
     each step at no extra cost; the L² error estimate is stored in ODEState.err
@@ -88,7 +103,7 @@ class RungeKuttaIntegrator(TimeIntegrator):
     Parameters
     ----------
     order:
-        Convergence order.  Must be one of {1, 2, 3, 4, 5}.
+        Convergence order.  Must be one of {1, 2, 3, 4, 5, 6}.
     """
 
     def __init__(self, order: int) -> None:

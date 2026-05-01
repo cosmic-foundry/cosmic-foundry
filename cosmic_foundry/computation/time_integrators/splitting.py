@@ -1,4 +1,4 @@
-"""Operator-splitting integrators: Lie and Strang."""
+"""Operator-splitting integrators: Lie, Strang, and Yoshida compositions."""
 
 from __future__ import annotations
 
@@ -58,7 +58,39 @@ def _strang_steps() -> list[_SplittingStep]:
     return [_SplittingStep(0, 0.5), _SplittingStep(1, 1.0), _SplittingStep(0, 0.5)]
 
 
-def _yoshida_steps() -> list[_SplittingStep]:
+def _merge_steps(steps: list[_SplittingStep]) -> list[_SplittingStep]:
+    """Merge adjacent substeps for the same component."""
+    merged: list[_SplittingStep] = []
+    for step in steps:
+        if merged and merged[-1].component_index == step.component_index:
+            previous = merged[-1]
+            merged[-1] = _SplittingStep(
+                previous.component_index, previous.weight + step.weight
+            )
+        else:
+            merged.append(step)
+    return [step for step in merged if step.weight != 0.0]
+
+
+def _scale_steps(steps: list[_SplittingStep], scale: float) -> list[_SplittingStep]:
+    """Return ``steps`` with every time-weight multiplied by ``scale``."""
+    return [_SplittingStep(step.component_index, scale * step.weight) for step in steps]
+
+
+def _triple_jump_steps(
+    base: list[_SplittingStep],
+    *,
+    exponent: float,
+) -> list[_SplittingStep]:
+    """Lift a symmetric splitting by two orders via Yoshida triple jump."""
+    w1 = 1.0 / (2.0 - 2.0**exponent)
+    w0 = 1.0 - 2.0 * w1
+    return _merge_steps(
+        _scale_steps(base, w1) + _scale_steps(base, w0) + _scale_steps(base, w1)
+    )
+
+
+def _yoshida4_steps() -> list[_SplittingStep]:
     """Yoshida 4th-order triple-jump splitting sequence for two components.
 
     Constructs S₄(h) = S₂(w₁h) ∘ S₂(w₀h) ∘ S₂(w₁h) where S₂ is the
@@ -75,23 +107,19 @@ def _yoshida_steps() -> list[_SplittingStep]:
     must handle negative ``dt`` correctly; this holds for any method applied to
     a time-reversible operator.
     """
-    w1 = 1.0 / (2.0 - 2.0 ** (1.0 / 3.0))
-    w0 = 1.0 - 2.0 * w1
-    half_sum = (w1 + w0) / 2.0
-    return [
-        _SplittingStep(0, w1 / 2.0),
-        _SplittingStep(1, w1),
-        _SplittingStep(0, half_sum),
-        _SplittingStep(1, w0),
-        _SplittingStep(0, half_sum),
-        _SplittingStep(1, w1),
-        _SplittingStep(0, w1 / 2.0),
-    ]
+    return _triple_jump_steps(_strang_steps(), exponent=1.0 / 3.0)
+
+
+def _yoshida6_steps() -> list[_SplittingStep]:
+    """Yoshida 6th-order triple-jump composition of the 4th-order splitter."""
+    return _triple_jump_steps(_yoshida4_steps(), exponent=1.0 / 5.0)
 
 
 _SPLITTING_SEQUENCES: dict[int, list[_SplittingStep]] = {
+    1: [_SplittingStep(0, 1.0), _SplittingStep(1, 1.0)],
     2: _strang_steps(),
-    4: _yoshida_steps(),
+    4: _yoshida4_steps(),
+    6: _yoshida6_steps(),
 }
 
 
@@ -104,8 +132,10 @@ class CompositionIntegrator(TimeIntegrator):
     integrator at multiple positions is allowed.
 
     The splitting sequence is selected by ``order``:
+        1 — Lie splitting (AB)
         2 — Strang symmetric splitting (ABA)
         4 — Yoshida triple-jump composition of order-2 Strang
+        6 — Yoshida triple-jump composition of order-4 splitting
 
     Parameters
     ----------
@@ -114,7 +144,7 @@ class CompositionIntegrator(TimeIntegrator):
         substeps whose component index is ``i``.
     order:
         Declared convergence order of the splitting scheme.  Must be one of
-        {2, 4}.
+        {1, 2, 4, 6}.
     """
 
     def __init__(

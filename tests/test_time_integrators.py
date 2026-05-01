@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+import sympy
 
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.backends import (
@@ -144,7 +145,7 @@ def _build_probs() -> list:
     ]
 
 
-_ORDERS = [1, 2, 3, 4, 5]
+_ORDERS = [1, 2, 3, 4, 5, 6]
 _PROBS = _build_probs()
 
 
@@ -238,6 +239,24 @@ class _BehaviorClaim(Claim):
         self._fn()
 
 
+class _UnsupportedClaim(Claim):
+    """Documents an intentionally unsupported order/family combination."""
+
+    def __init__(self, factory: Any, order: int, id_: str) -> None:
+        self._factory = factory
+        self._order = order
+        self._id = id_
+
+    @property
+    def description(self) -> str:
+        return f"unsupported/{self._id}/order{self._order}"
+
+    def check(self) -> None:
+        with pytest.raises(ValueError):
+            self._factory(self._order)
+        pytest.skip(f"{self._id} has no native order {self._order} method")
+
+
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
 
 
@@ -310,26 +329,92 @@ _CI_SPECS = _chain_specs(range(3, 5)) + _spoke_specs(range(3, 7), [1, 10])
 # ── targeted behavior check implementations ───────────────────────────────────
 
 
-def _etd_check() -> None:
-    """ETD4RK convergence against a Richardson-extrapolated reference."""
-    _L = Tensor([[-8.0, 0.0, 0.0], [8.0, -0.5, 0.0], [0.0, 0.5, 0.0]])
+def _semilinear_orders_check() -> None:
+    """Lawson RK semilinear integrators converge at orders 1 through 6."""
+    L = Tensor([[-2.0]])
 
     def _N(t: float, u: Tensor) -> Tensor:
-        r = 0.25 + 0.1 * math.sin(2.0 * t)
-        return Tensor([-r * float(u[0]), 0.0, r * float(u[0])], backend=u.backend)
+        return Tensor([math.sin(t)], backend=u.backend)
 
-    rhs = _ti.SemilinearRHS(_L, _N)
-    t_end = 0.5
-    ref = _run(_ti.CoxMatthewsETDRK4Integrator(4), rhs, _U3, t_end / 128, t_end)
-    t0, dts, errs = time.perf_counter(), [], []
-    for i in range(1, 7):
-        if time.perf_counter() - t0 > _BUDGET:
-            break
-        dt = t_end / 2**i
-        s = _run(_ti.CoxMatthewsETDRK4Integrator(4), rhs, _U3, dt, t_end)
-        errs.append(float(norm(s.u - ref.u)))
-        dts.append(dt)
-    assert _slope(errs, dts) >= 3.5
+    def _exact(t: float) -> tuple[float]:
+        forced = (
+            math.exp(-2.0 * t)
+            * (math.exp(2.0 * t) * (2.0 * math.sin(t) - math.cos(t)) + 1.0)
+            / 5.0
+        )
+        return (math.exp(-2.0 * t) + forced,)
+
+    rhs = _ti.SemilinearRHS(L, _N)
+    for q in range(1, 7):
+        inst = _ti.LawsonRungeKuttaIntegrator(q)
+        dts = [0.2, 0.1, 0.05, 0.025]
+        errs = []
+        for dt in dts:
+            state = _run(inst, rhs, Tensor([1.0]), dt, t_end=1.0)
+            errs.append(_err(state.u, _exact, state.t))
+        assert _slope(errs, dts) >= q - 0.5, f"Lawson RK order {q}"
+
+        auto_state = _run(_ti.AutoIntegrator(q), rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        direct_state = _run(inst, rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        assert float(norm(auto_state.u - direct_state.u)) < 1e-14
+
+
+def _imex_orders_check() -> None:
+    """IMEX additive RK methods converge at orders 1 through 4."""
+    lam_e, lam_i = -0.2, -0.8
+    rhs = _ti.SplitRHS(
+        lambda t, u: Tensor([lam_e * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([lam_i * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([[lam_i]], backend=u.backend),
+    )
+
+    def _exact(t: float) -> tuple[float]:
+        return (math.exp((lam_e + lam_i) * t),)
+
+    for q in range(1, 5):
+        inst = _ti.AdditiveRungeKuttaIntegrator(q)
+        dts = [0.2, 0.1, 0.05, 0.025]
+        errs = []
+        for dt in dts:
+            state = _run(inst, rhs, Tensor([1.0]), dt, t_end=1.0)
+            errs.append(_err(state.u, _exact, state.t))
+        assert _slope(errs, dts) >= q - 0.5, f"IMEX RK order {q}"
+
+        auto_state = _run(_ti.AutoIntegrator(q), rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        direct_state = _run(inst, rhs, Tensor([1.0]), 0.025, t_end=1.0)
+        assert float(norm(auto_state.u - direct_state.u)) < 1e-14
+
+
+def _composition_orders_check() -> None:
+    """Operator splitting supports Lie, Strang, and Yoshida orders 1, 2, 4, 6."""
+
+    def fA(t: float, u: Tensor) -> Tensor:
+        return Tensor([-float(u[1]), 0.0], backend=u.backend)
+
+    def fB(t: float, u: Tensor) -> Tensor:
+        return Tensor([0.0, float(u[0])], backend=u.backend)
+
+    rhs = _ti.CompositeRHS([_ti.BlackBoxRHS(fA), _ti.BlackBoxRHS(fB)])
+    sub_integrators = [_ti.RungeKuttaIntegrator(6), _ti.RungeKuttaIntegrator(6)]
+    for q in (1, 2, 4, 6):
+        inst = _ti.CompositionIntegrator(sub_integrators, q)
+        dts = [0.2, 0.1, 0.05, 0.025]
+        errs = []
+        for dt in dts:
+            state = _run(inst, rhs, _U2, dt, t_end=1.0)
+            errs.append(_err(state.u, _exact_osc, state.t))
+        assert _slope(errs, dts) >= q - 0.5, f"composition order {q}"
+
+        auto_state = _run(_ti.AutoIntegrator(q), rhs, _U2, 0.025, t_end=1.0)
+        if q in (1, 2):
+            auto_slope_target = q - 0.5
+            auto_errs = []
+            for dt in dts:
+                state = _run(_ti.AutoIntegrator(q), rhs, _U2, dt, t_end=1.0)
+                auto_errs.append(_err(state.u, _exact_osc, state.t))
+            assert _slope(auto_errs, dts) >= auto_slope_target
+        else:
+            assert _err(auto_state.u, _exact_osc, auto_state.t) < 1e-5
 
 
 def _nordsieck_check() -> None:
@@ -345,6 +430,98 @@ def _nordsieck_check() -> None:
     assert rescaled.h == nh.h
     for a, b in zip(rescaled.z, nh.z, strict=True):
         assert float(norm(a - b)) < 1e-14
+
+
+def _rk_order_conditions_check() -> None:
+    """Explicit RK tableaux satisfy rooted-tree order conditions through p=6."""
+    for q in range(1, 7):
+        inst = _ti.RungeKuttaIntegrator(q)
+        for tree in _ti.trees_up_to_order(q):
+            assert _ti.elementary_weight(tree, inst.A_sym, inst.b_sym) == (
+                1 / _ti.gamma(tree)
+            ), f"RK{q}: failed tree {tree}"
+
+
+def _implicit_rk_orders_check() -> None:
+    """Implicit RK tableaux and stage solvers converge at orders 1 through 6."""
+    rhs = _scalar_decay_jacobian_rhs()
+    for q in range(1, 7):
+        inst = _ti.ImplicitRungeKuttaIntegrator(q)
+        for tree in _ti.trees_up_to_order(q):
+            assert (
+                sympy.simplify(
+                    _ti.elementary_weight(tree, inst.A_sym, inst.b_sym)
+                    - 1 / _ti.gamma(tree)
+                )
+                == 0
+            ), f"implicit RK{q}: failed tree {tree}"
+        _assert_scalar_decay_order(inst, rhs, q)
+
+
+def _scalar_decay_rhs() -> _ti.BlackBoxRHS:
+    return _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend))
+
+
+def _scalar_decay_jacobian_rhs() -> _ti.JacobianRHS:
+    return _ti.JacobianRHS(
+        lambda t, u: Tensor([-float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([[-1.0]], backend=u.backend),
+    )
+
+
+def _assert_scalar_decay_order(
+    inst: Any, rhs: Any, q: int, *, tol: float = 0.5
+) -> None:
+    dts = [0.1, 0.05, 0.025, 0.0125]
+    errs = []
+    for dt in dts:
+        state = _run(inst, rhs, Tensor([1.0]), dt, t_end=0.96)
+        errs.append(abs(float(state.u[0]) - math.exp(-state.t)))
+    assert _slope(errs, dts) >= q - tol, f"{type(inst).__name__} order {q}"
+
+
+def _explicit_multistep_orders_check() -> None:
+    """Adams-Bashforth fixed-order methods converge at orders 1 through 6."""
+    rhs = _scalar_decay_rhs()
+    for q in range(1, 7):
+        _assert_scalar_decay_order(_ti.ExplicitMultistepIntegrator.for_order(q), rhs, q)
+
+
+def _nordsieck_fixed_orders_check() -> None:
+    """Nordsieck Adams and BDF fixed-order methods are instantiable through order 6."""
+    plain = _scalar_decay_rhs()
+    jac = _scalar_decay_jacobian_rhs()
+    for q in range(1, 7):
+        adams = _ti.MultistepIntegrator("adams", q)
+        bdf = _ti.MultistepIntegrator("bdf", q)
+        assert adams.order == q
+        assert bdf.order == q
+
+        adams_state = adams.init_state(plain, 0.0, Tensor([1.0]), 0.01)
+        bdf_state = bdf.init_state(jac, 0.0, Tensor([1.0]), 0.01)
+        assert adams.step(plain, adams_state, 0.01).history.q == q
+        assert bdf.step(jac, bdf_state, 0.01).history.q == q
+
+
+def _family_switching_nordsieck_orders_check() -> None:
+    """FamilySwitchingNordsieckIntegrator accepts fixed orders 1 through 6."""
+    rhs = _scalar_decay_jacobian_rhs()
+    switcher = _ti.StiffnessSwitcher(stiff_threshold=0.2, nonstiff_threshold=0.05)
+    for q in range(1, 7):
+        for family in ("adams", "bdf"):
+            inst = _ti.FamilySwitchingNordsieckIntegrator(
+                switcher=switcher,
+                q=q,
+                initial_family=family,
+            )
+            state = inst.init_state(rhs, 0.0, Tensor([1.0]), 0.01)
+            stepped = inst.step(rhs, state, 0.01)
+            assert inst.order == q
+            assert stepped.history.q == q
+            assert inst.accepted_families
+
+    with pytest.raises(ValueError):
+        _ti.FamilySwitchingNordsieckIntegrator(switcher=switcher, q=7)
 
 
 def _phi_check() -> None:
@@ -478,13 +655,42 @@ _CONV_CLAIMS: list[Claim] = [
 _NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS]
 
 _BEHAVIOR_CLAIMS: list[Claim] = [
-    _BehaviorClaim(_etd_check, "etd/convergence"),
+    _BehaviorClaim(_rk_order_conditions_check, "rk/order_conditions_1_6"),
+    _BehaviorClaim(_implicit_rk_orders_check, "implicit_rk/orders_1_6"),
+    _BehaviorClaim(_explicit_multistep_orders_check, "adams_bashforth/orders_1_6"),
+    _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
+    _BehaviorClaim(
+        _family_switching_nordsieck_orders_check,
+        "family_switching_nordsieck/orders_1_6",
+    ),
+    _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),
+    _BehaviorClaim(_imex_orders_check, "imex/orders_1_4"),
+    _BehaviorClaim(_composition_orders_check, "composition/orders_1_2_4_6"),
     _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
     _BehaviorClaim(_phi_check, "phi_function/coefficients"),
     _BehaviorClaim(_variable_order_check, "variable_order/climb_and_drop"),
     _BehaviorClaim(_vode_check, "vode/family_switch"),
     _BehaviorClaim(_lifecycle_check, "constraint/lifecycle"),
     _BehaviorClaim(_nse_direct_check, "nse/direct_solve"),
+]
+
+_UNSUPPORTED_CLAIMS: list[Claim] = [
+    *[_UnsupportedClaim(_ti.AdditiveRungeKuttaIntegrator, q, "imex") for q in (5, 6)],
+    *[
+        _UnsupportedClaim(
+            lambda order: _ti.CompositionIntegrator(
+                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+                order,
+            ),
+            q,
+            "composition",
+        )
+        for q in (3, 5)
+    ],
+    *[
+        _UnsupportedClaim(_ti.SymplecticCompositionIntegrator, q, "symplectic")
+        for q in (3, 5, 8)
+    ],
 ]
 
 _OFF_REASON = (
@@ -516,6 +722,13 @@ _BEHAVIOR_IDS = [c.description for c in _BEHAVIOR_CLAIMS]
 
 @pytest.mark.parametrize("claim", _BEHAVIOR_CLAIMS, ids=_BEHAVIOR_IDS)
 def test_behavior(claim: Claim) -> None:
+    claim.check()
+
+
+@pytest.mark.parametrize(
+    "claim", _UNSUPPORTED_CLAIMS, ids=[c.description for c in _UNSUPPORTED_CLAIMS]
+)
+def test_unsupported_order(claim: Claim) -> None:
     claim.check()
 
 

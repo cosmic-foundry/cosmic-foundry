@@ -483,35 +483,36 @@ NordsieckHistory                 — Nordsieck vector (z, h) with rescale_step()
 
 Integrators:
 
-RungeKuttaIntegrator             — Butcher-tableau explicit RK (arbitrary order)
+RungeKuttaIntegrator             — Butcher-tableau explicit RK (orders 1–6)
                                    instances: forward_euler(1), midpoint(2), heun(2),
                                    ralston(2), rk4(4), bogacki_shampine(3,embedded),
-                                   dormand_prince(5,embedded)
-ImplicitRungeKuttaIntegrator     — diagonally implicit RK
+                                   dormand_prince(5,embedded), butcher_6(6)
+ImplicitRungeKuttaIntegrator     — implicit RK
                                    instances: backward_euler(1), implicit_midpoint(2),
-                                   crouzeix_3(3)
+                                   crouzeix_3(3), gauss_legendre_2_stage(4),
+                                   radau_iia_3_stage(5), gauss_legendre_3_stage(6)
 AdditiveRungeKuttaIntegrator     — additive RK (paired explicit + implicit tableaux)
-                                   instances: ars222(2)
+                                   instances: imex_euler(1), ars222(2),
+                                   imex_ssp3_433(3), ark436_l2sa(4)
 ExplicitMultistepIntegrator      — explicit linear multistep (Adams-Bashforth)
-                                   instances: ab2, ab3, ab4
+                                   instances: ab1, ab2, ab3, ab4, ab5, ab6
 MultistepIntegrator              — fixed-order Nordsieck-form BDF / Adams-Moulton
-                                   factories: bdf_family → bdf1–bdf4
-                                              adams_family → adams_moulton1–adams_moulton4
+                                   factories: bdf_family → bdf1–bdf6
+                                              adams_family → adams_moulton1–adams_moulton6
 VariableOrderNordsieckIntegrator — online order selection (OrderSelector)
 FamilySwitchingNordsieckIntegrator
                                  — runtime BDF ↔ Adams-Moulton switching (StiffnessSwitcher)
-ExponentialEulerIntegrator       — ETD-Euler, order 1; instance: etd_euler
-ETDRK2Integrator                 — order 2; instance: etdrk2
-CoxMatthewsETDRK4Integrator      — order 4 (classical); instance: cox_matthews_etdrk4
-KrogstadETDRK4Integrator         — order 4 (stiff-order-correct); instance: krogstad_etdrk4
+LawsonRungeKuttaIntegrator       — integrating-factor RK for semilinear systems
+                                   instances: lawson_rk1–lawson_rk6
 SymplecticCompositionIntegrator  — position-Verlet family for separable Hamiltonian
                                    systems; inherits TimeIntegrator; accepts
                                    HamiltonianRHS with split_index
                                    instances: symplectic_euler(1), leapfrog(2),
-                                   forest_ruth(4), yoshida_6(6), yoshida_8(8)
+                                   forest_ruth(4), yoshida_6(6)
 CompositionIntegrator            — meta-integrator composing sub-integrators;
                                    factories: lie_steps()(1), strang_steps()(2),
-                                   yoshida_steps()(4, negative substep weights)
+                                   yoshida4_steps()(4, negative substep weights),
+                                   yoshida6_steps()(6, negative substep weights)
 
 Controllers:
 

@@ -16,9 +16,12 @@ ODEState.history.
 
 Named instances
 ---------------
+ab1  — order 1, β = [1]
 ab2  — order 2, β = [3/2, −1/2]
 ab3  — order 3, β = [23/12, −16/12, 5/12]
 ab4  — order 4, β = [55/24, −59/24, 37/24, −9/24]
+ab5  — order 5, β = [1901/720, −1387/360, 109/30, −637/360, 251/720]
+ab6  — order 6, β = [4277/1440, −2641/480, 4991/720, −3649/720, 959/480, −95/288]
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator as _RungeKuttaIntegrator,
 )
 
-_rk4 = _RungeKuttaIntegrator(4)
+_bootstrap_rk = _RungeKuttaIntegrator(6)
 
 
 class ExplicitMultistepIntegrator(TimeIntegrator):
@@ -57,9 +60,10 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
         Declared convergence order.
     """
 
-    # Classical Adams-Bashforth quadrature weights for orders 2–4.
+    # Classical Adams-Bashforth quadrature weights for orders 1–6.
     # Keys are order; values are (beta_list, order) ready for __init__.
     _AB: dict[int, list] = {
+        1: [sympy.Rational(1, 1)],
         2: [sympy.Rational(3, 2), sympy.Rational(-1, 2)],
         3: [sympy.Rational(23, 12), sympy.Rational(-16, 12), sympy.Rational(5, 12)],
         4: [
@@ -68,11 +72,26 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
             sympy.Rational(37, 24),
             sympy.Rational(-9, 24),
         ],
+        5: [
+            sympy.Rational(1901, 720),
+            sympy.Rational(-1387, 360),
+            sympy.Rational(109, 30),
+            sympy.Rational(-637, 360),
+            sympy.Rational(251, 720),
+        ],
+        6: [
+            sympy.Rational(4277, 1440),
+            sympy.Rational(-2641, 480),
+            sympy.Rational(4991, 720),
+            sympy.Rational(-3649, 720),
+            sympy.Rational(959, 480),
+            sympy.Rational(-95, 288),
+        ],
     }
 
     @classmethod
     def for_order(cls, q: int) -> ExplicitMultistepIntegrator:
-        """Return the standard Adams-Bashforth integrator of order q (2–4)."""
+        """Return the standard Adams-Bashforth integrator of order q (1–6)."""
         if q not in cls._AB:
             raise ValueError(
                 f"Adams-Bashforth order {q} not available; "
@@ -106,8 +125,8 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
 
         if len(history) < self._k - 1:
             f_n = rhs(t, u)
-            rk4_state: ODEState = _rk4.step(rhs, ODEState(t, u), dt)
-            return ODEState(rk4_state.t, rk4_state.u, dt, 0.0, (f_n,) + history)
+            boot_state: ODEState = _bootstrap_rk.step(rhs, ODEState(t, u), dt)
+            return ODEState(boot_state.t, boot_state.u, dt, 0.0, (f_n,) + history)
 
         f_n = rhs(t, u)
         all_f = (f_n,) + history[: self._k - 1]
