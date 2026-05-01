@@ -29,7 +29,6 @@ observational = [
 dev = [
     "pytest",
     "pytest-cov",
-    "pytest-mpl",
     "pytest-timeout",
     "pre-commit",
     "black",
@@ -120,7 +119,6 @@ timeout_method = "thread"
 markers = [
     "offline: opt-in stress tests that are not run by default or required in CI",
     "multihost: requires jax.distributed multi-process setup",
-    "visual: pytest-mpl image-comparison tests",
 ]
 filterwarnings = [
     # sympy 1.14 calls mpmath.libmp.bitcount() which mpmath 1.4 deprecated;
