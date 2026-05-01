@@ -33,6 +33,19 @@ from typing import Any
 
 import pytest
 
+from cosmic_foundry.computation.algorithm_capabilities import (
+    AffineComparisonPredicate,
+    ComparisonPredicate,
+    CoveragePatch,
+    DescriptorCoordinate,
+    InvalidCellRule,
+    MembershipPredicate,
+    NumericInterval,
+    ParameterAxis,
+    ParameterBin,
+    ParameterDescriptor,
+    ParameterSpaceSchema,
+)
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
@@ -745,6 +758,196 @@ class _AutoDiscoveryImportClaim(Claim[None]):
                 "test_structure.py imports auto-discovered classes directly "
                 "(use _discover_concrete_* instead): " + ", ".join(violations)
             )
+
+
+class _ParameterSpaceSchemaClaim(Claim[None]):
+    """Claim: parameter-space coverage primitives fail closed structurally."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/parameter_space_schema"
+
+    def check(self, _calibration: None) -> None:
+        schema = ParameterSpaceSchema(
+            name="demo_solve_relation",
+            axes=(
+                ParameterAxis(
+                    "map_linearity_defect",
+                    (
+                        NumericInterval(
+                            "linear",
+                            lower=0.0,
+                            upper=1.0e-12,
+                        ),
+                        NumericInterval(
+                            "nonlinear",
+                            lower=1.0e-12,
+                            include_lower=False,
+                        ),
+                    ),
+                ),
+                ParameterAxis(
+                    "dim_x",
+                    (NumericInterval("positive", lower=1.0),),
+                ),
+                ParameterAxis(
+                    "dim_y",
+                    (NumericInterval("positive", lower=1.0),),
+                ),
+                ParameterAxis(
+                    "coercivity_lower_bound",
+                    (
+                        NumericInterval("nonpositive", upper=0.0),
+                        NumericInterval(
+                            "positive",
+                            lower=0.0,
+                            include_lower=False,
+                        ),
+                    ),
+                ),
+                ParameterAxis(
+                    "condition_estimate",
+                    (
+                        NumericInterval("well_conditioned", upper=1.0e8),
+                        NumericInterval(
+                            "ill_conditioned",
+                            lower=1.0e8,
+                            include_lower=False,
+                        ),
+                    ),
+                ),
+                ParameterAxis(
+                    "operator_representation",
+                    (
+                        ParameterBin(
+                            "operator",
+                            frozenset({"assembled_dense", "matrix_free"}),
+                        ),
+                    ),
+                ),
+            ),
+            invalid_cells=(
+                InvalidCellRule(
+                    name="coercivity_requires_square_map",
+                    predicates=(
+                        AffineComparisonPredicate(
+                            {"dim_x": 1.0, "dim_y": -1.0}, "!=", 0.0
+                        ),
+                        ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+                    ),
+                    reason="positive coercivity is meaningful only for square maps",
+                ),
+            ),
+        )
+        owned_patch = CoveragePatch(
+            name="well_conditioned_spd",
+            owner="DenseCGSolver",
+            status="owned",
+            predicates=(
+                ComparisonPredicate("map_linearity_defect", "<=", 1.0e-12),
+                ComparisonPredicate("dim_x", "==", 4),
+                ComparisonPredicate("dim_y", "==", 4),
+                ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+                ComparisonPredicate("condition_estimate", "<=", 1.0e8),
+                MembershipPredicate(
+                    "operator_representation",
+                    frozenset({"assembled_dense", "matrix_free"}),
+                ),
+            ),
+        )
+        rejected_patch = CoveragePatch(
+            name="nonlinear_root_not_yet_public",
+            owner="missing-public-nonlinear-solver",
+            status="rejected",
+            predicates=(
+                ComparisonPredicate("map_linearity_defect", ">", 1.0e-12),
+                MembershipPredicate(
+                    "operator_representation",
+                    frozenset({"matrix_free"}),
+                ),
+            ),
+        )
+        patches = (owned_patch, rejected_patch)
+
+        assert schema.cell_status(self._descriptor(), patches) == "owned"
+        assert schema.cell_status(self._descriptor(dim_x=5), patches) == "invalid"
+        assert (
+            schema.cell_status(
+                self._descriptor(
+                    map_linearity_defect=2.0e-12,
+                    coercivity_lower_bound=0.0,
+                    operator_representation="matrix_free",
+                ),
+                patches,
+            )
+            == "rejected"
+        )
+        unknown_condition = self._descriptor(condition_estimate=None)
+        assert schema.cell_status(unknown_condition, patches) == "uncovered"
+
+        with pytest.raises(ValueError):
+            ParameterSpaceSchema(
+                name="empty_axis",
+                axes=(ParameterAxis("unbinned_axis", ()),),
+            ).validate_schema()
+        with pytest.raises(ValueError):
+            ParameterSpaceSchema(
+                name="duplicate_fields",
+                axes=(
+                    ParameterAxis(
+                        "first",
+                        (NumericInterval("all", lower=0.0),),
+                        descriptor_field="same_field",
+                    ),
+                    ParameterAxis(
+                        "second",
+                        (NumericInterval("all", lower=0.0),),
+                        descriptor_field="same_field",
+                    ),
+                ),
+            ).validate_schema()
+        with pytest.raises(ValueError):
+            schema.validate_coverage_patch(
+                CoveragePatch(
+                    name="undeclared_axis",
+                    owner="BadSolver",
+                    status="owned",
+                    predicates=(ComparisonPredicate("undeclared", "==", 1),),
+                )
+            )
+        with pytest.raises(TypeError):
+            schema.validate_coverage_patch(
+                CoveragePatch(
+                    name="unsupported_predicate",
+                    owner="BadSolver",
+                    status="owned",
+                    predicates=(object(),),  # type: ignore[arg-type]
+                )
+            )
+
+    @staticmethod
+    def _descriptor(
+        *,
+        map_linearity_defect: float | None = 0.0,
+        dim_x: int = 4,
+        dim_y: int = 4,
+        coercivity_lower_bound: float = 1.0,
+        condition_estimate: float | None = 10.0,
+        operator_representation: str = "assembled_dense",
+    ) -> ParameterDescriptor:
+        return ParameterDescriptor(
+            schema="demo_solve_relation",
+            coordinates={
+                "map_linearity_defect": DescriptorCoordinate(map_linearity_defect),
+                "dim_x": DescriptorCoordinate(dim_x),
+                "dim_y": DescriptorCoordinate(dim_y),
+                "coercivity_lower_bound": DescriptorCoordinate(coercivity_lower_bound),
+                "condition_estimate": DescriptorCoordinate(condition_estimate),
+                "operator_representation": DescriptorCoordinate(
+                    operator_representation
+                ),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1562,6 +1765,7 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_DISCRETE_OPERATOR_OWNERSHIP),
     _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
     _AutoDiscoveryImportClaim(),
+    _ParameterSpaceSchemaClaim(),
 ]
 
 

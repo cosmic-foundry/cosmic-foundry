@@ -996,32 +996,26 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add `ParameterSpaceSchema`, axis, bin/interval, invalid-cell, descriptor, and
-   coverage-patch machinery to
-   `cosmic_foundry.computation.algorithm_capabilities`, with structural tests
-   proving that coverage patches reference declared axes, unknown values are
-   handled explicitly, unsupported predicate kinds fail closed, and invalid
-   cells are distinguishable from uncovered valid cells.
-2. Add the solve-relation, linear-solver, and decomposition parameter-space
+1. Add the solve-relation, linear-solver, and decomposition parameter-space
    schemas before changing any solver ownership.  Tests should prove that named
    problem classes such as linear system, least squares, nonlinear root, and
    eigenproblem are derived regions over primitive axes, not primary axes, and
    that every generated coverage cell maps to a valid descriptor template.
-3. Generate a capability coverage document from the schemas and coverage patches,
+2. Generate a capability coverage document from the schemas and coverage patches,
    all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
    invalid, and uncovered cells.  The structural test should fail if the
    generated documentation is stale.  Seed it with the public nonlinear-solver
    gap as an annotation on an already-visible uncovered nonlinear-root region.
-4. Add `LinearOperatorDescriptor` construction for small assembled operators and
+3. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-5. Convert linear solver capabilities to coverage patches and update
+4. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-6. Convert decomposition capabilities to coverage patches, including
+5. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-7. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+6. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
