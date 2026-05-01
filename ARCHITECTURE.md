@@ -800,13 +800,12 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Stabilize `ExecutionPlan` helpers and add tests for extent selection.
-2. Add scalar replay support and failure metadata conventions.
-3. Expand Tensor-batched time-integrator correctness.
-4. Move time-integrator convergence and performance onto the execution plan.
-5. Convert linear-solver correctness/performance to batched RHS claims.
-6. Convert applicable discrete-operator claims to Tensor-batched evaluation.
-7. Tighten Tensor/device calibration trust checks and document the full harness.
+1. Add scalar replay support and failure metadata conventions.
+2. Expand Tensor-batched time-integrator correctness.
+3. Move time-integrator convergence and performance onto the execution plan.
+4. Convert linear-solver correctness/performance to batched RHS claims.
+5. Convert applicable discrete-operator claims to Tensor-batched evaluation.
+6. Tighten Tensor/device calibration trust checks and document the full harness.
 
 ---
 

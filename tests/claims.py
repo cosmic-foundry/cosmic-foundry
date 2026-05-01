@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
@@ -117,6 +118,47 @@ class ExecutionPlan:
             return self.device_calibration.gpu_fma_rate
         return self.device_calibration.cpu_fma_rate
 
+    def extent_for(
+        self,
+        *,
+        work_fmas: Callable[[int], float],
+        min_extent: int,
+        max_extent: int,
+        label: str,
+        safety: float = 0.5,
+    ) -> int:
+        """Largest monotone extent expected to fit the active claim budget."""
+        if min_extent < 1:
+            raise ValueError(f"{label}: min_extent must be >= 1")
+        if max_extent < min_extent:
+            raise ValueError(f"{label}: max_extent must be >= min_extent")
+        if not 0.0 < safety <= 1.0:
+            raise ValueError(f"{label}: safety must be in (0, 1]")
+
+        budget_fmas = self.claim_walltime_budget_s * safety * self.fma_rate
+        min_work = work_fmas(min_extent)
+        if min_work <= 0.0:
+            raise ValueError(f"{label}: work estimate must be positive")
+        if min_work > budget_fmas:
+            pytest.skip(
+                f"{label}: smallest extent {min_extent} needs "
+                f"{min_work:.3g} FMAs > budget {budget_fmas:.3g} FMAs "
+                f"({self.claim_walltime_budget_s:.3g}s on {self.device_kind})"
+            )
+
+        lo = min_extent
+        hi = max_extent
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            mid_work = work_fmas(mid)
+            if mid_work <= 0.0:
+                raise ValueError(f"{label}: work estimate must be positive")
+            if mid_work <= budget_fmas:
+                lo = mid
+            else:
+                hi = mid - 1
+        return lo
+
     def batch_size_for(
         self,
         *,
@@ -126,8 +168,48 @@ class ExecutionPlan:
         safety: float = 0.5,
     ) -> int:
         """Largest batch expected to fit the claim budget, clamped to bounds."""
-        budget = self.claim_walltime_budget_s * safety
         if fmas_per_case <= 0.0:
-            return min_batch
-        estimated = int(budget * self.fma_rate / fmas_per_case)
-        return max(min_batch, min(max_batch, estimated))
+            raise ValueError("batch: fmas_per_case must be positive")
+        return self.extent_for(
+            work_fmas=lambda batch: batch * fmas_per_case,
+            min_extent=min_batch,
+            max_extent=max_batch,
+            label="batch",
+            safety=safety,
+        )
+
+    def problem_size_for(
+        self,
+        *,
+        work_fmas: Callable[[int], float],
+        min_size: int,
+        max_size: int,
+        label: str = "problem_size",
+        safety: float = 0.5,
+    ) -> int:
+        """Largest problem size expected to fit the claim budget."""
+        return self.extent_for(
+            work_fmas=work_fmas,
+            min_extent=min_size,
+            max_extent=max_size,
+            label=label,
+            safety=safety,
+        )
+
+    def refinement_count_for(
+        self,
+        *,
+        work_fmas: Callable[[int], float],
+        min_refinements: int,
+        max_refinements: int,
+        label: str = "refinement_count",
+        safety: float = 0.5,
+    ) -> int:
+        """Largest refinement count expected to fit the claim budget."""
+        return self.extent_for(
+            work_fmas=work_fmas,
+            min_extent=min_refinements,
+            max_extent=max_refinements,
+            label=label,
+            safety=safety,
+        )
