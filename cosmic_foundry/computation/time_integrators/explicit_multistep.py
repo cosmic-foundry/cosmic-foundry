@@ -46,7 +46,7 @@ class ExplicitMultistepIntegrator(TimeIntegrator):
     The first k−1 steps are bootstrapped with RK4 to build the required
     function-value history; all subsequent steps use the full AB formula.
 
-    step() accepts an ODEState with history=None (as seeded by Integrator on
+    step() accepts an ODEState with history=None (as seeded by IntegrationDriver on
     the first call) or an ODEState with history populated by a previous step.
     It always returns ODEState.
 

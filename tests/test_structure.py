@@ -14,6 +14,7 @@ Claim types:
   _GenericBasesClaim        — no subclass leaves a generic base's TypeVars unbound
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
   _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
+  _ArchitectureOwnershipClaim — package exports and capability ownership are explicit
   _TestAxisConventionClaim  — module tests use correctness/convergence/performance
   _NoTopLevelDefaultBackendMutationClaim — tests do not mutate Tensor backend at import
 """
@@ -26,6 +27,7 @@ import inspect
 import pkgutil
 import sys
 import types
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,7 @@ _PACKAGES = [
     "cosmic_foundry.computation.decompositions",
     "cosmic_foundry.computation.solvers",
     "cosmic_foundry.computation.autotuning",
+    "cosmic_foundry.computation.time_integrators",
 ]
 _PURE_PACKAGES = [
     _PACKAGE_ROOT / "theory" / "foundation",
@@ -428,6 +431,120 @@ class _ImportBoundaryClaim(Claim[None]):
             )
 
 
+@dataclass(frozen=True)
+class _CapabilityRequestExpectation:
+    """Expected selected implementation for one capability request."""
+
+    request: Any
+    selected_implementation: str
+
+
+@dataclass(frozen=True)
+class _ArchitectureOwnershipSpec:
+    """Package-level ownership contract checked by _ArchitectureOwnershipClaim."""
+
+    package: str
+    public_categories: dict[str, frozenset[str]]
+    forbidden_public_symbols: frozenset[str] = frozenset()
+    capability_provider: str | None = None
+    request_selector: str | None = None
+    request_expectations: tuple[_CapabilityRequestExpectation, ...] = ()
+    expected_class_modules: dict[str, str] | None = None
+    required_name_fragments: dict[str, tuple[str, ...]] | None = None
+
+
+def _resolve_dotted(name: str) -> Any:
+    module_name, attr_name = name.rsplit(".", 1)
+    return getattr(importlib.import_module(module_name), attr_name)
+
+
+class _ArchitectureOwnershipClaim(Claim[None]):
+    """Claim: a package's public ownership and capability map are explicit."""
+
+    def __init__(self, spec: _ArchitectureOwnershipSpec) -> None:
+        self._spec = spec
+
+    @property
+    def description(self) -> str:
+        return f"architecture_ownership/{self._spec.package}"
+
+    def check(self, _calibration: None) -> None:
+        package = importlib.import_module(self._spec.package)
+        exported = set(getattr(package, "__all__", []))
+        categorized = set().union(*self._spec.public_categories.values())
+        missing = exported - categorized
+        extra = categorized - exported
+        assert not missing, f"exports without ownership category: {sorted(missing)}"
+        assert not extra, f"categorized symbols not exported: {sorted(extra)}"
+
+        forbidden_exports = exported & self._spec.forbidden_public_symbols
+        assert (
+            not forbidden_exports
+        ), f"retired public symbols exported: {sorted(forbidden_exports)}"
+
+        local_class_names = {
+            clsname
+            for modname, clsname, _cls in _all_local_classes()
+            if modname.startswith(f"{self._spec.package}.")
+        }
+        forbidden_classes = local_class_names & self._spec.forbidden_public_symbols
+        assert (
+            not forbidden_classes
+        ), f"retired public class names still defined: {sorted(forbidden_classes)}"
+
+        if self._spec.capability_provider is not None:
+            self._check_capabilities(exported)
+        self._check_class_modules(package)
+        self._check_name_fragments(package)
+
+    def _check_capabilities(self, exported: set[str]) -> None:
+        provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
+        capabilities = tuple(provider())
+        implementations = [cap.implementation for cap in capabilities]
+        missing_exports = set(implementations) - exported
+        assert not missing_exports, (
+            "capability implementations not exported: " f"{sorted(missing_exports)}"
+        )
+        duplicates = sorted(
+            name for name in set(implementations) if implementations.count(name) > 1
+        )
+        assert not duplicates, f"duplicate capability implementations: {duplicates}"
+
+        if self._spec.request_selector is None:
+            return
+        selector = _resolve_dotted(self._spec.request_selector)
+        for expectation in self._spec.request_expectations:
+            selected = selector(expectation.request)
+            assert selected.implementation == expectation.selected_implementation, (
+                f"{expectation.request!r} selected {selected.implementation}, "
+                f"expected {expectation.selected_implementation}"
+            )
+
+    def _check_class_modules(self, package: types.ModuleType) -> None:
+        expected = self._spec.expected_class_modules or {}
+        violations = []
+        for clsname, module_stem in expected.items():
+            cls = getattr(package, clsname)
+            actual_stem = cls.__module__.split(".")[-1]
+            if actual_stem != module_stem:
+                violations.append(f"{clsname}: {actual_stem} != {module_stem}")
+        assert not violations, "class/module ownership mismatch: " + "; ".join(
+            violations
+        )
+
+    def _check_name_fragments(self, package: types.ModuleType) -> None:
+        expected = self._spec.required_name_fragments or {}
+        violations = []
+        for clsname, fragments in expected.items():
+            getattr(package, clsname)
+            missing = [fragment for fragment in fragments if fragment not in clsname]
+            if missing:
+                violations.append(f"{clsname}: missing {missing}")
+        assert not violations, "ownership-obscuring class names: " + "; ".join(
+            violations
+        )
+
+
 class _ParametrizeEnforcementClaim(Claim[None]):
     """Claim: every top-level test_* function carries @pytest.mark.parametrize."""
 
@@ -625,6 +742,231 @@ _MATRIX_FREE_ITERATIVE_SOLVERS = _discover_matrix_free_iterative_solvers(_MODULE
 _FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
+_TimeIntegrationRequest = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.TimeIntegrationRequest"
+)
+_TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
+    package="cosmic_foundry.computation.time_integrators",
+    public_categories={
+        "capability_contract": frozenset(
+            {
+                "AlgorithmStructureContract",
+                "TimeIntegrationCapability",
+                "TimeIntegrationRegistry",
+                "TimeIntegrationRequest",
+                "select_time_integrator",
+                "time_integration_capabilities",
+            }
+        ),
+        "method_family": frozenset(
+            {
+                "AdditiveRungeKuttaIntegrator",
+                "CompositionIntegrator",
+                "ExplicitMultistepIntegrator",
+                "ImplicitRungeKuttaIntegrator",
+                "LawsonRungeKuttaIntegrator",
+                "MultistepIntegrator",
+                "RungeKuttaIntegrator",
+                "SymplecticCompositionIntegrator",
+            }
+        ),
+        "driver_controller": frozenset(
+            {
+                "AdaptiveNordsieckController",
+                "AutoIntegrator",
+                "ConstantStep",
+                "ConstraintAwareController",
+                "Controller",
+                "IntegrationDriver",
+                "PIController",
+                "TimeIntegrator",
+            }
+        ),
+        "policy": frozenset(
+            {
+                "FamilyName",
+                "FamilySwitch",
+                "OrderDecision",
+                "OrderSelector",
+                "StiffnessDiagnostic",
+                "StiffnessSwitcher",
+            }
+        ),
+        "rhs": frozenset(
+            {
+                "BlackBoxRHS",
+                "CompositeRHS",
+                "CompositeRHSProtocol",
+                "FiniteDiffJacobianRHS",
+                "HamiltonianRHS",
+                "HamiltonianRHSProtocol",
+                "JacobianRHS",
+                "ReactionNetworkRHS",
+                "RHSProtocol",
+                "SemilinearRHS",
+                "SemilinearRHSProtocol",
+                "SplitRHS",
+                "SplitRHSProtocol",
+                "WithJacobianRHSProtocol",
+            }
+        ),
+        "domain": frozenset(
+            {
+                "check_state_domain",
+                "DomainCheck",
+                "DomainViolation",
+                "NonnegativeStateDomain",
+                "predict_domain_step_limit",
+                "StateDomain",
+            }
+        ),
+        "state_result": frozenset(
+            {
+                "IntegrationSelectionResult",
+                "NordsieckHistory",
+                "ODEState",
+                "PhiFunction",
+            }
+        ),
+        "verification_helper": frozenset(
+            {
+                "elementary_weight",
+                "gamma",
+                "nonlinear_solve",
+                "order",
+                "project_conserved",
+                "sigma",
+                "solve_nse",
+                "stability_function",
+                "Tree",
+                "trees_up_to_order",
+            }
+        ),
+    },
+    forbidden_public_symbols=frozenset(
+        {
+            "FamilySwitchingNordsieckIntegrator",
+            "Integrator",
+            "IntegratorSelectionResult",
+            "VODEController",
+            "VariableOrderNordsieckIntegrator",
+        }
+    ),
+    capability_provider=(
+        "cosmic_foundry.computation.time_integrators.time_integration_capabilities"
+    ),
+    request_selector="cosmic_foundry.computation.time_integrators.select_time_integrator",
+    request_expectations=(
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"plain_rhs"}),
+                requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
+                order=4,
+            ),
+            "RungeKuttaIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"jacobian_rhs"}),
+                requested_properties=frozenset({"one_step", "implicit"}),
+                order=2,
+            ),
+            "ImplicitRungeKuttaIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"split_rhs"}),
+                requested_properties=frozenset({"one_step", "imex"}),
+                order=3,
+            ),
+            "AdditiveRungeKuttaIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"jacobian_rhs", "state_domain"}),
+                requested_properties=frozenset(
+                    {
+                        "advance",
+                        "nordsieck",
+                        "adaptive_timestep",
+                        "variable_order",
+                        "stiffness_switching",
+                        "domain_aware_acceptance",
+                    }
+                ),
+                order=2,
+            ),
+            "AdaptiveNordsieckController",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset(
+                    {"plain_rhs", "time_integrator", "controller"}
+                ),
+                requested_properties=frozenset({"advance", "adaptive_timestep"}),
+                order=3,
+            ),
+            "IntegrationDriver",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset(
+                    {"reaction_network_rhs", "conservation_constraints"}
+                ),
+                requested_properties=frozenset({"advance", "constraint_lifecycle"}),
+                order=2,
+            ),
+            "ConstraintAwareController",
+        ),
+    ),
+    expected_class_modules={
+        "AdaptiveNordsieckController": "adaptive_nordsieck",
+        "AdditiveRungeKuttaIntegrator": "imex",
+        "AlgorithmStructureContract": "capabilities",
+        "AutoIntegrator": "auto",
+        "BlackBoxRHS": "integrator",
+        "CompositeRHS": "splitting",
+        "CompositionIntegrator": "splitting",
+        "ConstraintAwareController": "constraint_aware",
+        "ConstantStep": "integrator",
+        "DomainCheck": "domains",
+        "DomainViolation": "domains",
+        "ExplicitMultistepIntegrator": "explicit_multistep",
+        "FiniteDiffJacobianRHS": "implicit",
+        "HamiltonianRHS": "symplectic",
+        "ImplicitRungeKuttaIntegrator": "implicit",
+        "IntegrationDriver": "integration_driver",
+        "IntegrationSelectionResult": "integration_driver",
+        "JacobianRHS": "implicit",
+        "LawsonRungeKuttaIntegrator": "exponential",
+        "MultistepIntegrator": "nordsieck",
+        "NonnegativeStateDomain": "domains",
+        "NordsieckHistory": "nordsieck",
+        "ODEState": "integrator",
+        "OrderDecision": "variable_order",
+        "OrderSelector": "variable_order",
+        "PhiFunction": "exponential",
+        "PIController": "integrator",
+        "ReactionNetworkRHS": "reaction_network",
+        "RungeKuttaIntegrator": "runge_kutta",
+        "SemilinearRHS": "exponential",
+        "SplitRHS": "imex",
+        "StiffnessDiagnostic": "stiffness",
+        "StiffnessSwitcher": "stiffness",
+        "SymplecticCompositionIntegrator": "symplectic",
+        "TimeIntegrationCapability": "capabilities",
+        "TimeIntegrationRegistry": "capabilities",
+        "TimeIntegrationRequest": "capabilities",
+    },
+    required_name_fragments={
+        "AdaptiveNordsieckController": ("Adaptive", "Nordsieck", "Controller"),
+        "ConstraintAwareController": ("Constraint", "Controller"),
+        "IntegrationDriver": ("Integration", "Driver"),
+        "OrderSelector": ("Order", "Selector"),
+        "StiffnessSwitcher": ("Stiffness", "Switcher"),
+    },
+)
+
 _CLAIMS: list[Claim[None]] = [
     *[_AbcInstantiationClaim(cls) for cls in _ABCS],
     *[_HierarchyClaim(child, parent) for child, parent in _HIERARCHY_PAIRS],
@@ -643,6 +985,7 @@ _CLAIMS: list[Claim[None]] = [
     *[_BodyDispatchClaim(p) for p in _TEST_FILES],
     *[_TestAxisConventionClaim(p) for p in _TEST_FILES],
     *[_NoTopLevelDefaultBackendMutationClaim(p) for p in _TEST_FILES],
+    _ArchitectureOwnershipClaim(_TIME_INTEGRATOR_OWNERSHIP),
     _AutoDiscoveryImportClaim(),
 ]
 
