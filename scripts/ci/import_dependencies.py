@@ -15,6 +15,7 @@ TESTS_ROOT = REPO_ROOT / "tests"
 SKIP_DIRS = {"miniforge", ".git", "__pycache__"}
 NUMERIC_IMPORT_ROOTS = {"math", "numpy", "scipy", "jax", "torch"}
 ALL_TESTS_TARGET = "tests"
+DOC_ONLY_TEST_TARGET = "tests/test_structure.py"
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,12 @@ def changed_files(base: str, head: str = "HEAD") -> list[Path]:
     return [REPO_ROOT / line for line in proc.stdout.splitlines() if line]
 
 
+def _is_documentation_path(rel: Path) -> bool:
+    if rel.suffix.lower() in {".md", ".rst"}:
+        return True
+    return rel.parts[:1] == ("docs",)
+
+
 def selected_pytest_targets(paths: list[Path]) -> list[str]:
     if not paths:
         return [ALL_TESTS_TARGET]
@@ -176,12 +183,17 @@ def selected_pytest_targets(paths: list[Path]) -> list[str]:
     graph = internal_import_graph()
     changed_modules: set[str] = set()
     direct_test_targets: set[str] = set()
+    saw_documentation = False
 
     for path in paths:
         try:
             rel = path.resolve().relative_to(REPO_ROOT)
         except ValueError:
             return [ALL_TESTS_TARGET]
+
+        if _is_documentation_path(rel):
+            saw_documentation = True
+            continue
 
         top = rel.parts[0]
         if top in {".github", "scripts"}:
@@ -213,6 +225,8 @@ def selected_pytest_targets(paths: list[Path]) -> list[str]:
     targets = direct_test_targets | graph_test_targets
     if changed_modules and not graph_test_targets:
         return [ALL_TESTS_TARGET]
+    if saw_documentation and not targets:
+        return [DOC_ONLY_TEST_TARGET]
     return sorted(targets) if targets else [ALL_TESTS_TARGET]
 
 
