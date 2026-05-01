@@ -153,10 +153,19 @@ def changed_files(base: str, head: str = "HEAD") -> list[Path]:
     proc = subprocess.run(
         ["git", "diff", "--name-only", f"{base}...{head}"],
         cwd=REPO_ROOT,
-        check=True,
         stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
     )
+    if proc.returncode != 0:
+        # Shallow PR checkouts may have both endpoints but no merge base.
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", base, head],
+            cwd=REPO_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
     return [REPO_ROOT / line for line in proc.stdout.splitlines() if line]
 
 
