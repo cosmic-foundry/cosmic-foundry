@@ -62,14 +62,14 @@ def _op_factory(n: int, backend: Backend) -> tuple[LinearOperator, Tensor]:
     return op, b
 
 
-class _SelectionValidClaim(Claim):
+class _SelectionValidClaim(Claim[None]):
     """Claim: the selected solver produces ‖Au − b‖₂ < tol on a full-rank problem."""
 
     @property
     def description(self) -> str:
         return "autotuning/selection_valid"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         autotuner = Autotuner(
             _SOLVERS,
             [_BACKEND],
@@ -88,7 +88,7 @@ class _SelectionValidClaim(Claim):
         )
 
 
-class _CrossoverClaim(Claim):
+class _CrossoverClaim(Claim[None]):
     """Claim: at large N, the autotuner selects DenseCGSolver (p=2) over LU (p=3).
 
     With a sparse FVM operator, CG costs O(N²): O(N) iterations each doing one
@@ -101,7 +101,7 @@ class _CrossoverClaim(Claim):
     def description(self) -> str:
         return "autotuning/cg_beats_lu_at_large_n"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         autotuner = Autotuner(
             _SOLVERS,
             [_BACKEND],
@@ -118,12 +118,12 @@ class _CrossoverClaim(Claim):
         )
 
 
-_CLAIMS: list[Claim] = [
+_CLAIMS: list[Claim[None]] = [
     _SelectionValidClaim(),
     _CrossoverClaim(),
 ]
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=lambda c: c.description)
-def test_autotuning(claim: Claim) -> None:
-    claim.check()
+def test_autotuning(claim: Claim[None]) -> None:
+    claim.check(None)

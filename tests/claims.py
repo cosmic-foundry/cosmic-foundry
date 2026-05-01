@@ -49,22 +49,12 @@ FIXED_SESSION_OVERHEAD_S: float = 40.0
 BUDGET_TOLERANCE: float = 1.1
 
 
-class Claim(ABC):
-    """Base for static correctness claims that do not depend on calibration."""
+class Claim(ABC, Generic[C]):
+    """Base for every test claim.
 
-    @property
-    @abstractmethod
-    def description(self) -> str: ...
-
-    @abstractmethod
-    def check(self) -> None: ...
-
-
-class CalibratedClaim(ABC, Generic[C]):
-    """Base for claims whose verification requires runtime calibration data.
-
-    The type parameter C is the calibration type.  Bind it concretely in each
-    claim family, e.g. CalibratedClaim[float] for FMA-rate-calibrated claims.
+    Claims receive a module-defined calibration object.  Static claims use
+    ``None`` as their trivial calibration so the dispatch contract remains
+    uniform across correctness, convergence, and performance axes.
     """
 
     @property

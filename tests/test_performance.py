@@ -47,7 +47,7 @@ import pytest
 
 from cosmic_foundry.computation.backends import NumpyBackend, PythonBackend
 from cosmic_foundry.computation.tensor import Tensor
-from tests.claims import CalibratedClaim, DeviceCalibration
+from tests.claims import Claim, DeviceCalibration
 
 # Regressions larger than this multiple of the roofline prediction fail.
 EFFICIENCY_FACTOR = 8
@@ -68,7 +68,7 @@ _NP = NumpyBackend()
 # ---------------------------------------------------------------------------
 
 
-class _MatvecPerfClaim(CalibratedClaim[float]):
+class _MatvecPerfClaim(Claim[float]):
     """Claim: N×N @ N matvec runs within EFFICIENCY_FACTOR of the FMA roofline.
 
     Expected FMAs: 2N² (N rows × N multiply-adds).
@@ -100,7 +100,7 @@ class _MatvecPerfClaim(CalibratedClaim[float]):
         )
 
 
-class _MatmulPerfClaim(CalibratedClaim[float]):
+class _MatmulPerfClaim(Claim[float]):
     """Claim: N×N @ N×N matmul runs within EFFICIENCY_FACTOR of the FMA roofline.
 
     Expected FMAs: 2N³ (N² output elements × N multiply-adds each).
@@ -132,7 +132,7 @@ class _MatmulPerfClaim(CalibratedClaim[float]):
         )
 
 
-class _DotPerfClaim(CalibratedClaim[float]):
+class _DotPerfClaim(Claim[float]):
     """Claim: N @ N dot product runs within EFFICIENCY_FACTOR of the FMA roofline.
 
     Expected FMAs: 2N (N multiplies + N-1 adds ≈ 2N).
@@ -164,7 +164,7 @@ class _DotPerfClaim(CalibratedClaim[float]):
         )
 
 
-class _NumpyParityPerfClaim(CalibratedClaim[float]):
+class _NumpyParityPerfClaim(Claim[float]):
     """NumpyBackend Tensor op ≤ NUMPY_PARITY_FACTOR × raw NumPy op.
 
     Measures the overhead of the Tensor wrapper (backend dispatch, shape
@@ -230,7 +230,7 @@ class _NumpyParityPerfClaim(CalibratedClaim[float]):
         )
 
 
-class _BackendSpeedupClaim(CalibratedClaim[float]):
+class _BackendSpeedupClaim(Claim[float]):
     """NumpyBackend Tensor op is at least min_speedup× faster than PythonBackend.
 
     Catches regressions where NumPy is accidentally bypassed (e.g. an
@@ -321,7 +321,7 @@ _DEVICE_WARMUP = 3
 # ---------------------------------------------------------------------------
 
 
-class _DeviceCpuPerfClaim(CalibratedClaim[DeviceCalibration]):
+class _DeviceCpuPerfClaim(Claim[DeviceCalibration]):
     """Backend CPU op ≤ _DEVICE_EFFICIENCY_FACTOR × CPU JIT roofline (post-warmup)."""
 
     def __init__(self, op: str, n: int) -> None:
@@ -368,7 +368,7 @@ class _DeviceCpuPerfClaim(CalibratedClaim[DeviceCalibration]):
         )
 
 
-class _DeviceGpuPerfClaim(CalibratedClaim[DeviceCalibration]):
+class _DeviceGpuPerfClaim(Claim[DeviceCalibration]):
     """Backend GPU op ≤ _DEVICE_EFFICIENCY_FACTOR × GPU JIT roofline (post-warmup).
 
     Skipped automatically when device_calibration.gpu_fma_rate is None.
@@ -422,7 +422,7 @@ class _DeviceGpuPerfClaim(CalibratedClaim[DeviceCalibration]):
         )
 
 
-class _DeviceGpuVsCpuRooflineClaim(CalibratedClaim[DeviceCalibration]):
+class _DeviceGpuVsCpuRooflineClaim(Claim[DeviceCalibration]):
     """GPU JIT roofline ≥ min_speedup × CPU JIT roofline.
 
     Catches miscalibration (e.g. GPU measurement accidentally ran on CPU)
@@ -452,7 +452,7 @@ class _DeviceGpuVsCpuRooflineClaim(CalibratedClaim[DeviceCalibration]):
 # Registries
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[CalibratedClaim[float]] = [
+_CLAIMS: list[Claim[float]] = [
     # PythonBackend vs FMA roofline
     *[_DotPerfClaim(n) for n in [8, 32, 128]],
     *[_MatvecPerfClaim(n) for n in [8, 16, 32]],
@@ -465,7 +465,7 @@ _CLAIMS: list[CalibratedClaim[float]] = [
     *[_BackendSpeedupClaim("matvec", n, 5) for n in [16, 32]],
 ]
 
-_DEVICE_CLAIMS: list[CalibratedClaim[DeviceCalibration]] = [
+_DEVICE_CLAIMS: list[Claim[DeviceCalibration]] = [
     # Backend CPU vs CPU JIT roofline (dot-product-calibrated, dispatch-limited)
     *[_DeviceCpuPerfClaim("matmul", n) for n in [128, 256]],
     *[_DeviceCpuPerfClaim("matvec", n) for n in [128, 256]],
@@ -479,7 +479,7 @@ _DEVICE_CLAIMS: list[CalibratedClaim[DeviceCalibration]] = [
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_performance(claim: CalibratedClaim[float], fma_rate: float) -> None:
+def test_performance(claim: Claim[float], fma_rate: float) -> None:
     claim.check(fma_rate)
 
 
@@ -487,6 +487,6 @@ def test_performance(claim: CalibratedClaim[float], fma_rate: float) -> None:
     "claim", _DEVICE_CLAIMS, ids=[c.description for c in _DEVICE_CLAIMS]
 )
 def test_device_performance(
-    claim: CalibratedClaim[DeviceCalibration], device_calibration: DeviceCalibration
+    claim: Claim[DeviceCalibration], device_calibration: DeviceCalibration
 ) -> None:
     claim.check(device_calibration)
