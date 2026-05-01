@@ -27,7 +27,9 @@ Checks currently wired:
 - **`select_tests.py`** — uses the same AST import graph to map
   changed files to pytest targets. The selector is conservative:
   shared test harness, CI/config, scripts, environment, or unmapped
-  package changes expand to the full `tests` target.
+  package changes expand to the full `tests` target. Documentation-only
+  changes run the cheap structural pytest target instead of the full suite;
+  markdown/docs jobs still own link and Sphinx validation.
 
 Adding a check: write `scripts/ci/check_<name>.py` using stdlib
 only, add one step to `.github/workflows/ci.yml` invoking it, and

@@ -714,8 +714,99 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-No active implementation items.  Move the next fully specified task here before
-starting another sprint.
+### Sprint: Tensor-batched verification harness
+
+Goal: make the test suite dogfood `Tensor` as the execution substrate for
+module-level verification, while preserving CPU-only ergonomics and adding
+meaningful GPU acceleration when a GPU is available.  The same correctness,
+convergence, and performance claims must run on CPU and GPU; device availability
+changes only the extent of coverage, not the mathematical claim being checked.
+
+The sprint is complete when the following are true:
+
+- **Execution-plan harness.**  `tests/claims.py` exposes a single
+  `ExecutionPlan` object carrying backend choice, device kind, device
+  calibration, and the active per-claim walltime budget.  `tests/conftest.py`
+  selects a GPU backend opportunistically when calibration succeeds, otherwise
+  uses the calibrated CPU backend.  Shared helpers convert
+  `CF_CLAIM_WALLTIME_BUDGET_S` into conservative extents such as batch size,
+  problem size, and refinement count.
+- **Walltime-budget semantics.**  The walltime budget controls test extent, not
+  test semantics.  Each scalable claim declares a smallest meaningful debug
+  extent and selects the largest conservative extent expected to fit the active
+  budget.  If even the smallest meaningful extent cannot fit, the claim skips
+  with an explicit reason.  Default local/CI budget remains one second per
+  claim; stress runs raise the same budget variable instead of using a separate
+  offline test marker.
+- **Scalar replay path.**  Every batched claim reports enough failure metadata
+  to replay one lane: batch index, method/order/problem identifier, parameter
+  values, actual value, analytical expected value, and error.  Add an
+  environment override such as `CF_TEST_BATCH_INDEX` so a failed batched lane can
+  be rerun as a scalar/debug case on CPU.
+- **Time-integrator correctness.**  Convert representative correctness claims
+  to Tensor-batched form first: scalar decay, harmonic oscillator, stiff decay,
+  semilinear forcing, and at least one adaptive-controller case.  The scalar
+  claims remain as replay/debug shapes where control flow or diagnostic
+  assertions make batching unnatural.
+- **Time-integrator convergence.**  Batch only independent manufactured
+  problems at each fixed refinement level.  Do not allow adaptive controller
+  choices to alter the convergence ladder.  CPU and GPU use the same
+  refinement schedule and tolerance; the execution plan scales only the number
+  of independent manufactured cases.
+- **Time-integrator performance.**  Move performance claims onto
+  `ExecutionPlan` so CPU and GPU compare against the same calibrated Tensor
+  roofline model.  The performance axis should report both selected extent and
+  achieved roofline ratio, and it should avoid checking launch-overhead-dominated
+  GPU workloads as if they were compute-bound.
+- **Linear-solver correctness.**  Batch right-hand sides first.  Keep matrix
+  assembly/factorization scalar unless and until the production API supports
+  batched factorizations.  Correctness claims compare Tensor-computed residuals
+  across the batched RHS dimension and report the worst RHS column as the replay
+  lane.
+- **Linear-solver convergence.**  Keep manufactured-solution convergence tied to
+  the discretization/solver claim being measured.  Where batching is useful,
+  batch independent RHS/source functions at the same mesh refinement, not
+  unrelated solver families.
+- **Linear-solver performance.**  Use the same execution-plan walltime policy to
+  choose matrix size and RHS count.  Separate factorization cost from solve cost
+  when the production API exposes a cached `Factorization`; do not hide an
+  expensive refactorization inside a batched solve claim.
+- **Discrete-operator correctness and convergence.**  Batch manufactured
+  point/cell evaluations where the operator API can evaluate Tensor states
+  without materializing each scalar.  Preserve exact symbolic order checks as
+  scalar structure claims because they are not device workloads.
+- **Tensor suite as substrate gate.**  `tests/test_tensor.py` remains the only
+  test file allowed to use raw NumPy/JAX directly for parity checks,
+  calibration, and roofline trust checks.  Other module tests use `Tensor` for
+  state updates, RHS evaluation, residuals, norms, and batched comparisons,
+  exiting to Python only at the final assertion boundary.
+- **Device calibration trust.**  Calibration continues to cash out against raw
+  tensor operations rather than another cosmic-foundry module.  GPU calibration
+  must fail or skip explicitly if the device is unavailable, misconfigured, or
+  no faster than the CPU baseline by the configured sanity threshold.
+- **Import-aware CI selection.**  The import-graph-based pytest selector remains
+  conservative while the suite grows.  Changes to shared test harness,
+  calibration, backend, or `Tensor` code expand to all affected module tests;
+  false positives are acceptable, false negatives are not.
+- **Typing cleanup for test harness code.**  Production mypy remains scoped to
+  `cosmic_foundry`, but new shared test-harness abstractions should be typed.
+  Existing test typing debt can be paid opportunistically: annotate Tensor
+  locals, type RHS closures, make test helper operators satisfy protocols or
+  cast intentionally, and remove stale `type: ignore` comments.
+- **Documentation.**  Add a test-harness section documenting the three axes
+  (correctness, convergence, performance), scalar/debug shape versus
+  batched/device shape, walltime-budget-to-extent selection, CPU/GPU behavior,
+  and failed-lane replay workflow.
+
+Recommended PR sequence:
+
+1. Stabilize `ExecutionPlan` helpers and add tests for extent selection.
+2. Add scalar replay support and failure metadata conventions.
+3. Expand Tensor-batched time-integrator correctness.
+4. Move time-integrator convergence and performance onto the execution plan.
+5. Convert linear-solver correctness/performance to batched RHS claims.
+6. Convert applicable discrete-operator claims to Tensor-batched evaluation.
+7. Tighten Tensor/device calibration trust checks and document the full harness.
 
 ---
 
