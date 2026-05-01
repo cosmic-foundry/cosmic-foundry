@@ -341,6 +341,7 @@ class ConstraintAwareController:
         t_end: float,
         *,
         initial_active: frozenset[int] | None = None,
+        stop_at_nse: bool = False,
     ) -> ODEState:
         """Advance from t0 to t_end with constraint lifecycle management.
 
@@ -354,6 +355,9 @@ class ConstraintAwareController:
             Final time.
         initial_active:
             Initial active constraint set.  Defaults to no active constraints.
+        stop_at_nse:
+            Return as soon as all independent equilibrium constraints activate
+            and the state has been projected onto the NSE manifold.
         """
         active: frozenset[int] = (
             initial_active if initial_active is not None else frozenset()
@@ -419,6 +423,11 @@ class ConstraintAwareController:
                 self.deactivation_events.append((candidate.t, newly_off))
 
             state = candidate._replace(u=u_proj, active_constraints=new_active)
+            if stop_at_nse and in_nse:
+                return state
+            if candidate.err == 0.0 and state.active_constraints:
+                growth = getattr(self._inner, "factor_max", 1.0)
+                dt = min(t_end - state.t, dt_try * growth)
 
         return state
 

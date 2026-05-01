@@ -188,6 +188,11 @@ class PIController:
         self._factor_max = factor_max
         self._err_prev = tol  # neutral: tol/err_prev = 1 on first step
 
+    @property
+    def factor_max(self) -> float:
+        """Maximum permitted growth factor for the next suggested step."""
+        return self._factor_max
+
     def accept(self, state: ODEState) -> bool:
         """Accept when err ≤ tol or when there is no embedded estimate."""
         return state.err == 0.0 or state.err <= self._tol
