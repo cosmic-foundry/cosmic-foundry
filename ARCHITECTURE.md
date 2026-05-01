@@ -714,38 +714,8 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Verification harness migration sprint
-
-Migrate the test suite to module-owned verification axes.  Each numerical
-module owns three parameterized claim registries:
-
-- `test_correctness`: compare outputs against analytical, exact, or residual
-  oracles.
-- `test_convergence`: verify asymptotic order or residual-rate behavior.
-- `test_performance`: verify calibrated cost-to-solution or cost-to-accuracy
-  against Tensor-grounded rooflines.
-
-All claims use a single calibrated interface: `description` plus
-`check(calibration)`.  Claims without meaningful calibration receive a trivial
-module calibration value; no compatibility layer is preserved for the old
-`Claim.check()` shape.
-
-CI eligibility is governed by a unified expected walltime policy, not by
-bespoke offline markers or environment flags.  Each claim declares, or is
-assigned by its module registry, an expected walltime.  The default target is
-one second per claim.  Claims expected to exceed the target are skipped in
-normal CI and local default runs; they remain available for explicit targeted
-stress runs by selecting a higher walltime budget.
-
-Planned PR sequence:
-
-1. **Update structure enforcement.**  Keep `tests/test_structure.py` as
-   repository-governance coverage, but update its enforcement claims for the
-   unified calibrated claim signature and the module-owned axis convention.
-
-Policy selectors are not a fourth verification axis.  They are covered by
-problem regimes that force distinct choices; claims remain named by axis and
-mathematical regime, not by selected implementation class or branch.
+No active implementation items.  Move the next fully specified task here before
+starting another sprint.
 
 ---
 
