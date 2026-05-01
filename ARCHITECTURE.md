@@ -739,42 +739,37 @@ stress runs by selecting a higher walltime budget.
 
 Planned PR sequence:
 
-1. **Normalize time-integrator tests.**  Keep `tests/test_time_integrators.py`
-   as the canonical example with correctness, convergence, and performance
-   axes.  Fold current time-integrator stress scenarios into claims in that
-   file, gate them by expected walltime rather than offline markers, then
-   remove `tests/offline/`.
-2. **Split global convergence coverage by module.**  Move discrete-operator
+1. **Split global convergence coverage by module.**  Move discrete-operator
    order and manufactured-solution convergence claims to
    `tests/test_discrete_operators.py`.  Move solver residual, residual-rate,
    and cost-to-solution claims to `tests/test_linear_solvers.py`.  Drop
    standalone separability conformance checks unless they re-enter as
    outcome-level claims for a fast-assembly module.  Delete the global
    `tests/test_convergence.py`.
-3. **Move Tensor performance into the Tensor module tests.**  Merge the
+2. **Move Tensor performance into the Tensor module tests.**  Merge the
    Tensor/backend roofline claims from `tests/test_performance.py` into
    `tests/test_tensor.py` under `test_performance`; keep Tensor arithmetic
    and backend behavior under `test_correctness`.  Delete
    `tests/test_performance.py`.
-4. **Remove standalone selector and boundary conformance tests.**  Delete
+3. **Remove standalone selector and boundary conformance tests.**  Delete
    `tests/test_autotuning.py`; policy behavior is covered implicitly through
    problem regimes in the owning module's correctness, convergence, or
    performance claims.  Delete `tests/test_boundary_conditions.py`; boundary
    behavior should reappear only through outcome-level module claims.
-5. **Clean up shared test infrastructure.**  Delete or relocate
+4. **Clean up shared test infrastructure.**  Delete or relocate
    `tests/calibration.py`; its current contents are solver/discrete-operator
    convergence-sizing utilities, not shared harness infrastructure.  Keep
    only genuinely session-wide fixtures in `tests/conftest.py`, such as
    Tensor/device calibration.  Keep only the unified claim interface, shared
    constants, and genuinely shared helpers in `tests/claims.py`.
-6. **Standardize claim walltime budgeting.**  Add shared harness support for a
+5. **Standardize claim walltime budgeting.**  Add shared harness support for a
    per-claim expected walltime, defaulting to one second.  Remove explicit
    offline markers and environment-variable gates from migrated tests.  Provide
    a single way to raise the walltime budget for targeted stress runs.
-7. **Delete visual regression tests.**  Remove `tests/visual/` and its
+6. **Delete visual regression tests.**  Remove `tests/visual/` and its
    baselines rather than carrying a pytest-mpl exception to the module-owned
    claim harness.
-8. **Update structure enforcement.**  Keep `tests/test_structure.py` as
+7. **Update structure enforcement.**  Keep `tests/test_structure.py` as
    repository-governance coverage, but update its enforcement claims for the
    unified calibrated claim signature and the module-owned axis convention.
 

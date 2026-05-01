@@ -48,6 +48,13 @@ FIXED_SESSION_OVERHEAD_S: float = 40.0
 # Tolerance multiplier on the total expected session time.
 BUDGET_TOLERANCE: float = 1.1
 
+# ── Per-claim walltime budget ────────────────────────────────────────────────
+# Unified default gate for claims that are valuable but too expensive for normal
+# local/CI runs.  Raise CF_CLAIM_WALLTIME_BUDGET_S for targeted stress runs.
+CLAIM_WALLTIME_BUDGET_S: float = float(
+    os.environ.get("CF_CLAIM_WALLTIME_BUDGET_S", "1.0")
+)
+
 
 class Claim(ABC, Generic[C]):
     """Base for every test claim.
