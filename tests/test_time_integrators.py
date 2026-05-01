@@ -336,6 +336,88 @@ class _CorrectnessClaim(Claim[Any]):
             assert _err(state.u, self._spec.expected, state.t) < self._spec.tol
 
 
+class _DomainClaim(Claim[Any]):
+    """Correctness claim for state-domain predicates."""
+
+    def __init__(self, name: str, check: Callable[[], None]) -> None:
+        self._name = name
+        self._check = check
+
+    @property
+    def description(self) -> str:
+        return f"correctness/domain/{self._name}"
+
+    def check(self, _calibration: Any) -> None:
+        self._check()
+
+
+def _domain_claims() -> list[_DomainClaim]:
+    def _accepts_nonnegative_state() -> None:
+        domain = _ti.NonnegativeStateDomain(3, roundoff_tolerance=1e-14)
+
+        result = domain.check(Tensor([0.0, 0.25, 1.0], backend=_TIME_BACKEND))
+
+        assert result.accepted
+        assert result.violation is None
+
+    def _accepts_roundoff_negative_state() -> None:
+        domain = _ti.NonnegativeStateDomain(2, roundoff_tolerance=1e-12)
+
+        result = domain.check(Tensor([1.0, -5e-13], backend=_TIME_BACKEND))
+
+        assert result.accepted
+
+    def _rejects_material_negative_state() -> None:
+        domain = _ti.NonnegativeStateDomain(3, roundoff_tolerance=1e-12)
+
+        result = domain.check(Tensor([0.1, -1e-9, -2e-9], backend=_TIME_BACKEND))
+
+        assert result.rejected
+        assert result.violation is not None
+        assert result.violation.component == 2
+        assert result.violation.value == -2e-9
+        assert result.violation.tolerance == 1e-12
+        assert result.violation.margin > 0.0
+
+    def _rejects_wrong_shape() -> None:
+        domain = _ti.NonnegativeStateDomain(3)
+
+        result = domain.check(Tensor([[1.0, 0.0, 0.0]], backend=_TIME_BACKEND))
+
+        assert result.rejected
+        assert result.violation is not None
+        assert result.violation.component is None
+        assert "shape" in result.violation.reason
+
+    def _reaction_network_exposes_abundance_domain() -> None:
+        rhs = _ti.ReactionNetworkRHS(
+            Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
+            lambda t, u: Tensor([float(u[0])], backend=u.backend),
+            lambda t, u: Tensor([float(u[1])], backend=u.backend),
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+        )
+
+        assert rhs.state_domain.check(
+            Tensor([0.25, 0.75], backend=_TIME_BACKEND)
+        ).accepted
+        result = rhs.state_domain.check(Tensor([0.25, -1e-8], backend=_TIME_BACKEND))
+
+        assert result.rejected
+        assert result.violation is not None
+        assert result.violation.component == 1
+
+    return [
+        _DomainClaim("nonnegative_accepts_valid", _accepts_nonnegative_state),
+        _DomainClaim("nonnegative_accepts_roundoff", _accepts_roundoff_negative_state),
+        _DomainClaim("nonnegative_rejects_negative", _rejects_material_negative_state),
+        _DomainClaim("nonnegative_rejects_shape", _rejects_wrong_shape),
+        _DomainClaim(
+            "reaction_network_exposes_abundance_domain",
+            _reaction_network_exposes_abundance_domain,
+        ),
+    ]
+
+
 class _BatchedDecayCorrectnessClaim(Claim[ExecutionPlan]):
     """Accuracy claim for many independent scalar decays in one Tensor state."""
 
@@ -1115,6 +1197,7 @@ _CONV_CLAIMS: list[Claim[ExecutionPlan]] = [
 
 _OFF_SPECS = _chain_specs(range(5, 12)) + _spoke_specs(range(7, 22), [1, 10, 100])
 _CORRECT_CLAIMS: list[Claim[Any]] = [
+    *_domain_claims(),
     _BatchedDecayCorrectnessClaim(),
     _BatchedOscillatorCorrectnessClaim(),
     _BatchedStiffDecayCorrectnessClaim(),
