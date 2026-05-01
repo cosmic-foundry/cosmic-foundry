@@ -768,6 +768,10 @@ _LinearSolverRequest = _resolve_dotted(
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
+_DiscreteOperatorRequest = _resolve_dotted(
+    "cosmic_foundry.theory.discrete.DiscreteOperatorRequest"
+)
+_GeometryRequest = _resolve_dotted("cosmic_foundry.geometry.GeometryRequest")
 _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     package="cosmic_foundry.computation.time_integrators",
     public_categories={
@@ -1241,6 +1245,299 @@ _DECOMPOSITION_OWNERSHIP = _ArchitectureOwnershipSpec(
     },
 )
 
+_DISCRETE_OPERATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
+    package="cosmic_foundry.theory.discrete",
+    public_categories={
+        "capability_contract": frozenset(
+            {
+                "DiscreteOperatorCapability",
+                "discrete_operator_capabilities",
+                "DiscreteOperatorRegistry",
+                "DiscreteOperatorRequest",
+                "select_discrete_operator",
+            }
+        ),
+        "mesh_topology": frozenset(
+            {
+                "CellComplex",
+                "Mesh",
+                "StructuredMesh",
+            }
+        ),
+        "field": frozenset(
+            {
+                "DiscreteField",
+                "EdgeField",
+                "FaceField",
+                "PointField",
+                "VolumeField",
+            }
+        ),
+        "boundary_condition": frozenset(
+            {
+                "DirichletGhostCells",
+                "DiscreteBoundaryCondition",
+                "InhomogeneousDirichletGhostCells",
+                "NeumannGhostCells",
+                "PeriodicGhostCells",
+                "ZeroGhostCells",
+            }
+        ),
+        "operator_interface": frozenset(
+            {
+                "DiscreteExteriorDerivative",
+                "DiscreteOperator",
+                "Discretization",
+                "NumericalFlux",
+                "RestrictionOperator",
+            }
+        ),
+        "numerical_flux": frozenset(
+            {
+                "AdvectionDiffusionFlux",
+                "AdvectiveFlux",
+                "DiffusiveFlux",
+            }
+        ),
+        "discretization": frozenset(
+            {
+                "DivergenceFormDiscretization",
+            }
+        ),
+    },
+    capability_provider="cosmic_foundry.theory.discrete.discrete_operator_capabilities",
+    request_selector="cosmic_foundry.theory.discrete.select_discrete_operator",
+    request_expectations=(
+        _CapabilityRequestExpectation(
+            _DiscreteOperatorRequest(
+                available_structure=frozenset(
+                    {"cartesian_mesh", "cell_average_field", "smooth_scalar_field"}
+                ),
+                requested_properties=frozenset(
+                    {"numerical_flux", "advective", "centered_stencil"}
+                ),
+                order=4,
+            ),
+            "AdvectiveFlux",
+        ),
+        _CapabilityRequestExpectation(
+            _DiscreteOperatorRequest(
+                available_structure=frozenset(
+                    {"cartesian_mesh", "cell_average_field", "smooth_scalar_field"}
+                ),
+                requested_properties=frozenset(
+                    {"numerical_flux", "diffusive", "antisymmetric_stencil"}
+                ),
+                order=4,
+            ),
+            "DiffusiveFlux",
+        ),
+        _CapabilityRequestExpectation(
+            _DiscreteOperatorRequest(
+                available_structure=frozenset(
+                    {"cartesian_mesh", "cell_average_field", "smooth_scalar_field"}
+                ),
+                requested_properties=frozenset(
+                    {"numerical_flux", "advective", "diffusive"}
+                ),
+                order=4,
+            ),
+            "AdvectionDiffusionFlux",
+        ),
+        _CapabilityRequestExpectation(
+            _DiscreteOperatorRequest(
+                available_structure=frozenset(
+                    {
+                        "cartesian_mesh",
+                        "numerical_flux",
+                        "discrete_boundary_condition",
+                    }
+                ),
+                requested_properties=frozenset(
+                    {"discrete_operator", "divergence_form", "boundary_aware"}
+                ),
+            ),
+            "DivergenceFormDiscretization",
+        ),
+    ),
+    rejected_requests=(
+        _CapabilityRejectionExpectation(
+            _DiscreteOperatorRequest(
+                available_structure=frozenset(
+                    {"cartesian_mesh", "cell_average_field", "smooth_scalar_field"}
+                ),
+                requested_properties=frozenset(
+                    {"numerical_flux", "diffusive", "antisymmetric_stencil"}
+                ),
+                order=3,
+            )
+        ),
+    ),
+    expected_class_modules={
+        "AdvectionDiffusionFlux": "advection_diffusion_flux",
+        "AdvectiveFlux": "advective_flux",
+        "CellComplex": "cell_complex",
+        "DiffusiveFlux": "diffusive_flux",
+        "DirichletGhostCells": "discrete_boundary_condition",
+        "DiscreteBoundaryCondition": "discrete_boundary_condition",
+        "DiscreteExteriorDerivative": "discrete_exterior_derivative",
+        "DiscreteField": "discrete_field",
+        "DiscreteOperator": "discrete_operator",
+        "DiscreteOperatorCapability": "algorithm_capabilities",
+        "DiscreteOperatorRegistry": "algorithm_capabilities",
+        "DiscreteOperatorRequest": "algorithm_capabilities",
+        "Discretization": "discretization",
+        "DivergenceFormDiscretization": "divergence_form_discretization",
+        "EdgeField": "edge_field",
+        "FaceField": "face_field",
+        "InhomogeneousDirichletGhostCells": "discrete_boundary_condition",
+        "Mesh": "mesh",
+        "NeumannGhostCells": "discrete_boundary_condition",
+        "NumericalFlux": "numerical_flux",
+        "PeriodicGhostCells": "discrete_boundary_condition",
+        "PointField": "point_field",
+        "RestrictionOperator": "restriction_operator",
+        "StructuredMesh": "structured_mesh",
+        "VolumeField": "volume_field",
+        "ZeroGhostCells": "discrete_boundary_condition",
+    },
+    required_name_fragments={
+        "AdvectionDiffusionFlux": ("Advection", "Diffusion", "Flux"),
+        "AdvectiveFlux": ("Flux",),
+        "DiffusiveFlux": ("Flux",),
+        "DivergenceFormDiscretization": ("Divergence", "Discretization"),
+    },
+)
+
+_GEOMETRY_OWNERSHIP = _ArchitectureOwnershipSpec(
+    package="cosmic_foundry.geometry",
+    public_categories={
+        "capability_contract": frozenset(
+            {
+                "GeometryCapability",
+                "geometry_capabilities",
+                "GeometryRegistry",
+                "GeometryRequest",
+                "select_geometry",
+            }
+        ),
+        "manifold": frozenset(
+            {
+                "EuclideanManifold",
+                "SchwarzschildManifold",
+            }
+        ),
+        "chart": frozenset(
+            {
+                "CartesianChart",
+            }
+        ),
+        "mesh": frozenset(
+            {
+                "CartesianMesh",
+            }
+        ),
+        "restriction_operator": frozenset(
+            {
+                "CartesianEdgeRestriction",
+                "CartesianFaceRestriction",
+                "CartesianPointRestriction",
+                "CartesianRestrictionOperator",
+                "CartesianVolumeRestriction",
+            }
+        ),
+        "discrete_geometry_operator": frozenset(
+            {
+                "CartesianExteriorDerivative",
+            }
+        ),
+    },
+    capability_provider="cosmic_foundry.geometry.geometry_capabilities",
+    request_selector="cosmic_foundry.geometry.select_geometry",
+    request_expectations=(
+        _CapabilityRequestExpectation(
+            _GeometryRequest(
+                available_structure=frozenset({"dimension"}),
+                requested_properties=frozenset({"manifold", "flat_metric"}),
+            ),
+            "EuclideanManifold",
+        ),
+        _CapabilityRequestExpectation(
+            _GeometryRequest(
+                available_structure=frozenset({"central_mass_symbol"}),
+                requested_properties=frozenset(
+                    {"manifold", "lorentzian_metric", "schwarzschild_geometry"}
+                ),
+            ),
+            "SchwarzschildManifold",
+        ),
+        _CapabilityRequestExpectation(
+            _GeometryRequest(
+                available_structure=frozenset(
+                    {"euclidean_manifold", "origin", "spacing", "shape"}
+                ),
+                requested_properties=frozenset({"mesh", "cartesian_mesh"}),
+            ),
+            "CartesianMesh",
+        ),
+        _CapabilityRequestExpectation(
+            _GeometryRequest(
+                available_structure=frozenset(
+                    {"cartesian_mesh", "discrete_field", "form_degree"}
+                ),
+                requested_properties=frozenset(
+                    {"discrete_exterior_derivative", "chain_map", "exact_stokes"}
+                ),
+            ),
+            "CartesianExteriorDerivative",
+        ),
+        _CapabilityRequestExpectation(
+            _GeometryRequest(
+                available_structure=frozenset({"cartesian_mesh", "zero_form"}),
+                requested_properties=frozenset({"restriction", "volume_field"}),
+            ),
+            "CartesianVolumeRestriction",
+        ),
+        _CapabilityRequestExpectation(
+            _GeometryRequest(
+                available_structure=frozenset({"cartesian_mesh", "zero_form"}),
+                requested_properties=frozenset({"restriction", "point_field"}),
+            ),
+            "CartesianPointRestriction",
+        ),
+    ),
+    rejected_requests=(
+        _CapabilityRejectionExpectation(
+            _GeometryRequest(
+                available_structure=frozenset({"cartesian_mesh", "zero_form"}),
+                requested_properties=frozenset({"restriction", "edge_field"}),
+            )
+        ),
+    ),
+    expected_class_modules={
+        "CartesianChart": "euclidean_manifold",
+        "CartesianEdgeRestriction": "cartesian_restriction_operator",
+        "CartesianExteriorDerivative": "cartesian_exterior_derivative",
+        "CartesianFaceRestriction": "cartesian_restriction_operator",
+        "CartesianMesh": "cartesian_mesh",
+        "CartesianPointRestriction": "cartesian_restriction_operator",
+        "CartesianRestrictionOperator": "cartesian_restriction_operator",
+        "CartesianVolumeRestriction": "cartesian_restriction_operator",
+        "EuclideanManifold": "euclidean_manifold",
+        "GeometryCapability": "algorithm_capabilities",
+        "GeometryRegistry": "algorithm_capabilities",
+        "GeometryRequest": "algorithm_capabilities",
+        "SchwarzschildManifold": "schwarzschild_manifold",
+    },
+    required_name_fragments={
+        "CartesianExteriorDerivative": ("Cartesian", "Derivative"),
+        "CartesianMesh": ("Cartesian", "Mesh"),
+        "CartesianRestrictionOperator": ("Cartesian", "Restriction"),
+        "EuclideanManifold": ("Manifold",),
+        "SchwarzschildManifold": ("Manifold",),
+    },
+)
+
 _CLAIMS: list[Claim[None]] = [
     *[_AbcInstantiationClaim(cls) for cls in _ABCS],
     *[_HierarchyClaim(child, parent) for child, parent in _HIERARCHY_PAIRS],
@@ -1262,6 +1559,8 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_TIME_INTEGRATOR_OWNERSHIP),
     _ArchitectureOwnershipClaim(_LINEAR_SOLVER_OWNERSHIP),
     _ArchitectureOwnershipClaim(_DECOMPOSITION_OWNERSHIP),
+    _ArchitectureOwnershipClaim(_DISCRETE_OPERATOR_OWNERSHIP),
+    _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
     _AutoDiscoveryImportClaim(),
 ]
 

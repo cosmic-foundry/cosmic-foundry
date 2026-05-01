@@ -854,8 +854,7 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add capability/ownership maps for discrete operators and geometry/theory
-   boundaries, reusing the same claim machinery.
+No queued implementation items remain in this sprint.
 
 ---
 

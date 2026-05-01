@@ -23,6 +23,7 @@ class AlgorithmCapability:
     contract: AlgorithmStructureContract
     min_order: int | None = None
     max_order: int | None = None
+    order_step: int | None = None
     supported_orders: frozenset[int] | None = None
     priority: int | None = None
 
@@ -32,9 +33,16 @@ class AlgorithmCapability:
             if self.supported_orders is not None:
                 if request.order not in self.supported_orders:
                     return False
-            elif self.min_order is not None and self.max_order is not None:
-                if not self.min_order <= request.order <= self.max_order:
+            else:
+                if self.min_order is not None and request.order < self.min_order:
                     return False
+                if self.max_order is not None and request.order > self.max_order:
+                    return False
+                if self.order_step is not None:
+                    if self.min_order is None:
+                        return False
+                    if (request.order - self.min_order) % self.order_step != 0:
+                        return False
         return (
             self.contract.requires <= request.available_structure
             and request.requested_properties <= self.contract.provides
