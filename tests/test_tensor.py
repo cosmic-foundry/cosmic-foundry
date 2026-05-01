@@ -36,7 +36,7 @@ _NON_PY_BACKENDS = (_NP, _JAX)
 # ---------------------------------------------------------------------------
 
 
-class _RoundtripClaim(Claim):
+class _RoundtripClaim(Claim[None]):
     def __init__(self, backend: Any, label: str, data: Any) -> None:
         self._backend = backend
         self._label = label
@@ -46,7 +46,7 @@ class _RoundtripClaim(Claim):
     def description(self) -> str:
         return f"roundtrip/{self._label}/{type(self._backend).__name__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         t = Tensor(self._data, backend=self._backend)
         recovered = t.to_list()
         ref = Tensor(self._data, backend=_PY).to_list()
@@ -60,7 +60,7 @@ class _RoundtripClaim(Claim):
 # ---------------------------------------------------------------------------
 
 
-class _ArithmeticClaim(Claim):
+class _ArithmeticClaim(Claim[None]):
     def __init__(self, label: str, fn: Any, backend: Any = None) -> None:
         self._label = label
         self._fn = fn
@@ -70,7 +70,7 @@ class _ArithmeticClaim(Claim):
     def description(self) -> str:
         return f"arithmetic/{self._label}/{type(self._backend).__name__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         py_result = self._fn(_PY)
         test_result = self._fn(self._backend)
         assert _approx_equal(py_result.to_list(), test_result.to_list()), (
@@ -84,7 +84,7 @@ class _ArithmeticClaim(Claim):
 # ---------------------------------------------------------------------------
 
 
-class _ConversionClaim(Claim):
+class _ConversionClaim(Claim[None]):
     def __init__(self, src: Any, dst: Any, label: str, data: Any) -> None:
         self._src = src
         self._dst = dst
@@ -98,7 +98,7 @@ class _ConversionClaim(Claim):
             f"{type(self._src).__name__}→{type(self._dst).__name__}"
         )
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         original = Tensor(self._data, backend=self._src)
         converted = original.to(self._dst)
         assert (
@@ -114,7 +114,7 @@ class _ConversionClaim(Claim):
 # ---------------------------------------------------------------------------
 
 
-class _MixedBackendClaim(Claim):
+class _MixedBackendClaim(Claim[None]):
     def __init__(self, label: str, fn: Any, a_backend: Any, b_backend: Any) -> None:
         self._label = label
         self._fn = fn
@@ -128,7 +128,7 @@ class _MixedBackendClaim(Claim):
             f"{type(self._a_backend).__name__}+{type(self._b_backend).__name__}"
         )
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         a = Tensor([1.0, 2.0, 3.0], backend=self._a_backend)
         b = Tensor([1.0, 2.0, 3.0], backend=self._b_backend)
         with pytest.raises(ValueError, match="mix backends"):
@@ -140,7 +140,7 @@ class _MixedBackendClaim(Claim):
 # ---------------------------------------------------------------------------
 
 
-class _FactoryClaim(Claim):
+class _FactoryClaim(Claim[None]):
     def __init__(self, backend: Any, name: str, fn: Any) -> None:
         self._backend = backend
         self._name = name
@@ -150,7 +150,7 @@ class _FactoryClaim(Claim):
     def description(self) -> str:
         return f"factory/{self._name}/{type(self._backend).__name__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         t = self._fn(self._backend)
         assert t.backend is self._backend, (
             f"{self.description}: expected backend {type(self._backend).__name__}, "
@@ -163,7 +163,7 @@ class _FactoryClaim(Claim):
 # ---------------------------------------------------------------------------
 
 
-class _SliceClaim(Claim):
+class _SliceClaim(Claim[None]):
     """Claim: a slice read or write gives the same result as PythonBackend."""
 
     def __init__(self, label: str, fn: Any, backend: Any = None) -> None:
@@ -175,7 +175,7 @@ class _SliceClaim(Claim):
     def description(self) -> str:
         return f"slice/{self._label}/{type(self._backend).__name__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         py_result = self._fn(_PY)
         test_result = self._fn(self._backend)
         assert _approx_equal(py_result.to_list(), test_result.to_list()), (
@@ -344,7 +344,7 @@ _MIXED_OPS = [
 # Registry
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[Claim] = [
+_CLAIMS: list[Claim[None]] = [
     # Round-trips for all backends
     *[
         _RoundtripClaim(b, label, data)
@@ -394,5 +394,5 @@ _CLAIMS: list[Claim] = [
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_tensor(claim: Claim) -> None:
-    claim.check()
+def test_tensor(claim: Claim[None]) -> None:
+    claim.check(None)

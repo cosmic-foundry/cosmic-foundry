@@ -96,7 +96,7 @@ _BC_SPECS: list[_BCSpec] = [
 ]
 
 
-class _ConstantFieldClaim(Claim):
+class _ConstantFieldClaim(Claim[None]):
     """Claim: a BC's ghost formula and its Laplacian consequence are consistent.
 
     For the constant field φ = _C and a given _BCSpec, three properties are
@@ -116,7 +116,7 @@ class _ConstantFieldClaim(Claim):
     def description(self) -> str:
         return f"constant_field/{self._spec.label}/{self._ndim}D"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         spec = self._spec
         ndim = self._ndim
         n = _N_PER_AXIS[ndim]
@@ -158,11 +158,11 @@ class _ConstantFieldClaim(Claim):
         )
 
 
-_CLAIMS: list[Claim] = [
+_CLAIMS: list[Claim[None]] = [
     _ConstantFieldClaim(spec, ndim) for spec in _BC_SPECS for ndim in [1, 2, 3]
 ]
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_boundary_conditions(claim: Claim) -> None:
-    claim.check()
+def test_boundary_conditions(claim: Claim[None]) -> None:
+    claim.check(None)

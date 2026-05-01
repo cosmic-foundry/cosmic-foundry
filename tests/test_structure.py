@@ -265,7 +265,7 @@ def _third_party_imports(path: Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-class _AbcInstantiationClaim(Claim):
+class _AbcInstantiationClaim(Claim[None]):
     def __init__(self, cls: type) -> None:
         self._cls = cls
 
@@ -273,12 +273,12 @@ class _AbcInstantiationClaim(Claim):
     def description(self) -> str:
         return f"abc_not_instantiable/{self._cls.__qualname__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         with pytest.raises(TypeError):
             self._cls()
 
 
-class _HierarchyClaim(Claim):
+class _HierarchyClaim(Claim[None]):
     def __init__(self, child: type, parent: type) -> None:
         self._child = child
         self._parent = parent
@@ -287,11 +287,11 @@ class _HierarchyClaim(Claim):
     def description(self) -> str:
         return f"hierarchy/{self._child.__qualname__}->{self._parent.__qualname__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         assert issubclass(self._child, self._parent)
 
 
-class _ModuleAllClaim(Claim):
+class _ModuleAllClaim(Claim[None]):
     def __init__(self, mod_path: str, mod: types.ModuleType) -> None:
         self._mod_path = mod_path
         self._mod = mod
@@ -300,7 +300,7 @@ class _ModuleAllClaim(Claim):
     def description(self) -> str:
         return f"module_all/{self._mod_path}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         exported = set(getattr(self._mod, "__all__", []))
         defined = {
             name
@@ -311,7 +311,7 @@ class _ModuleAllClaim(Claim):
         assert not missing, f"defined but not in __all__: {missing}"
 
 
-class _IterativeSolverJitClaim(Claim):
+class _IterativeSolverJitClaim(Claim[None]):
     def __init__(self, cls: type) -> None:
         self._cls = cls
 
@@ -319,7 +319,7 @@ class _IterativeSolverJitClaim(Claim):
     def description(self) -> str:
         return f"iterative_jit/{self._cls.__qualname__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         solver: Any = self._cls()
         state = solver.init_state(_JIT_OP, _JIT_B)
         new_state = solver.step(_JIT_OP, state)
@@ -329,7 +329,7 @@ class _IterativeSolverJitClaim(Claim):
         assert converged.shape == ()
 
 
-class _MaterializationGateClaim(Claim):
+class _MaterializationGateClaim(Claim[None]):
     def __init__(self, cls: type) -> None:
         self._cls = cls
 
@@ -337,7 +337,7 @@ class _MaterializationGateClaim(Claim):
     def description(self) -> str:
         return f"materialization_gate/{self._cls.__qualname__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         op = _DeclaredLinearOperator(_JIT_N)
         b = Tensor.declare(_JIT_N)
         solver: Any = self._cls()
@@ -347,7 +347,7 @@ class _MaterializationGateClaim(Claim):
             converged.get()
 
 
-class _FactorizationJitClaim(Claim):
+class _FactorizationJitClaim(Claim[None]):
     def __init__(self, cls: type) -> None:
         self._cls = cls
 
@@ -355,7 +355,7 @@ class _FactorizationJitClaim(Claim):
     def description(self) -> str:
         return f"factorization_jit/{self._cls.__qualname__}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         n = _JIT_N
         a = Tensor.declare(n, n)
         rhs = Tensor.declare(n)
@@ -363,14 +363,14 @@ class _FactorizationJitClaim(Claim):
         factored.solve(rhs)
 
 
-class _GenericBasesClaim(Claim):
+class _GenericBasesClaim(Claim[None]):
     """Claim: every subclass of a generic class fully binds the TypeVar parameters."""
 
     @property
     def description(self) -> str:
         return "generic_bases/all_parameterized"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         violations: list[str] = []
         for modname, clsname, cls in _all_local_classes():
             if getattr(cls, "__parameters__", ()):
@@ -388,19 +388,19 @@ class _GenericBasesClaim(Claim):
             )
 
 
-class _ManifoldIsolationClaim(Claim):
+class _ManifoldIsolationClaim(Claim[None]):
     """Claim: the Manifold and IndexedSet hierarchies are disjoint."""
 
     @property
     def description(self) -> str:
         return "manifold/disjoint_from_indexed_set"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         assert not issubclass(Manifold, IndexedSet)
         assert not issubclass(IndexedSet, Manifold)
 
 
-class _ImportBoundaryClaim(Claim):
+class _ImportBoundaryClaim(Claim[None]):
     """Claim: a theory/ or geometry/ source file imports no numerical packages."""
 
     def __init__(self, path: Path) -> None:
@@ -410,7 +410,7 @@ class _ImportBoundaryClaim(Claim):
     def description(self) -> str:
         return f"import_boundary/{self._path.relative_to(_PACKAGE_ROOT.parent)}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         violations = _third_party_imports(self._path)
         if violations:
             rel = self._path.relative_to(_PACKAGE_ROOT.parent)
@@ -419,7 +419,7 @@ class _ImportBoundaryClaim(Claim):
             )
 
 
-class _ParametrizeEnforcementClaim(Claim):
+class _ParametrizeEnforcementClaim(Claim[None]):
     """Claim: every top-level test_* function carries @pytest.mark.parametrize."""
 
     def __init__(self, path: Path) -> None:
@@ -429,7 +429,7 @@ class _ParametrizeEnforcementClaim(Claim):
     def description(self) -> str:
         return f"test_pattern/parametrize/{self._path.name}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         tree = ast.parse(self._path.read_text())
         violations = []
         for node in tree.body:
@@ -452,7 +452,7 @@ class _ParametrizeEnforcementClaim(Claim):
             )
 
 
-class _BodyDispatchClaim(Claim):
+class _BodyDispatchClaim(Claim[None]):
     """Claim: every top-level test_* body is a single claim.check(...) dispatch."""
 
     def __init__(self, path: Path) -> None:
@@ -462,7 +462,7 @@ class _BodyDispatchClaim(Claim):
     def description(self) -> str:
         return f"test_pattern/body_dispatch/{self._path.name}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         tree = ast.parse(self._path.read_text())
         violations = []
         for node in tree.body:
@@ -485,6 +485,11 @@ class _BodyDispatchClaim(Claim):
                 and call.func.attr == "check"
             ):
                 violations.append(f"{node.name}: body does not call .check()")
+                continue
+            if len(call.args) != 1 or call.keywords:
+                violations.append(
+                    f"{node.name}: .check() does not receive exactly one calibration"
+                )
         if violations:
             raise AssertionError(
                 f"{self._path.name}: test functions with non-dispatch bodies: "
@@ -492,7 +497,7 @@ class _BodyDispatchClaim(Claim):
             )
 
 
-class _AutoDiscoveryImportClaim(Claim):
+class _AutoDiscoveryImportClaim(Claim[None]):
     """Claim: test_structure.py imports no class that any _discover_concrete_* returns.
 
     Finds every function in this module whose name starts with _discover_concrete_,
@@ -504,7 +509,7 @@ class _AutoDiscoveryImportClaim(Claim):
     def description(self) -> str:
         return "test_pattern/auto_discovery_imports"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         import tests.test_structure as _self
 
         discovered = {
@@ -544,7 +549,7 @@ _MATRIX_FREE_ITERATIVE_SOLVERS = _discover_matrix_free_iterative_solvers(_MODULE
 _FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
-_CLAIMS: list[Claim] = [
+_CLAIMS: list[Claim[None]] = [
     *[_AbcInstantiationClaim(cls) for cls in _ABCS],
     *[_HierarchyClaim(child, parent) for child, parent in _HIERARCHY_PAIRS],
     *[_ModuleAllClaim(mod_path, mod) for mod_path, mod in _MODULES],
@@ -565,5 +570,5 @@ _CLAIMS: list[Claim] = [
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_structure(claim: Claim) -> None:
-    claim.check()
+def test_structure(claim: Claim[None]) -> None:
+    claim.check(None)

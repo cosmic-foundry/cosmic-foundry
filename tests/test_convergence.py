@@ -1,6 +1,6 @@
 """Convergence verification for all concrete DiscreteOperator subclasses and solvers.
 
-Each convergence claim is a CalibratedClaim subclass that encodes both what is
+Each convergence claim is a Claim subclass that encodes both what is
 being verified and how to verify it.  Adding a new claim requires only appending
 to _CLAIMS; the single parametric test covers all entries.
 
@@ -86,7 +86,7 @@ from cosmic_foundry.theory.discrete import (
 )
 from cosmic_foundry.theory.discrete.discrete_field import _CallableDiscreteField
 from tests.calibration import _MESH_FRACTIONS, _NP_BACKEND, _convergence_n_max
-from tests.claims import CalibratedClaim, Claim, assemble_linear_op
+from tests.claims import Claim, assemble_linear_op
 
 # ---------------------------------------------------------------------------
 # Dimension and budget configuration
@@ -111,7 +111,7 @@ _SOLVER_MESH_N = {1: 8, 2: 4, 3: 3}
 # ---------------------------------------------------------------------------
 
 
-class _OrderClaim(CalibratedClaim[float]):
+class _OrderClaim(Claim[float]):
     """Claim: discrete operator achieves O(h^p) convergence at order p.
 
     Verifies that the error polynomial has zeros at h⁰…h^{p-1} and a
@@ -222,7 +222,7 @@ class _OrderClaim(CalibratedClaim[float]):
         )
 
 
-class _SolverClaim(CalibratedClaim[float]):
+class _SolverClaim(Claim[float]):
     """Claim: solver residual < tol after solve on the given Discretization.
 
     Verifies that ‖b − Au‖₂ < tol after solve returns.  disc is pre-built
@@ -253,7 +253,7 @@ class _SolverClaim(CalibratedClaim[float]):
         assert residual < tol, f"Did not converge: residual {residual:.3e}"
 
 
-class _DirectSolverClaim(CalibratedClaim[float]):
+class _DirectSolverClaim(Claim[float]):
     """Claim: direct solver residual < tol after one factorization pass.
 
     disc is pre-built with its BC; assembled to a LinearOperator at check time.
@@ -315,7 +315,7 @@ class _DirectSolverClaim(CalibratedClaim[float]):
         assert residual < 1e-10, f"Direct solve residual {residual:.3e} >= 1e-10"
 
 
-class _ConvergenceRateClaim(CalibratedClaim[float]):
+class _ConvergenceRateClaim(Claim[float]):
     """Claim: ‖φ_h − φ_exact‖_{L²_h} converges at O(h^p) over a mesh sequence.
 
     Manufactured solution: tensor-product sinusoidal modes
@@ -554,7 +554,7 @@ class _ConvergenceRateClaim(CalibratedClaim[float]):
         )
 
 
-class _SeparabilityClaim(Claim):
+class _SeparabilityClaim(Claim[None]):
     """Claim: full d-dim stiffness matrix equals the Kronecker sum of 1D matrices.
 
     For a separable Cartesian FVM discretization, the assembled N^d × N^d
@@ -585,7 +585,7 @@ class _SeparabilityClaim(Claim):
     def description(self) -> str:
         return f"separability/{self._label}/{self._ndim}D"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         n = self._N_AXIS
         ndim = self._ndim
         n_nd = n**ndim
@@ -693,8 +693,8 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 # Claim generation: one loop over all dimensions
 # ---------------------------------------------------------------------------
 
-_CLAIMS: list[CalibratedClaim[float]] = []
-_SEPARABILITY_CLAIMS: list[Claim] = []
+_CLAIMS: list[Claim[float]] = []
+_SEPARABILITY_CLAIMS: list[Claim[None]] = []
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)
@@ -791,7 +791,7 @@ _N_CONVERGENCE_CLAIMS: int = sum(
 
 
 @pytest.mark.parametrize("claim", _CLAIMS, ids=[c.description for c in _CLAIMS])
-def test_convergence(claim: CalibratedClaim[float], fma_rate: float) -> None:
+def test_convergence(claim: Claim[float], fma_rate: float) -> None:
     claim.check(fma_rate)
 
 
@@ -800,5 +800,5 @@ def test_convergence(claim: CalibratedClaim[float], fma_rate: float) -> None:
     _SEPARABILITY_CLAIMS,
     ids=[c.description for c in _SEPARABILITY_CLAIMS],
 )
-def test_separability(claim: Claim) -> None:
-    claim.check()
+def test_separability(claim: Claim[None]) -> None:
+    claim.check(None)

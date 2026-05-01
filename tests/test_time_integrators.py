@@ -24,7 +24,7 @@ from cosmic_foundry.computation.backends import (
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor
-from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, CalibratedClaim, Claim
+from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
@@ -267,7 +267,7 @@ class _PerformanceSpec:
     roofline: Any
 
 
-class _ConvergenceClaim(Claim):
+class _ConvergenceClaim(Claim[None]):
     """Convergence + conservation claim for one (order, problem) pair."""
 
     def __init__(self, order: int, prob: tuple) -> None:
@@ -278,7 +278,7 @@ class _ConvergenceClaim(Claim):
     def description(self) -> str:
         return f"convergence/order{self._order}/{self._prob[0]}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         pid, u0, n, exact, mass_cons, rhs = self._prob
         inst = _ti.AutoIntegrator(self._order)
         t0 = time.perf_counter()
@@ -311,7 +311,7 @@ class _ConvergenceClaim(Claim):
                 ), f"order{self._order}/{pid}: u[{i}] negative"
 
 
-class _CorrectnessClaim(Claim):
+class _CorrectnessClaim(Claim[None]):
     """Accuracy claim for one numerical history against an analytical f(t)."""
 
     def __init__(self, spec: _CorrectnessSpec) -> None:
@@ -321,14 +321,14 @@ class _CorrectnessClaim(Claim):
     def description(self) -> str:
         return f"correctness/{self._spec.name}"
 
-    def check(self) -> None:
+    def check(self, _calibration: None) -> None:
         if self._spec.offline and not _OFFLINE:
             pytest.skip(_OFF_REASON)
         for state in self._spec.run():
             assert _err(state.u, self._spec.expected, state.t) < self._spec.tol
 
 
-class _PerformanceClaim(CalibratedClaim[_IntegratorCalibration]):
+class _PerformanceClaim(Claim[_IntegratorCalibration]):
     """Cost-to-accuracy claim against locally measured primitive rooflines."""
 
     def __init__(self, spec: _PerformanceSpec) -> None:
@@ -550,7 +550,7 @@ def integrator_calibration() -> _IntegratorCalibration:
 
 # ── claim registries ─────────────────────────────────────────────────────────
 
-_CONV_CLAIMS: list[Claim] = [
+_CONV_CLAIMS: list[Claim[None]] = [
     _ConvergenceClaim(order, prob) for order in _ORDERS for prob in _PROBS
 ]
 
@@ -559,13 +559,13 @@ _OFF_REASON = (
     "set COSMIC_FOUNDRY_OFFLINE_NETWORK_STRESS=1 to run"
 )
 _OFF_SPECS = _chain_specs(range(5, 12)) + _spoke_specs(range(7, 22), [1, 10, 100])
-_CORRECT_CLAIMS: list[Claim] = [
+_CORRECT_CLAIMS: list[Claim[None]] = [
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
     *[_CorrectnessClaim(_nse_correctness_spec(s, offline=True)) for s in _OFF_SPECS],
 ]
-_PERF_CLAIMS: list[CalibratedClaim[_IntegratorCalibration]] = [
+_PERF_CLAIMS: list[Claim[_IntegratorCalibration]] = [
     _PerformanceClaim(_explicit_rk4_performance_spec()),
     _PerformanceClaim(_semilinear_lawson4_performance_spec()),
 ]
@@ -578,22 +578,22 @@ _CONV_IDS = [c.description for c in _CONV_CLAIMS]
 
 
 @pytest.mark.parametrize("claim", _CONV_CLAIMS, ids=_CONV_IDS)
-def test_convergence(claim: Claim) -> None:
-    claim.check()
+def test_convergence(claim: Claim[None]) -> None:
+    claim.check(None)
 
 
 @pytest.mark.parametrize(
     "claim", _CORRECT_CLAIMS, ids=[c.description for c in _CORRECT_CLAIMS]
 )
-def test_correctness(claim: Claim) -> None:
-    claim.check()
+def test_correctness(claim: Claim[None]) -> None:
+    claim.check(None)
 
 
 @pytest.mark.parametrize(
     "claim", _PERF_CLAIMS, ids=[c.description for c in _PERF_CLAIMS]
 )
 def test_performance(
-    claim: CalibratedClaim[_IntegratorCalibration],
+    claim: Claim[_IntegratorCalibration],
     integrator_calibration: _IntegratorCalibration,
 ) -> None:
     claim.check(integrator_calibration)
