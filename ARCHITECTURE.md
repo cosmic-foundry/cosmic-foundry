@@ -733,67 +733,139 @@ broader persistence layer or as a standalone capability.
 
 ## Current work
 
-### Sprint: Domain-preserving adaptive integration
+### Sprint: Algorithm structure and capability selection
 
-Goal: make adaptive time integrators respect known state domains without
-post-step clipping.  For reaction-network abundances the valid domain is the
-nonnegative orthant intersected with the conservation manifold.  A candidate
-step that leaves that domain is not a valid accepted state: the controller must
-reject the internal step, reduce the step size, and retry from the previous
-state.  Projection remains for exact conservation and algebraic constraint
-initialization; it must not be used to hide a negative-abundance candidate.
+Goal: make algorithm ownership executable.  Calling code should be able to
+express the properties it needs from an algorithm, then let the package select
+the implementation whose declared capabilities satisfy those properties.
+Numerical claims verify that an algorithm is correct on a problem; capability
+ownership claims verify that implementations make truthful, non-overlapping
+claims about the domain they own.  The validation home for these architecture
+checks is `tests/test_structure.py`; feature-specific tests may remain in their
+existing files, but capability maps, dispatch uniqueness checks, and
+anti-duplication checks belong in the structural claim registry.
+
+This is the computation-layer counterpart to the `theory/` formalism.  The
+theory layer makes mathematical structure explicit so valid operations follow
+from declared structure.  Computation should do the same for algorithms:
+selectable implementations declare the input structure they require and the
+algorithmic properties they provide, and selection becomes the act of finding an
+implementation that inhabits a requested contract.
+
+The first application is the time-integration layer.  The recent Nordsieck
+cleanup made `VODEController` the single public adaptive Nordsieck controller,
+with `OrderSelector` and `StiffnessSwitcher` retained as reusable policies.
+This sprint should encode that decision as declared capabilities rather than
+only prose: callers request adaptive, domain-aware, stiffness-switching
+Nordsieck integration, and the registry resolves that request to the single
+implementation that owns it.  Future packages should be able to reuse the same
+pattern for solvers, decompositions, discretizations, and autotuning.
 
 The sprint is complete when the following are true:
 
-- **Domain abstraction.**  The computation layer exposes a small domain
-  predicate/protocol for integrator state validity.  It supports at least:
-  membership testing for a candidate `Tensor`, a roundoff floor for tiny
-  negative values, and failure metadata identifying the violated component and
-  margin.  Generic integrators know only that a domain accepted or rejected a
-  candidate; reaction-network-specific meaning stays in `ReactionNetworkRHS` or
-  a companion domain object.
-- **Reaction-network domain.**  `ReactionNetworkRHS` can provide the abundance
-  domain implied by its species vector: all abundances must be nonnegative
-  within an explicit roundoff tolerance.  Conservation laws remain separate
-  equality constraints enforced by `project_conserved`; positivity is an
-  acceptance criterion, not a clipping operation.
-- **Retry on domain failure.**  `VODEController` composes local error
-  acceptance with domain acceptance.  If either fails, the controller rejects
-  the step, leaves the previous state/history unchanged, shrinks the internal
-  timestep, rebuilds the Nordsieck history for the retry, and records the
-  rejection reason.  Domain rejection counts toward the existing rejection
-  limit.
-- **Known failure promoted.**  The branched hot-window reaction-network stress
-  claim no longer xfails.  It asserts nonnegative accepted abundances, tight
-  conservation, bounded rejection count, family switching, and coarse/fine
-  self-consistency.
-- **No clipping guard.**  Tests include a targeted network where a large
-  unconstrained step would produce a negative abundance.  The accepted solution
-  must be nonnegative because the controller either predicted a smaller
-  domain-safe attempt or retried from the previous state after rejection, not
-  because a negative component was clamped after the step.
-- **General controller path.**  After VODE is proven on the known failure, the
-  same domain-acceptance mechanism is made available to other adaptive
-  controllers (`Integrator`/`PIController` and `ConstraintAwareController`)
-  where they own candidate acceptance.  VODE is the single public adaptive
-  Nordsieck controller; `OrderSelector` and `StiffnessSwitcher` remain
-  reusable policies rather than competing wrappers.
-- **Domain-aware timestep prediction.**  The algorithm uses the known domain to
-  choose less reckless initial and retry timesteps.  For positivity domains this
-  can start with a conservative time-to-bound estimate from the current state
-  and RHS direction, then evolve toward richer domain hooks that provide
-  controller-specific step limits or safety factors.  The controller should
-  still verify every candidate; predictive bounds reduce avoidable rejections
-  but do not replace acceptance checks.
-- **Diagnostics.**  Rejection logs distinguish local truncation error,
-  stiffness/family changes, and domain violations.  Failed tests must report the
-  violated component, candidate value, tolerance, attempted `dt`, and retry
-  count so the single failing step can be reconstructed.
+- **Capability declaration model.**  Each selectable implementation can declare
+  the properties it satisfies: method family, supported RHS structure,
+  adaptivity, variable order, stiffness switching, domain awareness, constraint
+  lifecycle support, order range, required derivative information, and similar
+  package-local properties.  The declaration should be data, not prose, so
+  tests and dispatch can inspect it.
+- **Algorithm structure contracts.**  Capability declarations distinguish
+  required input structure from provided algorithmic properties.  For time
+  integration, requirements include RHS structure such as plain, Jacobian,
+  split, Hamiltonian, or reaction-network RHS, plus optional state-domain or
+  conservation-constraint structure.  Provided properties include explicit or
+  implicit stepping, adaptive timestep control, variable order, stiffness
+  switching, domain-aware acceptance, and constraint lifecycle management.
+- **Capability request model.**  Calling code can express required properties
+  without naming the concrete implementation.  A request can be exact or
+  partial: for example, "adaptive, domain-aware Nordsieck integration with
+  stiffness switching" should resolve to the implementation that declares those
+  capabilities.
+- **Selection and ambiguity rules.**  A package-local registry can select an
+  implementation from a capability request.  If multiple implementations satisfy
+  the same request, the registry must either use an explicit priority/ranking
+  encoded in data or fail as an architectural ambiguity.  Silent first-match
+  dispatch is not acceptable for ownership-sensitive paths.
+- **Inhabitation checks.**  Structural claims verify that expected requests have
+  at least one declared implementation and that ownership-sensitive requests
+  have exactly one selected implementation unless explicit priority data says
+  otherwise.  Missing inhabitants expose unsupported regions of the claimed
+  algorithm domain; duplicate inhabitants expose competing implementations.
+- **Reusable ownership claim type.**  `tests/test_structure.py` exposes
+  declarative claims for capability-based architecture ownership.  A claim can
+  categorize public symbols, verify declared capabilities, assert dispatch
+  uniqueness or explicit priority, list forbidden public symbols, and fail with
+  diagnostics that identify the mismatched symbol, capability, or request.
+- **Public-category maps.**  Ownership claims can still assert that each public
+  export in a package belongs to an expected category such as integrator,
+  controller, policy, RHS wrapper, decomposition, solver, result object, or
+  helper.  The categories are deliberately local to each package so the
+  mechanism is general without imposing a global taxonomy too early.
+- **Exclusive-owner checks.**  Ownership claims can assert that a named
+  responsibility has exactly one public owner or exactly one selected owner for
+  a capability request.  This is the guard against parallel implementations at
+  the same abstraction level: if a new class claims the same role, the
+  structural test fails until the registry declares an intentional priority or
+  the duplication is removed.
+- **Forbidden-symbol checks.**  Ownership claims can assert that retired public
+  names remain absent.  This catches accidental reintroduction of wrappers or
+  compatibility aliases when the project has explicitly consolidated a
+  responsibility.
+- **Ownership-revealing class names.**  Public class names should resemble the
+  architectural claim they make.  Avoid generic, acronym-only, or historical
+  names when they obscure ownership; for example, a controller name should say
+  what kind of control it owns rather than relying on a shorthand such as
+  `VODE`.  The structural claim should make these naming expectations explicit
+  enough that unclear new public names require either a rename or an intentional
+  ownership-map update.
+- **Primary-class module names.**  Module filenames should resemble the primary
+  public class or concept they house.  A class such as `Integrator` should not
+  live in a vaguely named module such as `stepper.py` when `integrator.py` is
+  the ownership-revealing home.  The ownership machinery should flag public
+  classes whose defining module name does not match the class responsibility,
+  while still allowing explicitly mapped policy/helper modules.
+- **Time-integrator ownership map.**  The first concrete map covers
+  `cosmic_foundry.computation.time_integrators`.  It should classify public
+  method families, drivers/controllers, policies, RHS wrappers, domains,
+  coefficient/history objects, and helpers.  It should encode at least:
+  adaptive Nordsieck control with stiffness switching resolves to the single
+  adaptive Nordsieck controller; `Integrator` owns the generic
+  integrator/controller advance loop; `ConstraintAwareController` owns
+  reaction-network constraint lifecycle advancement; `OrderSelector` and
+  `StiffnessSwitcher` are policies, not selectable competing controllers.
+- **Time-integrator capability registry.**  The first implementation PR should
+  introduce the time-integrator capability declarations and selection API in the
+  smallest useful form.  It may start by wrapping or replacing the current
+  `AutoIntegrator` dispatch so branch choice follows declared properties rather
+  than ad hoc class names and `isinstance` ordering.  The registry should be
+  narrow enough to avoid speculative generality but general enough that solvers
+  and decompositions can reuse the pattern later.
+- **Time-integrator anti-duplication guard.**  The time-integrator map forbids
+  retired wrapper names including `VariableOrderNordsieckIntegrator` and
+  `FamilySwitchingNordsieckIntegrator`.  If the first implementation discovers
+  other same-level overlaps or ambiguous ownership, fix the code or update the
+  map in the same PR rather than documenting the ambiguity as acceptable.
+- **Generalization path.**  The capability/ownership claim machinery is
+  documented in code well enough for later PRs to add registries or maps for
+  solvers, decompositions, discrete operators, geometry, and autotuning without
+  copying test logic.
 
 Recommended PR sequence:
 
-No remaining implementation PRs in this sprint; select the next sprint after
-this PR lands.
+1. Add time-integrator algorithm-structure contracts, a minimal
+   capability-selection API, and reusable structure claims in
+   `tests/test_structure.py` that verify category coverage, request
+   inhabitation, dispatch uniqueness or explicit priority, forbidden symbols,
+   ownership-revealing class names, and class/module naming alignment.  Fix any
+   time-integrator ownership gaps or overlaps the claims expose.
+2. Move `AutoIntegrator` onto the capability-selection path, or remove any
+   remaining ad hoc dispatch that competes with the registry.  Rename ambiguous
+   time-integrator classes or modules if the ownership claims expose unclear
+   names.
+3. Add capability/ownership maps for linear solvers and decompositions,
+   reusing the same claim machinery.
+4. Add capability/ownership maps for discrete operators and geometry/theory
+   boundaries, reusing the same claim machinery.
 
 ---
 
