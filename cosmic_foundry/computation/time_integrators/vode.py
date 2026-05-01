@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
-
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.domains import (
-    DomainCheck,
     DomainViolation,
-    StateDomain,
+    check_state_domain,
 )
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
@@ -119,7 +116,7 @@ class VODEController:
         while True:
             candidate = self._integrator(family, q).step(rhs, state, dt)
             order_decision = self._order_selector.decide(candidate)
-            domain_check = self._domain_check(rhs, candidate.u)
+            domain_check = check_state_domain(rhs, candidate.u)
             if order_decision.accepted and domain_check.accepted:
                 stiffness = self._diagnostic.update(
                     rhs.jacobian(candidate.t, candidate.u),
@@ -188,12 +185,6 @@ class VODEController:
 
     def _integrator(self, family: FamilyName, q: int) -> MultistepIntegrator:
         return MultistepIntegrator(family, q)
-
-    def _domain_check(self, rhs: Any, u: Tensor) -> DomainCheck:
-        domain = getattr(rhs, "state_domain", None)
-        if domain is None:
-            return DomainCheck(accepted=True)
-        return cast(StateDomain, domain).check(u)
 
 
 __all__ = ["VODEController"]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -86,7 +86,16 @@ class NonnegativeStateDomain:
         return DomainCheck(accepted=True)
 
 
+def check_state_domain(rhs: Any, u: Tensor) -> DomainCheck:
+    """Return the RHS state-domain result, accepting when no domain is exposed."""
+    domain = getattr(rhs, "state_domain", None)
+    if domain is None:
+        return DomainCheck(accepted=True)
+    return cast(StateDomain, domain).check(u)
+
+
 __all__ = [
+    "check_state_domain",
     "DomainCheck",
     "DomainViolation",
     "NonnegativeStateDomain",

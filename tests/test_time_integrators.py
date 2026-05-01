@@ -1107,13 +1107,7 @@ def _branched_hot_window_stress_spec() -> _CorrectnessSpec:
 def _vode_domain_rejection_spec() -> _CorrectnessSpec:
     def run() -> list[_ti.ODEState]:
         rate = 300.0
-        rhs = _ti.ReactionNetworkRHS(
-            Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
-            lambda t, u: Tensor([rate * float(u[0])], backend=u.backend),
-            lambda t, u: Tensor([0.0], backend=u.backend),
-            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
-            jac=lambda t, u: Tensor([[-rate, 0.0], [rate, 0.0]], backend=u.backend),
-        )
+        rhs = _two_species_decay_rhs(rate)
         controller = _vode_controller()
         state = controller.advance(
             rhs,
@@ -1133,6 +1127,126 @@ def _vode_domain_rejection_spec() -> _CorrectnessSpec:
 
     return _CorrectnessSpec(
         "domain/vode_retries_negative_abundance",
+        run,
+        lambda t: (1.0, 1.0),
+        float("inf"),
+    )
+
+
+def _two_species_decay_rhs(rate: float) -> _ti.ReactionNetworkRHS:
+    return _ti.ReactionNetworkRHS(
+        Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
+        lambda t, u: Tensor([rate * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([0.0], backend=u.backend),
+        Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+        jac=lambda t, u: Tensor([[-rate, 0.0], [rate, 0.0]], backend=u.backend),
+    )
+
+
+def _generic_integrator_domain_rejection_spec() -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rate = 300.0
+        rhs = _two_species_decay_rhs(rate)
+        stepper = _ti.Integrator(
+            _ti.RungeKuttaIntegrator(3),
+            controller=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1e-3,
+                dt0=0.005,
+            ),
+        )
+        state = stepper.advance(
+            rhs,
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            0.0,
+            0.03,
+        )
+
+        _assert_abundance_state(state.u, label="generic_integrator_domain_retry")
+        assert stepper.rejection_reasons.count("domain") >= 1
+        assert stepper.domain_violations
+        assert stepper.domain_violations[0].component is not None
+        assert stepper.domain_rejection_step_sizes[0] > 0.0
+        assert stepper.rejected_steps < 20
+        return [state]
+
+    return _CorrectnessSpec(
+        "domain/generic_integrator_retries_negative_abundance",
+        run,
+        lambda t: (1.0, 1.0),
+        float("inf"),
+    )
+
+
+def _variable_order_domain_rejection_spec() -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rhs = _two_species_decay_rhs(300.0)
+        controller = _ti.VariableOrderNordsieckIntegrator(
+            "adams",
+            _ti.OrderSelector(
+                1,
+                3,
+                atol=1e-2,
+                rtol=1e-2,
+                factor_min=0.5,
+                factor_max=1.2,
+            ),
+            q_initial=2,
+        )
+        state = controller.advance(
+            rhs,
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            0.0,
+            0.03,
+            0.005,
+        )
+
+        _assert_abundance_state(state.u, label="variable_order_domain_retry")
+        assert controller.rejection_reasons.count("domain") >= 1
+        assert controller.domain_violations
+        assert controller.domain_violations[0].component is not None
+        assert controller.domain_rejection_step_sizes[0] > 0.0
+        assert controller.rejected_steps < 10
+        return [state]
+
+    return _CorrectnessSpec(
+        "domain/variable_order_retries_negative_abundance",
+        run,
+        lambda t: (1.0, 1.0),
+        float("inf"),
+    )
+
+
+def _constraint_aware_domain_rejection_spec() -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rhs = _two_species_decay_rhs(1000.0)
+        controller = _ti.ConstraintAwareController(
+            rhs,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
+            inner=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1.0,
+                dt0=0.02,
+            ),
+        )
+        state = controller.advance(
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            0.0,
+            0.03,
+        )
+
+        _assert_abundance_state(state.u, label="constraint_aware_domain_retry")
+        assert controller.rejection_reasons.count("domain") >= 1
+        assert controller.domain_violations
+        assert controller.domain_violations[0].component is not None
+        assert controller.domain_rejection_step_sizes[0] > 0.0
+        assert controller.rejected_steps < 10
+        return [state]
+
+    return _CorrectnessSpec(
+        "domain/constraint_aware_retries_negative_abundance",
         run,
         lambda t: (1.0, 1.0),
         float("inf"),
@@ -1250,6 +1364,9 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
     _CorrectnessClaim(_vode_domain_rejection_spec()),
+    _CorrectnessClaim(_generic_integrator_domain_rejection_spec()),
+    _CorrectnessClaim(_variable_order_domain_rejection_spec()),
+    _CorrectnessClaim(_constraint_aware_domain_rejection_spec()),
     *[
         _CorrectnessClaim(_nse_correctness_spec(s, expected_walltime_s=5.0))
         for s in _OFF_SPECS

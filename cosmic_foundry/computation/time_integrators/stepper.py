@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators.domains import (
+    DomainViolation,
+    check_state_domain,
+)
 from cosmic_foundry.computation.time_integrators.integrator import (
     ConstantStep,
     Controller,
@@ -61,6 +65,8 @@ class Integrator:
     dt:
         Convenience shorthand: if supplied and controller is None, wraps
         dt in a ConstantStep.  Exactly one of controller or dt must be given.
+    max_rejections:
+        Maximum number of consecutive rejected attempts before advance fails.
     """
 
     def __init__(
@@ -68,6 +74,7 @@ class Integrator:
         integrator: TimeIntegrator,
         controller: Controller | None = None,
         dt: float | None = None,
+        max_rejections: int = 20,
     ) -> None:
         if controller is not None and dt is not None:
             raise ValueError("Provide either controller or dt, not both.")
@@ -78,6 +85,11 @@ class Integrator:
             self._controller: Controller = controller
         else:
             self._controller = ConstantStep(dt)  # type: ignore[arg-type]
+        self._max_rejections = max_rejections
+        self.rejection_reasons: list[str] = []
+        self.domain_violations: list[DomainViolation] = []
+        self.domain_rejection_step_sizes: list[float] = []
+        self.rejected_steps = 0
 
     def advance(
         self,
@@ -102,13 +114,34 @@ class Integrator:
         """
         state = ODEState(t0, u0)
         dt = self._controller.suggest(state, accepted=True)
+        rejections = 0
         while state.t < t_end:
             dt_try = min(dt, t_end - state.t)
             candidate = self._integrator.step(rhs, state, dt_try)
-            accepted = self._controller.accept(candidate)
-            dt = self._controller.suggest(candidate, accepted=accepted)
+            error_accepted = self._controller.accept(candidate)
+            domain_check = check_state_domain(rhs, candidate.u)
+            accepted = error_accepted and domain_check.accepted
             if accepted:
                 state = candidate
+                rejections = 0
+                dt = self._controller.suggest(candidate, accepted=True)
+                continue
+
+            rejections += 1
+            self.rejected_steps += 1
+            if rejections > self._max_rejections:
+                raise RuntimeError("integrator step exceeded rejection limit.")
+            if not error_accepted:
+                self.rejection_reasons.append("error")
+                dt = self._controller.suggest(candidate, accepted=False)
+                continue
+
+            self.rejection_reasons.append("domain")
+            assert domain_check.violation is not None
+            self.domain_violations.append(domain_check.violation)
+            self.domain_rejection_step_sizes.append(dt_try)
+            factor_min = getattr(self._controller, "factor_min", 0.5)
+            dt = dt_try * factor_min
         return state
 
 

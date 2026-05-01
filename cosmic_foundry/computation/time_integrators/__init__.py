@@ -19,6 +19,7 @@ from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
     NonnegativeStateDomain,
     StateDomain,
+    check_state_domain,
 )
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
@@ -94,6 +95,7 @@ __all__ = [
     "Tree",
     "AutoIntegrator",
     "BlackBoxRHS",
+    "check_state_domain",
     "ConstraintAwareController",
     "DomainCheck",
     "DomainViolation",

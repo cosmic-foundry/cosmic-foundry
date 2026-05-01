@@ -189,6 +189,11 @@ class PIController:
         self._err_prev = tol  # neutral: tol/err_prev = 1 on first step
 
     @property
+    def factor_min(self) -> float:
+        """Minimum permitted shrink factor for rejected steps."""
+        return self._factor_min
+
+    @property
     def factor_max(self) -> float:
         """Maximum permitted growth factor for the next suggested step."""
         return self._factor_max
