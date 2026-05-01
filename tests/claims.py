@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
@@ -53,6 +53,11 @@ CLAIM_WALLTIME_BUDGET_S: float = float(
     os.environ.get("CF_CLAIM_WALLTIME_BUDGET_S", "1.0")
 )
 
+# ── Batched-claim replay ─────────────────────────────────────────────────────
+# Set to a failed lane's batch index to rerun only that lane as a CPU scalar
+# debug case while preserving the original lane's parameterization.
+BATCH_REPLAY_INDEX_ENV = "CF_TEST_BATCH_INDEX"
+
 
 class Claim(ABC, Generic[C]):
     """Base for every test claim.
@@ -100,6 +105,39 @@ class DeviceCalibration:
     gpu_backend: Any | None
     cpu_fma_rate: float
     gpu_fma_rate: float | None
+
+
+@dataclass(frozen=True)
+class BatchedFailure:
+    """Failure metadata for one lane of a batched claim."""
+
+    claim: str
+    device_kind: str
+    batch_size: int
+    batch_index: int
+    method: str
+    order: int | None
+    problem: str
+    parameters: Mapping[str, object]
+    actual: object
+    expected: object
+    error: float
+    tolerance: float
+
+    def format(self) -> str:
+        """Return a replay-ready assertion message for a failed batch lane."""
+        order = "n/a" if self.order is None else str(self.order)
+        params = ", ".join(
+            f"{name}={value!r}" for name, value in sorted(self.parameters.items())
+        )
+        return (
+            f"{self.claim}/{self.device_kind}: batch={self.batch_size}, "
+            f"batch_index={self.batch_index}, method={self.method}, "
+            f"order={order}, problem={self.problem}, parameters={{ {params} }}, "
+            f"actual={self.actual!r}, expected={self.expected!r}, "
+            f"error={self.error:.3e} >= {self.tolerance:.3e}; "
+            f"replay with {BATCH_REPLAY_INDEX_ENV}={self.batch_index}"
+        )
 
 
 @dataclass(frozen=True)
@@ -213,3 +251,28 @@ class ExecutionPlan:
             label=label,
             safety=safety,
         )
+
+    def replay_batch_index(self, batch_size: int, *, label: str) -> int | None:
+        """Requested scalar replay lane, or None when full batching is active."""
+        raw = os.environ.get(BATCH_REPLAY_INDEX_ENV)
+        if raw is None:
+            return None
+        try:
+            index = int(raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"{label}: {BATCH_REPLAY_INDEX_ENV} must be an integer"
+            ) from exc
+        if index < 0 or index >= batch_size:
+            raise ValueError(
+                f"{label}: {BATCH_REPLAY_INDEX_ENV}={index} outside "
+                f"batch index range [0, {batch_size})"
+            )
+        return index
+
+    def batch_indices_for(self, batch_size: int, *, label: str) -> tuple[int, ...]:
+        """Full batch indices, or the single replay index from the environment."""
+        replay_index = self.replay_batch_index(batch_size, label=label)
+        if replay_index is not None:
+            return (replay_index,)
+        return tuple(range(batch_size))

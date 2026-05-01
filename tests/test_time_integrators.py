@@ -24,7 +24,12 @@ from cosmic_foundry.computation.backends import (
     set_default_backend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
-from tests.claims import INTEGRATOR_CLAIM_BUDGET_S, Claim, ExecutionPlan
+from tests.claims import (
+    INTEGRATOR_CLAIM_BUDGET_S,
+    BatchedFailure,
+    Claim,
+    ExecutionPlan,
+)
 
 _PREV = get_default_backend()
 set_default_backend(NumpyBackend())
@@ -356,15 +361,18 @@ class _BatchedDecayCorrectnessClaim(Claim[ExecutionPlan]):
     def check(self, execution_plan: ExecutionPlan) -> None:
         steps = round(self._T_END / self._DT)
         max_batch = 512 if execution_plan.device_kind == "gpu" else 32
-        batch = execution_plan.batch_size_for(
+        source_batch = execution_plan.batch_size_for(
             fmas_per_case=steps * self._ORDER * self._FMAS_PER_LANE_STEP,
             min_batch=4,
             max_batch=max_batch,
         )
+        lane_indices = execution_plan.batch_indices_for(
+            source_batch, label=self.description
+        )
         backend = execution_plan.backend
-        rates_values = [0.2 + 1.8 * i / max(batch - 1, 1) for i in range(batch)]
+        rates_values = [0.2 + 1.8 * i / max(source_batch - 1, 1) for i in lane_indices]
         rates = Tensor(rates_values, backend=backend)
-        u0_values = [1.0 + 0.1 * math.sin(i) for i in range(batch)]
+        u0_values = [1.0 + 0.1 * math.sin(i) for i in lane_indices]
         u0 = Tensor(u0_values, backend=backend)
         rhs = _ti.BlackBoxRHS(lambda t, u: -(rates * u))
         state = _run(
@@ -377,13 +385,27 @@ class _BatchedDecayCorrectnessClaim(Claim[ExecutionPlan]):
             for u0_i, rate_i in zip(u0_values, rates_values, strict=True)
         ]
         errors = [abs(float(a) - e) for a, e in zip(actual, expected, strict=True)]
-        worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
-        assert worst_error < self._TOL, (
-            f"{self.description}/{execution_plan.device_kind}: "
-            f"batch={batch}, lane={worst_i}, rate={rates_values[worst_i]:.6g}, "
-            f"actual={actual[worst_i]:.12g}, expected={expected[worst_i]:.12g}, "
-            f"error={worst_error:.3e} >= {self._TOL:.3e}"
-        )
+        local_worst_i, worst_error = max(enumerate(errors), key=lambda item: item[1])
+        batch_index = lane_indices[local_worst_i]
+        assert worst_error < self._TOL, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=source_batch,
+            batch_index=batch_index,
+            method="RungeKuttaIntegrator",
+            order=self._ORDER,
+            problem="scalar_decay",
+            parameters={
+                "dt": self._DT,
+                "t_end": self._T_END,
+                "rate": rates_values[local_worst_i],
+                "u0": u0_values[local_worst_i],
+            },
+            actual=actual[local_worst_i],
+            expected=expected[local_worst_i],
+            error=worst_error,
+            tolerance=self._TOL,
+        ).format()
 
 
 class _PerformanceClaim(Claim[_IntegratorCalibration]):
