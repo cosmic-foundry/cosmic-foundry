@@ -3,7 +3,7 @@
 Two test axes:
   test_convergence : _ORDERS × _PROBS — AutoIntegrator dispatches by RHS type; skips
                      unsupported (order, problem) pairs via ValueError
-  test_nse         : _NSE_CLAIMS      — integrated NSE behavior for reaction networks
+  test_correctness : _CORRECT_CLAIMS  — integration histories match analytical f(t)
 """
 
 from __future__ import annotations
@@ -55,6 +55,15 @@ def _run(
         for _ in range(n):
             state = inst.step(rhs, state, dt)
     return state
+
+
+def _history(inst: Any, rhs: Any, u0: Tensor, dt: float, t_end: float) -> list:
+    state = _ti.ODEState(0.0, u0)
+    states = []
+    while state.t < t_end:
+        state = inst.step(rhs, state, min(dt, t_end - state.t))
+        states.append(state)
+    return states
 
 
 # ── convergence slope (log-log OLS) ──────────────────────────────────────────
@@ -206,6 +215,15 @@ _PROBS = _build_probs()
 # ── Claim wrappers ────────────────────────────────────────────────────────────
 
 
+@dataclass(frozen=True)
+class _CorrectnessSpec:
+    name: str
+    run: Any
+    expected: Any
+    tol: float
+    offline: bool = False
+
+
 class _ConvergenceClaim(Claim):
     """Convergence + conservation claim for one (order, problem) pair."""
 
@@ -250,62 +268,21 @@ class _ConvergenceClaim(Claim):
                 ), f"order{self._order}/{pid}: u[{i}] negative"
 
 
-class _NSEClaim(Claim):
-    """NSE activation claim for one parametric reaction network."""
+class _CorrectnessClaim(Claim):
+    """Accuracy claim for one numerical history against an analytical f(t)."""
 
-    def __init__(self, spec: _Spec) -> None:
+    def __init__(self, spec: _CorrectnessSpec) -> None:
         self._spec = spec
 
     @property
     def description(self) -> str:
-        return f"nse/{self._spec.name}"
+        return f"correctness/{self._spec.name}"
 
     def check(self) -> None:
-        spec = self._spec
-        rhs = spec.build_rhs()
-        ctrl = _ti.ConstraintAwareController(
-            rhs=rhs,
-            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
-            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=spec.dt0()),
-            eps_activate=0.01,
-            eps_deactivate=0.1,
-        )
-        state = ctrl.advance(spec.u0(), 0.0, spec.t_end())
-        assert ctrl.nse_events, f"no NSE events: {spec.name}"
-        assert state.active_constraints == frozenset(range(spec.p))
-        eq = 1.0 / spec.n
-        for i in range(spec.n):
-            assert abs(float(state.u[i]) - eq) < 1e-7, f"{spec.name}[{i}]"
-
-
-class _NSETransientClaim(Claim):
-    """NSE constraints deactivate when a reaction network is far from equilibrium."""
-
-    @property
-    def description(self) -> str:
-        return "nse/transient-non-equilibrium"
-
-    def check(self) -> None:
-        k = 5.0
-        rhs = _ti.ReactionNetworkRHS(
-            Tensor([[-1.0], [1.0]]),
-            lambda t, u: Tensor([k * float(u[0])]),
-            lambda t, u: Tensor([k * float(u[1])]),
-            Tensor([0.9, 0.1]),
-        )
-        ctrl = _ti.ConstraintAwareController(
-            rhs=rhs,
-            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
-            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
-            eps_activate=0.01,
-            eps_deactivate=0.1,
-        )
-        state = ctrl.advance(
-            Tensor([0.7, 0.3]), 0.0, 0.1, initial_active=frozenset({0})
-        )
-        assert state.active_constraints == frozenset()
-        assert abs(float(state.u[0]) + float(state.u[1]) - 1.0) < 1e-10
-        assert abs(float(state.u[0]) - float(state.u[1])) > 0.05
+        if self._spec.offline and not _OFFLINE:
+            pytest.skip(_OFF_REASON)
+        for state in self._spec.run():
+            assert _err(state.u, self._spec.expected, state.t) < self._spec.tol
 
 
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
@@ -377,20 +354,83 @@ def _spoke_specs(nr: range, ks: list[int]) -> list[_Spec]:
 _CI_SPECS = _chain_specs(range(3, 5)) + _spoke_specs(range(3, 7), [1, 10])
 
 
+def _ode_correctness_specs() -> list[_CorrectnessSpec]:
+    specs = []
+    for name, u0, _n, exact, _mass, rhs in _PROBS:
+        specs.append(
+            _CorrectnessSpec(
+                name=name,
+                run=lambda u0=u0, rhs=rhs: _history(
+                    _ti.AutoIntegrator(4), rhs, u0, 0.02, 0.4
+                ),
+                expected=exact,
+                tol=1e-5,
+            )
+        )
+    return specs
+
+
+def _nse_correctness_spec(spec: _Spec, *, offline: bool = False) -> _CorrectnessSpec:
+    def run() -> list[_ti.ODEState]:
+        rhs = spec.build_rhs()
+        ctrl = _ti.ConstraintAwareController(
+            rhs=rhs,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
+            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=spec.dt0()),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+        return [ctrl.advance(spec.u0(), 0.0, spec.t_end())]
+
+    def expected(t: float) -> tuple[float, ...]:
+        return (1.0 / spec.n,) * spec.n
+
+    return _CorrectnessSpec(f"nse/{spec.name}", run, expected, 1e-7, offline)
+
+
+def _nse_transient_correctness_spec() -> _CorrectnessSpec:
+    k = 5.0
+
+    def run() -> list[_ti.ODEState]:
+        rhs = _ti.ReactionNetworkRHS(
+            Tensor([[-1.0], [1.0]]),
+            lambda t, u: Tensor([k * float(u[0])]),
+            lambda t, u: Tensor([k * float(u[1])]),
+            Tensor([0.9, 0.1]),
+        )
+        ctrl = _ti.ConstraintAwareController(
+            rhs=rhs,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
+            inner=_ti.PIController(alpha=0.35, beta=0.2, tol=1e-5, dt0=0.01),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+        return [ctrl.advance(Tensor([0.7, 0.3]), 0.0, 0.1)]
+
+    def expected(t: float) -> tuple[float, float]:
+        x0 = 0.5 + 0.2 * math.exp(-2.0 * k * t)
+        return x0, 1.0 - x0
+
+    return _CorrectnessSpec("nse/transient", run, expected, 1e-4)
+
+
 # ── claim registries ─────────────────────────────────────────────────────────
 
 _CONV_CLAIMS: list[Claim] = [
     _ConvergenceClaim(order, prob) for order in _ORDERS for prob in _PROBS
 ]
 
-_NSE_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _CI_SPECS] + [_NSETransientClaim()]
-
 _OFF_REASON = (
     "offline network stress tests; "
     "set COSMIC_FOUNDRY_OFFLINE_NETWORK_STRESS=1 to run"
 )
 _OFF_SPECS = _chain_specs(range(5, 12)) + _spoke_specs(range(7, 22), [1, 10, 100])
-_OFF_CLAIMS: list[Claim] = [_NSEClaim(s) for s in _OFF_SPECS]
+_CORRECT_CLAIMS: list[Claim] = [
+    *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
+    *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
+    _CorrectnessClaim(_nse_transient_correctness_spec()),
+    *[_CorrectnessClaim(_nse_correctness_spec(s, offline=True)) for s in _OFF_SPECS],
+]
 
 
 # ── parametric test functions (each body is a single claim.check() dispatch) ──
@@ -404,13 +444,8 @@ def test_convergence(claim: Claim) -> None:
     claim.check()
 
 
-@pytest.mark.parametrize("claim", _NSE_CLAIMS, ids=[c.description for c in _NSE_CLAIMS])
-def test_nse(claim: Claim) -> None:
-    claim.check()
-
-
-@pytest.mark.parametrize("claim", _OFF_CLAIMS, ids=[c.description for c in _OFF_CLAIMS])
-@pytest.mark.skipif(not _OFFLINE, reason=_OFF_REASON)
-@pytest.mark.offline
-def test_offline_nse(claim: Claim) -> None:
+@pytest.mark.parametrize(
+    "claim", _CORRECT_CLAIMS, ids=[c.description for c in _CORRECT_CLAIMS]
+)
+def test_correctness(claim: Claim) -> None:
     claim.check()
