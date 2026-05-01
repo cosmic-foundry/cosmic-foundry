@@ -765,11 +765,14 @@ for these architecture claims remains `tests/test_structure.py`, while numerical
 test modules should own the descriptor estimators and problem fixtures needed to
 check the mathematics.
 
-The same data should also generate capability coverage documentation.  A
-developer should be able to open one generated page and see which descriptor
-regions are owned, which regions are explicitly rejected, and which regions are
-unimplemented.  Gaps are not prose TODOs; they are named descriptor regions with
-no selected owner.
+The same data should also generate capability coverage documentation, but the
+coverage map must not be derived only from existing capabilities.  The parameter
+space itself is a first-class object: each package declares a small set of
+orthogonal descriptor axes and axis bins before overlaying owned regions.  A
+developer should be able to open one generated page and see the gridded
+parameter space with owned, explicitly rejected, and uncovered cells.  Explicit
+missing regions are useful after a gap is noticed; the grid is what exposes gaps
+that nobody has named yet.
 
 The sprint is complete when the following are true:
 
@@ -791,6 +794,21 @@ The sprint is complete when the following are true:
   singular-value lower bound; condition estimate; rank estimate; nullity
   estimate; RHS consistency defect; requested residual tolerance; requested
   solution tolerance; backend kind; device kind; and work/memory budgets.
+- **Parameter-space axes.**  Descriptor fields used for coverage documentation
+  are organized into orthogonal axes with finite bins or numeric intervals.
+  The linear-solver coverage axes should start with: problem kind
+  (`linear_system`, `linear_least_squares`, `nonlinear_system`,
+  `eigenproblem`); operator representation (`matrix_free`, `assembled_dense`,
+  `assembled_sparse`); shape (`square`, `rectangular_overdetermined`,
+  `rectangular_underdetermined`); rank regime (`full_rank`, `rank_deficient`,
+  `unknown_rank`); symmetry regime (`symmetric`, `skew_symmetric`,
+  `nonsymmetric`, `unknown_symmetry`); definiteness/coercivity
+  (`positive_definite`, `indefinite`, `singular_semidefinite`, `unknown`);
+  conditioning (`well_conditioned`, `ill_conditioned`, `unknown_condition`);
+  RHS consistency (`consistent`, `inconsistent`, `unknown_consistency`); and
+  resource regime (`within_dense_budget`, `matrix_free_only`, `over_budget`).
+  Axes are declared independently of current implementations so an empty cell is
+  a real absence, not an omitted example.
 - **Norm definitions are fixed.**  Descriptor fields that use norms must name
   the norm and scaling.  The default matrix defect is relative Frobenius norm:
   `||A - A.T||_F / max(||A||_F, eps)`.  The default residual defect is
@@ -821,17 +839,19 @@ The sprint is complete when the following are true:
   coarse asymptotic coefficients such as dense `O(n^3)` factorization, dense
   `O(n^2)` solve, and iterative `iterations * matvec_cost`, but it must produce
   comparable numeric work and memory estimates for selection.
-- **Coverage atlas generation.**  Capability registries expose enough structured
-  data to generate a documentation page from code.  The page groups descriptor
-  regions into three buckets: owned regions with selected implementations,
-  intentionally rejected regions with a rejection reason, and missing regions
-  with no owner.  The generated page must include the predicate bounds, the
-  certificate sources accepted by the selector, the cost model, and the priority
-  rule for every owned overlap.
-- **Gaps are first-class regions.**  A missing algorithm is represented as an
-  unowned descriptor region, not as absent prose.  For example, the current
-  solver coverage page should show an explicit gap for nonlinear systems outside
-  the time integrator:
+- **Coverage atlas generation.**  Capability registries and parameter-space
+  schemas expose enough structured data to generate a documentation page from
+  code.  The page projects the parameter space onto readable axis pairs or
+  small tables, then overlays selected owners, intentional rejections, and
+  uncovered cells.  It must include the predicate bounds, the certificate
+  sources accepted by the selector, the cost model, and the priority rule for
+  every owned overlap.  Uncovered cells remain visible even before anyone has
+  written a missing-capability note for them.
+- **Gaps are first-class regions.**  A missing algorithm can be represented as an
+  explicitly named unowned descriptor region after the coverage atlas exposes
+  it.  For example, the current solver coverage page should show blank coverage
+  over the `problem_kind = nonlinear_system` slice; that blank can then be
+  tagged as:
 
   ```
   Region: nonlinear algebraic solve F(x) = 0
@@ -851,8 +871,9 @@ The sprint is complete when the following are true:
     or trust-region safeguards, max residual evaluations, and failure reporting.
   ```
 
-  This makes the absence visible without claiming a fake capability or relying
-  on a reader to notice that no class exists.
+  The important point is that the blank `nonlinear_system` column exists before
+  this note is written.  The note records a known gap; the axis grid is what
+  gives us a chance to find unknown gaps.
 - **Overlap is numeric, not rhetorical.**  Structural tests construct descriptor
   examples for expected regions: SPD well-conditioned dense systems select CG or
   LU only when priority data says why; rank-deficient minimum-norm requests
@@ -881,20 +902,25 @@ Recommended PR sequence:
    `cosmic_foundry.computation.algorithm_capabilities`, with structural tests
    proving that bounds reference real descriptor fields, unknown values are
    handled explicitly, and unsupported predicate kinds fail closed.
-2. Add a generated capability coverage document, sourced from the registries and
-   checked by `tests/test_structure.py`, that lists owned, rejected, and missing
-   descriptor regions.  Seed it with the public nonlinear-system-solver gap so
-   gaps are visible before the nonlinear solver exists.
-3. Add `LinearOperatorDescriptor` construction for small assembled operators and
+2. Add package-local parameter-space schemas for linear solvers and
+   decompositions, with structural tests proving that coverage axes are declared
+   independently of current capabilities and that every generated coverage cell
+   maps to a valid descriptor template.
+3. Add a generated capability coverage document, sourced from the parameter
+   schemas and registries and checked by `tests/test_structure.py`, that
+   visualizes owned, rejected, and uncovered cells.  Seed it with the public
+   nonlinear-system-solver gap as an annotation on an already-visible uncovered
+   `nonlinear_system` region.
+4. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-4. Convert linear solver capabilities to quantitative predicates and update
+5. Convert linear solver capabilities to quantitative predicates and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-5. Convert decomposition capabilities to quantitative predicates, including
+6. Convert decomposition capabilities to quantitative predicates, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-6. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+7. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
