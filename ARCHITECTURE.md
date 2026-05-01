@@ -772,6 +772,19 @@ The sprint is complete when the following are true:
   names remain absent.  This catches accidental reintroduction of wrappers or
   compatibility aliases when the project has explicitly consolidated a
   responsibility.
+- **Ownership-revealing class names.**  Public class names should resemble the
+  architectural claim they make.  Avoid generic, acronym-only, or historical
+  names when they obscure ownership; for example, a controller name should say
+  what kind of control it owns rather than relying on a shorthand such as
+  `VODE`.  The structural claim should make these naming expectations explicit
+  enough that unclear new public names require either a rename or an intentional
+  ownership-map update.
+- **Primary-class module names.**  Module filenames should resemble the primary
+  public class or concept they house.  A class such as `Integrator` should not
+  live in a vaguely named module such as `stepper.py` when `integrator.py` is
+  the ownership-revealing home.  The ownership machinery should flag public
+  classes whose defining module name does not match the class responsibility,
+  while still allowing explicitly mapped policy/helper modules.
 - **Time-integrator ownership map.**  The first concrete map covers
   `cosmic_foundry.computation.time_integrators`.  It should classify public
   method families, drivers/controllers, policies, RHS wrappers, domains,
@@ -793,7 +806,8 @@ Recommended PR sequence:
 
 1. Add the reusable ownership-claim machinery to `tests/test_structure.py` and
    implement the time-integrator ownership map.  Fix any time-integrator
-   ownership gaps or overlaps the claim exposes.
+   ownership gaps, overlaps, unclear public class names, or class/module naming
+   mismatches the claim exposes.
 2. Add ownership maps for linear solvers and decompositions, reusing the same
    claim machinery.
 3. Add ownership maps for discrete operators and geometry/theory boundaries,
