@@ -765,6 +765,12 @@ for these architecture claims remains `tests/test_structure.py`, while numerical
 test modules should own the descriptor estimators and problem fixtures needed to
 check the mathematics.
 
+The same data should also generate capability coverage documentation.  A
+developer should be able to open one generated page and see which descriptor
+regions are owned, which regions are explicitly rejected, and which regions are
+unimplemented.  Gaps are not prose TODOs; they are named descriptor regions with
+no selected owner.
+
 The sprint is complete when the following are true:
 
 - **Descriptor-first contracts.**  `AlgorithmRequest` and `AlgorithmCapability`
@@ -815,6 +821,38 @@ The sprint is complete when the following are true:
   coarse asymptotic coefficients such as dense `O(n^3)` factorization, dense
   `O(n^2)` solve, and iterative `iterations * matvec_cost`, but it must produce
   comparable numeric work and memory estimates for selection.
+- **Coverage atlas generation.**  Capability registries expose enough structured
+  data to generate a documentation page from code.  The page groups descriptor
+  regions into three buckets: owned regions with selected implementations,
+  intentionally rejected regions with a rejection reason, and missing regions
+  with no owner.  The generated page must include the predicate bounds, the
+  certificate sources accepted by the selector, the cost model, and the priority
+  rule for every owned overlap.
+- **Gaps are first-class regions.**  A missing algorithm is represented as an
+  unowned descriptor region, not as absent prose.  For example, the current
+  solver coverage page should show an explicit gap for nonlinear systems outside
+  the time integrator:
+
+  ```
+  Region: nonlinear algebraic solve F(x) = 0
+  Descriptor:
+    problem_kind = nonlinear_system
+    residual_available = true
+    jacobian_available in {true, false}
+    requested_solution = root
+    requested_tolerance = finite
+  Selected owner: none
+  Existing partial owners:
+    time_integrators._newton.nonlinear_solve is internal stage machinery, not a
+    public nonlinear-system solver capability.
+  Required capability before this region is owned:
+    NonlinearSolver with descriptor bounds for residual norm, Jacobian
+    availability, local convergence radius or globalization policy, line-search
+    or trust-region safeguards, max residual evaluations, and failure reporting.
+  ```
+
+  This makes the absence visible without claiming a fake capability or relying
+  on a reader to notice that no class exists.
 - **Overlap is numeric, not rhetorical.**  Structural tests construct descriptor
   examples for expected regions: SPD well-conditioned dense systems select CG or
   LU only when priority data says why; rank-deficient minimum-norm requests
@@ -843,16 +881,20 @@ Recommended PR sequence:
    `cosmic_foundry.computation.algorithm_capabilities`, with structural tests
    proving that bounds reference real descriptor fields, unknown values are
    handled explicitly, and unsupported predicate kinds fail closed.
-2. Add `LinearOperatorDescriptor` construction for small assembled operators and
+2. Add a generated capability coverage document, sourced from the registries and
+   checked by `tests/test_structure.py`, that lists owned, rejected, and missing
+   descriptor regions.  Seed it with the public nonlinear-system-solver gap so
+   gaps are visible before the nonlinear solver exists.
+3. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-3. Convert linear solver capabilities to quantitative predicates and update
+4. Convert linear solver capabilities to quantitative predicates and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-4. Convert decomposition capabilities to quantitative predicates, including
+5. Convert decomposition capabilities to quantitative predicates, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+6. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
