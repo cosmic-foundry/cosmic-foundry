@@ -819,9 +819,8 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Convert linear-solver correctness/performance to batched RHS claims.
-2. Convert applicable discrete-operator claims to Tensor-batched evaluation.
-3. Tighten Tensor/device calibration trust checks and document the full harness.
+1. Convert applicable discrete-operator claims to Tensor-batched evaluation.
+2. Tighten Tensor/device calibration trust checks and document the full harness.
 
 ---
 
