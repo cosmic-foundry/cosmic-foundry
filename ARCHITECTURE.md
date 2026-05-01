@@ -511,7 +511,8 @@ SymplecticCompositionIntegrator  — position-Verlet family for separable Hamilt
                                    forest_ruth(4), yoshida_6(6), yoshida_8(8)
 CompositionIntegrator            — meta-integrator composing sub-integrators;
                                    factories: lie_steps()(1), strang_steps()(2),
-                                   yoshida_steps()(4, negative substep weights)
+                                   yoshida4_steps()(4, negative substep weights),
+                                   yoshida6_steps()(6, negative substep weights)
 
 Controllers:
 

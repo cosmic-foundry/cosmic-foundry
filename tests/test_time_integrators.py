@@ -367,6 +367,38 @@ def _imex_orders_check() -> None:
         assert float(norm(auto_state.u - direct_state.u)) < 1e-14
 
 
+def _composition_orders_check() -> None:
+    """Operator splitting supports Lie, Strang, and Yoshida orders 1, 2, 4, 6."""
+
+    def fA(t: float, u: Tensor) -> Tensor:
+        return Tensor([-float(u[1]), 0.0], backend=u.backend)
+
+    def fB(t: float, u: Tensor) -> Tensor:
+        return Tensor([0.0, float(u[0])], backend=u.backend)
+
+    rhs = _ti.CompositeRHS([_ti.BlackBoxRHS(fA), _ti.BlackBoxRHS(fB)])
+    sub_integrators = [_ti.RungeKuttaIntegrator(6), _ti.RungeKuttaIntegrator(6)]
+    for q in (1, 2, 4, 6):
+        inst = _ti.CompositionIntegrator(sub_integrators, q)
+        dts = [0.2, 0.1, 0.05, 0.025]
+        errs = []
+        for dt in dts:
+            state = _run(inst, rhs, _U2, dt, t_end=1.0)
+            errs.append(_err(state.u, _exact_osc, state.t))
+        assert _slope(errs, dts) >= q - 0.5, f"composition order {q}"
+
+        auto_state = _run(_ti.AutoIntegrator(q), rhs, _U2, 0.025, t_end=1.0)
+        if q in (1, 2):
+            auto_slope_target = q - 0.5
+            auto_errs = []
+            for dt in dts:
+                state = _run(_ti.AutoIntegrator(q), rhs, _U2, dt, t_end=1.0)
+                auto_errs.append(_err(state.u, _exact_osc, state.t))
+            assert _slope(auto_errs, dts) >= auto_slope_target
+        else:
+            assert _err(auto_state.u, _exact_osc, auto_state.t) < 1e-5
+
+
 def _nordsieck_check() -> None:
     """NordsieckHistory change_order and rescale_step round-trip invariants."""
     nh = _ti.NordsieckHistory(
@@ -590,6 +622,7 @@ _BEHAVIOR_CLAIMS: list[Claim] = [
     _BehaviorClaim(_nordsieck_fixed_orders_check, "nordsieck/fixed_orders_1_6"),
     _BehaviorClaim(_semilinear_orders_check, "semilinear/orders_1_6"),
     _BehaviorClaim(_imex_orders_check, "imex/orders_1_4"),
+    _BehaviorClaim(_composition_orders_check, "composition/orders_1_2_4_6"),
     _BehaviorClaim(_nordsieck_check, "nordsieck/round_trip"),
     _BehaviorClaim(_phi_check, "phi_function/coefficients"),
     _BehaviorClaim(_variable_order_check, "variable_order/climb_and_drop"),
