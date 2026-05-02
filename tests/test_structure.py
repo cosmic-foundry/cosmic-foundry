@@ -1188,42 +1188,54 @@ class _SolveRelationSchemaClaim(Claim[None]):
         return ParameterDescriptor(
             schema=schema,
             coordinates={
-                "dim_x": DescriptorCoordinate(dim_x),
-                "dim_y": DescriptorCoordinate(dim_y),
-                "auxiliary_scalar_count": DescriptorCoordinate(auxiliary_scalar_count),
-                "equality_constraint_count": DescriptorCoordinate(
+                LinearSolverField.DIM_X: DescriptorCoordinate(dim_x),
+                LinearSolverField.DIM_Y: DescriptorCoordinate(dim_y),
+                LinearSolverField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(
+                    auxiliary_scalar_count
+                ),
+                LinearSolverField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(
                     equality_constraint_count
                 ),
-                "normalization_constraint_count": DescriptorCoordinate(
+                LinearSolverField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(
                     normalization_constraint_count
                 ),
-                "residual_target_available": DescriptorCoordinate(
+                LinearSolverField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
                     residual_target_available
                 ),
-                "target_is_zero": DescriptorCoordinate(target_is_zero),
-                "map_linearity_defect": DescriptorCoordinate(
+                LinearSolverField.TARGET_IS_ZERO: DescriptorCoordinate(target_is_zero),
+                LinearSolverField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
                     map_linearity_defect,
                     evidence=map_linearity_evidence,  # type: ignore[arg-type]
                 ),
-                "matrix_representation_available": DescriptorCoordinate(
+                LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
                     matrix_representation_available
                 ),
-                "operator_application_available": DescriptorCoordinate(
+                LinearSolverField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
                     operator_application_available
                 ),
-                "derivative_oracle_kind": DescriptorCoordinate(derivative_oracle_kind),
-                "objective_relation": DescriptorCoordinate(objective_relation),
-                "acceptance_relation": DescriptorCoordinate(acceptance_relation),
-                "requested_residual_tolerance": DescriptorCoordinate(
+                LinearSolverField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+                    derivative_oracle_kind
+                ),
+                LinearSolverField.OBJECTIVE_RELATION: DescriptorCoordinate(
+                    objective_relation
+                ),
+                LinearSolverField.ACCEPTANCE_RELATION: DescriptorCoordinate(
+                    acceptance_relation
+                ),
+                LinearSolverField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
                     requested_residual_tolerance
                 ),
-                "requested_solution_tolerance": DescriptorCoordinate(
+                LinearSolverField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
                     requested_solution_tolerance
                 ),
-                "backend_kind": DescriptorCoordinate(backend_kind),
-                "device_kind": DescriptorCoordinate(device_kind),
-                "work_budget_fmas": DescriptorCoordinate(work_budget_fmas),
-                "memory_budget_bytes": DescriptorCoordinate(memory_budget_bytes),
+                LinearSolverField.BACKEND_KIND: DescriptorCoordinate(backend_kind),
+                LinearSolverField.DEVICE_KIND: DescriptorCoordinate(device_kind),
+                LinearSolverField.WORK_BUDGET_FMAS: DescriptorCoordinate(
+                    work_budget_fmas
+                ),
+                LinearSolverField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
+                    memory_budget_bytes
+                ),
             },
         )
 
@@ -1253,33 +1265,47 @@ class _SolveRelationSchemaClaim(Claim[None]):
             schema=descriptor.schema,
             coordinates=descriptor.coordinates
             | {
-                "linear_operator_matrix_available": DescriptorCoordinate(
-                    linear_operator_matrix_available
+                LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: (
+                    DescriptorCoordinate(linear_operator_matrix_available)
                 ),
-                "assembly_cost_fmas": DescriptorCoordinate(assembly_cost_fmas),
-                "matvec_cost_fmas": DescriptorCoordinate(matvec_cost_fmas),
-                "linear_operator_memory_bytes": DescriptorCoordinate(
+                LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(
+                    assembly_cost_fmas
+                ),
+                LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(
+                    matvec_cost_fmas
+                ),
+                LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: DescriptorCoordinate(
                     linear_operator_memory_bytes
                 ),
-                "symmetry_defect": DescriptorCoordinate(symmetry_defect),
-                "skew_symmetry_defect": DescriptorCoordinate(skew_symmetry_defect),
-                "diagonal_nonzero_margin": DescriptorCoordinate(
+                LinearSolverField.SYMMETRY_DEFECT: DescriptorCoordinate(
+                    symmetry_defect
+                ),
+                LinearSolverField.SKEW_SYMMETRY_DEFECT: DescriptorCoordinate(
+                    skew_symmetry_defect
+                ),
+                LinearSolverField.DIAGONAL_NONZERO_MARGIN: DescriptorCoordinate(
                     diagonal_nonzero_margin
                 ),
-                "diagonal_dominance_margin": DescriptorCoordinate(
+                LinearSolverField.DIAGONAL_DOMINANCE_MARGIN: DescriptorCoordinate(
                     diagonal_dominance_margin
                 ),
-                "coercivity_lower_bound": DescriptorCoordinate(coercivity_lower_bound),
-                "singular_value_lower_bound": DescriptorCoordinate(
+                LinearSolverField.COERCIVITY_LOWER_BOUND: DescriptorCoordinate(
+                    coercivity_lower_bound
+                ),
+                LinearSolverField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
                     singular_value_lower_bound
                 ),
-                "condition_estimate": DescriptorCoordinate(
+                LinearSolverField.CONDITION_ESTIMATE: DescriptorCoordinate(
                     condition_estimate,
                     evidence=condition_evidence,  # type: ignore[arg-type]
                 ),
-                "rank_estimate": DescriptorCoordinate(rank_estimate),
-                "nullity_estimate": DescriptorCoordinate(nullity_estimate),
-                "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
+                LinearSolverField.RANK_ESTIMATE: DescriptorCoordinate(rank_estimate),
+                LinearSolverField.NULLITY_ESTIMATE: DescriptorCoordinate(
+                    nullity_estimate
+                ),
+                LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
+                    rhs_consistency_defect
+                ),
             },
         )
 
@@ -1316,30 +1342,46 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 "factorization_memory_budget_bytes": DescriptorCoordinate(
                     factorization_memory_budget_bytes
                 ),
-                "linear_operator_matrix_available": DescriptorCoordinate(
-                    linear_operator_matrix_available
+                LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: (
+                    DescriptorCoordinate(linear_operator_matrix_available)
                 ),
-                "assembly_cost_fmas": DescriptorCoordinate(assembly_cost_fmas),
-                "matvec_cost_fmas": DescriptorCoordinate(matvec_cost_fmas),
-                "linear_operator_memory_bytes": DescriptorCoordinate(
+                LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(
+                    assembly_cost_fmas
+                ),
+                LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(
+                    matvec_cost_fmas
+                ),
+                LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: DescriptorCoordinate(
                     linear_operator_memory_bytes
                 ),
-                "symmetry_defect": DescriptorCoordinate(symmetry_defect),
-                "skew_symmetry_defect": DescriptorCoordinate(skew_symmetry_defect),
-                "diagonal_nonzero_margin": DescriptorCoordinate(
+                LinearSolverField.SYMMETRY_DEFECT: DescriptorCoordinate(
+                    symmetry_defect
+                ),
+                LinearSolverField.SKEW_SYMMETRY_DEFECT: DescriptorCoordinate(
+                    skew_symmetry_defect
+                ),
+                LinearSolverField.DIAGONAL_NONZERO_MARGIN: DescriptorCoordinate(
                     diagonal_nonzero_margin
                 ),
-                "diagonal_dominance_margin": DescriptorCoordinate(
+                LinearSolverField.DIAGONAL_DOMINANCE_MARGIN: DescriptorCoordinate(
                     diagonal_dominance_margin
                 ),
-                "coercivity_lower_bound": DescriptorCoordinate(coercivity_lower_bound),
-                "singular_value_lower_bound": DescriptorCoordinate(
+                LinearSolverField.COERCIVITY_LOWER_BOUND: DescriptorCoordinate(
+                    coercivity_lower_bound
+                ),
+                LinearSolverField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
                     singular_value_lower_bound
                 ),
-                "condition_estimate": DescriptorCoordinate(condition_estimate),
-                "rank_estimate": DescriptorCoordinate(rank_estimate),
-                "nullity_estimate": DescriptorCoordinate(nullity_estimate),
-                "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
+                LinearSolverField.CONDITION_ESTIMATE: DescriptorCoordinate(
+                    condition_estimate
+                ),
+                LinearSolverField.RANK_ESTIMATE: DescriptorCoordinate(rank_estimate),
+                LinearSolverField.NULLITY_ESTIMATE: DescriptorCoordinate(
+                    nullity_estimate
+                ),
+                LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
+                    rhs_consistency_defect
+                ),
             },
         )
 
@@ -1404,8 +1446,9 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         self._assert_no_coverage_region_status_model()
         self._assert_no_solver_local_point_query()
         self._assert_no_solver_error_string_dispatch()
+        self._assert_no_linear_solver_field_text_identity()
         schema = linear_solver_parameter_schema()
-        assert {field.value for field in LinearSolverField} == schema.descriptor_fields
+        assert set(LinearSolverField) == schema.descriptor_fields
         regions = linear_solver_coverage_regions()
         self._assert_no_declared_coverage_literals(regions)
         for region in regions:
@@ -1679,6 +1722,64 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
                         "solver selection must not dispatch on exception text"
                     )
 
+    @staticmethod
+    def _assert_no_linear_solver_field_text_identity() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        field_labels = {field.value for field in LinearSolverField}
+        identity_calls = {
+            "AffineComparisonPredicate",
+            "ComparisonPredicate",
+            "EvidencePredicate",
+            "MembershipPredicate",
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            call_name = node.func.id if isinstance(node.func, ast.Name) else None
+            if call_name in identity_calls:
+                candidates = []
+                if node.args:
+                    candidates.append(node.args[0])
+                candidates.extend(
+                    keyword.value
+                    for keyword in node.keywords
+                    if keyword.arg in {"field", "terms"}
+                )
+                for candidate in candidates:
+                    if _LinearSolverCoverageRegionClaim._field_label_literal(
+                        candidate, field_labels
+                    ):
+                        raise AssertionError(
+                            "parameter-space field identity must be symbolic, "
+                            "with strings limited to labels and rendering"
+                        )
+            if call_name == "ParameterDescriptor":
+                coordinates = next(
+                    (
+                        keyword.value
+                        for keyword in node.keywords
+                        if keyword.arg == "coordinates"
+                    ),
+                    node.args[1] if len(node.args) > 1 else None,
+                )
+                if _LinearSolverCoverageRegionClaim._field_label_literal(
+                    coordinates, field_labels
+                ):
+                    raise AssertionError(
+                        "parameter descriptor coordinates must be keyed by "
+                        "symbolic field identity"
+                    )
+
+    @classmethod
+    def _field_label_literal(cls, node: ast.AST | None, labels: set[str]) -> bool:
+        if isinstance(node, ast.Constant):
+            return isinstance(node.value, str) and node.value in labels
+        if isinstance(node, ast.Dict):
+            return any(cls._field_label_literal(key, labels) for key in node.keys)
+        return False
+
     @classmethod
     def _assert_no_declared_coverage_literals(
         cls,
@@ -1691,26 +1792,24 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
     @staticmethod
     def _declared_coverage_literals(
         regions: tuple[CoverageRegion, ...],
-    ) -> frozenset[str | int | float]:
-        literals: set[str | int | float] = set()
+    ) -> frozenset[str]:
+        literals: set[str] = set()
         for region in regions:
             for predicate in region.predicates:
-                literals.update(predicate.referenced_fields)
+                literals.update(
+                    _field_label(field) for field in predicate.referenced_fields
+                )
                 if isinstance(predicate, ComparisonPredicate):
-                    if not isinstance(predicate.value, bool):
+                    if isinstance(predicate.value, str):
                         literals.add(predicate.value)
                 elif isinstance(predicate, MembershipPredicate):
                     literals.update(
-                        value
-                        for value in predicate.values
-                        if isinstance(value, str | int | float)
-                        and not isinstance(value, bool)
+                        value for value in predicate.values if isinstance(value, str)
                     )
                 elif isinstance(predicate, EvidencePredicate):
                     literals.update(predicate.evidence)
                 elif isinstance(predicate, AffineComparisonPredicate):
-                    literals.update(predicate.terms)
-                    literals.add(predicate.value)
+                    literals.update(_field_label(field) for field in predicate.terms)
         return frozenset(literals)
 
     @classmethod
@@ -2578,23 +2677,29 @@ def _descriptor_value(descriptor: ParameterDescriptor, field: str) -> str:
     return value
 
 
+def _field_label(field: Any) -> str:
+    return field.value if isinstance(field, LinearSolverField) else str(field)
+
+
 def _predicate_label(predicate: Any) -> str:
     if isinstance(predicate, ComparisonPredicate):
-        return f"{predicate.field} {predicate.operator} {predicate.value}"
+        return f"{_field_label(predicate.field)} {predicate.operator} {predicate.value}"
     if isinstance(predicate, AffineComparisonPredicate):
         terms = " + ".join(
-            f"{coefficient:g}*{field}"
-            for field, coefficient in sorted(predicate.terms.items())
+            f"{coefficient:g}*{_field_label(field)}"
+            for field, coefficient in sorted(
+                predicate.terms.items(), key=lambda item: _field_label(item[0])
+            )
         )
         if predicate.offset:
             terms = f"{terms} + {predicate.offset:g}"
         return f"{terms} {predicate.operator} {predicate.value:g}"
     if isinstance(predicate, MembershipPredicate):
         values = ", ".join(str(value) for value in sorted(predicate.values, key=str))
-        return f"{predicate.field} in {{{values}}}"
+        return f"{_field_label(predicate.field)} in {{{values}}}"
     if isinstance(predicate, EvidencePredicate):
         evidence = ", ".join(sorted(predicate.evidence))
-        return f"{predicate.field} evidence in {{{evidence}}}"
+        return f"{_field_label(predicate.field)} evidence in {{{evidence}}}"
     return repr(predicate)
 
 
@@ -2699,11 +2804,11 @@ def _predicate_affine_projection(
 ) -> tuple[dict[str, float], str, float] | None:
     if isinstance(predicate, AffineComparisonPredicate):
         visible = {
-            field: coefficient
+            _field_label(field): coefficient
             for field, coefficient in predicate.terms.items()
-            if field in {x_axis, y_axis}
+            if _field_label(field) in {x_axis, y_axis}
         }
-        hidden = set(predicate.terms) - {x_axis, y_axis}
+        hidden = {_field_label(field) for field in predicate.terms} - {x_axis, y_axis}
         if visible and not hidden:
             return (
                 {
@@ -2714,14 +2819,15 @@ def _predicate_affine_projection(
                 predicate.value - predicate.offset,
             )
         return None
-    if isinstance(predicate, ComparisonPredicate) and predicate.field in {
+    if isinstance(predicate, ComparisonPredicate) and _field_label(predicate.field) in {
         x_axis,
         y_axis,
     }:
+        field = _field_label(predicate.field)
         return (
             {
-                x_axis: 1.0 if predicate.field == x_axis else 0.0,
-                y_axis: 1.0 if predicate.field == y_axis else 0.0,
+                x_axis: 1.0 if field == x_axis else 0.0,
+                y_axis: 1.0 if field == y_axis else 0.0,
             },
             predicate.operator,
             float(predicate.value),

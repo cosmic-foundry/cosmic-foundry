@@ -821,10 +821,10 @@ The sprint is complete when the following are true:
   predicates that distinguish that class.  Implementation-local coverage
   declarations must not carry an independent tag contract such as
   `requires`/`provides`; any human-facing label is either inferred from code
-  structure or derived as a schema alias over descriptor predicates.  Predicate
-  code must refer to descriptor axes through schema-owned field symbols rather
-  than raw strings, so field identity has one symbolic home and coverage claims
-  cannot quietly drift from the schema vocabulary.
+  structure or derived as a schema alias over descriptor predicates.  Descriptor
+  field identity must be symbolic end to end: axes, predicates, descriptors, and
+  coverage claims refer to field objects, while strings are labels used at
+  documentation, diagnostics, or serialization boundaries.
 - **Selection is a point query.**  Runtime dispatch becomes a query of the
   parameter-space atlas: locate the descriptor cell, find the unique coverage
   region containing it, and reject if no owned region contains it.  Coverage
