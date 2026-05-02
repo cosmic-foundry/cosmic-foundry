@@ -7,13 +7,17 @@ from pkgutil import iter_modules
 from types import ModuleType
 
 from cosmic_foundry.computation.algorithm_capabilities import (
+    AffineComparisonPredicate,
+    ComparisonPredicate,
     CoveragePatch,
+    EvidencePredicate,
     ParameterDescriptor,
     linear_solver_parameter_schema,
 )
-from cosmic_foundry.computation.solvers._capability_claims import (
+from cosmic_foundry.computation.solvers.coverage import (
+    LINEARITY_TOLERANCE,
     LinearSolverCapability,
-    selector_rejection_patches,
+    capability,
 )
 
 
@@ -34,9 +38,19 @@ def _declared_capabilities() -> tuple[LinearSolverCapability, ...]:
         for item in module.__dict__.values():
             if not isinstance(item, type) or item.__module__ != module.__name__:
                 continue
-            declare = getattr(item, "linear_solver_capabilities", None)
-            if declare is not None:
-                capabilities.extend(declare())
+            predicates = getattr(item, "linear_solver_coverage", None)
+            if predicates is not None:
+                capabilities.append(
+                    capability(
+                        item,
+                        coverage_predicates=predicates,
+                        coverage_priority=getattr(
+                            item,
+                            "linear_solver_coverage_priority",
+                            None,
+                        ),
+                    )
+                )
     return tuple(capabilities)
 
 
@@ -51,10 +65,66 @@ def linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
 def linear_solver_coverage_patches() -> tuple[CoveragePatch, ...]:
     """Return autodiscovered descriptor-space coverage patches."""
     patches: list[CoveragePatch] = []
-    for capability in LINEAR_SOLVER_CAPABILITIES:
-        patches.extend(capability.coverage_patches)
+    for record in LINEAR_SOLVER_CAPABILITIES:
+        patches.extend(record.coverage_patches)
     patches.extend(selector_rejection_patches())
     return tuple(patches)
+
+
+def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
+    """Return selector-level rejection regions not owned by implementations."""
+    return (
+        CoveragePatch(
+            "linear_solver_work_budget_below_operator_cost",
+            "linear_solver_selector",
+            "rejected",
+            (
+                ComparisonPredicate(
+                    "map_linearity_defect",
+                    "<=",
+                    LINEARITY_TOLERANCE,
+                ),
+                AffineComparisonPredicate(
+                    {"work_budget_fmas": 1.0, "matvec_cost_fmas": -1.0},
+                    "<",
+                    0.0,
+                ),
+            ),
+        ),
+        CoveragePatch(
+            "linear_solver_memory_budget_below_operator_storage",
+            "linear_solver_selector",
+            "rejected",
+            (
+                ComparisonPredicate(
+                    "map_linearity_defect",
+                    "<=",
+                    LINEARITY_TOLERANCE,
+                ),
+                AffineComparisonPredicate(
+                    {
+                        "memory_budget_bytes": 1.0,
+                        "linear_operator_memory_bytes": -1.0,
+                    },
+                    "<",
+                    0.0,
+                ),
+            ),
+        ),
+        CoveragePatch(
+            "linear_solver_unknown_condition",
+            "linear_solver_selector",
+            "rejected",
+            (
+                ComparisonPredicate(
+                    "map_linearity_defect",
+                    "<=",
+                    LINEARITY_TOLERANCE,
+                ),
+                EvidencePredicate("condition_estimate", frozenset({"unavailable"})),
+            ),
+        ),
+    )
 
 
 def select_linear_solver_for_descriptor(
@@ -71,10 +141,7 @@ def select_linear_solver_for_descriptor(
     if status == "uncovered":
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
 
-    owners = {
-        capability.implementation: capability
-        for capability in LINEAR_SOLVER_CAPABILITIES
-    }
+    owners = {record.implementation: record for record in LINEAR_SOLVER_CAPABILITIES}
     matches = tuple(
         patch
         for patch in patches

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicate
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
-from cosmic_foundry.computation.solvers._capability_claims import (
+from cosmic_foundry.computation.solvers.coverage import (
     LINEARITY_TOLERANCE,
-    LinearSolverCapability,
     budget_predicates,
-    capability,
     dense_matrix_predicates,
     linear_system_predicates,
 )
@@ -42,7 +40,7 @@ class DenseSVDSolver(DirectSolver):
     def __init__(self, rcond: float = 1e-10) -> None:
         super().__init__(SVDFactorization(rcond))
 
-    _coverage_predicates = (
+    linear_solver_coverage = (
         linear_system_predicates()
         + dense_matrix_predicates()
         + budget_predicates()
@@ -51,17 +49,7 @@ class DenseSVDSolver(DirectSolver):
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-
-    @classmethod
-    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return descriptor-space coverage owned by this solver implementation."""
-        return (
-            capability(
-                cls,
-                coverage_predicates=cls._coverage_predicates,
-                coverage_priority=20,
-            ),
-        )
+    linear_solver_coverage_priority = 20
 
 
 __all__ = ["DenseSVDSolver"]

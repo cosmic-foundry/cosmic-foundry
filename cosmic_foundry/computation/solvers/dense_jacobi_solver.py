@@ -6,12 +6,10 @@ from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor as tensor_module
 from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicate
-from cosmic_foundry.computation.solvers._capability_claims import (
+from cosmic_foundry.computation.solvers.coverage import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
-    LinearSolverCapability,
     budget_predicates,
-    capability,
     dense_matrix_predicates,
     linear_system_predicates,
 )
@@ -92,7 +90,7 @@ class DenseJacobiSolver(StationaryIterationSolver):
         s: _JacobiState = state
         return s.u
 
-    _coverage_predicates = (
+    linear_solver_coverage = (
         linear_system_predicates()
         + dense_matrix_predicates()
         + budget_predicates()
@@ -103,17 +101,7 @@ class DenseJacobiSolver(StationaryIterationSolver):
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-
-    @classmethod
-    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return descriptor-space coverage owned by this solver implementation."""
-        return (
-            capability(
-                cls,
-                coverage_predicates=cls._coverage_predicates,
-                coverage_priority=25,
-            ),
-        )
+    linear_solver_coverage_priority = 25
 
 
 __all__ = ["DenseJacobiSolver"]
