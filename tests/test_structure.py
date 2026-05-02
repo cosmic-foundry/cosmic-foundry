@@ -29,7 +29,7 @@ import inspect
 import pkgutil
 import sys
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import Any, NewType, TypeAlias, get_args, get_origin, get_type_hints
 
@@ -2357,18 +2357,6 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 
 
 @dataclass(frozen=True)
-class _AtlasEvidencePoint:
-    """One descriptor evidence point rendered into the capability atlas."""
-
-    descriptor: ParameterDescriptor
-
-    @property
-    def schema(self) -> ParameterSpaceSchema:
-        """Unique atlas schema inhabited by the descriptor."""
-        return _atlas_schema_for_descriptor(self.descriptor)
-
-
-@dataclass(frozen=True)
 class _AtlasGap:
     """Known uncovered descriptor region rendered into the atlas."""
 
@@ -2419,13 +2407,16 @@ class _AtlasRegionShape:
 class _AtlasPlotSpec:
     """One generated SVG projection of descriptor cells."""
 
-    projections: tuple[_AtlasEvidencePoint, ...]
+    descriptors: tuple[ParameterDescriptor, ...]
 
     @property
     def schema(self) -> ParameterSpaceSchema:
-        """Common schema for the projections shown by this plot."""
-        schema = self.projections[0].schema
-        assert all(projection.schema == schema for projection in self.projections)
+        """Common schema for the descriptors shown by this plot."""
+        schema = _atlas_schema_for_descriptor(self.descriptors[0])
+        assert all(
+            _atlas_schema_for_descriptor(descriptor) == schema
+            for descriptor in self.descriptors
+        )
         return schema
 
     @property
@@ -2441,12 +2432,12 @@ class _AtlasPlotSpec:
     @property
     def x_range(self) -> tuple[float, float]:
         """Range derived from projected descriptor coordinates."""
-        return _atlas_axis_range(self.projections, self.x_axis)
+        return _atlas_axis_range(self.descriptors, self.x_axis)
 
     @property
     def y_range(self) -> tuple[float, float]:
         """Range derived from projected descriptor coordinates."""
-        return _atlas_axis_range(self.projections, self.y_axis)
+        return _atlas_axis_range(self.descriptors, self.y_axis)
 
     @property
     def filename(self) -> _AtlasText:
@@ -2467,64 +2458,42 @@ class _AtlasPlotSpec:
         )
 
 
-def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
+def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
     return (
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._solve_descriptor(),
+        _SolveRelationSchemaClaim._solve_descriptor(),
+        _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=3,
+            dim_y=5,
+            objective_relation="least_squares",
         ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._solve_descriptor(
-                dim_x=3,
-                dim_y=5,
-                objective_relation="least_squares",
-            ),
+        _SolveRelationSchemaClaim._solve_descriptor(
+            map_linearity_defect=None,
+            map_linearity_evidence="unavailable",
+            residual_target_available=False,
         ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._solve_descriptor(
-                map_linearity_defect=None,
-                map_linearity_evidence="unavailable",
-                residual_target_available=False,
-            ),
+        _SolveRelationSchemaClaim._solve_descriptor(
+            auxiliary_scalar_count=1,
+            normalization_constraint_count=1,
+            acceptance_relation="eigenpair_residual",
+            objective_relation="spectral_residual",
         ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._solve_descriptor(
-                auxiliary_scalar_count=1,
-                normalization_constraint_count=1,
-                acceptance_relation="eigenpair_residual",
-                objective_relation="spectral_residual",
-            ),
+        _SolveRelationSchemaClaim._solve_descriptor(
+            acceptance_relation="eigenpair_residual",
         ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._solve_descriptor(
-                acceptance_relation="eigenpair_residual",
-            ),
+        _SolveRelationSchemaClaim._linear_descriptor(),
+        _SolveRelationSchemaClaim._linear_descriptor(
+            singular_value_lower_bound=0.0,
+            rank_estimate=3,
+            nullity_estimate=1,
         ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._linear_descriptor(),
+        _SolveRelationSchemaClaim._linear_descriptor(
+            linear_operator_matrix_available=False,
+            matrix_representation_available=False,
         ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._linear_descriptor(
-                singular_value_lower_bound=0.0,
-                rank_estimate=3,
-                nullity_estimate=1,
-            ),
-        ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._linear_descriptor(
-                linear_operator_matrix_available=False,
-                matrix_representation_available=False,
-            ),
-        ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
-        ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._decomposition_descriptor(),
-        ),
-        _AtlasEvidencePoint(
-            _SolveRelationSchemaClaim._decomposition_descriptor(
-                matrix_columns=5,
-            ),
+        _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
+        _SolveRelationSchemaClaim._decomposition_descriptor(),
+        _SolveRelationSchemaClaim._decomposition_descriptor(
+            matrix_columns=5,
         ),
     )
 
@@ -2613,20 +2582,21 @@ def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
 
 
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
-    groups: dict[frozenset[DescriptorField], list[_AtlasEvidencePoint]] = {}
-    for projection in _capability_atlas_projections():
-        groups.setdefault(projection.schema.descriptor_fields, []).append(projection)
+    groups: dict[frozenset[DescriptorField], list[ParameterDescriptor]] = {}
+    for descriptor in _capability_atlas_descriptors():
+        schema = _atlas_schema_for_descriptor(descriptor)
+        groups.setdefault(schema.descriptor_fields, []).append(descriptor)
     return tuple(_AtlasPlotSpec(tuple(group)) for group in groups.values())
 
 
 def _atlas_axis_range(
-    projections: tuple[_AtlasEvidencePoint, ...],
+    descriptors: tuple[ParameterDescriptor, ...],
     field: _AtlasDescriptorField,
 ) -> tuple[float, float]:
     values = tuple(
-        float(projection.descriptor.coordinate(field).value)
-        for projection in projections
-        if projection.descriptor.coordinate(field).known
+        float(descriptor.coordinate(field).value)
+        for descriptor in descriptors
+        if descriptor.coordinate(field).known
     )
     assert values
     return (max(1.0, float(int(min(values))) - 2.0), float(int(max(values))) + 1.0)
@@ -2642,7 +2612,7 @@ def _atlas_fixed_axes(spec: _AtlasPlotSpec) -> tuple[_AtlasDescriptorField, ...]
     return tuple(
         field
         for field in _atlas_hidden_axes(spec)
-        if _axis_has_one_known_value(spec.projections, field)
+        if _axis_has_one_known_value(spec.descriptors, field)
     )
 
 
@@ -2662,12 +2632,10 @@ def _atlas_hidden_axes(spec: _AtlasPlotSpec) -> tuple[_AtlasDescriptorField, ...
 
 
 def _axis_has_one_known_value(
-    projections: tuple[_AtlasEvidencePoint, ...],
+    descriptors: tuple[ParameterDescriptor, ...],
     field: _AtlasDescriptorField,
 ) -> bool:
-    coordinates = tuple(
-        projection.descriptor.coordinate(field) for projection in projections
-    )
+    coordinates = tuple(descriptor.coordinate(field) for descriptor in descriptors)
     return (
         all(coordinate.known for coordinate in coordinates)
         and len({coordinate.value for coordinate in coordinates}) == 1
@@ -3012,6 +2980,24 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
     return tuple(shapes)
 
 
+def _capability_atlas_model_objects() -> tuple[object, ...]:
+    specs = _capability_atlas_plot_specs()
+    schema_regions = tuple(
+        region
+        for spec in specs
+        for region in _schema_atlas_regions(
+            spec.schema,
+            _atlas_regions_for_schema(spec.schema),
+        )
+    )
+    shapes = tuple(shape for spec in specs for shape in _projected_region_shapes(spec))
+    return (*specs, *_capability_atlas_gaps(), *schema_regions, *shapes)
+
+
+def _capability_atlas_model_classes() -> frozenset[type]:
+    return frozenset(type(model) for model in _capability_atlas_model_objects())
+
+
 def _atlas_source_label(
     source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
 ) -> _AtlasText:
@@ -3039,11 +3025,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_atlas_models_do_not_store_raw_text()
+        self._assert_atlas_dataclasses_are_not_trivial_wrappers()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
-        self._assert_evidence_points_are_descriptors()
+        self._assert_evidence_is_descriptors()
         self._assert_coverage_regions_are_schema_discovered()
-        self._assert_plot_specs_select_projection_objects()
+        self._assert_plot_specs_select_descriptors()
         for spec in _capability_atlas_plot_specs():
             schema = spec.schema
             regions = _atlas_regions_for_schema(schema)
@@ -3060,12 +3047,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     @classmethod
     def _assert_atlas_models_do_not_store_raw_text(cls) -> None:
-        atlas_classes = [
-            obj
-            for obj in globals().values()
-            if isinstance(obj, type) and obj.__name__.startswith("_Atlas")
-        ]
-        for atlas_class in atlas_classes:
+        for atlas_class in _capability_atlas_model_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_raw_text(annotation)
 
@@ -3079,10 +3061,27 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
 
     @classmethod
-    def _assert_plot_specs_select_projection_objects(cls) -> None:
+    def _assert_atlas_dataclasses_are_not_trivial_wrappers(cls) -> None:
+        atlas_classes = {
+            atlas_class
+            for atlas_class in _capability_atlas_model_classes()
+            if is_dataclass(atlas_class)
+        }
+        for atlas_class in atlas_classes:
+            if len(fields(atlas_class)) != 1:
+                continue
+            derived_properties = [
+                value
+                for value in vars(atlas_class).values()
+                if isinstance(value, property)
+            ]
+            assert derived_properties
+
+    @classmethod
+    def _assert_plot_specs_select_descriptors(cls) -> None:
         annotations = get_type_hints(_AtlasPlotSpec)
         assert any(
-            cls._annotation_contains_type(annotation, _AtlasEvidencePoint)
+            cls._annotation_contains_type(annotation, ParameterDescriptor)
             for annotation in annotations.values()
         )
         assert not any(
@@ -3094,37 +3093,44 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             for annotation in annotations.values()
         )
         specs = _capability_atlas_plot_specs()
-        plotted = tuple(projection for spec in specs for projection in spec.projections)
-        assert plotted == _capability_atlas_projections()
+        plotted = tuple(descriptor for spec in specs for descriptor in spec.descriptors)
+        assert plotted == _capability_atlas_descriptors()
         for spec in specs:
-            assert spec.projections
-            schema = spec.projections[0].schema
-            assert all(projection.schema == schema for projection in spec.projections)
+            assert spec.descriptors
+            schema = _atlas_schema_for_descriptor(spec.descriptors[0])
+            assert all(
+                _atlas_schema_for_descriptor(descriptor) == schema
+                for descriptor in spec.descriptors
+            )
         for left in plotted:
             for right in plotted:
-                assert (left.schema == right.schema) == (
+                assert (
+                    _atlas_schema_for_descriptor(left)
+                    == _atlas_schema_for_descriptor(right)
+                ) == (
                     any(
-                        left in spec.projections and right in spec.projections
+                        left in spec.descriptors and right in spec.descriptors
                         for spec in specs
                     )
                 )
 
     @classmethod
     def _assert_evidence_schema_is_derived(cls) -> None:
-        annotations = get_type_hints(_AtlasEvidencePoint)
+        annotations = get_type_hints(_AtlasPlotSpec)
         assert not any(
             cls._annotation_contains_type(annotation, ParameterSpaceSchema)
             for annotation in annotations.values()
         )
-        for point in _capability_atlas_projections():
-            assert _atlas_schema_for_descriptor(point.descriptor).descriptor_fields == (
-                point.schema.descriptor_fields
-            )
+        for descriptor in _capability_atlas_descriptors():
+            _atlas_schema_for_descriptor(descriptor)
 
     @classmethod
-    def _assert_evidence_points_are_descriptors(cls) -> None:
-        annotations = get_type_hints(_AtlasEvidencePoint)
-        assert set(annotations.values()) == {ParameterDescriptor}
+    def _assert_evidence_is_descriptors(cls) -> None:
+        annotations = get_type_hints(_AtlasPlotSpec)
+        assert any(
+            cls._annotation_contains_type(annotation, ParameterDescriptor)
+            for annotation in annotations.values()
+        )
 
     @classmethod
     def _assert_coverage_regions_are_schema_discovered(cls) -> None:
@@ -3137,7 +3143,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     @classmethod
     def _assert_projection_axis_roles_are_derived(cls) -> None:
-        annotations = get_type_hints(_AtlasEvidencePoint)
+        annotations = get_type_hints(_AtlasPlotSpec)
         assert not any(
             cls._annotation_contains_type(annotation, _AtlasText)
             for annotation in annotations.values()
