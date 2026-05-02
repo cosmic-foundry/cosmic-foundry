@@ -1402,6 +1402,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         self._assert_no_local_disjointness_algebra()
         self._assert_no_coverage_patch_priority_model()
         self._assert_no_solver_local_point_query()
+        self._assert_no_solver_error_string_dispatch()
         schema = linear_solver_parameter_schema()
         patches = linear_solver_coverage_patches()
         self._assert_no_declared_coverage_literals(patches)
@@ -1558,6 +1559,18 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             assert not (
                 "contains" in call_names and "status" in comparisons
             ), "solver selection must use ParameterSpaceSchema.covering_patch"
+
+    @staticmethod
+    def _assert_no_solver_error_string_dispatch() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "solvers" / "capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id == "str":
+                    raise AssertionError(
+                        "solver selection must not dispatch on exception text"
+                    )
 
     @classmethod
     def _assert_no_declared_coverage_literals(

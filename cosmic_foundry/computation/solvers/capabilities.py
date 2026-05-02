@@ -150,12 +150,7 @@ def select_linear_solver_for_descriptor(
     """Select a linear solver by parameter-space descriptor coverage."""
     schema = linear_solver_parameter_schema()
     patches = linear_solver_coverage_patches()
-    try:
-        patch = schema.covering_patch(descriptor, patches)
-    except ValueError as exc:
-        if "invalid descriptor" not in str(exc):
-            raise
-        raise ValueError(f"invalid linear-solver descriptor {descriptor!r}") from exc
+    patch = schema.covering_patch(descriptor, patches)
     if patch is None:
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
     if patch.status == "rejected":
