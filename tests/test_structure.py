@@ -1662,6 +1662,13 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         return "algorithm_capabilities/linear_solver_coverage_locality"
 
     def check(self, _calibration: None) -> None:
+        support_tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "solvers" / "coverage.py").read_text()
+        )
+        assert not self._coverage_category_support(support_tree), (
+            "linear-solver coverage records must not carry a parallel "
+            "implementation category"
+        )
         for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
             if path.name.startswith("_") or path.name in {
                 "capabilities.py",
@@ -1674,14 +1681,14 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                     "owned linear-solver coverage patch must be declared in "
                     f"class {owner}: {path.relative_to(_PROJECT_ROOT)}"
                 )
-            manual_categories = self._manual_capability_categories(tree)
+            manual_categories = self._manual_coverage_categories(tree)
             assert not manual_categories, (
-                "linear-solver categories must be inferred from implementation "
-                f"inheritance: {path.relative_to(_PROJECT_ROOT)}"
+                "linear-solver coverage must not declare categories; implementation "
+                f"groupings come from inheritance: {path.relative_to(_PROJECT_ROOT)}"
             )
-            manual_names = self._manual_capability_names(tree)
+            manual_names = self._manual_coverage_names(tree)
             assert not manual_names, (
-                "linear-solver capability names must come from class identity: "
+                "linear-solver coverage names must come from class identity: "
                 f"{path.relative_to(_PROJECT_ROOT)}"
             )
             manual_patches = self._manual_owned_patch_calls(tree)
@@ -1694,7 +1701,7 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                 "linear-solver implementation coverage must not declare tag contracts: "
                 f"{path.relative_to(_PROJECT_ROOT)}"
             )
-            manual_providers = self._manual_capability_provider_methods(tree)
+            manual_providers = self._manual_coverage_provider_methods(tree)
             assert not manual_providers, (
                 "linear-solver coverage must be declared as class attributes, "
                 f"not provider methods: {path.relative_to(_PROJECT_ROOT)}"
@@ -1722,12 +1729,13 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         return tuple(locations)
 
     @classmethod
-    def _manual_capability_categories(cls, tree: ast.Module) -> tuple[str, ...]:
+    def _manual_coverage_categories(cls, tree: ast.Module) -> tuple[str, ...]:
         categories: list[str] = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            if cls._call_name(node.func) != "LinearSolverCapability":
+            call_name = cls._call_name(node.func)
+            if call_name not in {"LinearSolverCoverage", "coverage", "capability"}:
                 continue
             category = cls._string_arg(node, 2, "category")
             if category is not None:
@@ -1735,12 +1743,12 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         return tuple(categories)
 
     @classmethod
-    def _manual_capability_names(cls, tree: ast.Module) -> tuple[str, ...]:
+    def _manual_coverage_names(cls, tree: ast.Module) -> tuple[str, ...]:
         names: list[str] = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            if cls._call_name(node.func) != "capability":
+            if cls._call_name(node.func) not in {"coverage", "capability"}:
                 continue
             name = cls._string_arg(node, 1, "name")
             if name is not None:
@@ -1774,13 +1782,24 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         return tuple(calls)
 
     @staticmethod
-    def _manual_capability_provider_methods(tree: ast.Module) -> tuple[str, ...]:
+    def _manual_coverage_provider_methods(tree: ast.Module) -> tuple[str, ...]:
         return tuple(
             node.name
             for node in ast.walk(tree)
             if isinstance(node, ast.FunctionDef)
-            and node.name == "linear_solver_capabilities"
+            and node.name in {"linear_solver_capabilities", "linear_solver_coverages"}
         )
+
+    @staticmethod
+    def _coverage_category_support(tree: ast.Module) -> tuple[str, ...]:
+        category_support: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                if node.target.id == "category":
+                    category_support.append(node.target.id)
+            if isinstance(node, ast.FunctionDef) and node.name == "category_for":
+                category_support.append(node.name)
+        return tuple(category_support)
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
@@ -2836,9 +2855,9 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
     public_categories={
         "capability_contract": frozenset(
             {
-                "LinearSolverCapability",
-                "LINEAR_SOLVER_CAPABILITIES",
-                "linear_solver_capabilities",
+                "LinearSolverCoverage",
+                "LINEAR_SOLVER_COVERAGES",
+                "linear_solver_coverages",
                 "linear_solver_coverage_patches",
                 "select_linear_solver_for_descriptor",
             }
@@ -2868,7 +2887,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             }
         ),
     },
-    capability_provider="cosmic_foundry.computation.solvers.linear_solver_capabilities",
+    capability_provider="cosmic_foundry.computation.solvers.linear_solver_coverages",
     expected_class_modules={
         "DenseCGSolver": "dense_cg_solver",
         "DenseGMRESSolver": "dense_gmres_solver",
@@ -2881,7 +2900,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "KrylovSolver": "iterative_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
-        "LinearSolverCapability": "coverage",
+        "LinearSolverCoverage": "coverage",
         "StationaryIterationSolver": "iterative_solver",
     },
     required_name_fragments={

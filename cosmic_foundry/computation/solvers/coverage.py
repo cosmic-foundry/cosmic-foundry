@@ -17,24 +17,22 @@ CONDITION_LIMIT = 1.0e8
 
 
 @dataclass(frozen=True)
-class LinearSolverCapability:
+class LinearSolverCoverage:
     """Descriptor-space coverage owned by one linear-solver implementation."""
 
     implementation: str
-    category: str
     coverage_patches: tuple[CoveragePatch, ...]
 
 
-def capability(
+def coverage(
     owner: type,
     *,
     coverage_predicates: tuple[StructuredPredicate, ...] = (),
     coverage_priority: int | None = None,
-) -> LinearSolverCapability:
+) -> LinearSolverCoverage:
     """Return descriptor-space coverage whose identity comes from ``owner``."""
-    return LinearSolverCapability(
+    return LinearSolverCoverage(
         owner.__name__,
-        category_for(owner),
         (
             CoveragePatch(
                 owner.__name__,
@@ -45,16 +43,6 @@ def capability(
             ),
         ),
     )
-
-
-def category_for(owner: type) -> str:
-    """Infer the linear-solver category from the implementation class MRO."""
-    mro_names = {cls.__name__ for cls in owner.__mro__}
-    if "DirectSolver" in mro_names:
-        return "direct_solver"
-    if "IterativeSolver" in mro_names:
-        return "iterative_solver"
-    raise ValueError(f"cannot infer linear-solver category for {owner.__name__}")
 
 
 def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
@@ -102,4 +90,4 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
     )
 
 
-__all__ = ["LinearSolverCapability"]
+__all__ = ["LinearSolverCoverage"]

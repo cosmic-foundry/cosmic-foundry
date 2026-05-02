@@ -902,16 +902,16 @@ The sprint is complete when the following are true:
   caller, or unavailable.  Selection may trust exact and certified bounds;
   caller assumptions are allowed only when the request explicitly permits them,
   and tests must cover that policy.
-- **Solver coverage patches.**  Linear solver capabilities are coverage patches
-  over the schema.  Examples: `DenseCGSolver` covers descriptors whose residual
-  map is certified linear, `dim_x == dim_y`, symmetry defect is below tolerance,
-  coercivity lower bound is positive, condition estimate and iteration cost fit
-  budget, and a matrix-free or assembled matvec is available.  `DenseJacobiSolver`
-  covers the diagonally dominant stationary-iteration region.  `DenseLUSolver`
-  covers full-rank square dense linear maps inside memory/work budget.
-  `DenseSVDSolver` covers rank-deficient or minimum-norm dense regions.
-  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps only under
-  restart, memory, and predicted-work bounds.
+- **Solver coverage patches.**  Linear solver implementations own coverage
+  patches over the schema.  Examples: `DenseCGSolver` covers descriptors whose
+  residual map is certified linear, `dim_x == dim_y`, symmetry defect is below
+  tolerance, coercivity lower bound is positive, condition estimate and
+  iteration cost fit budget, and a matrix-free or assembled matvec is available.
+  `DenseJacobiSolver` covers the diagonally dominant stationary-iteration
+  region.  `DenseLUSolver` covers full-rank square dense linear maps inside
+  memory/work budget.  `DenseSVDSolver` covers rank-deficient or minimum-norm
+  dense regions.  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps
+  only under restart, memory, and predicted-work bounds.
 - **Decomposition coverage patches.**  Decomposition capabilities are coverage
   patches over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,
