@@ -636,28 +636,27 @@ def render_capability_atlas() -> str:
 
     lines.extend(["## Computed Gaps", ""])
     uncovered = tuple(
-        (schema, source)
-        for schema in atlas._capability_atlas_schemas()
-        for source in atlas._capability_atlas_uncovered_regions(
-            schema, atlas._atlas_regions_for_schema(schema)
+        (
+            schema,
+            atlas._capability_atlas_uncovered_cells(
+                schema, atlas._atlas_regions_for_schema(schema)
+            ),
         )
+        for schema in atlas._capability_atlas_schemas()
     )
+    uncovered = tuple((schema, cells) for schema, cells in uncovered if cells)
     if uncovered:
-        for index, (schema, source) in enumerate(uncovered, start=1):
+        for schema, cells in uncovered:
             lines.extend(
                 [
-                    f"### Uncovered region {index}",
+                    f"### {schema.name}",
                     "",
-                    f"- Schema: `{schema.name}`",
-                    f"- Region: `{atlas._atlas_source_label(source)}`",
-                    "- Predicates:",
+                    f"- Uncovered schema cells: `{len(cells)}`",
+                    "- Cell basis: schema axis bins and intervals",
+                    "- Excluded cells: invalid cells and owned coverage regions",
+                    "",
                 ]
             )
-            lines.extend(
-                f"  - `{atlas._predicate_label(predicate)}`"
-                for predicate in source.predicates
-            )
-            lines.append("")
     else:
         lines.extend(
             [

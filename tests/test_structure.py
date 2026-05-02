@@ -30,6 +30,7 @@ import pkgutil
 import sys
 import types
 from dataclasses import dataclass
+from itertools import product
 from pathlib import Path
 from typing import Any, NamedTuple, NewType, TypeAlias
 
@@ -2360,17 +2361,16 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 _AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
 
 
-class _AtlasUncoveredRegion(NamedTuple):
-    """Computed valid region not owned by any coverage claim."""
+class _AtlasUncoveredCell(NamedTuple):
+    """Computed valid schema cell not owned by any coverage claim."""
 
-    region: DerivedParameterRegion
     predicates: tuple[StructuredPredicate, ...]
 
     def contains(self, descriptor: ParameterDescriptor) -> bool:
         return all(predicate.evaluate(descriptor) for predicate in self.predicates)
 
 
-_AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredRegion
+_AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredCell
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -2618,8 +2618,7 @@ def _source_alternatives(
     source: _AtlasRegionSource,
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
-    if isinstance(source, _AtlasUncoveredRegion):
-        assert source.region in schema.derived_regions
+    if isinstance(source, _AtlasUncoveredCell):
         return (source.predicates,)
     if isinstance(source, InvalidCellRule):
         assert source in schema.invalid_cells
@@ -2635,39 +2634,104 @@ def _schema_atlas_regions(
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[_AtlasRegionSource, ...]:
     """Return every schema region that should appear in atlas projections."""
-    return (
-        *schema.invalid_cells,
-        *regions,
-        *_capability_atlas_uncovered_regions(schema, regions),
-    )
+    return (*schema.invalid_cells, *regions)
 
 
-def _capability_atlas_uncovered_regions(
+def _capability_atlas_uncovered_cells(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...],
-) -> tuple[_AtlasUncoveredRegion, ...]:
+) -> tuple[_AtlasUncoveredCell, ...]:
     excluded = tuple(rule.predicates for rule in schema.invalid_cells) + tuple(
         region.predicates for region in regions
     )
-    uncovered: list[_AtlasUncoveredRegion] = []
-    for region in schema.derived_regions:
-        for predicates in region.alternatives:
-            if all(
-                predicate_sets_are_disjoint(predicates, excluded_predicates)
-                for excluded_predicates in excluded
-            ):
-                uncovered.append(_AtlasUncoveredRegion(region, predicates))
-    return tuple(uncovered)
+    return tuple(
+        _AtlasUncoveredCell(cell)
+        for cell in _schema_cells(schema)
+        if all(
+            predicate_sets_are_disjoint(cell, excluded_predicates)
+            for excluded_predicates in excluded
+        )
+    )
+
+
+def _schema_cells(
+    schema: ParameterSpaceSchema,
+) -> tuple[tuple[StructuredPredicate, ...], ...]:
+    axis_cells = tuple(_axis_cells(axis) for axis in schema.axes)
+    return tuple(
+        tuple(predicate for axis_cell in cell for predicate in axis_cell)
+        for cell in product(*axis_cells)
+    )
+
+
+def _axis_cells(axis: ParameterAxis) -> tuple[tuple[StructuredPredicate, ...], ...]:
+    return tuple(
+        _axis_region_predicates(axis, axis_region) for axis_region in axis.bins
+    )
+
+
+def _axis_region_predicates(
+    axis: ParameterAxis,
+    axis_region: ParameterBin | NumericInterval,
+) -> tuple[StructuredPredicate, ...]:
+    if isinstance(axis_region, ParameterBin):
+        return (MembershipPredicate(axis.field, axis_region.values),)
+    predicates: list[StructuredPredicate] = []
+    if axis_region.lower is not None:
+        predicates.append(
+            ComparisonPredicate(
+                axis.field,
+                ">=" if axis_region.include_lower else ">",
+                axis_region.lower,
+            )
+        )
+    if axis_region.upper is not None:
+        predicates.append(
+            ComparisonPredicate(
+                axis.field,
+                "<=" if axis_region.include_upper else "<",
+                axis_region.upper,
+            )
+        )
+    return tuple(predicates)
 
 
 def _atlas_source_key(source: _AtlasRegionSource) -> tuple[object, ...]:
-    if isinstance(source, _AtlasUncoveredRegion):
+    if isinstance(source, _AtlasUncoveredCell):
         return (
-            _AtlasUncoveredRegion,
-            id(source.region),
-            tuple(id(predicate) for predicate in source.predicates),
+            _AtlasUncoveredCell,
+            tuple(_predicate_key(predicate) for predicate in source.predicates),
         )
     return (type(source), id(source))
+
+
+def _predicate_key(predicate: StructuredPredicate) -> tuple[object, ...]:
+    if isinstance(predicate, ComparisonPredicate):
+        return (
+            ComparisonPredicate,
+            predicate.field,
+            predicate.operator,
+            predicate.value,
+            predicate.accepted_evidence,
+        )
+    if isinstance(predicate, MembershipPredicate):
+        return (
+            MembershipPredicate,
+            predicate.field,
+            predicate.values,
+            predicate.accepted_evidence,
+        )
+    if isinstance(predicate, EvidencePredicate):
+        return (EvidencePredicate, predicate.field, predicate.evidence)
+    assert isinstance(predicate, AffineComparisonPredicate)
+    return (
+        AffineComparisonPredicate,
+        tuple(sorted(predicate.terms.items(), key=lambda item: _field_label(item[0]))),
+        predicate.operator,
+        predicate.value,
+        predicate.offset,
+        predicate.accepted_evidence,
+    )
 
 
 def _atlas_regions_for_schema(
@@ -2920,8 +2984,8 @@ def _atlas_source_label(
 ) -> _AtlasText:
     if isinstance(source, CoverageRegion):
         return _AtlasText(_coverage_region_name(source))
-    if isinstance(source, _AtlasUncoveredRegion):
-        return _AtlasText(source.region.name)
+    if isinstance(source, _AtlasUncoveredCell):
+        return _AtlasText("schema cell")
     return _AtlasText(source.name)
 
 
@@ -2956,11 +3020,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             discovered = _schema_atlas_regions(schema, regions)
             assert {_atlas_source_key(source) for source in discovered} == {
                 _atlas_source_key(source)
-                for source in (
-                    *schema.invalid_cells,
-                    *regions,
-                    *_capability_atlas_uncovered_regions(schema, regions),
-                )
+                for source in (*schema.invalid_cells, *regions)
             }
             shapes = _projected_region_shapes(group)
             assert shapes
@@ -3043,17 +3103,16 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def _assert_uncovered_regions_are_computed() -> None:
         for schema in _capability_atlas_schemas():
             regions = _atlas_regions_for_schema(schema)
-            uncovered = _capability_atlas_uncovered_regions(schema, regions)
+            uncovered = _capability_atlas_uncovered_cells(schema, regions)
+            excluded = tuple(rule.predicates for rule in schema.invalid_cells) + tuple(
+                region.predicates for region in regions
+            )
             assert uncovered == tuple(
-                _AtlasUncoveredRegion(region, predicates)
-                for region in schema.derived_regions
-                for predicates in region.alternatives
+                _AtlasUncoveredCell(cell)
+                for cell in _schema_cells(schema)
                 if all(
-                    predicate_sets_are_disjoint(predicates, excluded)
-                    for excluded in (
-                        tuple(rule.predicates for rule in schema.invalid_cells)
-                        + tuple(region.predicates for region in regions)
-                    )
+                    predicate_sets_are_disjoint(cell, excluded_predicates)
+                    for excluded_predicates in excluded
                 )
             )
             for source in uncovered:
