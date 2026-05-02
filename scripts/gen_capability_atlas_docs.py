@@ -581,22 +581,8 @@ def render_capability_atlas() -> str:
         "",
     ]
     for spec in atlas._capability_atlas_plot_specs():
-        fixed = sorted(
-            {
-                field
-                for projection in spec.projections
-                for field in projection.fixed_axes
-            },
-            key=atlas._field_label,
-        )
-        marginalized = sorted(
-            {
-                field
-                for projection in spec.projections
-                for field in projection.marginalized_axes
-            },
-            key=atlas._field_label,
-        )
+        fixed = atlas._atlas_fixed_axes(spec)
+        marginalized = atlas._atlas_marginalized_axes(spec)
         lines.extend(
             [
                 f"### {spec.title}",
