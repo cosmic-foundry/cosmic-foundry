@@ -1431,7 +1431,6 @@ class _AtlasPlotSpec:
     y_axis: str
     x_range: tuple[float, float]
     y_range: tuple[float, float]
-    regions: tuple[_AtlasRegionProjection, ...]
     cells: tuple[str, ...]
     caption: str
 
@@ -1647,22 +1646,6 @@ def _capability_atlas_evidence() -> tuple[_AtlasEvidence, ...]:
     return ()
 
 
-def _atlas_region(
-    name: str,
-    status: str,
-    source_kind: str,
-    source_name: str | None = None,
-    condition: str = "",
-) -> _AtlasRegionProjection:
-    return _AtlasRegionProjection(
-        name=name,
-        status=status,
-        source_kind=source_kind,
-        source_name=source_name or name,
-        condition=condition,
-    )
-
-
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
     return (
         _AtlasPlotSpec(
@@ -1673,50 +1656,6 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             "dim_y",
             (1.0, 6.0),
             (1.0, 6.0),
-            (
-                _atlas_region(
-                    "linear_system",
-                    "uncovered",
-                    "derived_region",
-                    condition=("linear map; target available; residual acceptance"),
-                ),
-                _atlas_region(
-                    "least_squares",
-                    "uncovered",
-                    "derived_region",
-                    condition=(
-                        "least_squares objective; other visible dims conditional"
-                    ),
-                ),
-                _atlas_region(
-                    "nonlinear_root",
-                    "uncovered",
-                    "derived_region",
-                    condition=("nonlinear/unknown linearity; visible dims conditional"),
-                ),
-                _atlas_region(
-                    "eigenproblem",
-                    "uncovered",
-                    "derived_region",
-                    condition=(
-                        "spectral scalar and normalization; visible dims conditional"
-                    ),
-                ),
-                _atlas_region(
-                    "invalid_eigenpair_without_spectral_data",
-                    "invalid",
-                    "invalid_cell",
-                    "eigenpair_requires_auxiliary_scalar",
-                    "eigenpair residual missing spectral auxiliary scalar",
-                ),
-                _atlas_region(
-                    "invalid_eigenpair_without_normalization",
-                    "invalid",
-                    "invalid_cell",
-                    "eigenpair_requires_normalization",
-                    "eigenpair residual missing normalization",
-                ),
-            ),
             (
                 "Solve relation: square linear system",
                 "Solve relation: least-squares relation",
@@ -1735,40 +1674,6 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                _atlas_region(
-                    "linear_system",
-                    "uncovered",
-                    "derived_region",
-                    condition="linear map; target available; residual acceptance",
-                ),
-                _atlas_region(
-                    "symmetric_positive_definite",
-                    "uncovered",
-                    "derived_region",
-                    condition="square; symmetric; positive coercivity",
-                ),
-                _atlas_region(
-                    "overdetermined",
-                    "uncovered",
-                    "derived_region",
-                    condition="dim_y > dim_x",
-                ),
-                _atlas_region(
-                    "invalid_nonsquare_spd",
-                    "invalid",
-                    "invalid_cell",
-                    "coercivity_requires_square_map",
-                    "coercivity asserted while nonsquare",
-                ),
-                _atlas_region(
-                    "invalid_nonsquare_symmetric",
-                    "invalid",
-                    "invalid_cell",
-                    "symmetry_requires_square_map",
-                    "symmetry asserted while nonsquare",
-                ),
-            ),
-            (
                 "Linear solver: SPD full-rank dense descriptor",
                 "Linear solver: rank-deficient descriptor",
                 "Linear solver: matrix-free descriptor",
@@ -1784,21 +1689,6 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             "matrix_columns",
             (1.0, 6.0),
             (1.0, 6.0),
-            (
-                _atlas_region(
-                    "square",
-                    "uncovered",
-                    "derived_region",
-                    condition="matrix_rows == matrix_columns",
-                ),
-                _atlas_region(
-                    "invalid_nonsquare_coercive",
-                    "invalid",
-                    "invalid_cell",
-                    "coercivity_requires_square_matrix",
-                    "coercivity_lower_bound > 0 while matrix_rows != matrix_columns",
-                ),
-            ),
             (
                 "Decomposition: square full-rank dense descriptor",
                 "Invalid decomposition: nonsquare coercive descriptor",
@@ -1939,6 +1829,32 @@ def _source_alternatives(
             )
         return (matches[0].predicates,)
     raise AssertionError(f"unsupported atlas source kind {region.source_kind!r}")
+
+
+def _schema_atlas_regions(
+    schema: ParameterSpaceSchema,
+) -> tuple[_AtlasRegionProjection, ...]:
+    """Return every schema region that should appear in atlas projections."""
+    derived = tuple(
+        _AtlasRegionProjection(
+            name=region.name,
+            status="uncovered",
+            source_kind="derived_region",
+            source_name=region.name,
+        )
+        for region in schema.derived_regions
+    )
+    invalid = tuple(
+        _AtlasRegionProjection(
+            name=rule.name,
+            status="invalid",
+            source_kind="invalid_cell",
+            source_name=rule.name,
+            condition=rule.reason,
+        )
+        for rule in schema.invalid_cells
+    )
+    return derived + invalid
 
 
 def _predicate_affine_projection(
@@ -2137,7 +2053,7 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
     }
     schema = schemas[spec.schema]
     shapes: list[_AtlasRegionShape] = []
-    for region in spec.regions:
+    for region in _schema_atlas_regions(schema):
         alternatives = _source_alternatives(schema, region)
         for alternative_index, predicates in enumerate(alternatives, start=1):
             geometry = _project_alternative_geometry(
@@ -2464,7 +2380,9 @@ def _render_capability_atlas() -> str:
         "coordinates fixed outside the projection, and the higher-dimensional axes",
         "that are only summarized.  Region geometry is drawn first; concrete",
         "descriptor fixtures from `tests/test_structure.py` are overlaid as",
-        "numbered evidence points.  Ownership is intentionally sparse at this",
+        "numbered evidence points.  Plot region lists are autodiscovered from",
+        "`DerivedParameterRegion` and `InvalidCellRule` declarations on each",
+        "schema.  Ownership is intentionally sparse at this",
         "stage: solver and decomposition implementations have not yet been",
         "converted from string-set capability tags to coverage patches.",
         "",
@@ -2572,7 +2490,24 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         assert "![Solve-Relation Regions]" in expected
         assert "![Linear-Solver Regions]" in expected
         assert "![Decomposition Regions]" in expected
+        schemas = {
+            schema.name: schema
+            for schema in (
+                solve_relation_parameter_schema(),
+                linear_solver_parameter_schema(),
+                decomposition_parameter_schema(),
+            )
+        }
         for spec in _capability_atlas_plot_specs():
+            schema = schemas[spec.schema]
+            discovered = _schema_atlas_regions(schema)
+            assert {
+                (region.source_kind, region.source_name) for region in discovered
+            } == {
+                ("derived_region", region.name) for region in schema.derived_regions
+            } | {
+                ("invalid_cell", rule.name) for rule in schema.invalid_cells
+            }
             shapes = _projected_region_shapes(spec)
             assert shapes
             for shape in shapes:
