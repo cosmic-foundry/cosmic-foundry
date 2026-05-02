@@ -7,15 +7,11 @@ from pkgutil import iter_modules
 from types import ModuleType
 
 from cosmic_foundry.computation.algorithm_capabilities import (
-    AffineComparisonPredicate,
-    ComparisonPredicate,
     CoveragePatch,
-    EvidencePredicate,
     ParameterDescriptor,
     linear_solver_parameter_schema,
 )
 from cosmic_foundry.computation.solvers.coverage import (
-    LINEARITY_TOLERANCE,
     LinearSolverCoverage,
     coverage,
 )
@@ -62,86 +58,7 @@ def linear_solver_coverage_patches() -> tuple[CoveragePatch, ...]:
     patches: list[CoveragePatch] = []
     for record in LINEAR_SOLVER_COVERAGES:
         patches.extend(record.coverage_patches)
-    patches.extend(selector_rejection_patches())
     return tuple(patches)
-
-
-def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
-    """Return selector-level rejection regions not owned by implementations."""
-    return (
-        CoveragePatch(
-            "linear_solver_work_budget_below_operator_cost",
-            "linear_solver_selector",
-            "rejected",
-            (
-                ComparisonPredicate(
-                    "map_linearity_defect",
-                    "<=",
-                    LINEARITY_TOLERANCE,
-                ),
-                AffineComparisonPredicate(
-                    {"work_budget_fmas": 1.0, "matvec_cost_fmas": -1.0},
-                    "<",
-                    0.0,
-                ),
-                AffineComparisonPredicate(
-                    {
-                        "memory_budget_bytes": 1.0,
-                        "linear_operator_memory_bytes": -1.0,
-                    },
-                    ">=",
-                    0.0,
-                ),
-            ),
-        ),
-        CoveragePatch(
-            "linear_solver_memory_budget_below_operator_storage",
-            "linear_solver_selector",
-            "rejected",
-            (
-                ComparisonPredicate(
-                    "map_linearity_defect",
-                    "<=",
-                    LINEARITY_TOLERANCE,
-                ),
-                AffineComparisonPredicate(
-                    {
-                        "memory_budget_bytes": 1.0,
-                        "linear_operator_memory_bytes": -1.0,
-                    },
-                    "<",
-                    0.0,
-                ),
-            ),
-        ),
-        CoveragePatch(
-            "linear_solver_unknown_condition",
-            "linear_solver_selector",
-            "rejected",
-            (
-                ComparisonPredicate(
-                    "map_linearity_defect",
-                    "<=",
-                    LINEARITY_TOLERANCE,
-                ),
-                AffineComparisonPredicate(
-                    {"work_budget_fmas": 1.0, "matvec_cost_fmas": -1.0},
-                    ">=",
-                    0.0,
-                ),
-                AffineComparisonPredicate(
-                    {
-                        "memory_budget_bytes": 1.0,
-                        "linear_operator_memory_bytes": -1.0,
-                    },
-                    ">=",
-                    0.0,
-                ),
-                ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-                EvidencePredicate("condition_estimate", frozenset({"unavailable"})),
-            ),
-        ),
-    )
 
 
 def select_linear_solver_for_descriptor(
@@ -153,8 +70,6 @@ def select_linear_solver_for_descriptor(
     patch = schema.covering_patch(descriptor, patches)
     if patch is None:
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
-    if patch.status == "rejected":
-        raise ValueError(f"rejected linear-solver descriptor {descriptor!r}")
 
     owners = {record.implementation: record for record in LINEAR_SOLVER_COVERAGES}
     return owners[patch.owner]

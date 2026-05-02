@@ -150,8 +150,6 @@ def _status_style(status: str) -> tuple[str, str]:
         return "#b42318", "#fee4e2"
     if status == "owned":
         return "#027a48", "#d1fadf"
-    if status == "rejected":
-        return "#b54708", "#fef0c7"
     return "#475467", "#f2f4f7"
 
 
@@ -574,8 +572,7 @@ def render_capability_atlas() -> str:
         "Status legend:",
         "",
         "- `invalid`: the descriptor violates a schema validity rule.",
-        "- `owned`: at least one coverage patch owns the descriptor.",
-        "- `rejected`: coverage patches intentionally reject the descriptor.",
+        "- `owned`: a coverage patch owns the descriptor.",
         "- `uncovered`: the descriptor is valid but no coverage patch owns it.",
         "",
         _ATLAS_STYLE_AND_SCRIPT,
@@ -626,7 +623,6 @@ def render_capability_atlas() -> str:
                     f"### {patch.name}",
                     "",
                     f"- Owner: `{patch.owner}`",
-                    f"- Status: `{patch.status}`",
                     "- Predicates:",
                 ]
             )
