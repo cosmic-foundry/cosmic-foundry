@@ -28,6 +28,35 @@ def contract(
     return AlgorithmStructureContract(frozenset(requires), frozenset(provides))
 
 
+def capability(
+    owner: type,
+    name: str,
+    structure_contract: AlgorithmStructureContract,
+    *,
+    priority: int | None = None,
+    coverage_patches: tuple[CoveragePatch, ...] = (),
+) -> LinearSolverCapability:
+    """Return a capability whose category is inferred from solver inheritance."""
+    return LinearSolverCapability(
+        name,
+        owner.__name__,
+        category_for(owner),
+        structure_contract,
+        priority=priority,
+        coverage_patches=coverage_patches,
+    )
+
+
+def category_for(owner: type) -> str:
+    """Infer the linear-solver category from the implementation class MRO."""
+    mro_names = {cls.__name__ for cls in owner.__mro__}
+    if "DirectSolver" in mro_names:
+        return "direct_solver"
+    if "IterativeSolver" in mro_names:
+        return "iterative_solver"
+    raise ValueError(f"cannot infer linear-solver category for {owner.__name__}")
+
+
 def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
     """Return the primitive predicates for a linear residual solve."""
     return (

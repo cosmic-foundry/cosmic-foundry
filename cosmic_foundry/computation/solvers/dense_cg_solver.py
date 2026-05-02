@@ -14,6 +14,7 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
     budget_predicates,
+    capability,
     contract,
     linear_system_predicates,
     owned_patch,
@@ -113,10 +114,9 @@ class DenseCGSolver(IterativeSolver):
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
         """Return capability declarations owned by this solver implementation."""
         return (
-            LinearSolverCapability(
+            capability(
+                cls,
                 "dense_cg_iteration",
-                cls.__name__,
-                "iterative_solver",
                 contract(
                     requires=("linear_operator", "symmetric_positive_definite"),
                     provides=("solve", "iterative", "krylov", "matrix_free", "spd"),

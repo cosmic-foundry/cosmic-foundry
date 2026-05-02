@@ -9,6 +9,7 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
     budget_predicates,
+    capability,
     contract,
     dense_matrix_predicates,
     linear_system_predicates,
@@ -45,10 +46,9 @@ class DenseLUSolver(DirectSolver):
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
         """Return capability declarations owned by this solver implementation."""
         return (
-            LinearSolverCapability(
+            capability(
+                cls,
                 "dense_lu_direct",
-                cls.__name__,
-                "direct_solver",
                 contract(
                     requires=("dense_operator", "square_system", "full_rank"),
                     provides=("solve", "direct", "exact", "factorized_dense"),

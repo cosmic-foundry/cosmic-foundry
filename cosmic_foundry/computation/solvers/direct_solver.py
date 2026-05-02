@@ -5,6 +5,7 @@ from __future__ import annotations
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
 from cosmic_foundry.computation.solvers._capability_claims import (
     LinearSolverCapability,
+    capability,
     contract,
 )
 from cosmic_foundry.computation.solvers.linear_solver import (
@@ -54,10 +55,9 @@ class DirectSolver(LinearSolver):
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
         """Return capability declarations owned by this solver implementation."""
         return (
-            LinearSolverCapability(
+            capability(
+                cls,
                 "generic_direct",
-                cls.__name__,
-                "direct_solver",
                 contract(
                     requires=("linear_operator", "decomposition"),
                     provides=("solve", "direct", "assembled_matrix"),

@@ -1669,6 +1669,11 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                     "owned linear-solver coverage patch must be declared in "
                     f"class {owner}: {path.relative_to(_PROJECT_ROOT)}"
                 )
+            manual_categories = self._manual_capability_categories(tree)
+            assert not manual_categories, (
+                "linear-solver categories must be inferred from implementation "
+                f"inheritance: {path.relative_to(_PROJECT_ROOT)}"
+            )
 
     @classmethod
     def _owned_coverage_locations(
@@ -1690,6 +1695,19 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                         if owner is not None:
                             locations.append((owner, None))
         return tuple(locations)
+
+    @classmethod
+    def _manual_capability_categories(cls, tree: ast.Module) -> tuple[str, ...]:
+        categories: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if cls._call_name(node.func) != "LinearSolverCapability":
+                continue
+            category = cls._string_arg(node, 2, "category")
+            if category is not None:
+                categories.append(category)
+        return tuple(categories)
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:

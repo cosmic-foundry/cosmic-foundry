@@ -11,6 +11,7 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
     budget_predicates,
+    capability,
     contract,
     dense_matrix_predicates,
     linear_system_predicates,
@@ -110,10 +111,9 @@ class DenseJacobiSolver(IterativeSolver):
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
         """Return capability declarations owned by this solver implementation."""
         return (
-            LinearSolverCapability(
+            capability(
+                cls,
                 "dense_jacobi_iteration",
-                cls.__name__,
-                "iterative_solver",
                 contract(
                     requires=("linear_operator", "diagonal", "row_abs_sums"),
                     provides=("solve", "iterative", "stationary", "matrix_free"),
