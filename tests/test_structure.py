@@ -31,7 +31,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NewType, TypeAlias
+from typing import Any, NamedTuple, NewType, TypeAlias
 
 import pytest
 
@@ -52,6 +52,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    StructuredPredicate,
     coverage_regions_are_disjoint,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
@@ -75,11 +76,6 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = LinearSolverField | DecompositionField
-_AtlasRegionSource: TypeAlias = (
-    DerivedParameterRegion | InvalidCellRule | CoverageRegion
-)
-
-
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -2362,7 +2358,19 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 
 
 _AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
-_AtlasUncoveredDescriptor: TypeAlias = tuple[ParameterSpaceSchema, ParameterDescriptor]
+
+
+class _AtlasUncoveredRegion(NamedTuple):
+    """Computed valid region not owned by any coverage claim."""
+
+    region: DerivedParameterRegion
+    predicates: tuple[StructuredPredicate, ...]
+
+    def contains(self, descriptor: ParameterDescriptor) -> bool:
+        return all(predicate.evaluate(descriptor) for predicate in self.predicates)
+
+
+_AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredRegion
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -2452,16 +2460,6 @@ def _descriptor_inhabits_schema(
     except ValueError:
         return False
     return True
-
-
-def _capability_atlas_uncovered_descriptors() -> tuple[_AtlasUncoveredDescriptor, ...]:
-    uncovered: list[_AtlasUncoveredDescriptor] = []
-    for descriptor in _capability_atlas_descriptors():
-        schema = _atlas_schema_for_descriptor(descriptor)
-        regions = _atlas_regions_for_schema(schema)
-        if schema.cell_status(descriptor, regions) == "uncovered":
-            uncovered.append((schema, descriptor))
-    return tuple(uncovered)
 
 
 def _capability_atlas_descriptor_groups() -> tuple[_AtlasDescriptorGroup, ...]:
@@ -2620,9 +2618,9 @@ def _source_alternatives(
     source: _AtlasRegionSource,
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
-    if isinstance(source, DerivedParameterRegion):
-        assert source in schema.derived_regions
-        return source.alternatives
+    if isinstance(source, _AtlasUncoveredRegion):
+        assert source.region in schema.derived_regions
+        return (source.predicates,)
     if isinstance(source, InvalidCellRule):
         assert source in schema.invalid_cells
         return (source.predicates,)
@@ -2637,7 +2635,39 @@ def _schema_atlas_regions(
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[_AtlasRegionSource, ...]:
     """Return every schema region that should appear in atlas projections."""
-    return (*schema.derived_regions, *schema.invalid_cells, *regions)
+    return (
+        *schema.invalid_cells,
+        *regions,
+        *_capability_atlas_uncovered_regions(schema, regions),
+    )
+
+
+def _capability_atlas_uncovered_regions(
+    schema: ParameterSpaceSchema,
+    regions: tuple[CoverageRegion, ...],
+) -> tuple[_AtlasUncoveredRegion, ...]:
+    excluded = tuple(rule.predicates for rule in schema.invalid_cells) + tuple(
+        region.predicates for region in regions
+    )
+    uncovered: list[_AtlasUncoveredRegion] = []
+    for region in schema.derived_regions:
+        for predicates in region.alternatives:
+            if all(
+                predicate_sets_are_disjoint(predicates, excluded_predicates)
+                for excluded_predicates in excluded
+            ):
+                uncovered.append(_AtlasUncoveredRegion(region, predicates))
+    return tuple(uncovered)
+
+
+def _atlas_source_key(source: _AtlasRegionSource) -> tuple[object, ...]:
+    if isinstance(source, _AtlasUncoveredRegion):
+        return (
+            _AtlasUncoveredRegion,
+            id(source.region),
+            tuple(id(predicate) for predicate in source.predicates),
+        )
+    return (type(source), id(source))
 
 
 def _atlas_regions_for_schema(
@@ -2886,15 +2916,17 @@ def _projected_region_shapes(
 
 
 def _atlas_source_label(
-    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
+    source: _AtlasRegionSource,
 ) -> _AtlasText:
     if isinstance(source, CoverageRegion):
         return _AtlasText(_coverage_region_name(source))
+    if isinstance(source, _AtlasUncoveredRegion):
+        return _AtlasText(source.region.name)
     return _AtlasText(source.name)
 
 
 def _atlas_source_status(
-    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
+    source: _AtlasRegionSource,
 ) -> _AtlasText:
     if isinstance(source, InvalidCellRule):
         return _AtlasText("invalid")
@@ -2912,7 +2944,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_no_atlas_dataclass_stores_presentation_text()
-        self._assert_uncovered_descriptors_are_computed()
+        self._assert_uncovered_regions_are_computed()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
@@ -2922,9 +2954,13 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
             discovered = _schema_atlas_regions(schema, regions)
-            assert {id(source) for source in discovered} == {
-                id(source)
-                for source in schema.derived_regions + schema.invalid_cells + regions
+            assert {_atlas_source_key(source) for source in discovered} == {
+                _atlas_source_key(source)
+                for source in (
+                    *schema.invalid_cells,
+                    *regions,
+                    *_capability_atlas_uncovered_regions(schema, regions),
+                )
             }
             shapes = _projected_region_shapes(group)
             assert shapes
@@ -3004,14 +3040,31 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
 
     @staticmethod
-    def _assert_uncovered_descriptors_are_computed() -> None:
-        assert _capability_atlas_uncovered_descriptors() == tuple(
-            (schema, descriptor)
-            for descriptor in _capability_atlas_descriptors()
-            for schema in (_atlas_schema_for_descriptor(descriptor),)
-            if schema.cell_status(descriptor, _atlas_regions_for_schema(schema))
-            == "uncovered"
-        )
+    def _assert_uncovered_regions_are_computed() -> None:
+        for schema in _capability_atlas_schemas():
+            regions = _atlas_regions_for_schema(schema)
+            uncovered = _capability_atlas_uncovered_regions(schema, regions)
+            assert uncovered == tuple(
+                _AtlasUncoveredRegion(region, predicates)
+                for region in schema.derived_regions
+                for predicates in region.alternatives
+                if all(
+                    predicate_sets_are_disjoint(predicates, excluded)
+                    for excluded in (
+                        tuple(rule.predicates for rule in schema.invalid_cells)
+                        + tuple(region.predicates for region in regions)
+                    )
+                )
+            )
+            for source in uncovered:
+                assert all(
+                    predicate_sets_are_disjoint(source.predicates, rule.predicates)
+                    for rule in schema.invalid_cells
+                )
+                assert all(
+                    predicate_sets_are_disjoint(source.predicates, region.predicates)
+                    for region in regions
+                )
 
     @classmethod
     def _assert_descriptor_groups_are_schema_equivalence_classes(cls) -> None:
