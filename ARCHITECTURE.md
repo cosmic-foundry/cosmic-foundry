@@ -1012,28 +1012,19 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Derive projected atlas geometry from schema predicates instead of manual plot
-   annotations.  For each `DerivedParameterRegion`, invalid-cell rule, and later
-   `CoveragePatch`, the atlas generator should project structured predicates
-   onto the chosen visible axes and compute the line, interval, polygon, or
-   conditional-overlay geometry from that source data.  Manual projection specs
-   may choose which axes to show and may supply human labels, but they must not
-   restate region bounds such as `dim_x == dim_y` or `dim_y > dim_x` as
-   independent SVG geometry.  Structural tests should fail when a plotted region
-   references bounds that cannot be traced back to the schema predicate.
-2. Add an interactive atlas projection mode.  The generated documentation should
+1. Add an interactive atlas projection mode.  The generated documentation should
    retain static fallbacks, but the primary view should let a developer hover
    over a region or evidence marker and see that region's predicate overlay on
    the base diagram: highlighted visible-axis geometry, fixed hidden-axis
    predicates, marginalized axes, ownership status, and which sampled test
    descriptors lie inside it.  Conditional projections such as nonlinear-root or
    eigenproblem overlays must make clear which unshown axes activate the region.
-3. Convert linear solver capabilities to coverage patches and update
+2. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-4. Convert decomposition capabilities to coverage patches, including
+3. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+4. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---

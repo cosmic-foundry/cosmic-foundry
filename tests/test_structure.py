@@ -40,6 +40,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     CoveragePatch,
     DerivedParameterRegion,
     DescriptorCoordinate,
+    EvidencePredicate,
     InvalidCellRule,
     MembershipPredicate,
     NumericInterval,
@@ -1397,11 +1398,23 @@ class _AtlasEvidence:
 
 
 @dataclass(frozen=True)
-class _AtlasRegionShape:
-    """Projected region geometry rendered before descriptor evidence points."""
+class _AtlasRegionProjection:
+    """Schema region selected for projection onto a plot."""
 
     name: str
     status: str
+    source_kind: str
+    source_name: str
+    condition: str = ""
+
+
+@dataclass(frozen=True)
+class _AtlasRegionShape:
+    """Projected region geometry derived from schema predicates."""
+
+    name: str
+    status: str
+    source_name: str
     geometry: str
     points: tuple[tuple[float, float], ...]
     condition: str
@@ -1418,7 +1431,7 @@ class _AtlasPlotSpec:
     y_axis: str
     x_range: tuple[float, float]
     y_range: tuple[float, float]
-    regions: tuple[_AtlasRegionShape, ...]
+    regions: tuple[_AtlasRegionProjection, ...]
     cells: tuple[str, ...]
     caption: str
 
@@ -1634,6 +1647,22 @@ def _capability_atlas_evidence() -> tuple[_AtlasEvidence, ...]:
     return ()
 
 
+def _atlas_region(
+    name: str,
+    status: str,
+    source_kind: str,
+    source_name: str | None = None,
+    condition: str = "",
+) -> _AtlasRegionProjection:
+    return _AtlasRegionProjection(
+        name=name,
+        status=status,
+        source_kind=source_kind,
+        source_name=source_name or name,
+        condition=condition,
+    )
+
+
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
     return (
         _AtlasPlotSpec(
@@ -1645,40 +1674,47 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                _AtlasRegionShape(
+                _atlas_region(
                     "linear_system",
                     "uncovered",
-                    "line",
-                    ((1.0, 1.0), (6.0, 6.0)),
-                    "linear map; target available; residual acceptance",
+                    "derived_region",
+                    condition=("linear map; target available; residual acceptance"),
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "least_squares",
                     "uncovered",
-                    "polygon",
-                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
-                    "linear map; least_squares objective; target available",
+                    "derived_region",
+                    condition=(
+                        "least_squares objective; other visible dims conditional"
+                    ),
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "nonlinear_root",
                     "uncovered",
-                    "rectangle",
-                    ((1.0, 1.0), (6.0, 6.0)),
-                    "nonlinear or unknown linearity; residual acceptance",
+                    "derived_region",
+                    condition=("nonlinear/unknown linearity; visible dims conditional"),
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "eigenproblem",
                     "uncovered",
-                    "rectangle",
-                    ((1.25, 1.25), (5.75, 5.75)),
-                    "spectral scalar and normalization; eigenpair residual",
+                    "derived_region",
+                    condition=(
+                        "spectral scalar and normalization; visible dims conditional"
+                    ),
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "invalid_eigenpair_without_spectral_data",
                     "invalid",
-                    "rectangle",
-                    ((1.5, 1.5), (5.5, 5.5)),
-                    "eigenpair residual missing spectral data",
+                    "invalid_cell",
+                    "eigenpair_requires_auxiliary_scalar",
+                    "eigenpair residual missing spectral auxiliary scalar",
+                ),
+                _atlas_region(
+                    "invalid_eigenpair_without_normalization",
+                    "invalid",
+                    "invalid_cell",
+                    "eigenpair_requires_normalization",
+                    "eigenpair residual missing normalization",
                 ),
             ),
             (
@@ -1699,33 +1735,37 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                _AtlasRegionShape(
+                _atlas_region(
                     "linear_system",
                     "uncovered",
-                    "line",
-                    ((1.0, 1.0), (6.0, 6.0)),
-                    "linear map; target available; residual acceptance",
+                    "derived_region",
+                    condition="linear map; target available; residual acceptance",
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "symmetric_positive_definite",
                     "uncovered",
-                    "line",
-                    ((1.0, 1.0), (6.0, 6.0)),
-                    "square; symmetric; positive coercivity",
+                    "derived_region",
+                    condition="square; symmetric; positive coercivity",
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "overdetermined",
                     "uncovered",
-                    "polygon",
-                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
-                    "dim_y > dim_x",
+                    "derived_region",
+                    condition="dim_y > dim_x",
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "invalid_nonsquare_spd",
                     "invalid",
-                    "polygon",
-                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
-                    "symmetry/coercivity asserted while nonsquare",
+                    "invalid_cell",
+                    "coercivity_requires_square_map",
+                    "coercivity asserted while nonsquare",
+                ),
+                _atlas_region(
+                    "invalid_nonsquare_symmetric",
+                    "invalid",
+                    "invalid_cell",
+                    "symmetry_requires_square_map",
+                    "symmetry asserted while nonsquare",
                 ),
             ),
             (
@@ -1745,18 +1785,17 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                _AtlasRegionShape(
+                _atlas_region(
                     "square",
                     "uncovered",
-                    "line",
-                    ((1.0, 1.0), (6.0, 6.0)),
-                    "matrix_rows == matrix_columns",
+                    "derived_region",
+                    condition="matrix_rows == matrix_columns",
                 ),
-                _AtlasRegionShape(
+                _atlas_region(
                     "invalid_nonsquare_coercive",
                     "invalid",
-                    "polygon",
-                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
+                    "invalid_cell",
+                    "coercivity_requires_square_matrix",
                     "coercivity_lower_bound > 0 while matrix_rows != matrix_columns",
                 ),
             ),
@@ -1849,6 +1888,293 @@ def _svg_plot_point(
         + plot_h
         - _plot_coordinate(y_value, axis_min=y_min, axis_max=y_max) * plot_h,
     )
+
+
+def _predicate_label(predicate: Any) -> str:
+    if isinstance(predicate, ComparisonPredicate):
+        return f"{predicate.field} {predicate.operator} {predicate.value}"
+    if isinstance(predicate, AffineComparisonPredicate):
+        terms = " + ".join(
+            f"{coefficient:g}*{field}"
+            for field, coefficient in sorted(predicate.terms.items())
+        )
+        if predicate.offset:
+            terms = f"{terms} + {predicate.offset:g}"
+        return f"{terms} {predicate.operator} {predicate.value:g}"
+    if isinstance(predicate, MembershipPredicate):
+        values = ", ".join(str(value) for value in sorted(predicate.values, key=str))
+        return f"{predicate.field} in {{{values}}}"
+    if isinstance(predicate, EvidencePredicate):
+        evidence = ", ".join(sorted(predicate.evidence))
+        return f"{predicate.field} evidence in {{{evidence}}}"
+    return repr(predicate)
+
+
+def _source_alternatives(
+    schema: ParameterSpaceSchema,
+    region: _AtlasRegionProjection,
+) -> tuple[tuple[Any, ...], ...]:
+    if region.source_kind == "derived_region":
+        matches = [
+            candidate
+            for candidate in schema.derived_regions
+            if candidate.name == region.source_name
+        ]
+        if not matches:
+            raise AssertionError(
+                f"atlas region {region.name!r} references missing "
+                f"derived region {region.source_name!r}"
+            )
+        return matches[0].alternatives
+    if region.source_kind == "invalid_cell":
+        matches = [
+            candidate
+            for candidate in schema.invalid_cells
+            if candidate.name == region.source_name
+        ]
+        if not matches:
+            raise AssertionError(
+                f"atlas region {region.name!r} references missing "
+                f"invalid cell {region.source_name!r}"
+            )
+        return (matches[0].predicates,)
+    raise AssertionError(f"unsupported atlas source kind {region.source_kind!r}")
+
+
+def _predicate_affine_projection(
+    predicate: Any, x_axis: str, y_axis: str
+) -> tuple[dict[str, float], str, float] | None:
+    if isinstance(predicate, AffineComparisonPredicate):
+        visible = {
+            field: coefficient
+            for field, coefficient in predicate.terms.items()
+            if field in {x_axis, y_axis}
+        }
+        hidden = set(predicate.terms) - {x_axis, y_axis}
+        if visible and not hidden:
+            return (
+                {
+                    x_axis: visible.get(x_axis, 0.0),
+                    y_axis: visible.get(y_axis, 0.0),
+                },
+                predicate.operator,
+                predicate.value - predicate.offset,
+            )
+        return None
+    if isinstance(predicate, ComparisonPredicate) and predicate.field in {
+        x_axis,
+        y_axis,
+    }:
+        return (
+            {
+                x_axis: 1.0 if predicate.field == x_axis else 0.0,
+                y_axis: 1.0 if predicate.field == y_axis else 0.0,
+            },
+            predicate.operator,
+            float(predicate.value),
+        )
+    return None
+
+
+def _affine_value(
+    point: tuple[float, float],
+    terms: dict[str, float],
+    x_axis: str,
+    y_axis: str,
+    value: float,
+) -> float:
+    x, y = point
+    return terms.get(x_axis, 0.0) * x + terms.get(y_axis, 0.0) * y - value
+
+
+def _clip_polygon_to_half_plane(
+    polygon: tuple[tuple[float, float], ...],
+    terms: dict[str, float],
+    operator: str,
+    value: float,
+    x_axis: str,
+    y_axis: str,
+) -> tuple[tuple[float, float], ...]:
+    def inside(point: tuple[float, float]) -> bool:
+        signed = _affine_value(point, terms, x_axis, y_axis, value)
+        if operator in {">", ">="}:
+            return signed >= -1.0e-12
+        if operator in {"<", "<="}:
+            return signed <= 1.0e-12
+        raise AssertionError(f"unsupported half-plane operator {operator!r}")
+
+    def intersection(
+        start: tuple[float, float], end: tuple[float, float]
+    ) -> tuple[float, float]:
+        start_value = _affine_value(start, terms, x_axis, y_axis, value)
+        end_value = _affine_value(end, terms, x_axis, y_axis, value)
+        if abs(start_value - end_value) <= 1.0e-12:
+            return end
+        fraction = start_value / (start_value - end_value)
+        return (
+            start[0] + fraction * (end[0] - start[0]),
+            start[1] + fraction * (end[1] - start[1]),
+        )
+
+    clipped: list[tuple[float, float]] = []
+    for index, start in enumerate(polygon):
+        end = polygon[(index + 1) % len(polygon)]
+        start_inside = inside(start)
+        end_inside = inside(end)
+        if start_inside and end_inside:
+            clipped.append(end)
+        elif start_inside and not end_inside:
+            clipped.append(intersection(start, end))
+        elif not start_inside and end_inside:
+            clipped.append(intersection(start, end))
+            clipped.append(end)
+    return tuple(clipped)
+
+
+def _affine_equality_line(
+    terms: dict[str, float],
+    value: float,
+    x_axis: str,
+    y_axis: str,
+    x_range: tuple[float, float],
+    y_range: tuple[float, float],
+) -> tuple[tuple[float, float], ...]:
+    x_min, x_max = x_range
+    y_min, y_max = y_range
+    x_coefficient = terms.get(x_axis, 0.0)
+    y_coefficient = terms.get(y_axis, 0.0)
+    points: list[tuple[float, float]] = []
+
+    if abs(y_coefficient) > 1.0e-12:
+        for x_value in (x_min, x_max):
+            y_value = (value - x_coefficient * x_value) / y_coefficient
+            if y_min - 1.0e-12 <= y_value <= y_max + 1.0e-12:
+                points.append((x_value, y_value))
+    if abs(x_coefficient) > 1.0e-12:
+        for y_value in (y_min, y_max):
+            x_value = (value - y_coefficient * y_value) / x_coefficient
+            if x_min - 1.0e-12 <= x_value <= x_max + 1.0e-12:
+                points.append((x_value, y_value))
+
+    deduplicated: list[tuple[float, float]] = []
+    for point in points:
+        rounded = (round(point[0], 12), round(point[1], 12))
+        if rounded not in deduplicated:
+            deduplicated.append(rounded)
+    return tuple(deduplicated[:2])
+
+
+def _project_alternative_geometry(
+    predicates: tuple[Any, ...],
+    *,
+    x_axis: str,
+    y_axis: str,
+    x_range: tuple[float, float],
+    y_range: tuple[float, float],
+) -> tuple[tuple[str, tuple[tuple[float, float], ...]], ...]:
+    rectangle = (
+        (x_range[0], y_range[0]),
+        (x_range[1], y_range[0]),
+        (x_range[1], y_range[1]),
+        (x_range[0], y_range[1]),
+    )
+    projected = [
+        projection
+        for predicate in predicates
+        if (projection := _predicate_affine_projection(predicate, x_axis, y_axis))
+        is not None
+    ]
+    if not projected:
+        return (("rectangle", ((x_range[0], y_range[0]), (x_range[1], y_range[1]))),)
+
+    equality = [projection for projection in projected if projection[1] == "=="]
+    inequalities = [
+        projection
+        for projection in projected
+        if projection[1] in {">", ">=", "<", "<="}
+    ]
+    not_equal = [projection for projection in projected if projection[1] == "!="]
+
+    if equality:
+        terms, _operator, value = equality[0]
+        line = _affine_equality_line(terms, value, x_axis, y_axis, x_range, y_range)
+        return (("line", line),) if len(line) == 2 else ()
+
+    polygons: list[tuple[tuple[float, float], ...]] = [rectangle]
+    for terms, operator, value in inequalities:
+        polygons = [
+            clipped
+            for polygon in polygons
+            if (
+                clipped := _clip_polygon_to_half_plane(
+                    polygon, terms, operator, value, x_axis, y_axis
+                )
+            )
+        ]
+
+    for terms, _operator, value in not_equal:
+        split_polygons: list[tuple[tuple[float, float], ...]] = []
+        for polygon in polygons:
+            for operator in (">", "<"):
+                clipped = _clip_polygon_to_half_plane(
+                    polygon, terms, operator, value, x_axis, y_axis
+                )
+                if clipped:
+                    split_polygons.append(clipped)
+        polygons = split_polygons
+
+    return tuple(("polygon", polygon) for polygon in polygons if len(polygon) >= 3)
+
+
+def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, ...]:
+    schemas = {
+        schema.name: schema
+        for schema in (
+            solve_relation_parameter_schema(),
+            linear_solver_parameter_schema(),
+            decomposition_parameter_schema(),
+        )
+    }
+    schema = schemas[spec.schema]
+    shapes: list[_AtlasRegionShape] = []
+    for region in spec.regions:
+        alternatives = _source_alternatives(schema, region)
+        for alternative_index, predicates in enumerate(alternatives, start=1):
+            geometry = _project_alternative_geometry(
+                predicates,
+                x_axis=spec.x_axis,
+                y_axis=spec.y_axis,
+                x_range=spec.x_range,
+                y_range=spec.y_range,
+            )
+            if not geometry:
+                raise AssertionError(
+                    f"atlas region {region.name!r} has no visible projection "
+                    f"onto {spec.x_axis!r}/{spec.y_axis!r}"
+                )
+            predicate_summary = "; ".join(
+                _predicate_label(predicate) for predicate in predicates
+            )
+            condition = region.condition or predicate_summary
+            if len(alternatives) > 1:
+                condition = f"alternative {alternative_index}: {condition}"
+            shape_name = (
+                region.name
+                if len(alternatives) == 1
+                else f"{region.name} alt {alternative_index}"
+            )
+            for geometry_name, points in geometry:
+                shapes.append(
+                    _AtlasRegionShape(
+                        shape_name,
+                        region.status,
+                        region.source_name,
+                        geometry_name,
+                        points,
+                        condition,
+                    )
+                )
+    return tuple(shapes)
 
 
 def _render_region_shape(
@@ -1959,11 +2285,15 @@ def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
         if projection.schema.name == spec.schema
     }
     selected = [projections[cell] for cell in spec.cells]
+    region_shapes = _projected_region_shapes(spec)
     x_min, x_max = spec.x_range
     y_min, y_max = spec.y_range
 
     width = 1180
-    height = 820
+    height = max(
+        820,
+        206 + 24 + 42 * len(region_shapes) + 8 + 24 + 58 * len(selected) + 50,
+    )
     left = 94
     right = 440
     top = 72
@@ -2016,7 +2346,7 @@ def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
             ]
         )
 
-    for region in spec.regions:
+    for region in region_shapes:
         parts.append(
             _render_region_shape(
                 region,
@@ -2049,7 +2379,7 @@ def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
         _svg_text(width - 292, label_y, "Projected regions", size=13, weight="700")
     )
     label_y += 24
-    for index, region in enumerate(spec.regions, start=1):
+    for index, region in enumerate(region_shapes, start=1):
         stroke, fill = _status_style(region.status)
         opacity = _region_opacity(region.status)
         parts.extend(
@@ -2242,6 +2572,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         assert "![Solve-Relation Regions]" in expected
         assert "![Linear-Solver Regions]" in expected
         assert "![Decomposition Regions]" in expected
+        for spec in _capability_atlas_plot_specs():
+            shapes = _projected_region_shapes(spec)
+            assert shapes
+            for shape in shapes:
+                assert shape.source_name
+                assert shape.points
         assert _render_capability_atlas_plots()
 
 
