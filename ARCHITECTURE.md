@@ -953,8 +953,10 @@ The sprint is complete when the following are true:
   region objects directly rather than resolving region names through a parallel
   string registry, and projection status is derived from the source object:
   invalid cells render invalid, coverage regions render owned, and derived
-  regions without an owner render uncovered.  Coverage regions are not resolved
-  by selector priority; same-descriptor claims must be removed by sharper
+  regions without an owner render uncovered.  Atlas model fields must not use
+  raw string types; presentation text is explicitly typed as presentation text,
+  and semantic references are objects.  Coverage regions are not resolved by
+  selector priority; same-descriptor claims must be removed by sharper
   predicates or by deleting at least one claim.  Uncovered regions remain
   visible even before anyone has written a missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
