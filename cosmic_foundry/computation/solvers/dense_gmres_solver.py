@@ -10,12 +10,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     MembershipPredicate,
 )
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
-from cosmic_foundry.computation.solvers._capability_claims import (
+from cosmic_foundry.computation.solvers.coverage import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
-    LinearSolverCapability,
     budget_predicates,
-    capability,
     linear_system_predicates,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
@@ -136,7 +134,7 @@ class DenseGMRESSolver(KrylovSolver):
         s: _GMRESState = state
         return s.u
 
-    _coverage_predicates = (
+    linear_solver_coverage = (
         linear_system_predicates()
         + budget_predicates()
         + (
@@ -149,17 +147,7 @@ class DenseGMRESSolver(KrylovSolver):
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-
-    @classmethod
-    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return descriptor-space coverage owned by this solver implementation."""
-        return (
-            capability(
-                cls,
-                coverage_predicates=cls._coverage_predicates,
-                coverage_priority=15,
-            ),
-        )
+    linear_solver_coverage_priority = 15
 
 
 __all__ = ["DenseGMRESSolver"]

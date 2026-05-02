@@ -1663,7 +1663,10 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
-            if path.name.startswith("_") or path.name == "capabilities.py":
+            if path.name.startswith("_") or path.name in {
+                "capabilities.py",
+                "coverage.py",
+            }:
                 continue
             tree = ast.parse(path.read_text())
             for owner, class_name in self._owned_coverage_locations(tree):
@@ -1690,6 +1693,11 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             assert not manual_contracts, (
                 "linear-solver implementation coverage must not declare tag contracts: "
                 f"{path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_providers = self._manual_capability_provider_methods(tree)
+            assert not manual_providers, (
+                "linear-solver coverage must be declared as class attributes, "
+                f"not provider methods: {path.relative_to(_PROJECT_ROOT)}"
             )
 
     @classmethod
@@ -1764,6 +1772,15 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                 continue
             calls.append("contract")
         return tuple(calls)
+
+    @staticmethod
+    def _manual_capability_provider_methods(tree: ast.Module) -> tuple[str, ...]:
+        return tuple(
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "linear_solver_capabilities"
+        )
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
@@ -2864,7 +2881,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "KrylovSolver": "iterative_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
-        "LinearSolverCapability": "_capability_claims",
+        "LinearSolverCapability": "coverage",
         "StationaryIterationSolver": "iterative_solver",
     },
     required_name_fragments={

@@ -8,7 +8,6 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     CoveragePatch,
-    EvidencePredicate,
     MembershipPredicate,
     StructuredPredicate,
 )
@@ -33,10 +32,10 @@ def capability(
     coverage_priority: int | None = None,
 ) -> LinearSolverCapability:
     """Return descriptor-space coverage whose identity comes from ``owner``."""
-    coverage_patches = (
-        ()
-        if not coverage_predicates
-        else (
+    return LinearSolverCapability(
+        owner.__name__,
+        category_for(owner),
+        (
             CoveragePatch(
                 owner.__name__,
                 owner.__name__,
@@ -44,9 +43,8 @@ def capability(
                 coverage_predicates,
                 priority=coverage_priority,
             ),
-        )
+        ),
     )
-    return LinearSolverCapability(owner.__name__, category_for(owner), coverage_patches)
 
 
 def category_for(owner: type) -> str:
@@ -100,62 +98,6 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
             },
             ">=",
             0.0,
-        ),
-    )
-
-
-def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
-    """Return selector-level rejection regions not owned by implementations."""
-    return (
-        CoveragePatch(
-            "linear_solver_work_budget_below_operator_cost",
-            "linear_solver_selector",
-            "rejected",
-            (
-                ComparisonPredicate(
-                    "map_linearity_defect",
-                    "<=",
-                    LINEARITY_TOLERANCE,
-                ),
-                AffineComparisonPredicate(
-                    {"work_budget_fmas": 1.0, "matvec_cost_fmas": -1.0},
-                    "<",
-                    0.0,
-                ),
-            ),
-        ),
-        CoveragePatch(
-            "linear_solver_memory_budget_below_operator_storage",
-            "linear_solver_selector",
-            "rejected",
-            (
-                ComparisonPredicate(
-                    "map_linearity_defect",
-                    "<=",
-                    LINEARITY_TOLERANCE,
-                ),
-                AffineComparisonPredicate(
-                    {
-                        "memory_budget_bytes": 1.0,
-                        "linear_operator_memory_bytes": -1.0,
-                    },
-                    "<",
-                    0.0,
-                ),
-            ),
-        ),
-        CoveragePatch(
-            "linear_solver_unknown_condition",
-            "linear_solver_selector",
-            "rejected",
-            (
-                ComparisonPredicate(
-                    "map_linearity_defect",
-                    "<=",
-                    LINEARITY_TOLERANCE,
-                ),
-                EvidencePredicate("condition_estimate", frozenset({"unavailable"})),
-            ),
         ),
     )
 
