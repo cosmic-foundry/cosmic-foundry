@@ -432,6 +432,149 @@ class CoveragePatch:
         return all(predicate.evaluate(descriptor) for predicate in self.predicates)
 
 
+def predicate_sets_are_disjoint(
+    left: tuple[StructuredPredicate, ...],
+    right: tuple[StructuredPredicate, ...],
+) -> bool:
+    """Return whether two predicate conjunctions are provably disjoint."""
+    fields = frozenset().union(
+        *(predicate.referenced_fields for predicate in left + right)
+    )
+    return any(
+        _field_predicates_are_disjoint(
+            field,
+            tuple(
+                predicate for predicate in left if field in predicate.referenced_fields
+            ),
+            tuple(
+                predicate for predicate in right if field in predicate.referenced_fields
+            ),
+        )
+        for field in fields
+    )
+
+
+def _field_predicates_are_disjoint(
+    field: str,
+    left: tuple[StructuredPredicate, ...],
+    right: tuple[StructuredPredicate, ...],
+) -> bool:
+    predicates = left + right
+    memberships = tuple(
+        predicate
+        for predicate in predicates
+        if isinstance(predicate, MembershipPredicate)
+    )
+    evidences = tuple(
+        predicate
+        for predicate in predicates
+        if isinstance(predicate, EvidencePredicate)
+    )
+    comparisons = tuple(
+        predicate
+        for predicate in predicates
+        if isinstance(predicate, ComparisonPredicate)
+    )
+    if len(memberships) > 1:
+        values = frozenset.intersection(
+            *(predicate.values for predicate in memberships)
+        )
+        if not values:
+            return True
+    if len(evidences) > 1:
+        evidence = frozenset.intersection(
+            *(predicate.evidence for predicate in evidences)
+        )
+        if not evidence:
+            return True
+    if memberships and comparisons:
+        values = frozenset.intersection(
+            *(predicate.values for predicate in memberships)
+        )
+        if not any(
+            _value_satisfies_comparisons(field, value, comparisons) for value in values
+        ):
+            return True
+    return _comparisons_are_disjoint(field, comparisons)
+
+
+def _comparisons_are_disjoint(
+    field: str,
+    comparisons: tuple[ComparisonPredicate, ...],
+) -> bool:
+    equal_values = {
+        predicate.value for predicate in comparisons if predicate.operator == "=="
+    }
+    if len(equal_values) > 1:
+        return True
+    if equal_values:
+        value = next(iter(equal_values))
+        return not _value_satisfies_comparisons(field, value, comparisons)
+    lower_bound = _strongest_lower_bound(comparisons)
+    upper_bound = _strongest_upper_bound(comparisons)
+    if lower_bound is None or upper_bound is None:
+        return False
+    lower_value, lower_inclusive = lower_bound
+    upper_value, upper_inclusive = upper_bound
+    if not isinstance(lower_value, bool | str) and not isinstance(
+        upper_value, bool | str
+    ):
+        if lower_value > upper_value:
+            return True
+        if lower_value == upper_value and not (lower_inclusive and upper_inclusive):
+            return True
+    return False
+
+
+def _value_satisfies_comparisons(
+    field: str,
+    value: ScalarValue,
+    comparisons: tuple[ComparisonPredicate, ...],
+) -> bool:
+    descriptor = ParameterDescriptor("witness", {field: DescriptorCoordinate(value)})
+    return all(predicate.evaluate(descriptor) for predicate in comparisons)
+
+
+def _strongest_lower_bound(
+    comparisons: tuple[ComparisonPredicate, ...],
+) -> tuple[ScalarValue, bool] | None:
+    lower: tuple[ScalarValue, bool] | None = None
+    for predicate in comparisons:
+        if predicate.operator not in {">", ">="}:
+            continue
+        candidate = (predicate.value, predicate.operator == ">=")
+        candidate_value, candidate_inclusive = candidate
+        if lower is None:
+            lower = candidate
+            continue
+        lower_value, lower_inclusive = lower
+        if candidate_value > lower_value:  # type: ignore[operator]
+            lower = candidate
+        elif candidate_value == lower_value:
+            lower = (candidate_value, candidate_inclusive and lower_inclusive)
+    return lower
+
+
+def _strongest_upper_bound(
+    comparisons: tuple[ComparisonPredicate, ...],
+) -> tuple[ScalarValue, bool] | None:
+    upper: tuple[ScalarValue, bool] | None = None
+    for predicate in comparisons:
+        if predicate.operator not in {"<", "<="}:
+            continue
+        candidate = (predicate.value, predicate.operator == "<=")
+        candidate_value, candidate_inclusive = candidate
+        if upper is None:
+            upper = candidate
+            continue
+        upper_value, upper_inclusive = upper
+        if candidate_value < upper_value:  # type: ignore[operator]
+            upper = candidate
+        elif candidate_value == upper_value:
+            upper = (candidate_value, candidate_inclusive and upper_inclusive)
+    return upper
+
+
 @dataclass(frozen=True)
 class ParameterSpaceSchema:
     """Parameter-space axes, validity rules, and coverage validation."""
@@ -1174,6 +1317,7 @@ __all__ = [
     "ParameterDescriptor",
     "ParameterPredicate",
     "ParameterSpaceSchema",
+    "predicate_sets_are_disjoint",
     "SmallLinearOperator",
     "solve_relation_parameter_schema",
 ]
