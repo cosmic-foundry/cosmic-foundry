@@ -1962,6 +1962,12 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                 "by predicates, not selector priority: "
                 f"{path.relative_to(_PROJECT_ROOT)}"
             )
+            nonlocal_requirements = self._nonlocal_coverage_requirements(tree)
+            assert not nonlocal_requirements, (
+                "implementation-local solver coverage must be irreducible "
+                "predicate data; inherited contracts come from class structure: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
+            )
 
     @classmethod
     def _owned_coverage_locations(
@@ -2089,6 +2095,37 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                     if keyword.arg == "priority":
                         priorities.append(keyword.arg)
         return tuple(priorities)
+
+    @classmethod
+    def _nonlocal_coverage_requirements(cls, tree: ast.Module) -> tuple[str, ...]:
+        violations: list[str] = []
+        predicate_constructors = {
+            "AffineComparisonPredicate",
+            "ComparisonPredicate",
+            "EvidencePredicate",
+            "MembershipPredicate",
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign | ast.AnnAssign):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+            if not any(
+                isinstance(target, ast.Name) and target.id == "linear_solver_coverage"
+                for target in targets
+            ):
+                continue
+            value = node.value
+            if not isinstance(value, ast.Tuple):
+                violations.append("linear_solver_coverage")
+                continue
+            for element in value.elts:
+                if (
+                    not isinstance(element, ast.Call)
+                    or cls._call_name(element.func) not in predicate_constructors
+                ):
+                    violations.append("linear_solver_coverage")
+                    break
+        return tuple(violations)
 
     @staticmethod
     def _coverage_category_support(tree: ast.Module) -> tuple[str, ...]:

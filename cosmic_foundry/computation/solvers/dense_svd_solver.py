@@ -6,9 +6,6 @@ from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicat
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.coverage import (
     LINEARITY_TOLERANCE,
-    budget_predicates,
-    dense_matrix_predicates,
-    linear_system_predicates,
 )
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 
@@ -41,14 +38,9 @@ class DenseSVDSolver(DirectSolver):
         super().__init__(SVDFactorization(rcond))
 
     linear_solver_coverage = (
-        linear_system_predicates()
-        + dense_matrix_predicates()
-        + budget_predicates()
-        + (
-            ComparisonPredicate("nullity_estimate", ">", 0),
-            ComparisonPredicate("singular_value_lower_bound", "<=", 0.0),
-            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        )
+        ComparisonPredicate("nullity_estimate", ">", 0),
+        ComparisonPredicate("singular_value_lower_bound", "<=", 0.0),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
     )
 
 

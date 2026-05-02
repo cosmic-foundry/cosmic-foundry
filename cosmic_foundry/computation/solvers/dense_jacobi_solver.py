@@ -9,9 +9,6 @@ from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicat
 from cosmic_foundry.computation.solvers.coverage import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
-    budget_predicates,
-    dense_matrix_predicates,
-    linear_system_predicates,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import (
     StationaryIterationSolver,
@@ -91,16 +88,11 @@ class DenseJacobiSolver(StationaryIterationSolver):
         return s.u
 
     linear_solver_coverage = (
-        linear_system_predicates()
-        + dense_matrix_predicates()
-        + budget_predicates()
-        + (
-            ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
-            ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
-            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        )
+        ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
+        ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
+        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
     )
 
 
