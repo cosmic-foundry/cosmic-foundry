@@ -627,11 +627,6 @@ def render_capability_atlas() -> str:
                     "",
                     f"- Owner: `{patch.owner}`",
                     f"- Status: `{patch.status}`",
-                    (
-                        f"- Priority: `{patch.priority}`"
-                        if patch.priority is not None
-                        else "- Priority: unset"
-                    ),
                     "- Predicates:",
                 ]
             )

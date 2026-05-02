@@ -84,6 +84,14 @@ def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
                     "<",
                     0.0,
                 ),
+                AffineComparisonPredicate(
+                    {
+                        "memory_budget_bytes": 1.0,
+                        "linear_operator_memory_bytes": -1.0,
+                    },
+                    ">=",
+                    0.0,
+                ),
             ),
         ),
         CoveragePatch(
@@ -116,6 +124,20 @@ def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
                     "<=",
                     LINEARITY_TOLERANCE,
                 ),
+                AffineComparisonPredicate(
+                    {"work_budget_fmas": 1.0, "matvec_cost_fmas": -1.0},
+                    ">=",
+                    0.0,
+                ),
+                AffineComparisonPredicate(
+                    {
+                        "memory_budget_bytes": 1.0,
+                        "linear_operator_memory_bytes": -1.0,
+                    },
+                    ">=",
+                    0.0,
+                ),
+                ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
                 EvidencePredicate("condition_estimate", frozenset({"unavailable"})),
             ),
         ),

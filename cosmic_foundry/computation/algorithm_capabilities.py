@@ -418,7 +418,6 @@ class CoveragePatch:
     owner: str
     status: CoverageStatus
     predicates: tuple[StructuredPredicate, ...]
-    priority: int | None = None
 
     @property
     def referenced_fields(self) -> frozenset[str]:
@@ -451,7 +450,16 @@ def predicate_sets_are_disjoint(
             ),
         )
         for field in fields
-    )
+    ) or _affine_predicates_are_disjoint(left + right)
+
+
+def coverage_patches_are_disjoint(patches: tuple[CoveragePatch, ...]) -> bool:
+    """Return whether coverage patches form a pairwise-disjoint partition."""
+    for pair_index, left in enumerate(patches):
+        for right in patches[pair_index + 1 :]:
+            if not predicate_sets_are_disjoint(left.predicates, right.predicates):
+                return False
+    return True
 
 
 def _field_predicates_are_disjoint(
@@ -484,6 +492,13 @@ def _field_predicates_are_disjoint(
     if len(evidences) > 1:
         evidence = frozenset.intersection(
             *(predicate.evidence for predicate in evidences)
+        )
+        if not evidence:
+            return True
+    if evidences and comparisons:
+        evidence = frozenset.intersection(
+            *(predicate.evidence for predicate in evidences),
+            *(predicate.accepted_evidence for predicate in comparisons),
         )
         if not evidence:
             return True
@@ -524,6 +539,74 @@ def _comparisons_are_disjoint(
         if lower_value == upper_value and not (lower_inclusive and upper_inclusive):
             return True
     return False
+
+
+def _affine_predicates_are_disjoint(
+    predicates: tuple[StructuredPredicate, ...],
+) -> bool:
+    groups: dict[
+        tuple[tuple[tuple[str, float], ...], float],
+        list[AffineComparisonPredicate],
+    ] = {}
+    for predicate in predicates:
+        if isinstance(predicate, AffineComparisonPredicate):
+            key = (tuple(sorted(predicate.terms.items())), predicate.offset)
+            groups.setdefault(key, []).append(predicate)
+    return any(_affine_group_is_disjoint(tuple(group)) for group in groups.values())
+
+
+def _affine_group_is_disjoint(
+    predicates: tuple[AffineComparisonPredicate, ...],
+) -> bool:
+    lower_bound = _strongest_affine_lower_bound(predicates)
+    upper_bound = _strongest_affine_upper_bound(predicates)
+    if lower_bound is None or upper_bound is None:
+        return False
+    lower_value, lower_inclusive = lower_bound
+    upper_value, upper_inclusive = upper_bound
+    if lower_value > upper_value:
+        return True
+    return lower_value == upper_value and not (lower_inclusive and upper_inclusive)
+
+
+def _strongest_affine_lower_bound(
+    predicates: tuple[AffineComparisonPredicate, ...],
+) -> tuple[float, bool] | None:
+    lower: tuple[float, bool] | None = None
+    for predicate in predicates:
+        if predicate.operator not in {">", ">="}:
+            continue
+        candidate = (predicate.value, predicate.operator == ">=")
+        if lower is None:
+            lower = candidate
+            continue
+        candidate_value, candidate_inclusive = candidate
+        lower_value, lower_inclusive = lower
+        if candidate_value > lower_value:
+            lower = candidate
+        elif candidate_value == lower_value:
+            lower = (candidate_value, candidate_inclusive and lower_inclusive)
+    return lower
+
+
+def _strongest_affine_upper_bound(
+    predicates: tuple[AffineComparisonPredicate, ...],
+) -> tuple[float, bool] | None:
+    upper: tuple[float, bool] | None = None
+    for predicate in predicates:
+        if predicate.operator not in {"<", "<="}:
+            continue
+        candidate = (predicate.value, predicate.operator == "<=")
+        if upper is None:
+            upper = candidate
+            continue
+        candidate_value, candidate_inclusive = candidate
+        upper_value, upper_inclusive = upper
+        if candidate_value < upper_value:
+            upper = candidate
+        elif candidate_value == upper_value:
+            upper = (candidate_value, candidate_inclusive and upper_inclusive)
+    return upper
 
 
 def _value_satisfies_comparisons(
@@ -679,6 +762,9 @@ class ParameterSpaceSchema:
         containing = tuple(patch for patch in patches if patch.contains(descriptor))
         if not containing:
             return "uncovered"
+        if len(containing) > 1:
+            names = ", ".join(patch.name for patch in containing)
+            raise ValueError(f"descriptor lies in multiple coverage patches: {names}")
         if all(patch.status == "rejected" for patch in containing):
             return "rejected"
         return "owned"
@@ -1301,6 +1387,7 @@ __all__ = [
     "AlgorithmRequest",
     "AlgorithmStructureContract",
     "ComparisonPredicate",
+    "coverage_patches_are_disjoint",
     "CoveragePatch",
     "DerivedParameterRegion",
     "DescriptorCoordinate",

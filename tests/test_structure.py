@@ -49,6 +49,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    coverage_patches_are_disjoint,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
@@ -916,6 +917,20 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         assert schema.cell_status(unknown_condition, patches) == "uncovered"
 
         with pytest.raises(ValueError):
+            schema.cell_status(
+                self._descriptor(),
+                (
+                    owned_patch,
+                    CoveragePatch(
+                        name="duplicate_region",
+                        owner="OtherSolver",
+                        status="owned",
+                        predicates=owned_patch.predicates,
+                    ),
+                ),
+            )
+
+        with pytest.raises(ValueError):
             ParameterSpaceSchema(
                 name="empty_axis",
                 axes=(ParameterAxis("unbinned_axis", ()),),
@@ -1381,6 +1396,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_no_local_disjointness_algebra()
+        self._assert_no_coverage_patch_priority_model()
         schema = linear_solver_parameter_schema()
         patches = linear_solver_coverage_patches()
         self._assert_no_declared_coverage_literals(patches)
@@ -1392,7 +1408,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         rejected_patches = tuple(
             patch for patch in patches if patch.status == "rejected"
         )
-        self._assert_pairwise_owned_patches_disjoint(owned_patches)
+        self._assert_coverage_patches_disjoint(patches)
         for patch in owned_patches:
             descriptor = self._descriptor_witness_for_patch(schema, patch)
             assert schema.cell_status(descriptor, patches) == "owned"
@@ -1427,20 +1443,14 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         return next(iter(matches)).owner
 
     @classmethod
-    def _assert_pairwise_owned_patches_disjoint(
+    def _assert_coverage_patches_disjoint(
         cls,
-        owned_patches: tuple[CoveragePatch, ...],
+        patches: tuple[CoveragePatch, ...],
     ) -> None:
         cls._assert_coverage_disjointness_algebra()
-        for pair_index, left in enumerate(owned_patches):
-            for right in owned_patches[pair_index + int(cls._one()) :]:
-                assert predicate_sets_are_disjoint(
-                    left.predicates,
-                    right.predicates,
-                ), (
-                    "owned linear-solver coverage patches must be pairwise disjoint "
-                    f"without selector priority: {left.name}, {right.name}"
-                )
+        assert coverage_patches_are_disjoint(
+            patches
+        ), "linear-solver coverage patches must be pairwise disjoint"
 
     @classmethod
     def _assert_coverage_disjointness_algebra(cls) -> None:
@@ -1452,9 +1462,25 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             (ComparisonPredicate("algebraic_bound", ">", cls._zero()),),
             (ComparisonPredicate("algebraic_bound", "<=", cls._zero()),),
         )
+        assert predicate_sets_are_disjoint(
+            (
+                AffineComparisonPredicate(
+                    {"algebraic_budget": cls._one(), "algebraic_cost": -cls._one()},
+                    ">=",
+                    cls._zero(),
+                ),
+            ),
+            (
+                AffineComparisonPredicate(
+                    {"algebraic_budget": cls._one(), "algebraic_cost": -cls._one()},
+                    "<",
+                    cls._zero(),
+                ),
+            ),
+        )
         assert not predicate_sets_are_disjoint(
-            (ComparisonPredicate("algebraic_overlap", "<=", cls._two()),),
-            (ComparisonPredicate("algebraic_overlap", ">", cls._one()),),
+            (ComparisonPredicate("algebraic_interval", "<=", cls._two()),),
+            (ComparisonPredicate("algebraic_interval", ">", cls._one()),),
         )
 
     @classmethod
@@ -1472,6 +1498,38 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
         }
         assert not forbidden & local_helpers
+
+    @staticmethod
+    def _assert_no_coverage_patch_priority_model() -> None:
+        source_paths = (_PROJECT_ROOT / "scripts" / "gen_capability_atlas_docs.py",)
+        for source_path in source_paths:
+            tree = ast.parse(source_path.read_text())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Attribute) and node.attr == "priority":
+                    raise AssertionError(
+                        "coverage machinery must not read priority: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+                if isinstance(node, ast.keyword) and node.arg == "priority":
+                    raise AssertionError(
+                        "coverage machinery must not pass priority: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "CoveragePatch":
+                fields = {
+                    child.target.id
+                    for child in node.body
+                    if isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                }
+                assert "priority" not in fields
+                return
+        raise AssertionError("CoveragePatch class not found")
 
     @classmethod
     def _assert_no_declared_coverage_literals(
@@ -1754,8 +1812,9 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             )
             manual_priorities = self._manual_coverage_priorities(tree)
             assert not manual_priorities, (
-                "linear-solver coverage overlap must be resolved by predicates, "
-                f"not selector priority: {path.relative_to(_PROJECT_ROOT)}"
+                "linear-solver coverage partition boundaries must be expressed "
+                "by predicates, not selector priority: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
             )
 
     @classmethod
