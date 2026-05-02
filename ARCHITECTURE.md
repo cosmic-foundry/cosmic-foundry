@@ -823,8 +823,10 @@ The sprint is complete when the following are true:
   `requires`/`provides`; any human-facing label is either inferred from code
   structure or derived as a schema alias over descriptor predicates.  Descriptor
   field identity must be symbolic end to end: axes, predicates, descriptors, and
-  coverage claims refer to field objects, while strings are labels used at
-  documentation, diagnostics, or serialization boundaries.
+  coverage claims refer to one field object, while strings are labels used at
+  documentation, diagnostics, or serialization boundaries.  A schema axis has
+  exactly one identity; any display label is derived from that field rather than
+  stored as a second name.
 - **Selection is a point query.**  Runtime dispatch becomes a query of the
   parameter-space atlas: locate the descriptor cell, find the unique coverage
   region containing it, and reject if no owned region contains it.  Coverage

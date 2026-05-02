@@ -817,6 +817,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         return "algorithm_capabilities/parameter_space_schema"
 
     def check(self, _calibration: None) -> None:
+        self._assert_axis_has_one_identity()
         schema = ParameterSpaceSchema(
             name="demo_solve_relation",
             axes=(
@@ -945,16 +946,8 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
             ParameterSpaceSchema(
                 name="duplicate_fields",
                 axes=(
-                    ParameterAxis(
-                        "first",
-                        (NumericInterval("all", lower=0.0),),
-                        descriptor_field="same_field",
-                    ),
-                    ParameterAxis(
-                        "second",
-                        (NumericInterval("all", lower=0.0),),
-                        descriptor_field="same_field",
-                    ),
+                    ParameterAxis("same_field", (NumericInterval("all", lower=0.0),)),
+                    ParameterAxis("same_field", (NumericInterval("all", lower=0.0),)),
                 ),
             ).validate_schema()
         with pytest.raises(ValueError):
@@ -971,6 +964,25 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                     predicates=(object(),),  # type: ignore[arg-type]
                 )
             )
+
+    @staticmethod
+    def _assert_axis_has_one_identity() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != "ParameterAxis":
+                continue
+            fields = {
+                child.target.id
+                for child in node.body
+                if isinstance(child, ast.AnnAssign)
+                and isinstance(child.target, ast.Name)
+            }
+            assert "field" in fields
+            assert not {"name", "descriptor_field"} & fields
+            return
+        raise AssertionError("ParameterAxis class not found")
 
     @staticmethod
     def _descriptor(
@@ -1865,7 +1877,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             value = cls._interval_witness(bin_or_interval)
             if axis.contains(DescriptorCoordinate(value)):
                 return value
-        raise AssertionError(f"axis {axis.name!r} has no witness value")
+        raise AssertionError(f"axis {axis.label!r} has no witness value")
 
     @staticmethod
     def _interval_witness(interval: NumericInterval) -> float:
@@ -1924,7 +1936,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
                 coordinate = DescriptorCoordinate(candidate)
                 if axis.contains(coordinate) and predicate.evaluate(
                     ParameterDescriptor(
-                        axis.name,
+                        axis.label,
                         {axis.field: coordinate},
                     )
                 ):
