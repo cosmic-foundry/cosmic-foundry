@@ -46,10 +46,10 @@ class DenseSVDSolver(DirectSolver):
         + budget_predicates()
         + (
             ComparisonPredicate("nullity_estimate", ">", 0),
+            ComparisonPredicate("singular_value_lower_bound", "<=", 0.0),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-    linear_solver_coverage_priority = 20
 
 
 __all__ = ["DenseSVDSolver"]

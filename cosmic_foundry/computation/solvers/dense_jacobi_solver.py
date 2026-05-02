@@ -97,11 +97,11 @@ class DenseJacobiSolver(StationaryIterationSolver):
         + (
             ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
             ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
+            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
             ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-    linear_solver_coverage_priority = 25
 
 
 __all__ = ["DenseJacobiSolver"]

@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import itertools
 import pkgutil
 import sys
 import types
@@ -49,6 +50,8 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    ScalarValue,
+    StructuredPredicate,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
@@ -1390,6 +1393,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         rejected_patches = tuple(
             patch for patch in patches if patch.status == "rejected"
         )
+        self._assert_pairwise_owned_patches_disjoint(owned_patches)
         for patch in owned_patches:
             descriptor = self._descriptor_witness_for_patch(schema, patch)
             assert schema.cell_status(descriptor, patches) == "owned"
@@ -1405,8 +1409,9 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             with pytest.raises(ValueError):
                 select_linear_solver_for_descriptor(descriptor)
 
-    @staticmethod
+    @classmethod
     def _selected_patch_owner(
+        cls,
         descriptor: ParameterDescriptor,
         patches: tuple[CoveragePatch, ...],
     ) -> str:
@@ -1416,17 +1421,179 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             if patch.status == "owned" and patch.contains(descriptor)
         )
         assert matches
-        ranked = sorted(
-            matches,
-            key=lambda patch: (
-                patch.priority if patch.priority is not None else float("inf")
-            ),
+        assert len(matches) == cls._one(), (
+            "owned linear-solver coverage patches must be pairwise disjoint at "
+            f"selected descriptors: {[patch.name for patch in matches]}"
         )
-        ranked_iter = iter(ranked)
-        first = next(ranked_iter)
-        second = next(ranked_iter, None)
-        assert second is None or first.priority != second.priority
-        return first.owner
+        return next(iter(matches)).owner
+
+    @classmethod
+    def _assert_pairwise_owned_patches_disjoint(
+        cls,
+        owned_patches: tuple[CoveragePatch, ...],
+    ) -> None:
+        pair_size = int(cls._two())
+        for left, right in itertools.combinations(owned_patches, pair_size):
+            assert cls._predicate_sets_are_disjoint(
+                left.predicates,
+                right.predicates,
+            ), (
+                "owned linear-solver coverage patches must be pairwise disjoint "
+                f"without selector priority: {left.name}, {right.name}"
+            )
+
+    @classmethod
+    def _predicate_sets_are_disjoint(
+        cls,
+        left: tuple[StructuredPredicate, ...],
+        right: tuple[StructuredPredicate, ...],
+    ) -> bool:
+        fields = frozenset().union(
+            *(predicate.referenced_fields for predicate in left + right)
+        )
+        return any(
+            cls._field_predicates_are_disjoint(
+                field,
+                tuple(
+                    predicate
+                    for predicate in left
+                    if field in predicate.referenced_fields
+                ),
+                tuple(
+                    predicate
+                    for predicate in right
+                    if field in predicate.referenced_fields
+                ),
+            )
+            for field in fields
+        )
+
+    @classmethod
+    def _field_predicates_are_disjoint(
+        cls,
+        field: str,
+        left: tuple[StructuredPredicate, ...],
+        right: tuple[StructuredPredicate, ...],
+    ) -> bool:
+        predicates = left + right
+        memberships = tuple(
+            predicate
+            for predicate in predicates
+            if isinstance(predicate, MembershipPredicate)
+        )
+        evidences = tuple(
+            predicate
+            for predicate in predicates
+            if isinstance(predicate, EvidencePredicate)
+        )
+        comparisons = tuple(
+            predicate
+            for predicate in predicates
+            if isinstance(predicate, ComparisonPredicate)
+        )
+        if len(memberships) > cls._one():
+            values = frozenset.intersection(
+                *(predicate.values for predicate in memberships)
+            )
+            if not values:
+                return True
+        if len(evidences) > cls._one():
+            evidence = frozenset.intersection(
+                *(predicate.evidence for predicate in evidences)
+            )
+            if not evidence:
+                return True
+        if memberships and comparisons:
+            values = frozenset.intersection(
+                *(predicate.values for predicate in memberships)
+            )
+            if not any(
+                cls._value_satisfies_comparisons(field, value, comparisons)
+                for value in values
+            ):
+                return True
+        return cls._comparisons_are_disjoint(field, comparisons)
+
+    @classmethod
+    def _comparisons_are_disjoint(
+        cls,
+        field: str,
+        comparisons: tuple[ComparisonPredicate, ...],
+    ) -> bool:
+        equal_values = {
+            predicate.value for predicate in comparisons if predicate.operator == "=="
+        }
+        if len(equal_values) > cls._one():
+            return True
+        if equal_values:
+            value = next(iter(equal_values))
+            return not cls._value_satisfies_comparisons(field, value, comparisons)
+        lower_bound = cls._strongest_lower_bound(comparisons)
+        upper_bound = cls._strongest_upper_bound(comparisons)
+        if lower_bound is None or upper_bound is None:
+            return False
+        lower_value, lower_inclusive = lower_bound
+        upper_value, upper_inclusive = upper_bound
+        if not isinstance(lower_value, bool | str) and not isinstance(
+            upper_value, bool | str
+        ):
+            if lower_value > upper_value:
+                return True
+            if lower_value == upper_value and not (lower_inclusive and upper_inclusive):
+                return True
+        return False
+
+    @staticmethod
+    def _value_satisfies_comparisons(
+        field: str,
+        value: Any,
+        comparisons: tuple[ComparisonPredicate, ...],
+    ) -> bool:
+        descriptor = ParameterDescriptor(
+            "witness",
+            {field: DescriptorCoordinate(value)},
+        )
+        return all(predicate.evaluate(descriptor) for predicate in comparisons)
+
+    @staticmethod
+    def _strongest_lower_bound(
+        comparisons: tuple[ComparisonPredicate, ...],
+    ) -> tuple[ScalarValue, bool] | None:
+        lower: tuple[ScalarValue, bool] | None = None
+        for predicate in comparisons:
+            if predicate.operator not in {">", ">="}:
+                continue
+            candidate = (predicate.value, predicate.operator == ">=")
+            candidate_value, candidate_inclusive = candidate
+            if lower is None:
+                lower = candidate
+                continue
+            lower_value, lower_inclusive = lower
+            if candidate_value > lower_value:  # type: ignore[operator]
+                lower = candidate
+            elif candidate_value == lower_value:
+                lower = (candidate_value, candidate_inclusive and lower_inclusive)
+        return lower
+
+    @staticmethod
+    def _strongest_upper_bound(
+        comparisons: tuple[ComparisonPredicate, ...],
+    ) -> tuple[ScalarValue, bool] | None:
+        upper: tuple[ScalarValue, bool] | None = None
+        for predicate in comparisons:
+            if predicate.operator not in {"<", "<="}:
+                continue
+            candidate = (predicate.value, predicate.operator == "<=")
+            candidate_value, candidate_inclusive = candidate
+            if upper is None:
+                upper = candidate
+                continue
+            upper_value, upper_inclusive = upper
+            if candidate_value < upper_value:  # type: ignore[operator]
+                upper = candidate
+            elif candidate_value == upper_value:
+                upper = (candidate_value, candidate_inclusive and upper_inclusive)
+        return upper
 
     @classmethod
     def _assert_no_declared_coverage_literals(
@@ -1444,8 +1611,6 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         literals: set[str | int | float] = set()
         for patch in patches:
             literals.update({patch.name, patch.owner})
-            if patch.priority is not None:
-                literals.add(patch.priority)
             for predicate in patch.predicates:
                 literals.update(predicate.referenced_fields)
                 if isinstance(predicate, ComparisonPredicate):
@@ -1669,6 +1834,9 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             "linear-solver coverage records must not carry a parallel "
             "implementation category"
         )
+        assert not self._coverage_priority_support(
+            support_tree
+        ), "linear-solver coverage records must not carry selector priority"
         for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
             if path.name.startswith("_") or path.name in {
                 "capabilities.py",
@@ -1705,6 +1873,11 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             assert not manual_providers, (
                 "linear-solver coverage must be declared as class attributes, "
                 f"not provider methods: {path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_priorities = self._manual_coverage_priorities(tree)
+            assert not manual_priorities, (
+                "linear-solver coverage overlap must be resolved by predicates, "
+                f"not selector priority: {path.relative_to(_PROJECT_ROOT)}"
             )
 
     @classmethod
@@ -1791,6 +1964,23 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         )
 
     @staticmethod
+    def _manual_coverage_priorities(tree: ast.Module) -> tuple[str, ...]:
+        priorities: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id.endswith("priority"):
+                        priorities.append(target.id)
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                if node.target.id.endswith("priority"):
+                    priorities.append(node.target.id)
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "priority":
+                        priorities.append(keyword.arg)
+        return tuple(priorities)
+
+    @staticmethod
     def _coverage_category_support(tree: ast.Module) -> tuple[str, ...]:
         category_support: list[str] = []
         for node in ast.walk(tree):
@@ -1800,6 +1990,16 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             if isinstance(node, ast.FunctionDef) and node.name == "category_for":
                 category_support.append(node.name)
         return tuple(category_support)
+
+    @staticmethod
+    def _coverage_priority_support(tree: ast.Module) -> tuple[str, ...]:
+        priority_support: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.arg) and node.arg.endswith("priority"):
+                priority_support.append(node.arg)
+            if isinstance(node, ast.keyword) and node.arg == "priority":
+                priority_support.append(node.arg)
+        return tuple(priority_support)
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
