@@ -810,17 +810,19 @@ The sprint is complete when the following are true:
   the value internally, or require an explicit fallback policy.
 - **Capabilities are coverage patches.**  A capability declares a bounded region
   in the parameter space plus the guarantees it provides inside that region.
-  The region may be a conjunction of bins, numeric intervals, and cost-model
+  The region may be a conjunction of bins, numeric intervals, and feasibility
   inequalities over schema axes.  The implementation name is metadata attached
   to the region, not the root of the model.  Implementation-local coverage
   declarations must not carry an independent tag contract such as
   `requires`/`provides`; any human-facing label is either inferred from code
   structure or derived as a schema alias over descriptor predicates.
 - **Selection is a point query.**  Runtime dispatch becomes a query of the
-  parameter-space atlas: locate the descriptor cell, find all coverage patches
-  containing it, reject if none own it, and fail on overlap unless priority data
-  is explicit.  This keeps dispatch, generated documentation, and structure
-  tests as different views of the same object.
+  parameter-space atlas: locate the descriptor cell, find the unique coverage
+  patch containing it, and reject if no owned patch contains it.  Coverage
+  patches form a partition of their claimed space; if two implementations appear
+  to own the same descriptor, the predicates must be sharpened or one claim must
+  be deleted.  This keeps dispatch, generated documentation, and structure tests
+  as different views of the same object.
 - **Knowledge state is modeled separately from truth.**  A coordinate such as
   "symmetric", "full rank", or "well conditioned" has two parts: the underlying
   mathematical predicate and the evidence currently available to the selector.
@@ -917,11 +919,12 @@ The sprint is complete when the following are true:
   patches over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,
   least-squares, or minimum-norm dense regions within factorization budget.
-- **Cost models are contracts too.**  Capabilities declare a conservative
-  symbolic cost model in terms of descriptor fields.  The first version can use
-  coarse asymptotic coefficients such as dense `O(n^3)` factorization, dense
-  `O(n^2)` solve, and iterative `iterations * matvec_cost`, but it must produce
-  comparable numeric work and memory estimates for selection.
+- **Feasibility inequalities are contracts too.**  Capabilities declare a conservative
+  symbolic feasibility model in terms of descriptor fields.  The first version
+  can use coarse asymptotic coefficients such as dense `O(n^3)` factorization,
+  dense `O(n^2)` solve, and iterative `iterations * matvec_cost`, but those
+  predicates only decide whether a region is feasible.  They must not choose
+  between two owners of the same descriptor.
 - **Coverage atlas generation.**  `tests/test_structure.py` is the source of
   truth for coverage documentation.  Parameter-space schemas and capability
   coverage patches are declared as structural claims or claim inputs there, and
@@ -933,15 +936,15 @@ The sprint is complete when the following are true:
   which numerical claim file owns the evidence and whether it is representative,
   boundary, regression, convergence, correctness, or performance sampling.  It
   must include the predicate bounds, the certificate sources accepted by the
-  selector, and the cost model.  Owned overlaps are not resolved by selector
-  priority; they must be removed by sharper predicates or justified by a
-  machine-checkable selection theorem.  Uncovered regions remain visible even
-  before anyone has written a missing-capability note for them.
+  selector, and feasibility inequalities.  Coverage patches are not resolved by
+  selector priority; same-descriptor claims must be removed by sharper
+  predicates or by deleting at least one claim.  Uncovered regions remain
+  visible even before anyone has written a missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
   a higher-dimensional schema, not the schema itself.  Each plot must render
   region area first and sampled test points second.  It must state which axes
   are shown, which axes are fixed, which axes are marginalized into a summary
-  marker, and whether any hidden-axis overlap or gap exists.  A region may not
+  marker, and whether any hidden-axis condition or gap exists.  A region may not
   be rendered as simply "owned" when ownership depends on an unshown
   certificate, budget, tolerance, or backend axis; in that case the projection
   must show conditional ownership or split the projection until the dependency is
@@ -979,20 +982,20 @@ The sprint is complete when the following are true:
   declared axes; every invalid region has a reason; every generated
   documentation region comes from the schema; and the rendered coverage document
   is byte-for-byte current with the claim registry.  Then tests sample
-  representative descriptor points: SPD well-conditioned dense systems select CG
-  or LU only when priority data says why; rank-deficient minimum-norm requests
-  select SVD; strictly diagonally dominant systems select Jacobi when the
-  iteration budget is satisfied; nonsymmetric matrix-free systems select GMRES;
+  representative descriptor points: matrix-free SPD systems select CG;
+  full-rank dense systems outside strict diagonal dominance select LU;
+  rank-deficient minimum-norm requests select SVD; strictly diagonally dominant
+  systems select Jacobi when the iteration budget is satisfied; nonsymmetric
+  matrix-free systems select GMRES;
   unsupported descriptors reject.  Numerical claim registries should expose
   enough descriptor metadata for the atlas to overlay those tested points on top
   of owned regions.  An owned region without numerical evidence is allowed only
   when it is explicitly marked structural-only or deferred, so the documentation
   can distinguish "claimed and tested" from "claimed but not numerically
-  exercised".  Ambiguous overlap without explicit priority remains a test
-  failure.
+  exercised".  Same-descriptor ownership is a test failure.
 - **No prose-only ownership.**  The generated documentation may contain human
-  explanation, but every ownership, rejection, invalidity, overlap, priority, and
-  missing-region statement in it must trace back to a structural claim in
+  explanation, but every ownership, rejection, invalidity, partition boundary,
+  and missing-region statement in it must trace back to a structural claim in
   `tests/test_structure.py`.  Conversely, every structural claim that changes
   dispatch behavior must appear in the generated atlas or in an explicit
   machine-readable exclusion list.  This prevents the documentation from
