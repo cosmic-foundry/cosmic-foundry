@@ -2396,14 +2396,21 @@ class _AtlasUncoveredCell(NamedTuple):
 
 
 _AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredCell
-_AtlasCellSource: TypeAlias = (
-    type[InvalidCellRule] | type[CoverageRegion] | type[_AtlasUncoveredCell]
-)
+
+
+class _AtlasCellSource(NamedTuple):
+    """Semantic source identity for one schema cell."""
+
+    kind: type[InvalidCellRule] | type[CoverageRegion] | type[_AtlasUncoveredCell]
+    key: tuple[object, ...]
+
+
 _AtlasCellSignature: TypeAlias = frozenset[_AtlasCellSource]
 _ATLAS_PROJECTIONS_BY_SCHEMA: dict[tuple[object, ...], _AtlasProjection] = {}
 _ATLAS_SIGNATURE_CELLS_BY_SCHEMA: dict[
     tuple[object, ...], tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...]
 ] = {}
+_ATLAS_CELL_SOURCES_BY_REGION: dict[int, _AtlasCellSource] = {}
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -2620,8 +2627,14 @@ def _atlas_projection_hidden_uncovered_cells(
     projected: dict[tuple[int, int], set[_AtlasCellSignature]],
 ) -> int:
     return sum(
-        any(_AtlasUncoveredCell in signature for signature in signatures)
-        and any(CoverageRegion in signature for signature in signatures)
+        any(
+            _atlas_signature_has_source(signature, _AtlasUncoveredCell)
+            for signature in signatures
+        )
+        and any(
+            _atlas_signature_has_source(signature, CoverageRegion)
+            for signature in signatures
+        )
         for signatures in projected.values()
     )
 
@@ -2630,8 +2643,14 @@ def _atlas_projection_visible_uncovered_cells(
     projected: dict[tuple[int, int], set[_AtlasCellSignature]],
 ) -> int:
     return sum(
-        any(_AtlasUncoveredCell in signature for signature in signatures)
-        and not any(CoverageRegion in signature for signature in signatures)
+        any(
+            _atlas_signature_has_source(signature, _AtlasUncoveredCell)
+            for signature in signatures
+        )
+        and not any(
+            _atlas_signature_has_source(signature, CoverageRegion)
+            for signature in signatures
+        )
         for signatures in projected.values()
     )
 
@@ -2640,9 +2659,19 @@ def _atlas_projection_visible_owned_cells(
     projected: dict[tuple[int, int], set[_AtlasCellSignature]],
 ) -> int:
     return sum(
-        any(CoverageRegion in signature for signature in signatures)
+        any(
+            _atlas_signature_has_source(signature, CoverageRegion)
+            for signature in signatures
+        )
         for signatures in projected.values()
     )
+
+
+def _atlas_signature_has_source(
+    signature: _AtlasCellSignature,
+    kind: type[InvalidCellRule] | type[CoverageRegion] | type[_AtlasUncoveredCell],
+) -> bool:
+    return any(source.kind is kind for source in signature)
 
 
 def _schema_signature_cells(
@@ -2652,7 +2681,7 @@ def _schema_signature_cells(
     key = _atlas_schema_region_key(schema, regions)
     if key not in _ATLAS_SIGNATURE_CELLS_BY_SCHEMA:
         _ATLAS_SIGNATURE_CELLS_BY_SCHEMA[key] = tuple(
-            (coordinates, _schema_cell_signature(schema, regions, cell))
+            (coordinates, _schema_cell_signature(schema, regions, coordinates, cell))
             for coordinates, cell in _schema_indexed_cells(schema)
         )
     return _ATLAS_SIGNATURE_CELLS_BY_SCHEMA[key]
@@ -2661,19 +2690,21 @@ def _schema_signature_cells(
 def _schema_cell_signature(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...],
+    coordinates: tuple[int, ...],
     cell: tuple[StructuredPredicate, ...],
 ) -> _AtlasCellSignature:
     sources: set[_AtlasCellSource] = set()
-    if any(
-        not predicate_sets_are_disjoint(cell, rule.predicates)
+    sources.update(
+        _atlas_cell_source(rule)
         for rule in schema.invalid_cells
-    ):
-        sources.add(InvalidCellRule)
-    if any(
-        not predicate_sets_are_disjoint(cell, region.predicates) for region in regions
-    ):
-        sources.add(CoverageRegion)
-    return frozenset(sources or {_AtlasUncoveredCell})
+        if not predicate_sets_are_disjoint(cell, rule.predicates)
+    )
+    sources.update(
+        _atlas_cell_source(region)
+        for region in regions
+        if not predicate_sets_are_disjoint(cell, region.predicates)
+    )
+    return frozenset(sources or {_atlas_uncovered_cell_source(coordinates)})
 
 
 def _atlas_group_x_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
@@ -2939,6 +2970,36 @@ def _atlas_source_key(source: _AtlasRegionSource) -> tuple[object, ...]:
     return (type(source), id(source))
 
 
+def _atlas_cell_source(source: InvalidCellRule | CoverageRegion) -> _AtlasCellSource:
+    cache_key = id(source)
+    if cache_key in _ATLAS_CELL_SOURCES_BY_REGION:
+        return _ATLAS_CELL_SOURCES_BY_REGION[cache_key]
+    if isinstance(source, CoverageRegion):
+        cell_source = _AtlasCellSource(
+            CoverageRegion,
+            (
+                source.owner,
+                tuple(_predicate_key(predicate) for predicate in source.predicates),
+            ),
+        )
+    else:
+        cell_source = _AtlasCellSource(
+            InvalidCellRule,
+            (tuple(_predicate_key(predicate) for predicate in source.predicates),),
+        )
+    _ATLAS_CELL_SOURCES_BY_REGION[cache_key] = cell_source
+    return cell_source
+
+
+def _atlas_uncovered_cell_source(
+    coordinates: tuple[int, ...],
+) -> _AtlasCellSource:
+    return _AtlasCellSource(
+        _AtlasUncoveredCell,
+        coordinates,
+    )
+
+
 def _predicate_key(predicate: StructuredPredicate) -> tuple[object, ...]:
     if isinstance(predicate, ComparisonPredicate):
         return (
@@ -3084,6 +3145,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_no_atlas_dataclass_stores_presentation_text()
         self._assert_uncovered_regions_are_computed()
         self._assert_axis_views_are_schema_partitions()
+        self._assert_cell_signatures_preserve_source_identity()
         self._assert_projection_axes_minimize_information_loss()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
@@ -3215,6 +3277,30 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             y_axis = _atlas_schema_axis(schema, _atlas_group_y_axis(group))
             assert _atlas_group_x_range(group) == _atlas_axis_range(x_axis)
             assert _atlas_group_y_range(group) == _atlas_axis_range(y_axis)
+
+    @staticmethod
+    def _assert_cell_signatures_preserve_source_identity() -> None:
+        for schema in _capability_atlas_schemas():
+            regions = _atlas_regions_for_schema(schema)
+            signatures = tuple(
+                signature
+                for _coordinates, signature in _schema_signature_cells(schema, regions)
+            )
+            sources = frozenset(
+                source for signature in signatures for source in signature
+            )
+            assert all(source.kind is not type for source in sources)
+            assert {source for source in sources if source.kind is CoverageRegion} == {
+                _atlas_cell_source(region) for region in regions
+            }
+            assert {
+                source for source in sources if source.kind is InvalidCellRule
+            }.issubset({_atlas_cell_source(rule) for rule in schema.invalid_cells})
+            assert all(
+                isinstance(source.key, tuple) and source.key
+                for source in sources
+                if source.kind is _AtlasUncoveredCell
+            )
 
     @staticmethod
     def _assert_projection_axes_minimize_information_loss() -> None:

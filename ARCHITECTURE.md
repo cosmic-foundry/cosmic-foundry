@@ -811,8 +811,10 @@ may use log scale.  Renderers must not choose plot ranges from sampled
 descriptor values when the schema already declares the relevant partition.
 Projection axes are selected as quotient maps from full schema cells onto a
 plot plane: the chosen plane minimizes hidden valid-unowned cells, then
-preserves source-signature distinctions, not schema declaration order,
-presentation names, or rendered status text.
+preserves source-signature distinctions.  Source signatures preserve actual
+semantic source identity: invalid-rule predicates, coverage owner plus
+predicates, and uncovered schema-cell coordinates.  They are not collapsed to schema
+declaration order, presentation names, or rendered status text.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
