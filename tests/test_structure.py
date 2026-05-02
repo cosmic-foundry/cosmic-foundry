@@ -2917,26 +2917,16 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasProjectedRegio
     return tuple(shapes)
 
 
-def _capability_atlas_model_objects() -> tuple[object, ...]:
+def _capability_atlas_carrier_classes() -> frozenset[type]:
+    return frozenset({_AtlasPlotSpec, _AtlasGap})
+
+
+def _capability_atlas_semantic_carrier_classes() -> frozenset[type]:
+    return frozenset({_AtlasPlotSpec})
+
+
+def _capability_atlas_carriers() -> tuple[object, ...]:
     return (*_capability_atlas_plot_specs(), *_capability_atlas_gaps())
-
-
-def _capability_atlas_semantic_model_objects() -> tuple[object, ...]:
-    return tuple(
-        model
-        for model in _capability_atlas_model_objects()
-        if not isinstance(model, _AtlasGap)
-    )
-
-
-def _capability_atlas_model_classes() -> frozenset[type]:
-    return frozenset(type(model) for model in _capability_atlas_model_objects())
-
-
-def _capability_atlas_semantic_model_classes() -> frozenset[type]:
-    return frozenset(
-        type(model) for model in _capability_atlas_semantic_model_objects()
-    )
 
 
 def _atlas_source_label(
@@ -2965,10 +2955,11 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         return "algorithm_capabilities/capability_atlas_doc_generates"
 
     def check(self, _calibration: None) -> None:
-        self._assert_atlas_models_do_not_store_raw_text()
-        self._assert_semantic_atlas_models_do_not_store_presentation_text()
-        self._assert_semantic_atlas_models_do_not_store_render_categories()
-        self._assert_semantic_atlas_models_do_not_store_scalar_bookkeeping()
+        self._assert_atlas_carriers_are_admitted_by_type()
+        self._assert_atlas_carriers_do_not_store_raw_text()
+        self._assert_semantic_atlas_carriers_do_not_store_presentation_text()
+        self._assert_semantic_atlas_carriers_do_not_store_render_categories()
+        self._assert_semantic_atlas_carriers_do_not_store_scalar_bookkeeping()
         self._assert_atlas_dataclasses_are_not_trivial_wrappers()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
@@ -2990,8 +2981,13 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 assert points
 
     @classmethod
-    def _assert_atlas_models_do_not_store_raw_text(cls) -> None:
-        for atlas_class in _capability_atlas_model_classes():
+    def _assert_atlas_carriers_are_admitted_by_type(cls) -> None:
+        admitted = _capability_atlas_carrier_classes()
+        assert {type(carrier) for carrier in _capability_atlas_carriers()} == admitted
+
+    @classmethod
+    def _assert_atlas_carriers_do_not_store_raw_text(cls) -> None:
+        for atlas_class in _capability_atlas_carrier_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_raw_text(annotation)
 
@@ -3005,14 +3001,14 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
 
     @classmethod
-    def _assert_semantic_atlas_models_do_not_store_presentation_text(cls) -> None:
-        for atlas_class in _capability_atlas_semantic_model_classes():
+    def _assert_semantic_atlas_carriers_do_not_store_presentation_text(cls) -> None:
+        for atlas_class in _capability_atlas_semantic_carrier_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_type(annotation, _AtlasText)
 
     @classmethod
-    def _assert_semantic_atlas_models_do_not_store_render_categories(cls) -> None:
-        for atlas_class in _capability_atlas_semantic_model_classes():
+    def _assert_semantic_atlas_carriers_do_not_store_render_categories(cls) -> None:
+        for atlas_class in _capability_atlas_semantic_carrier_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_enum(annotation)
 
@@ -3025,8 +3021,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
 
     @classmethod
-    def _assert_semantic_atlas_models_do_not_store_scalar_bookkeeping(cls) -> None:
-        for atlas_class in _capability_atlas_semantic_model_classes():
+    def _assert_semantic_atlas_carriers_do_not_store_scalar_bookkeeping(cls) -> None:
+        for atlas_class in _capability_atlas_semantic_carrier_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_type(annotation, int)
 
@@ -3034,7 +3030,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def _assert_atlas_dataclasses_are_not_trivial_wrappers(cls) -> None:
         atlas_classes = {
             atlas_class
-            for atlas_class in _capability_atlas_model_classes()
+            for atlas_class in _capability_atlas_carrier_classes()
             if is_dataclass(atlas_class)
         }
         for atlas_class in atlas_classes:

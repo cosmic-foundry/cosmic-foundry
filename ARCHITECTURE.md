@@ -809,10 +809,11 @@ Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
 primitive choices, and alternative ordinals are rendering consequences.
-Structural tests reject any return to presentation strings, render-category
-enums, scalar bookkeeping fields, wrapper evidence objects, stored schema
-identities, stored ownership-region lists, or hand-declared axis roles as
-semantic keys.
+Atlas carrier types are admitted by premise rather than inferred from rendered
+objects.  Structural tests reject any return to presentation strings,
+render-category enums, scalar bookkeeping fields, wrapper evidence objects,
+stored schema identities, stored ownership-region lists, generated-artifact
+carrier types, or hand-declared axis roles as semantic keys.
 
 The sprint is complete when the following are true:
 
