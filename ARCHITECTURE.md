@@ -807,10 +807,12 @@ shown, fixed, and marginalized are derived from the plot plane plus descriptor
 evidence; they are not maintained as parallel annotations on evidence points.
 Region projection models carry source objects, predicates, and projected
 coordinate sets; names, conditions, statuses, geometry labels, and SVG primitive
-choices are rendering consequences.  Structural tests reject any return to
-presentation strings, render-category enums, wrapper evidence objects, stored
-schema identities, stored ownership-region lists, or hand-declared axis roles as
-semantic keys.
+choices are rendering consequences.  Alternative ordinals disambiguate repeated
+rendered labels only if the renderer chooses to show them; they are not model
+coordinates.  Structural tests reject any return to presentation strings,
+render-category enums, scalar bookkeeping fields, wrapper evidence objects,
+stored schema identities, stored ownership-region lists, or hand-declared axis
+roles as semantic keys.
 
 The sprint is complete when the following are true:
 
