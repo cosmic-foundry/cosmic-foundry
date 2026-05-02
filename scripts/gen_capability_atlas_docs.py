@@ -297,11 +297,10 @@ def _render_region_shape(
     raise AssertionError(f"unsupported atlas geometry {region.geometry!r}")
 
 
-def _matched_regions(projection: atlas._AtlasEvidencePoint) -> str:
+def _matched_regions(descriptor: atlas.ParameterDescriptor) -> str:
+    schema = atlas._atlas_schema_for_descriptor(descriptor)
     matched = [
-        region.name
-        for region in projection.schema.derived_regions
-        if region.contains(projection.descriptor)
+        region.name for region in schema.derived_regions if region.contains(descriptor)
     ]
     return ", ".join(matched) if matched else "none"
 
@@ -313,51 +312,52 @@ def _coverage_region_name(region: atlas.CoverageRegion) -> str:
 def _shape_evidence_labels(
     schema: atlas.ParameterSpaceSchema,
     region: atlas._AtlasRegionShape,
-    projections: tuple[atlas._AtlasEvidencePoint, ...],
+    descriptors: tuple[atlas.ParameterDescriptor, ...],
 ) -> str:
     labels: list[str] = []
     if isinstance(region.source, atlas.InvalidCellRule):
-        for index, projection in enumerate(projections, start=1):
-            if region.source.matches(projection.descriptor):
+        for index, descriptor in enumerate(descriptors, start=1):
+            if region.source.matches(descriptor):
                 labels.append(str(index))
     elif isinstance(region.source, atlas.DerivedParameterRegion):
-        for index, projection in enumerate(projections, start=1):
-            if region.source.contains(projection.descriptor):
+        for index, descriptor in enumerate(descriptors, start=1):
+            if region.source.contains(descriptor):
                 labels.append(str(index))
     else:
-        for index, projection in enumerate(projections, start=1):
-            if region.source.contains(projection.descriptor):
+        for index, descriptor in enumerate(descriptors, start=1):
+            if region.source.contains(descriptor):
                 labels.append(str(index))
     return ", ".join(labels) if labels else "none"
 
 
 def _projection_region_targets(
     schema: atlas.ParameterSpaceSchema,
-    projection: atlas._AtlasEvidencePoint,
+    descriptor: atlas.ParameterDescriptor,
     region_targets_by_source: dict[int, list[str]],
 ) -> str:
     regions = atlas._atlas_regions_for_schema(schema)
     targets: list[str] = []
     for region in schema.derived_regions:
-        if region.contains(projection.descriptor):
+        if region.contains(descriptor):
             targets.extend(region_targets_by_source.get(id(region), ()))
     for rule in schema.invalid_cells:
-        if rule.matches(projection.descriptor):
+        if rule.matches(descriptor):
             targets.extend(region_targets_by_source.get(id(rule), ()))
     for region in regions:
-        if region.contains(projection.descriptor):
+        if region.contains(descriptor):
             targets.extend(region_targets_by_source.get(id(region), ()))
     return " ".join(dict.fromkeys(targets))
 
 
 def _projection_title(
-    projection: atlas._AtlasEvidencePoint,
+    descriptor: atlas.ParameterDescriptor,
     status: str,
     index: int,
 ) -> str:
+    schema = atlas._atlas_schema_for_descriptor(descriptor)
     return (
-        f"{projection.schema.name} descriptor {index}; status {status}; "
-        f"regions {_matched_regions(projection)}"
+        f"{schema.name} descriptor {index}; status {status}; "
+        f"regions {_matched_regions(descriptor)}"
     )
 
 
@@ -398,7 +398,7 @@ def _render_region_card(
 
 
 def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
-    selected = spec.projections
+    selected = spec.descriptors
     schema = spec.schema
     region_shapes = atlas._projected_region_shapes(spec)
     x_axis_label = atlas._field_label(spec.x_axis)
@@ -490,12 +490,13 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         )
 
     seen_points: dict[tuple[float, float], int] = {}
-    for index, projection in enumerate(selected, start=1):
-        regions = atlas._atlas_regions_for_schema(projection.schema)
-        status = projection.schema.cell_status(projection.descriptor, regions)
+    for index, descriptor in enumerate(selected, start=1):
+        schema = atlas._atlas_schema_for_descriptor(descriptor)
+        regions = atlas._atlas_regions_for_schema(schema)
+        status = schema.cell_status(descriptor, regions)
         stroke, _fill = _status_style(status)
-        x_value = float(projection.descriptor.coordinate(spec.x_axis).value)
-        y_value = float(projection.descriptor.coordinate(spec.y_axis).value)
+        x_value = float(descriptor.coordinate(spec.x_axis).value)
+        y_value = float(descriptor.coordinate(spec.y_axis).value)
         x, y = _svg_plot_point(
             x_value,
             y_value,
@@ -514,9 +515,9 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         offsets = ((0.0, 0.0), (14.0, 0.0), (-14.0, 0.0), (0.0, -14.0), (0.0, 14.0))
         dx, dy = offsets[duplicate_index % len(offsets)]
         region_targets = _projection_region_targets(
-            schema, projection, region_targets_by_source
+            schema, descriptor, region_targets_by_source
         )
-        title = html.escape(_projection_title(projection, status, index))
+        title = html.escape(_projection_title(descriptor, status, index))
         svg_parts.extend(
             [
                 (
