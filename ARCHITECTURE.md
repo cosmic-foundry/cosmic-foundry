@@ -1012,25 +1012,12 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Autodiscover atlas plot regions from the schema.  Plot specs may choose
-   projection axes and descriptor evidence overlays, but the region list itself
-   should be pulled from `DerivedParameterRegion`, invalid-cell rules, and later
-   `CoveragePatch` declarations.  If a projection becomes too cluttered, the
-   suppress/group decision must be explicit machine-readable policy with a
-   reason, not an omitted manual region list.
-2. Add an interactive atlas projection mode.  The generated documentation should
-   retain static fallbacks, but the primary view should let a developer hover
-   over a region or evidence marker and see that region's predicate overlay on
-   the base diagram: highlighted visible-axis geometry, fixed hidden-axis
-   predicates, marginalized axes, ownership status, and which sampled test
-   descriptors lie inside it.  Conditional projections such as nonlinear-root or
-   eigenproblem overlays must make clear which unshown axes activate the region.
-3. Convert linear solver capabilities to coverage patches and update
+1. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-4. Convert decomposition capabilities to coverage patches, including
+2. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+3. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
