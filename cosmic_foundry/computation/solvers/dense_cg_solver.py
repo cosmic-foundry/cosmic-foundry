@@ -94,6 +94,8 @@ class DenseCGSolver(KrylovSolver):
         linear_system_predicates()
         + budget_predicates()
         + (
+            MembershipPredicate("matrix_representation_available", frozenset({False})),
+            MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
             MembershipPredicate("operator_application_available", frozenset({True})),
             ComparisonPredicate("symmetry_defect", "<=", LINEARITY_TOLERANCE),
             ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
@@ -102,7 +104,6 @@ class DenseCGSolver(KrylovSolver):
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-    linear_solver_coverage_priority = 10
 
 
 __all__ = ["DenseCGSolver"]

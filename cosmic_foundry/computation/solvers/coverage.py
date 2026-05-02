@@ -28,7 +28,6 @@ def coverage(
     owner: type,
     *,
     coverage_predicates: tuple[StructuredPredicate, ...] = (),
-    coverage_priority: int | None = None,
 ) -> LinearSolverCoverage:
     """Return descriptor-space coverage whose identity comes from ``owner``."""
     return LinearSolverCoverage(
@@ -39,7 +38,6 @@ def coverage(
                 owner.__name__,
                 "owned",
                 coverage_predicates,
-                priority=coverage_priority,
             ),
         ),
     )

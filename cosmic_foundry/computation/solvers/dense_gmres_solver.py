@@ -147,7 +147,6 @@ class DenseGMRESSolver(KrylovSolver):
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-    linear_solver_coverage_priority = 15
 
 
 __all__ = ["DenseGMRESSolver"]

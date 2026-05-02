@@ -29,12 +29,12 @@ class DenseLUSolver(DirectSolver):
         + dense_matrix_predicates()
         + budget_predicates()
         + (
+            ComparisonPredicate("diagonal_dominance_margin", "<=", 0.0),
             ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
             ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         )
     )
-    linear_solver_coverage_priority = 30
 
 
 __all__ = ["DenseLUSolver"]

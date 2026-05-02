@@ -906,9 +906,10 @@ The sprint is complete when the following are true:
   patches over the schema.  Examples: `DenseCGSolver` covers descriptors whose
   residual map is certified linear, `dim_x == dim_y`, symmetry defect is below
   tolerance, coercivity lower bound is positive, condition estimate and
-  iteration cost fit budget, and a matrix-free or assembled matvec is available.
-  `DenseJacobiSolver` covers the diagonally dominant stationary-iteration
-  region.  `DenseLUSolver` covers full-rank square dense linear maps inside
+  iteration cost fit budget, and only a matrix-free matvec is available.
+  `DenseJacobiSolver` covers the strictly diagonally dominant dense
+  stationary-iteration region.  `DenseLUSolver` covers full-rank square dense
+  linear maps outside the strict diagonal-dominance region and inside
   memory/work budget.  `DenseSVDSolver` covers rank-deficient or minimum-norm
   dense regions.  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps
   only under restart, memory, and predicted-work bounds.
@@ -932,9 +933,10 @@ The sprint is complete when the following are true:
   which numerical claim file owns the evidence and whether it is representative,
   boundary, regression, convergence, correctness, or performance sampling.  It
   must include the predicate bounds, the certificate sources accepted by the
-  selector, the cost model, and the priority rule for every owned overlap.
-  Uncovered regions remain visible even before anyone has written a
-  missing-capability note for them.
+  selector, and the cost model.  Owned overlaps are not resolved by selector
+  priority; they must be removed by sharper predicates or justified by a
+  machine-checkable selection theorem.  Uncovered regions remain visible even
+  before anyone has written a missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
   a higher-dimensional schema, not the schema itself.  Each plot must render
   region area first and sampled test points second.  It must state which axes

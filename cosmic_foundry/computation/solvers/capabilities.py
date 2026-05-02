@@ -44,11 +44,6 @@ def _discovered_coverages() -> tuple[LinearSolverCoverage, ...]:
                     coverage(
                         item,
                         coverage_predicates=predicates,
-                        coverage_priority=getattr(
-                            item,
-                            "linear_solver_coverage_priority",
-                            None,
-                        ),
                     )
                 )
     return tuple(coverages)
@@ -147,14 +142,10 @@ def select_linear_solver_for_descriptor(
         for patch in patches
         if patch.status == "owned" and patch.contains(descriptor)
     )
-    ranked = sorted(
-        matches,
-        key=lambda patch: patch.priority if patch.priority is not None else 1_000_000,
-    )
-    if len(ranked) > 1 and ranked[0].priority == ranked[1].priority:
-        names = ", ".join(patch.name for patch in ranked)
-        raise ValueError(f"ambiguous linear-solver descriptor priority: {names}")
-    return owners[ranked[0].owner]
+    if len(matches) > 1:
+        names = ", ".join(patch.name for patch in matches)
+        raise ValueError(f"ambiguous linear-solver descriptor coverage: {names}")
+    return owners[matches[0].owner]
 
 
 __all__ = [
