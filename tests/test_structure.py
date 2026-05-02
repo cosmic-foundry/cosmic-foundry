@@ -48,6 +48,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterDescriptor,
     ParameterSpaceSchema,
     decomposition_parameter_schema,
+    linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
     solve_relation_parameter_schema,
 )
@@ -113,6 +114,23 @@ class _JitLinearOperator:
 
 _JIT_OP = _JitLinearOperator(_JIT_N)
 _JIT_B = Tensor([1.0] * _JIT_N, backend=_JIT_BACKEND)
+
+
+class _MatrixLinearOperator:
+    """Small dense operator used by descriptor-construction structure claims."""
+
+    def __init__(self, matrix: tuple[tuple[float, ...], ...]) -> None:
+        self._matrix = matrix
+        self._n = len(matrix)
+
+    def apply(self, u: Tensor) -> Tensor:
+        return Tensor(
+            [
+                sum(self._matrix[row][col] * float(u[col]) for col in range(self._n))
+                for row in range(self._n)
+            ],
+            backend=u.backend,
+        )
 
 
 class _DeclaredLinearOperator:
@@ -1296,6 +1314,51 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
             },
         )
+
+
+class _LinearOperatorDescriptorClaim(Claim[None]):
+    """Claim: small assembled operators produce schema-valid descriptors."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/linear_operator_descriptor"
+
+    def check(self, _calibration: None) -> None:
+        schema = linear_solver_parameter_schema()
+        regions = _SolveRelationSchemaClaim._regions(schema)
+
+        spd = linear_operator_descriptor_from_assembled_operator(
+            _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
+            Tensor([1.0, 0.0], backend=_JIT_BACKEND),
+        )
+        schema.validate_descriptor(spd.parameter_descriptor)
+        assert spd.matrix == ((2.0, -1.0), (-1.0, 2.0))
+        assert regions["linear_system"].contains(spd.parameter_descriptor)
+        assert regions["symmetric_positive_definite"].contains(spd.parameter_descriptor)
+        assert regions["full_rank"].contains(spd.parameter_descriptor)
+        assert spd.coordinate("symmetry_defect").value == 0.0
+        assert spd.coordinate("coercivity_lower_bound").value == 1.0
+        assert spd.coordinate("coercivity_lower_bound").evidence == "lower_bound"
+        assert spd.coordinate("rank_estimate").value == 2
+        assert spd.coordinate("rhs_consistency_defect").value == 0.0
+
+        rank_deficient = linear_operator_descriptor_from_assembled_operator(
+            _MatrixLinearOperator(((1.0, 1.0), (1.0, 1.0))),
+            Tensor([1.0, 1.0], backend=_JIT_BACKEND),
+        )
+        schema.validate_descriptor(rank_deficient.parameter_descriptor)
+        assert regions["rank_deficient"].contains(rank_deficient.parameter_descriptor)
+        assert rank_deficient.coordinate("rank_estimate").value == 1
+        assert rank_deficient.coordinate("nullity_estimate").value == 1
+        assert rank_deficient.coordinate("singular_value_lower_bound").value == 0.0
+        assert rank_deficient.coordinate("rhs_consistency_defect").value == 0.0
+
+        inconsistent = linear_operator_descriptor_from_assembled_operator(
+            _MatrixLinearOperator(((1.0, 1.0), (1.0, 1.0))),
+            Tensor([1.0, 0.0], backend=_JIT_BACKEND),
+        )
+        schema.validate_descriptor(inconsistent.parameter_descriptor)
+        assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
 
 
 @dataclass(frozen=True)
@@ -2999,6 +3062,7 @@ _CLAIMS: list[Claim[None]] = [
     _AutoDiscoveryImportClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
+    _LinearOperatorDescriptorClaim(),
     _CapabilityAtlasDocClaim(),
 ]
 
