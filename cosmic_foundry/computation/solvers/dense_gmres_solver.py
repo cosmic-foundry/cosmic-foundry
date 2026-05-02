@@ -7,6 +7,7 @@ from typing import Any, NamedTuple
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.algorithm_capabilities import (
     ComparisonPredicate,
+    LinearSolverField,
 )
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.coverage import (
@@ -132,10 +133,18 @@ class DenseGMRESSolver(KrylovSolver):
         return s.u
 
     linear_solver_coverage = (
-        ComparisonPredicate("symmetry_defect", ">", LINEARITY_TOLERANCE),
-        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+        ComparisonPredicate(
+            LinearSolverField.SYMMETRY_DEFECT, ">", LINEARITY_TOLERANCE
+        ),
+        ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
+        ComparisonPredicate(
+            LinearSolverField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
+        ),
+        ComparisonPredicate(
+            LinearSolverField.RHS_CONSISTENCY_DEFECT,
+            "<=",
+            LINEARITY_TOLERANCE,
+        ),
     )
 
 

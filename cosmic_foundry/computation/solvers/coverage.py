@@ -6,6 +6,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     CoverageRegion,
+    LinearSolverField,
     MembershipPredicate,
     StructuredPredicate,
 )
@@ -29,11 +30,22 @@ def coverage(
 def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
     """Return the primitive predicates for a linear residual solve."""
     return (
-        ComparisonPredicate("map_linearity_defect", "<=", LINEARITY_TOLERANCE),
-        AffineComparisonPredicate({"dim_x": 1.0, "dim_y": -1.0}, "==", 0.0),
-        MembershipPredicate("residual_target_available", frozenset({True})),
+        ComparisonPredicate(
+            LinearSolverField.MAP_LINEARITY_DEFECT,
+            "<=",
+            LINEARITY_TOLERANCE,
+        ),
+        AffineComparisonPredicate(
+            {LinearSolverField.DIM_X: 1.0, LinearSolverField.DIM_Y: -1.0},
+            "==",
+            0.0,
+        ),
         MembershipPredicate(
-            "acceptance_relation",
+            LinearSolverField.RESIDUAL_TARGET_AVAILABLE,
+            frozenset({True}),
+        ),
+        MembershipPredicate(
+            LinearSolverField.ACCEPTANCE_RELATION,
             frozenset({"residual_below_tolerance"}),
         ),
     )
@@ -42,8 +54,14 @@ def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
 def dense_matrix_predicates() -> tuple[MembershipPredicate, ...]:
     """Return predicates for an available dense assembled matrix."""
     return (
-        MembershipPredicate("matrix_representation_available", frozenset({True})),
-        MembershipPredicate("linear_operator_matrix_available", frozenset({True})),
+        MembershipPredicate(
+            LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE,
+            frozenset({True}),
+        ),
+        MembershipPredicate(
+            LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE,
+            frozenset({True}),
+        ),
     )
 
 
@@ -51,19 +69,25 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
     """Return conservative work and memory budget predicates."""
     return (
         AffineComparisonPredicate(
-            {"work_budget_fmas": 1.0, "assembly_cost_fmas": -1.0},
-            ">=",
-            0.0,
-        ),
-        AffineComparisonPredicate(
-            {"work_budget_fmas": 1.0, "matvec_cost_fmas": -1.0},
+            {
+                LinearSolverField.WORK_BUDGET_FMAS: 1.0,
+                LinearSolverField.ASSEMBLY_COST_FMAS: -1.0,
+            },
             ">=",
             0.0,
         ),
         AffineComparisonPredicate(
             {
-                "memory_budget_bytes": 1.0,
-                "linear_operator_memory_bytes": -1.0,
+                LinearSolverField.WORK_BUDGET_FMAS: 1.0,
+                LinearSolverField.MATVEC_COST_FMAS: -1.0,
+            },
+            ">=",
+            0.0,
+        ),
+        AffineComparisonPredicate(
+            {
+                LinearSolverField.MEMORY_BUDGET_BYTES: 1.0,
+                LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: -1.0,
             },
             ">=",
             0.0,
@@ -74,9 +98,18 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
 def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
     """Return predicates for solvers that use operator application directly."""
     return (
-        MembershipPredicate("matrix_representation_available", frozenset({False})),
-        MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
-        MembershipPredicate("operator_application_available", frozenset({True})),
+        MembershipPredicate(
+            LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE,
+            frozenset({False}),
+        ),
+        MembershipPredicate(
+            LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE,
+            frozenset({False}),
+        ),
+        MembershipPredicate(
+            LinearSolverField.OPERATOR_APPLICATION_AVAILABLE,
+            frozenset({True}),
+        ),
     )
 
 

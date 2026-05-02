@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal, Protocol, TypeAlias
 
 import numpy as np
@@ -109,6 +111,44 @@ EvidenceSource: TypeAlias = Literal[
 ]
 ComparisonOperator: TypeAlias = Literal["<", "<=", "==", "!=", ">=", ">"]
 CellStatus: TypeAlias = Literal["invalid", "owned", "uncovered"]
+
+
+class LinearSolverField(StrEnum):
+    """Schema-owned descriptor fields for linear-solver coverage."""
+
+    ACCEPTANCE_RELATION = "acceptance_relation"
+    ASSEMBLY_COST_FMAS = "assembly_cost_fmas"
+    AUXILIARY_SCALAR_COUNT = "auxiliary_scalar_count"
+    BACKEND_KIND = "backend_kind"
+    COERCIVITY_LOWER_BOUND = "coercivity_lower_bound"
+    CONDITION_ESTIMATE = "condition_estimate"
+    DERIVATIVE_ORACLE_KIND = "derivative_oracle_kind"
+    DEVICE_KIND = "device_kind"
+    DIAGONAL_DOMINANCE_MARGIN = "diagonal_dominance_margin"
+    DIAGONAL_NONZERO_MARGIN = "diagonal_nonzero_margin"
+    DIM_X = "dim_x"
+    DIM_Y = "dim_y"
+    EQUALITY_CONSTRAINT_COUNT = "equality_constraint_count"
+    LINEAR_OPERATOR_MATRIX_AVAILABLE = "linear_operator_matrix_available"
+    LINEAR_OPERATOR_MEMORY_BYTES = "linear_operator_memory_bytes"
+    MAP_LINEARITY_DEFECT = "map_linearity_defect"
+    MATVEC_COST_FMAS = "matvec_cost_fmas"
+    MATRIX_REPRESENTATION_AVAILABLE = "matrix_representation_available"
+    MEMORY_BUDGET_BYTES = "memory_budget_bytes"
+    NORMALIZATION_CONSTRAINT_COUNT = "normalization_constraint_count"
+    NULLITY_ESTIMATE = "nullity_estimate"
+    OBJECTIVE_RELATION = "objective_relation"
+    OPERATOR_APPLICATION_AVAILABLE = "operator_application_available"
+    RANK_ESTIMATE = "rank_estimate"
+    REQUESTED_RESIDUAL_TOLERANCE = "requested_residual_tolerance"
+    REQUESTED_SOLUTION_TOLERANCE = "requested_solution_tolerance"
+    RESIDUAL_TARGET_AVAILABLE = "residual_target_available"
+    RHS_CONSISTENCY_DEFECT = "rhs_consistency_defect"
+    SINGULAR_VALUE_LOWER_BOUND = "singular_value_lower_bound"
+    SKEW_SYMMETRY_DEFECT = "skew_symmetry_defect"
+    SYMMETRY_DEFECT = "symmetry_defect"
+    TARGET_IS_ZERO = "target_is_zero"
+    WORK_BUDGET_FMAS = "work_budget_fmas"
 
 
 @dataclass(frozen=True)
@@ -311,7 +351,7 @@ class MembershipPredicate:
 class AffineComparisonPredicate:
     """Affine comparison over numeric descriptor fields."""
 
-    terms: dict[str, float]
+    terms: Mapping[str, float]
     operator: ComparisonOperator
     value: float
     offset: float = 0.0
@@ -1405,6 +1445,7 @@ __all__ = [
     "decomposition_parameter_schema",
     "EvidencePredicate",
     "InvalidCellRule",
+    "LinearSolverField",
     "LinearOperatorDescriptor",
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",
