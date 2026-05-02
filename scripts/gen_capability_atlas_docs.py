@@ -297,7 +297,7 @@ def _render_region_shape(
     raise AssertionError(f"unsupported atlas geometry {region.geometry!r}")
 
 
-def _matched_regions(projection: atlas._AtlasProjection) -> str:
+def _matched_regions(projection: atlas._AtlasEvidencePoint) -> str:
     matched = [
         region.name
         for region in projection.schema.derived_regions
@@ -313,7 +313,7 @@ def _coverage_region_name(region: atlas.CoverageRegion) -> str:
 def _shape_evidence_labels(
     schema: atlas.ParameterSpaceSchema,
     region: atlas._AtlasRegionShape,
-    projections: tuple[atlas._AtlasProjection, ...],
+    projections: tuple[atlas._AtlasEvidencePoint, ...],
 ) -> str:
     labels: list[str] = []
     if isinstance(region.source, atlas.InvalidCellRule):
@@ -333,7 +333,7 @@ def _shape_evidence_labels(
 
 def _projection_region_targets(
     schema: atlas.ParameterSpaceSchema,
-    projection: atlas._AtlasProjection,
+    projection: atlas._AtlasEvidencePoint,
     region_targets_by_source: dict[int, list[str]],
 ) -> str:
     targets: list[str] = []
@@ -347,6 +347,17 @@ def _projection_region_targets(
         if region.contains(projection.descriptor):
             targets.extend(region_targets_by_source.get(id(region), ()))
     return " ".join(dict.fromkeys(targets))
+
+
+def _projection_title(
+    projection: atlas._AtlasEvidencePoint,
+    status: str,
+    index: int,
+) -> str:
+    return (
+        f"{projection.schema.name} descriptor {index}; status {status}; "
+        f"regions {_matched_regions(projection)}"
+    )
 
 
 def _render_region_card(
@@ -505,16 +516,14 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         region_targets = _projection_region_targets(
             schema, projection, region_targets_by_source
         )
+        title = html.escape(_projection_title(projection, status, index))
         svg_parts.extend(
             [
                 (
                     '<g class="cf-atlas-point-overlay" '
                     f'data-cf-atlas-member="{_html_attr(region_targets)}">'
                 ),
-                (
-                    f"<title>{html.escape(projection.title)}; status {status}; "
-                    f"regions {html.escape(_matched_regions(projection))}</title>"
-                ),
+                f"<title>{title}</title>",
                 f'<circle cx="{x + dx:.1f}" cy="{y + dy:.1f}" r="8" fill="#ffffff" '
                 f'stroke="{stroke}" stroke-width="2.4"/>',
                 _svg_text(

@@ -796,12 +796,13 @@ sources of truth.
 Atlas projection text follows the same rule: titles, captions, filenames, and
 axis labels may render an object, but they must not identify, select, or join
 objects.  Generated plots are discovered by the equivalence relation induced by
-schema identity over projection objects; plot titles, filenames, captions,
-ranges, and coordinate labels are rendering consequences.  Projection axes are
-schema field objects.  Axis roles such as shown, fixed, and marginalized are
-derived from the plot plane plus descriptor evidence; they are not maintained as
-parallel annotations on evidence points.  Structural tests reject any return to
-presentation strings or hand-declared axis roles as semantic keys.
+schema identity over descriptor evidence points; plot titles, filenames,
+captions, ranges, point labels, and coordinate labels are rendering
+consequences.  Projection axes are schema field objects.  Axis roles such as
+shown, fixed, and marginalized are derived from the plot plane plus descriptor
+evidence; they are not maintained as parallel annotations on evidence points.
+Structural tests reject any return to presentation strings or hand-declared
+axis roles as semantic keys.
 
 The sprint is complete when the following are true:
 

@@ -2357,12 +2357,11 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 
 
 @dataclass(frozen=True)
-class _AtlasProjection:
-    """One descriptor template rendered into the capability atlas."""
+class _AtlasEvidencePoint:
+    """One descriptor evidence point rendered into the capability atlas."""
 
     schema: ParameterSpaceSchema
     descriptor: ParameterDescriptor
-    title: _AtlasText
     regions: tuple[CoverageRegion, ...] = ()
 
 
@@ -2417,7 +2416,7 @@ class _AtlasRegionShape:
 class _AtlasPlotSpec:
     """One generated SVG projection of descriptor cells."""
 
-    projections: tuple[_AtlasProjection, ...]
+    projections: tuple[_AtlasEvidencePoint, ...]
 
     @property
     def schema(self) -> ParameterSpaceSchema:
@@ -2465,37 +2464,34 @@ class _AtlasPlotSpec:
         )
 
 
-def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
+def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
     solve_schema = solve_relation_parameter_schema()
     linear_schema = linear_solver_parameter_schema()
     decomposition_schema = decomposition_parameter_schema()
     solver_regions = linear_solver_coverage_regions()
 
     return (
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(),
-            _AtlasText("Solve relation: square linear system"),
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 dim_x=3,
                 dim_y=5,
                 objective_relation="least_squares",
             ),
-            _AtlasText("Solve relation: least-squares relation"),
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 map_linearity_defect=None,
                 map_linearity_evidence="unavailable",
                 residual_target_available=False,
             ),
-            _AtlasText("Solve relation: public nonlinear-solver gap"),
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 auxiliary_scalar_count=1,
@@ -2503,57 +2499,49 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 acceptance_relation="eigenpair_residual",
                 objective_relation="spectral_residual",
             ),
-            _AtlasText("Solve relation: eigenproblem region"),
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 acceptance_relation="eigenpair_residual",
             ),
-            _AtlasText("Invalid solve relation: eigenpair without spectral data"),
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(),
-            _AtlasText("Linear solver: SPD full-rank dense descriptor"),
             solver_regions,
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(
                 singular_value_lower_bound=0.0,
                 rank_estimate=3,
                 nullity_estimate=1,
             ),
-            _AtlasText("Linear solver: rank-deficient descriptor"),
             solver_regions,
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(
                 linear_operator_matrix_available=False,
                 matrix_representation_available=False,
             ),
-            _AtlasText("Linear solver: matrix-free descriptor"),
             solver_regions,
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
-            _AtlasText("Invalid linear solver: nonsquare SPD descriptor"),
             solver_regions,
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             decomposition_schema,
             _SolveRelationSchemaClaim._decomposition_descriptor(),
-            _AtlasText("Decomposition: square full-rank dense descriptor"),
         ),
-        _AtlasProjection(
+        _AtlasEvidencePoint(
             decomposition_schema,
             _SolveRelationSchemaClaim._decomposition_descriptor(
                 matrix_columns=5,
             ),
-            _AtlasText("Invalid decomposition: nonsquare coercive descriptor"),
         ),
     )
 
@@ -2593,14 +2581,14 @@ def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
 
 
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
-    groups: dict[int, list[_AtlasProjection]] = {}
+    groups: dict[int, list[_AtlasEvidencePoint]] = {}
     for projection in _capability_atlas_projections():
         groups.setdefault(id(projection.schema), []).append(projection)
     return tuple(_AtlasPlotSpec(tuple(group)) for group in groups.values())
 
 
 def _atlas_axis_range(
-    projections: tuple[_AtlasProjection, ...],
+    projections: tuple[_AtlasEvidencePoint, ...],
     field: _AtlasDescriptorField,
 ) -> tuple[float, float]:
     values = tuple(
@@ -2642,7 +2630,7 @@ def _atlas_hidden_axes(spec: _AtlasPlotSpec) -> tuple[_AtlasDescriptorField, ...
 
 
 def _axis_has_one_known_value(
-    projections: tuple[_AtlasProjection, ...],
+    projections: tuple[_AtlasEvidencePoint, ...],
     field: _AtlasDescriptorField,
 ) -> bool:
     coordinates = tuple(
@@ -2739,7 +2727,7 @@ def _schema_atlas_regions(
 
 
 def _atlas_regions_for_projections(
-    projections: tuple[_AtlasProjection, ...],
+    projections: tuple[_AtlasEvidencePoint, ...],
 ) -> tuple[CoverageRegion, ...]:
     regions: dict[type, CoverageRegion] = {}
     for projection in projections:
@@ -3048,7 +3036,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def _assert_plot_specs_select_projection_objects(cls) -> None:
         annotations = get_type_hints(_AtlasPlotSpec)
         assert any(
-            cls._annotation_contains_type(annotation, _AtlasProjection)
+            cls._annotation_contains_type(annotation, _AtlasEvidencePoint)
             for annotation in annotations.values()
         )
         assert not any(
@@ -3077,7 +3065,11 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     @classmethod
     def _assert_projection_axis_roles_are_derived(cls) -> None:
-        annotations = get_type_hints(_AtlasProjection)
+        annotations = get_type_hints(_AtlasEvidencePoint)
+        assert not any(
+            cls._annotation_contains_type(annotation, _AtlasText)
+            for annotation in annotations.values()
+        )
         assert not any(
             cls._annotation_is_text_collection(annotation)
             for annotation in annotations.values()
