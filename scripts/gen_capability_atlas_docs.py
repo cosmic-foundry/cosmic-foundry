@@ -210,7 +210,7 @@ def _render_region_shape(
     y_max: float,
 ) -> str:
     stroke, fill = _status_style(str(atlas._atlas_source_status(region.source)))
-    if region.geometry is atlas._AtlasGeometryKind.LINE:
+    if len(region.points) == 2:
         (x0, y0), (x1, y1) = region.points
         px0, py0 = _svg_plot_point(
             x0,
@@ -241,7 +241,7 @@ def _render_region_shape(
             f'stroke="{stroke}" stroke-width="7" stroke-linecap="round" '
             'stroke-opacity="0.72"/>'
         )
-    if region.geometry is atlas._AtlasGeometryKind.POLYGON:
+    if len(region.points) >= 3:
         points = [
             _svg_plot_point(
                 x,
@@ -262,39 +262,7 @@ def _render_region_shape(
             f'<polygon points="{svg_points}" fill="{fill}" fill-opacity="0.22" '
             f'stroke="{stroke}" stroke-width="2" stroke-opacity="0.62"/>'
         )
-    if region.geometry is atlas._AtlasGeometryKind.RECTANGLE:
-        (x0, y0), (x1, y1) = region.points
-        px0, py0 = _svg_plot_point(
-            min(x0, x1),
-            max(y0, y1),
-            left=left,
-            top=top,
-            plot_w=plot_w,
-            plot_h=plot_h,
-            x_min=x_min,
-            x_max=x_max,
-            y_min=y_min,
-            y_max=y_max,
-        )
-        px1, py1 = _svg_plot_point(
-            max(x0, x1),
-            min(y0, y1),
-            left=left,
-            top=top,
-            plot_w=plot_w,
-            plot_h=plot_h,
-            x_min=x_min,
-            x_max=x_max,
-            y_min=y_min,
-            y_max=y_max,
-        )
-        return (
-            f'<rect x="{px0:.1f}" y="{py0:.1f}" width="{px1 - px0:.1f}" '
-            f'height="{py1 - py0:.1f}" fill="{fill}" fill-opacity="0.20" '
-            f'stroke="{stroke}" stroke-width="2" stroke-dasharray="8 5" '
-            'stroke-opacity="0.62"/>'
-        )
-    raise AssertionError(f"unsupported atlas geometry {region.geometry!r}")
+    raise AssertionError(f"unsupported atlas geometry with {len(region.points)} points")
 
 
 def _shape_name(region: atlas._AtlasRegionShape) -> str:

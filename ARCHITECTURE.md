@@ -805,11 +805,12 @@ captions, ranges, point labels, and coordinate labels are rendering
 consequences.  Projection axes are schema field objects.  Axis roles such as
 shown, fixed, and marginalized are derived from the plot plane plus descriptor
 evidence; they are not maintained as parallel annotations on evidence points.
-Region projection models carry source objects, predicates, symbolic geometry,
-and numeric coordinates; names, conditions, statuses, and geometry labels are
-rendering consequences.  Structural tests reject any return to presentation
-strings, wrapper evidence objects, stored schema identities, stored
-ownership-region lists, or hand-declared axis roles as semantic keys.
+Region projection models carry source objects, predicates, and projected
+coordinate sets; names, conditions, statuses, geometry labels, and SVG primitive
+choices are rendering consequences.  Structural tests reject any return to
+presentation strings, render-category enums, wrapper evidence objects, stored
+schema identities, stored ownership-region lists, or hand-declared axis roles as
+semantic keys.
 
 The sprint is complete when the following are true:
 

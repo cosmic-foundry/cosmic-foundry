@@ -30,7 +30,7 @@ import pkgutil
 import sys
 import types
 from dataclasses import dataclass, fields, is_dataclass
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from typing import Any, NewType, TypeAlias, get_args, get_origin, get_type_hints
 
@@ -79,14 +79,6 @@ _AtlasDescriptorField: TypeAlias = LinearSolverField | DecompositionField
 _AtlasRegionSource: TypeAlias = (
     DerivedParameterRegion | InvalidCellRule | CoverageRegion
 )
-
-
-class _AtlasGeometryKind(Enum):
-    """Symbolic projected-geometry kind for rendered atlas regions."""
-
-    LINE = auto()
-    POLYGON = auto()
-    RECTANGLE = auto()
 
 
 _PACKAGES = [
@@ -2390,7 +2382,6 @@ class _AtlasRegionShape:
     predicates: tuple[Any, ...]
     alternative_index: int
     alternative_count: int
-    geometry: _AtlasGeometryKind
     points: tuple[tuple[float, float], ...]
 
 
@@ -2850,7 +2841,7 @@ def _project_alternative_geometry(
     y_axis: _AtlasDescriptorField,
     x_range: tuple[float, float],
     y_range: tuple[float, float],
-) -> tuple[tuple[_AtlasGeometryKind, tuple[tuple[float, float], ...]], ...]:
+) -> tuple[tuple[tuple[float, float], ...], ...]:
     rectangle = (
         (x_range[0], y_range[0]),
         (x_range[1], y_range[0]),
@@ -2864,12 +2855,7 @@ def _project_alternative_geometry(
         is not None
     ]
     if not projected:
-        return (
-            (
-                _AtlasGeometryKind.RECTANGLE,
-                ((x_range[0], y_range[0]), (x_range[1], y_range[1])),
-            ),
-        )
+        return (rectangle,)
 
     equality = [projection for projection in projected if projection[1] == "=="]
     inequalities = [
@@ -2882,7 +2868,7 @@ def _project_alternative_geometry(
     if equality:
         terms, _operator, value = equality[0]
         line = _affine_equality_line(terms, value, x_axis, y_axis, x_range, y_range)
-        return ((_AtlasGeometryKind.LINE, line),) if len(line) == 2 else ()
+        return (line,) if len(line) == 2 else ()
 
     polygons: list[tuple[tuple[float, float], ...]] = [rectangle]
     for terms, operator, value in inequalities:
@@ -2907,11 +2893,7 @@ def _project_alternative_geometry(
                     split_polygons.append(clipped)
         polygons = split_polygons
 
-    return tuple(
-        (_AtlasGeometryKind.POLYGON, polygon)
-        for polygon in polygons
-        if len(polygon) >= 3
-    )
+    return tuple(polygon for polygon in polygons if len(polygon) >= 3)
 
 
 def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, ...]:
@@ -2934,14 +2916,13 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
                     "visible projection "
                     f"onto {spec.x_axis!r}/{spec.y_axis!r}"
                 )
-            for geometry_name, points in geometry:
+            for points in geometry:
                 shapes.append(
                     _AtlasRegionShape(
                         source,
                         predicates,
                         alternative_index,
                         len(alternatives),
-                        geometry_name,
                         points,
                     )
                 )
@@ -3000,6 +2981,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         self._assert_atlas_models_do_not_store_raw_text()
         self._assert_semantic_atlas_models_do_not_store_presentation_text()
+        self._assert_semantic_atlas_models_do_not_store_render_categories()
         self._assert_atlas_dataclasses_are_not_trivial_wrappers()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
@@ -3040,6 +3022,20 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         for atlas_class in _capability_atlas_semantic_model_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_type(annotation, _AtlasText)
+
+    @classmethod
+    def _assert_semantic_atlas_models_do_not_store_render_categories(cls) -> None:
+        for atlas_class in _capability_atlas_semantic_model_classes():
+            for annotation in get_type_hints(atlas_class).values():
+                assert not cls._annotation_contains_enum(annotation)
+
+    @classmethod
+    def _annotation_contains_enum(cls, annotation: object) -> bool:
+        if isinstance(annotation, type) and issubclass(annotation, Enum):
+            return True
+        return any(
+            cls._annotation_contains_enum(argument) for argument in get_args(annotation)
+        )
 
     @classmethod
     def _assert_atlas_dataclasses_are_not_trivial_wrappers(cls) -> None:
