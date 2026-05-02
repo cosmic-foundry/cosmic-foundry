@@ -809,9 +809,10 @@ uses the schema-owned partition first: finite bins render as categorical cells,
 threshold intervals remain visible as partitions, and positive numeric intervals
 may use log scale.  Renderers must not choose plot ranges from sampled
 descriptor values when the schema already declares the relevant partition.
-Projection axes are selected by computed status separation over schema cells:
-the plot plane is chosen to expose ownership holes and status contrast, not by
-schema declaration order or presentation names.
+Projection axes are selected as quotient maps from full schema cells onto a
+plot plane: the chosen plane minimizes hidden valid-unowned cells, then
+preserves source-signature distinctions, not schema declaration order,
+presentation names, or rendered status text.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
