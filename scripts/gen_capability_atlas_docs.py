@@ -303,10 +303,6 @@ def _shape_evidence_labels(
         for index, descriptor in enumerate(descriptors, start=1):
             if source.matches(descriptor):
                 labels.append(str(index))
-    elif isinstance(source, atlas.DerivedParameterRegion):
-        for index, descriptor in enumerate(descriptors, start=1):
-            if source.contains(descriptor):
-                labels.append(str(index))
     else:
         for index, descriptor in enumerate(descriptors, start=1):
             if source.contains(descriptor):
@@ -317,19 +313,19 @@ def _shape_evidence_labels(
 def _projection_region_targets(
     schema: atlas.ParameterSpaceSchema,
     descriptor: atlas.ParameterDescriptor,
-    region_targets_by_source: dict[int, list[str]],
+    region_targets_by_source: dict[tuple[object, ...], list[str]],
 ) -> str:
     regions = atlas._atlas_regions_for_schema(schema)
     targets: list[str] = []
-    for region in schema.derived_regions:
-        if region.contains(descriptor):
-            targets.extend(region_targets_by_source.get(id(region), ()))
-    for rule in schema.invalid_cells:
-        if rule.matches(descriptor):
-            targets.extend(region_targets_by_source.get(id(rule), ()))
-    for region in regions:
-        if region.contains(descriptor):
-            targets.extend(region_targets_by_source.get(id(region), ()))
+    for source in atlas._schema_atlas_regions(schema, regions):
+        if isinstance(source, atlas.InvalidCellRule):
+            contains = source.matches(descriptor)
+        else:
+            contains = source.contains(descriptor)
+        if contains:
+            targets.extend(
+                region_targets_by_source.get(atlas._atlas_source_key(source), ())
+            )
     return " ".join(dict.fromkeys(targets))
 
 
@@ -440,10 +436,12 @@ def _render_interactive_plot(group: atlas._AtlasDescriptorGroup) -> str:
         )
 
     cards: list[str] = []
-    region_targets_by_source: dict[int, list[str]] = {}
+    region_targets_by_source: dict[tuple[object, ...], list[str]] = {}
     for index, (source, predicates, points) in enumerate(region_shapes, start=1):
         target_id = _dom_id(atlas_id, "region", index, _shape_name(source))
-        region_targets_by_source.setdefault(id(source), []).append(target_id)
+        region_targets_by_source.setdefault(atlas._atlas_source_key(source), []).append(
+            target_id
+        )
         shape = _render_region_shape(
             source,
             points,
@@ -569,8 +567,9 @@ def render_capability_atlas() -> str:
         "that are only summarized.  Region geometry is drawn first; concrete",
         "descriptor fixtures from `tests/test_structure.py` are overlaid as",
         "numbered evidence points.  Plot region lists are autodiscovered from",
-        "`DerivedParameterRegion`, `InvalidCellRule`, and `CoverageRegion`",
-        "declarations reachable from each schema projection.",
+        "`InvalidCellRule`, `CoverageRegion`, and computed uncovered",
+        "`DerivedParameterRegion` alternatives reachable from each schema",
+        "projection.",
         "",
         "Status legend:",
         "",
@@ -636,31 +635,29 @@ def render_capability_atlas() -> str:
         )
 
     lines.extend(["## Computed Gaps", ""])
-    uncovered = atlas._capability_atlas_uncovered_descriptors()
+    uncovered = tuple(
+        (schema, source)
+        for schema in atlas._capability_atlas_schemas()
+        for source in atlas._capability_atlas_uncovered_regions(
+            schema, atlas._atlas_regions_for_schema(schema)
+        )
+    )
     if uncovered:
-        for index, (schema, descriptor) in enumerate(uncovered, start=1):
-            regions = atlas._atlas_regions_for_schema(schema)
-            assert schema.cell_status(descriptor, regions) == "uncovered"
+        for index, (schema, source) in enumerate(uncovered, start=1):
             lines.extend(
                 [
-                    f"### Uncovered descriptor {index}",
+                    f"### Uncovered region {index}",
                     "",
                     f"- Schema: `{schema.name}`",
-                    "- Coordinates:",
+                    f"- Region: `{atlas._atlas_source_label(source)}`",
+                    "- Predicates:",
                 ]
             )
             lines.extend(
-                "  - "
-                f"`{atlas._field_label(axis.field)}`: "
-                f"`{atlas._descriptor_value(descriptor, axis.field)}`"
-                for axis in schema.axes
+                f"  - `{atlas._predicate_label(predicate)}`"
+                for predicate in source.predicates
             )
-            lines.extend(
-                [
-                    "- Matched schema regions: " f"{_matched_regions(descriptor)}",
-                    "",
-                ]
-            )
+            lines.append("")
     else:
         lines.extend(
             [

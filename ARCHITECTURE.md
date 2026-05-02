@@ -810,9 +810,10 @@ a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
 primitive choices, and alternative ordinals are rendering consequences.
 Atlas-local dataclasses must not store atlas presentation text.  Gap sections
-are computed from valid descriptor evidence whose schema cell status is
-uncovered; they are not manually recorded notes.  Structural tests reject any
-return to presentation-text dataclasses, wrapper evidence objects, stored schema
+are computed from derived schema-region alternatives that are provably disjoint
+from invalid cells and owned coverage regions; descriptor evidence remains an
+overlay, not the gap model.  Structural tests reject any return to
+presentation-text dataclasses, wrapper evidence objects, stored schema
 identities, stored ownership-region lists, generated-artifact models, or
 hand-declared axis roles as semantic keys.
 
@@ -990,13 +991,12 @@ The sprint is complete when the following are true:
   certificate, budget, tolerance, or backend axis; in that case the projection
   must show conditional ownership or split the projection until the dependency is
   visible.
-- **Gaps are computed from uncovered cells.**  A missing algorithm is not a
-  manually recorded note.  The atlas computes gaps by classifying descriptor
-  evidence and schema regions against the current ownership regions: invalid
-  cells are excluded, owned cells are excluded, and valid cells with no covering
-  owner are rendered as uncovered.  Human-readable missing-capability prose can
-  be generated from those objects later, but it must not become a parallel
-  source of region identity.
+- **Gaps are computed from uncovered regions.**  A missing algorithm is not a
+  manually recorded note and not a sampled descriptor point.  The atlas computes
+  gaps from derived schema-region alternatives that are provably disjoint from
+  invalid cells and owned coverage regions.  Human-readable missing-capability
+  prose can be generated from those objects later, but it must not become a
+  parallel source of region identity.
 - **Coverage is tested at the schema level.**  Structural tests validate the
   schema before any algorithm selection: every axis has bins or intervals; every
   descriptor field referenced by an axis exists; every coverage region references
