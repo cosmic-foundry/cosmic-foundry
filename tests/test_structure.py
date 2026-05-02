@@ -552,7 +552,10 @@ class _ArchitectureOwnershipClaim(Claim[None]):
     def _check_capabilities(self, exported: set[str]) -> None:
         provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
         capabilities = tuple(provider())
-        implementations = [cap.implementation for cap in capabilities]
+        implementations = [
+            self._capability_implementation_name(cap.implementation)
+            for cap in capabilities
+        ]
         missing_exports = set(implementations) - exported
         assert not missing_exports, (
             "capability implementations not exported: " f"{sorted(missing_exports)}"
@@ -580,6 +583,12 @@ class _ArchitectureOwnershipClaim(Claim[None]):
                 f"{expectation.request!r} unexpectedly selected "
                 f"{selected.implementation}"
             )
+
+    @staticmethod
+    def _capability_implementation_name(implementation: Any) -> str:
+        if isinstance(implementation, type):
+            return implementation.__name__
+        return str(implementation)
 
     def _check_class_modules(self, package: types.ModuleType) -> None:
         expected = self._spec.expected_class_modules or {}
@@ -871,8 +880,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
             ),
         )
         owned_region = CoverageRegion(
-            name="well_conditioned_spd",
-            owner="DenseCGSolver",
+            owner=IterativeSolver,
             predicates=(
                 ComparisonPredicate("map_linearity_defect", "<=", 1.0e-12),
                 ComparisonPredicate("dim_x", "==", 4),
@@ -911,8 +919,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 (
                     owned_region,
                     CoverageRegion(
-                        name="duplicate_region",
-                        owner="OtherSolver",
+                        owner=Factorization,
                         predicates=owned_region.predicates,
                     ),
                 ),
@@ -944,16 +951,14 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         with pytest.raises(ValueError):
             schema.validate_coverage_region(
                 CoverageRegion(
-                    name="undeclared_axis",
-                    owner="BadSolver",
+                    owner=IterativeSolver,
                     predicates=(ComparisonPredicate("undeclared", "==", 1),),
                 )
             )
         with pytest.raises(TypeError):
             schema.validate_coverage_region(
                 CoverageRegion(
-                    name="unsupported_predicate",
-                    owner="BadSolver",
+                    owner=IterativeSolver,
                     predicates=(object(),),  # type: ignore[arg-type]
                 )
             )
@@ -1385,6 +1390,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         self._assert_no_local_disjointness_algebra()
         self._assert_no_legacy_coverage_region_names()
+        self._assert_coverage_region_identity_is_owner_class()
         self._assert_no_coverage_region_priority_model()
         self._assert_no_coverage_region_status_model()
         self._assert_no_solver_local_point_query()
@@ -1395,14 +1401,14 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for region in regions:
             schema.validate_coverage_region(region)
 
-        selected_owners: set[str] = set()
+        selected_owners: set[type] = set()
         self._assert_coverage_regions_disjoint(regions)
         for region in regions:
             descriptor = self._descriptor_witness_for_region(schema, region)
             assert schema.cell_status(descriptor, regions) == "owned"
             selected = select_linear_solver_for_descriptor(descriptor)
             expected_owner = self._selected_region_owner(descriptor, regions)
-            assert selected.implementation == expected_owner
+            assert selected.implementation is expected_owner
             selected_owners.add(expected_owner)
         assert selected_owners == {region.owner for region in regions}
 
@@ -1411,12 +1417,13 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         cls,
         descriptor: ParameterDescriptor,
         regions: tuple[CoverageRegion, ...],
-    ) -> str:
+    ) -> type:
         matches = tuple(region for region in regions if region.contains(descriptor))
         assert matches
         assert len(matches) == cls._one(), (
             "owned linear-solver coverage regions must be pairwise disjoint at "
-            f"selected descriptors: {[region.name for region in matches]}"
+            "selected descriptors: "
+            f"{[_coverage_region_name(region) for region in matches]}"
         )
         return next(iter(matches)).owner
 
@@ -1514,6 +1521,52 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
                             "coverage ownership must use region terminology: "
                             f"{source_path.relative_to(_PROJECT_ROOT)}: {name!r}"
                         )
+
+    @staticmethod
+    def _assert_coverage_region_identity_is_owner_class() -> None:
+        source_paths = (
+            _PACKAGE_ROOT / "computation" / "solvers" / "capabilities.py",
+            _PACKAGE_ROOT / "computation" / "solvers" / "coverage.py",
+        )
+        for source_path in source_paths:
+            tree = ast.parse(source_path.read_text())
+            for node in ast.walk(tree):
+                if (
+                    source_path.name == "coverage.py"
+                    and isinstance(node, ast.Attribute)
+                    and node.attr == "__name__"
+                ):
+                    raise AssertionError(
+                        "coverage identity must not be stringified in the model: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+                if isinstance(node, ast.Call):
+                    call_name = (
+                        node.func.id if isinstance(node.func, ast.Name) else None
+                    )
+                    if call_name == "CoverageRegion":
+                        assert len(node.args) <= 2, (
+                            "CoverageRegion identity is owner plus predicates, "
+                            "not a separate name: "
+                            f"{source_path.relative_to(_PROJECT_ROOT)}"
+                        )
+
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "CoverageRegion":
+                fields = {
+                    child.target.id: child.annotation
+                    for child in node.body
+                    if isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                }
+                assert "name" not in fields
+                assert isinstance(fields.get("owner"), ast.Name)
+                assert fields["owner"].id == "type"
+                return
+        raise AssertionError("CoverageRegion class not found")
 
     @staticmethod
     def _assert_no_coverage_region_priority_model() -> None:
@@ -1631,7 +1684,6 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
     ) -> frozenset[str | int | float]:
         literals: set[str | int | float] = set()
         for region in regions:
-            literals.update({region.name, region.owner})
             for predicate in region.predicates:
                 literals.update(predicate.referenced_fields)
                 if isinstance(predicate, ComparisonPredicate):
@@ -2451,7 +2503,9 @@ def _source_alternatives(
         return (matches[0].predicates,)
     if region.source_kind == "coverage_region":
         matches = [
-            candidate for candidate in regions if candidate.name == region.source_name
+            candidate
+            for candidate in regions
+            if _coverage_region_name(candidate) == region.source_name
         ]
         if not matches:
             raise AssertionError(
@@ -2489,11 +2543,11 @@ def _schema_atlas_regions(
     )
     coverage = tuple(
         _AtlasRegionProjection(
-            name=region.name,
+            name=_coverage_region_name(region),
             status="owned",
             source_kind="coverage_region",
-            source_name=region.name,
-            condition=f"{region.owner} coverage region",
+            source_name=_coverage_region_name(region),
+            condition=f"{_coverage_region_name(region)} coverage region",
         )
         for region in regions
     )
@@ -2506,8 +2560,12 @@ def _atlas_regions_for_schema(schema_name: str) -> tuple[CoverageRegion, ...]:
         if projection.schema.name != schema_name:
             continue
         for region in projection.regions:
-            regions[region.name] = region
+            regions[_coverage_region_name(region)] = region
     return tuple(regions.values())
+
+
+def _coverage_region_name(region: CoverageRegion) -> str:
+    return region.owner.__name__
 
 
 def _predicate_affine_projection(
@@ -2774,7 +2832,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             } | {
                 ("invalid_cell", rule.name) for rule in schema.invalid_cells
             } | {
-                ("coverage_region", region.name) for region in regions
+                ("coverage_region", _coverage_region_name(region)) for region in regions
             }
             shapes = _projected_region_shapes(spec)
             assert shapes

@@ -811,8 +811,9 @@ The sprint is complete when the following are true:
 - **Capabilities are coverage regions.**  A capability declares a bounded region
   in the parameter space plus the guarantees it provides inside that region.
   The region may be a conjunction of bins, numeric intervals, and feasibility
-  inequalities over schema axes.  The implementation name is metadata attached
-  to the region, not the root of the model.  Implementation-local coverage
+  inequalities over schema axes.  The implementation owner is the class identity
+  attached to the region; display names are derived only when rendering a human
+  projection.  Implementation-local coverage
   declarations must not carry an independent tag contract such as
   `requires`/`provides`; any human-facing label is either inferred from code
   structure or derived as a schema alias over descriptor predicates.

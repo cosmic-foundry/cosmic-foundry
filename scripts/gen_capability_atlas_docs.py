@@ -306,6 +306,10 @@ def _matched_regions(projection: atlas._AtlasProjection) -> str:
     return ", ".join(matched) if matched else "none"
 
 
+def _coverage_region_name(region: atlas.CoverageRegion) -> str:
+    return region.owner.__name__
+
+
 def _shape_evidence_labels(
     schema: atlas.ParameterSpaceSchema,
     region: atlas._AtlasRegionShape,
@@ -612,17 +616,17 @@ def render_capability_atlas() -> str:
 
     lines.extend(["", "## Coverage Regions", ""])
     regions = {
-        region.name: region
+        _coverage_region_name(region): region
         for projection in atlas._capability_atlas_projections()
         for region in projection.regions
     }
     if regions:
-        for region in sorted(regions.values(), key=lambda item: item.name):
+        for region in sorted(regions.values(), key=_coverage_region_name):
             lines.extend(
                 [
-                    f"### {region.name}",
+                    f"### {_coverage_region_name(region)}",
                     "",
-                    f"- Owner: `{region.owner}`",
+                    f"- Owner: `{_coverage_region_name(region)}`",
                     "- Predicates:",
                 ]
             )
