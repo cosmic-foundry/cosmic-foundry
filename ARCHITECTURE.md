@@ -1005,22 +1005,16 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Generate a capability coverage document from the schemas and coverage patches,
-   all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
-   invalid, uncovered, and numerically tested cells.  The structural test should
-   fail if the generated documentation is stale.  Seed it with the public
-   nonlinear-solver gap as an annotation on an already-visible uncovered
-   nonlinear-root region.
-2. Add `LinearOperatorDescriptor` construction for small assembled operators and
+1. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-3. Convert linear solver capabilities to coverage patches and update
+2. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-4. Convert decomposition capabilities to coverage patches, including
+3. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+4. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
