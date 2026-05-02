@@ -10,10 +10,8 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
-    Requirement,
     budget_predicates,
     capability,
-    contract,
     dense_matrix_predicates,
     linear_system_predicates,
 )
@@ -108,17 +106,10 @@ class DenseJacobiSolver(StationaryIterationSolver):
 
     @classmethod
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return capability declarations owned by this solver implementation."""
+        """Return descriptor-space coverage owned by this solver implementation."""
         return (
             capability(
                 cls,
-                contract(
-                    requires=(
-                        Requirement.LINEAR_OPERATOR,
-                        Requirement.DIAGONAL,
-                        Requirement.ROW_ABS_SUMS,
-                    ),
-                ),
                 coverage_predicates=cls._coverage_predicates,
                 coverage_priority=25,
             ),
