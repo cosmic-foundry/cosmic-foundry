@@ -1501,6 +1501,21 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
 
     @staticmethod
     def _assert_no_coverage_patch_priority_model() -> None:
+        source_paths = (_PROJECT_ROOT / "scripts" / "gen_capability_atlas_docs.py",)
+        for source_path in source_paths:
+            tree = ast.parse(source_path.read_text())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Attribute) and node.attr == "priority":
+                    raise AssertionError(
+                        "coverage machinery must not read priority: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+                if isinstance(node, ast.keyword) and node.arg == "priority":
+                    raise AssertionError(
+                        "coverage machinery must not pass priority: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+
         tree = ast.parse(
             (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
         )
