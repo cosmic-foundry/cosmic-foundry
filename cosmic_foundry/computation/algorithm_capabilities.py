@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol, TypeAlias
 
+import numpy as np
+
+from cosmic_foundry.computation.tensor import Tensor
+
 
 @dataclass(frozen=True)
 class AlgorithmStructureContract:
@@ -207,6 +211,32 @@ class ParameterPredicate(Protocol):
     def evaluate(self, descriptor: ParameterDescriptor) -> bool:
         """Return whether ``descriptor`` satisfies the predicate."""
         ...
+
+
+class SmallLinearOperator(Protocol):
+    """Linear operator protocol needed for deterministic descriptor assembly."""
+
+    def apply(self, u: Tensor) -> Tensor:
+        """Apply the operator to one vector."""
+        ...
+
+
+@dataclass(frozen=True)
+class LinearOperatorDescriptor:
+    """Small assembled linear-operator descriptor plus matrix witness.
+
+    The parameter descriptor is the schema-level object consumed by selection
+    and atlas code.  The assembled matrix is retained as a deterministic witness
+    for structural tests and documentation generators; it is not a performance
+    timing result.
+    """
+
+    parameter_descriptor: ParameterDescriptor
+    matrix: tuple[tuple[float, ...], ...]
+
+    def coordinate(self, field: str) -> DescriptorCoordinate:
+        """Return the coordinate for ``field``."""
+        return self.parameter_descriptor.coordinate(field)
 
 
 def _compare(
@@ -522,6 +552,7 @@ class ParameterSpaceSchema:
 
 
 _LINEARITY_EPS = 1.0e-12
+_NUMERIC_EPS = 1.0e-14
 
 
 def _bool_axis(name: str) -> ParameterAxis:
@@ -957,6 +988,168 @@ def decomposition_parameter_schema() -> ParameterSpaceSchema:
     )
 
 
+def _backend_kind(backend: object) -> str:
+    name = type(backend).__name__.lower()
+    if "numpy" in name:
+        return "numpy"
+    if "jax" in name:
+        return "jax"
+    if "python" in name:
+        return "python"
+    return "unknown"
+
+
+def _assemble_matrix(
+    op: SmallLinearOperator, b: Tensor
+) -> tuple[tuple[float, ...], ...]:
+    n = b.shape[0]
+    columns: list[list[float]] = []
+    for col in range(n):
+        basis = Tensor.zeros(n, backend=b.backend)
+        basis = basis.set(col, Tensor(1.0, backend=b.backend))
+        applied = op.apply(basis)
+        columns.append([float(applied[row]) for row in range(n)])
+    return tuple(tuple(columns[col][row] for col in range(n)) for row in range(n))
+
+
+def _rhs_tuple(b: Tensor) -> tuple[float, ...]:
+    return tuple(float(b[row]) for row in range(b.shape[0]))
+
+
+def _zero_small(value: float, tolerance: float = _NUMERIC_EPS) -> float:
+    return 0.0 if abs(value) <= tolerance else value
+
+
+def linear_operator_descriptor_from_assembled_operator(
+    op: SmallLinearOperator,
+    b: Tensor,
+    *,
+    requested_residual_tolerance: float = 1.0e-8,
+    requested_solution_tolerance: float = 1.0e-8,
+    work_budget_fmas: float = 1.0e9,
+    memory_budget_bytes: float = 1.0e9,
+    device_kind: str = "cpu",
+) -> LinearOperatorDescriptor:
+    """Assemble a small operator and return deterministic schema coordinates.
+
+    The construction is for capability classification and structural fixtures,
+    not for benchmarking.  It materializes the matrix by applying ``op`` to each
+    standard basis vector, then computes algebraic descriptors using stable
+    dense linear-algebra formulas.
+    """
+    if len(b.shape) != 1 or b.shape[0] <= 0:
+        raise ValueError("linear-operator descriptors require a nonempty vector RHS")
+
+    matrix = _assemble_matrix(op, b)
+    rhs = _rhs_tuple(b)
+    n = len(rhs)
+    a = np.array(matrix, dtype=float)
+    rhs_array = np.array(rhs, dtype=float)
+    frobenius_norm = float(np.linalg.norm(a))
+    scale = max(frobenius_norm, _NUMERIC_EPS)
+    symmetry_defect = _zero_small(float(np.linalg.norm(a - a.T)) / scale)
+    skew_symmetry_defect = _zero_small(float(np.linalg.norm(a + a.T)) / scale)
+    diagonal_nonzero_margin = min(abs(matrix[i][i]) for i in range(n))
+    diagonal_dominance_margin = min(
+        abs(matrix[i][i]) - sum(abs(matrix[i][j]) for j in range(n) if j != i)
+        for i in range(n)
+    )
+
+    singular_values = np.linalg.svd(a, compute_uv=False)
+    singular_tolerance = (
+        max(a.shape)
+        * np.finfo(float).eps
+        * max(
+            float(singular_values[0]) if singular_values.size else 0.0,
+            1.0,
+        )
+    )
+    cleaned_singular_values = [
+        0.0 if value <= singular_tolerance else float(value)
+        for value in singular_values
+    ]
+    singular_value_lower_bound = min(cleaned_singular_values, default=0.0)
+    rank_estimate = sum(value > 0.0 for value in cleaned_singular_values)
+    nullity_estimate = n - rank_estimate
+    positive_singular_values = [
+        value for value in cleaned_singular_values if value > 0.0
+    ]
+    condition_estimate = (
+        max(cleaned_singular_values) / min(positive_singular_values)
+        if positive_singular_values
+        else 1.0e300
+    )
+
+    symmetric_part = 0.5 * (a + a.T)
+    eigenvalues = np.linalg.eigvalsh(symmetric_part)
+    coercivity_lower_bound = _zero_small(float(np.min(eigenvalues)))
+
+    least_squares_solution, *_ = np.linalg.lstsq(a, rhs_array, rcond=None)
+    residual = rhs_array - a @ least_squares_solution
+    rhs_consistency_defect = _zero_small(
+        float(np.linalg.norm(residual))
+        / max(float(np.linalg.norm(rhs_array)), _NUMERIC_EPS)
+    )
+    nonzeros = int(np.count_nonzero(np.abs(a) > _NUMERIC_EPS))
+    matvec_cost_fmas = float(max(1, 2 * nonzeros))
+    assembly_cost_fmas = float(n) * matvec_cost_fmas
+    memory_estimate = float(8 * (n * n + n))
+
+    descriptor = ParameterDescriptor(
+        schema="linear_solver",
+        coordinates={
+            "dim_x": DescriptorCoordinate(n),
+            "dim_y": DescriptorCoordinate(n),
+            "auxiliary_scalar_count": DescriptorCoordinate(0),
+            "equality_constraint_count": DescriptorCoordinate(0),
+            "normalization_constraint_count": DescriptorCoordinate(0),
+            "residual_target_available": DescriptorCoordinate(True),
+            "target_is_zero": DescriptorCoordinate(False),
+            "map_linearity_defect": DescriptorCoordinate(0.0),
+            "matrix_representation_available": DescriptorCoordinate(True),
+            "operator_application_available": DescriptorCoordinate(True),
+            "derivative_oracle_kind": DescriptorCoordinate("matrix"),
+            "objective_relation": DescriptorCoordinate("none"),
+            "acceptance_relation": DescriptorCoordinate("residual_below_tolerance"),
+            "requested_residual_tolerance": DescriptorCoordinate(
+                requested_residual_tolerance
+            ),
+            "requested_solution_tolerance": DescriptorCoordinate(
+                requested_solution_tolerance
+            ),
+            "backend_kind": DescriptorCoordinate(_backend_kind(b.backend)),
+            "device_kind": DescriptorCoordinate(device_kind),
+            "work_budget_fmas": DescriptorCoordinate(work_budget_fmas),
+            "memory_budget_bytes": DescriptorCoordinate(memory_budget_bytes),
+            "linear_operator_matrix_available": DescriptorCoordinate(True),
+            "assembly_cost_fmas": DescriptorCoordinate(assembly_cost_fmas),
+            "matvec_cost_fmas": DescriptorCoordinate(matvec_cost_fmas),
+            "linear_operator_memory_bytes": DescriptorCoordinate(memory_estimate),
+            "symmetry_defect": DescriptorCoordinate(symmetry_defect),
+            "skew_symmetry_defect": DescriptorCoordinate(skew_symmetry_defect),
+            "diagonal_nonzero_margin": DescriptorCoordinate(diagonal_nonzero_margin),
+            "diagonal_dominance_margin": DescriptorCoordinate(
+                diagonal_dominance_margin
+            ),
+            "coercivity_lower_bound": DescriptorCoordinate(
+                coercivity_lower_bound, evidence="lower_bound"
+            ),
+            "singular_value_lower_bound": DescriptorCoordinate(
+                singular_value_lower_bound, evidence="lower_bound"
+            ),
+            "condition_estimate": DescriptorCoordinate(
+                condition_estimate, evidence="estimate"
+            ),
+            "rank_estimate": DescriptorCoordinate(rank_estimate, evidence="estimate"),
+            "nullity_estimate": DescriptorCoordinate(
+                nullity_estimate, evidence="estimate"
+            ),
+            "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
+        },
+    )
+    return LinearOperatorDescriptor(descriptor, matrix)
+
+
 __all__ = [
     "AffineComparisonPredicate",
     "AlgorithmCapability",
@@ -970,7 +1163,9 @@ __all__ = [
     "decomposition_parameter_schema",
     "EvidencePredicate",
     "InvalidCellRule",
+    "LinearOperatorDescriptor",
     "linear_solver_parameter_schema",
+    "linear_operator_descriptor_from_assembled_operator",
     "MembershipPredicate",
     "NumericInterval",
     "ParameterAxis",
@@ -978,5 +1173,6 @@ __all__ = [
     "ParameterDescriptor",
     "ParameterPredicate",
     "ParameterSpaceSchema",
+    "SmallLinearOperator",
     "solve_relation_parameter_schema",
 ]
