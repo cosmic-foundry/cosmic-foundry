@@ -2368,12 +2368,22 @@ class _AtlasAxisView(NamedTuple):
     use_log_scale: bool
 
 
+class _AtlasProjectionObjective(NamedTuple):
+    """Lexicographic loss of quotienting schema cells onto a plot plane."""
+
+    hidden_uncovered_cells: int
+    negative_visible_uncovered_cells: int
+    signature_loss: int
+    negative_visible_owned_cells: int
+    negative_projected_cells: int
+
+
 class _AtlasProjection(NamedTuple):
-    """Schema-axis projection selected by status separation."""
+    """Schema-axis quotient selected by semantic information preservation."""
 
     x_axis: ParameterAxis
     y_axis: ParameterAxis
-    score: tuple[int, int, int, int, int, int, int]
+    objective: _AtlasProjectionObjective
 
 
 class _AtlasUncoveredCell(NamedTuple):
@@ -2386,12 +2396,13 @@ class _AtlasUncoveredCell(NamedTuple):
 
 
 _AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredCell
-_AtlasCellStatus: TypeAlias = (
+_AtlasCellSource: TypeAlias = (
     type[InvalidCellRule] | type[CoverageRegion] | type[_AtlasUncoveredCell]
 )
+_AtlasCellSignature: TypeAlias = frozenset[_AtlasCellSource]
 _ATLAS_PROJECTIONS_BY_SCHEMA: dict[tuple[object, ...], _AtlasProjection] = {}
-_ATLAS_STATUS_CELLS_BY_SCHEMA: dict[
-    tuple[object, ...], tuple[tuple[tuple[int, ...], _AtlasCellStatus], ...]
+_ATLAS_SIGNATURE_CELLS_BY_SCHEMA: dict[
+    tuple[object, ...], tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...]
 ] = {}
 
 
@@ -2502,12 +2513,12 @@ def _atlas_group_schema(group: _AtlasDescriptorGroup) -> ParameterSpaceSchema:
 
 
 def _atlas_group_x_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
-    """X axis selected by schema-cell status separation."""
+    """X axis selected by schema-cell information preservation."""
     return _atlas_axis_field(_atlas_group_projection(group).x_axis)
 
 
 def _atlas_group_y_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
-    """Y axis selected by schema-cell status separation."""
+    """Y axis selected by schema-cell information preservation."""
     return _atlas_axis_field(_atlas_group_projection(group).y_axis)
 
 
@@ -2516,8 +2527,9 @@ def _atlas_group_projection(group: _AtlasDescriptorGroup) -> _AtlasProjection:
     regions = _atlas_regions_for_schema(schema)
     key = _atlas_schema_region_key(schema, regions)
     if key not in _ATLAS_PROJECTIONS_BY_SCHEMA:
-        _ATLAS_PROJECTIONS_BY_SCHEMA[key] = max(
-            _atlas_candidate_projections(schema, regions), key=lambda item: item.score
+        _ATLAS_PROJECTIONS_BY_SCHEMA[key] = min(
+            _atlas_candidate_projections(schema, regions),
+            key=lambda item: item.objective,
         )
     return _ATLAS_PROJECTIONS_BY_SCHEMA[key]
 
@@ -2547,81 +2559,121 @@ def _atlas_candidate_projections(
     regions: tuple[CoverageRegion, ...],
 ) -> tuple[_AtlasProjection, ...]:
     candidates: list[_AtlasProjection] = []
-    status_cells = _schema_status_cells(schema, regions)
+    signature_cells = _schema_signature_cells(schema, regions)
     for x_index, x_axis in enumerate(schema.axes):
         for y_axis in schema.axes[x_index + 1 :]:
             candidates.append(
                 _AtlasProjection(
                     x_axis,
                     y_axis,
-                    _atlas_projection_score(schema, status_cells, x_axis, y_axis),
+                    _atlas_projection_objective(
+                        schema, signature_cells, x_axis, y_axis
+                    ),
                 )
             )
     return tuple(candidates)
 
 
-def _atlas_projection_score(
+def _atlas_projection_objective(
     schema: ParameterSpaceSchema,
-    status_cells: tuple[tuple[tuple[int, ...], _AtlasCellStatus], ...],
+    signature_cells: tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...],
     x_axis: ParameterAxis,
     y_axis: ParameterAxis,
-) -> tuple[int, int, int, int, int, int, int]:
-    projected: dict[tuple[int, int], set[_AtlasCellStatus]] = {}
+) -> _AtlasProjectionObjective:
+    projected = _atlas_projection_fibers(schema, signature_cells, x_axis, y_axis)
+    return _AtlasProjectionObjective(
+        hidden_uncovered_cells=_atlas_projection_hidden_uncovered_cells(projected),
+        negative_visible_uncovered_cells=-_atlas_projection_visible_uncovered_cells(
+            projected
+        ),
+        signature_loss=_atlas_projection_signature_loss(projected),
+        negative_visible_owned_cells=-_atlas_projection_visible_owned_cells(projected),
+        negative_projected_cells=-len(projected),
+    )
+
+
+def _atlas_projection_fibers(
+    schema: ParameterSpaceSchema,
+    signature_cells: tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...],
+    x_axis: ParameterAxis,
+    y_axis: ParameterAxis,
+) -> dict[tuple[int, int], set[_AtlasCellSignature]]:
+    projected: dict[tuple[int, int], set[_AtlasCellSignature]] = {}
     x_index = schema.axes.index(x_axis)
     y_index = schema.axes.index(y_axis)
-    for coordinates, status in status_cells:
+    for coordinates, signature in signature_cells:
         bucket = (
             coordinates[x_index],
             coordinates[y_index],
         )
-        projected.setdefault(bucket, set()).add(status)
-    pure = tuple(statuses for statuses in projected.values() if len(statuses) == 1)
-    status_signatures = frozenset(
-        frozenset(statuses) for statuses in projected.values()
-    )
-    mixed = len(projected) - len(pure)
-    return (
-        sum(
-            _AtlasUncoveredCell in statuses and CoverageRegion not in statuses
-            for statuses in projected.values()
-        ),
-        sum(CoverageRegion in statuses for statuses in projected.values()),
-        len(status_signatures),
-        sum(statuses == {_AtlasUncoveredCell} for statuses in pure),
-        len(pure),
-        -mixed,
-        len(_atlas_axis_view(x_axis).cells) * len(_atlas_axis_view(y_axis).cells),
+        projected.setdefault(bucket, set()).add(signature)
+    return projected
+
+
+def _atlas_projection_signature_loss(
+    projected: dict[tuple[int, int], set[_AtlasCellSignature]],
+) -> int:
+    return sum(len(signatures) - 1 for signatures in projected.values())
+
+
+def _atlas_projection_hidden_uncovered_cells(
+    projected: dict[tuple[int, int], set[_AtlasCellSignature]],
+) -> int:
+    return sum(
+        any(_AtlasUncoveredCell in signature for signature in signatures)
+        and any(CoverageRegion in signature for signature in signatures)
+        for signatures in projected.values()
     )
 
 
-def _schema_status_cells(
+def _atlas_projection_visible_uncovered_cells(
+    projected: dict[tuple[int, int], set[_AtlasCellSignature]],
+) -> int:
+    return sum(
+        any(_AtlasUncoveredCell in signature for signature in signatures)
+        and not any(CoverageRegion in signature for signature in signatures)
+        for signatures in projected.values()
+    )
+
+
+def _atlas_projection_visible_owned_cells(
+    projected: dict[tuple[int, int], set[_AtlasCellSignature]],
+) -> int:
+    return sum(
+        any(CoverageRegion in signature for signature in signatures)
+        for signatures in projected.values()
+    )
+
+
+def _schema_signature_cells(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...],
-) -> tuple[tuple[tuple[int, ...], _AtlasCellStatus], ...]:
+) -> tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...]:
     key = _atlas_schema_region_key(schema, regions)
-    if key not in _ATLAS_STATUS_CELLS_BY_SCHEMA:
-        _ATLAS_STATUS_CELLS_BY_SCHEMA[key] = tuple(
-            (coordinates, _schema_cell_status(schema, regions, cell))
+    if key not in _ATLAS_SIGNATURE_CELLS_BY_SCHEMA:
+        _ATLAS_SIGNATURE_CELLS_BY_SCHEMA[key] = tuple(
+            (coordinates, _schema_cell_signature(schema, regions, cell))
             for coordinates, cell in _schema_indexed_cells(schema)
         )
-    return _ATLAS_STATUS_CELLS_BY_SCHEMA[key]
+    return _ATLAS_SIGNATURE_CELLS_BY_SCHEMA[key]
 
 
-def _schema_cell_status(
+def _schema_cell_signature(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...],
     cell: tuple[StructuredPredicate, ...],
-) -> _AtlasCellStatus:
+) -> _AtlasCellSignature:
+    sources: set[_AtlasCellSource] = set()
     if any(
         not predicate_sets_are_disjoint(cell, rule.predicates)
         for rule in schema.invalid_cells
     ):
-        return InvalidCellRule
+        sources.add(InvalidCellRule)
     if any(
         not predicate_sets_are_disjoint(cell, region.predicates) for region in regions
     ):
-        return CoverageRegion
-    return _AtlasUncoveredCell
+        sources.add(CoverageRegion)
+    return frozenset(sources or {_AtlasUncoveredCell})
 
 
 def _atlas_group_x_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
@@ -3032,7 +3084,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_no_atlas_dataclass_stores_presentation_text()
         self._assert_uncovered_regions_are_computed()
         self._assert_axis_views_are_schema_partitions()
-        self._assert_projection_axes_are_status_discovered()
+        self._assert_projection_axes_minimize_information_loss()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
@@ -3165,14 +3217,16 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             assert _atlas_group_y_range(group) == _atlas_axis_range(y_axis)
 
     @staticmethod
-    def _assert_projection_axes_are_status_discovered() -> None:
+    def _assert_projection_axes_minimize_information_loss() -> None:
         for group in _capability_atlas_descriptor_groups():
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
             projection = _atlas_group_projection(group)
             candidates = _atlas_candidate_projections(schema, regions)
             assert projection in candidates
-            assert projection.score == max(candidate.score for candidate in candidates)
+            assert projection.objective == min(
+                candidate.objective for candidate in candidates
+            )
             assert {_atlas_group_x_axis(group), _atlas_group_y_axis(group)} == {
                 _atlas_axis_field(projection.x_axis),
                 _atlas_axis_field(projection.y_axis),
