@@ -336,6 +336,7 @@ def _projection_region_targets(
     projection: atlas._AtlasEvidencePoint,
     region_targets_by_source: dict[int, list[str]],
 ) -> str:
+    regions = atlas._atlas_regions_for_schema(schema)
     targets: list[str] = []
     for region in schema.derived_regions:
         if region.contains(projection.descriptor):
@@ -343,7 +344,7 @@ def _projection_region_targets(
     for rule in schema.invalid_cells:
         if rule.matches(projection.descriptor):
             targets.extend(region_targets_by_source.get(id(rule), ()))
-    for region in projection.regions:
+    for region in regions:
         if region.contains(projection.descriptor):
             targets.extend(region_targets_by_source.get(id(region), ()))
     return " ".join(dict.fromkeys(targets))
@@ -490,9 +491,8 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
 
     seen_points: dict[tuple[float, float], int] = {}
     for index, projection in enumerate(selected, start=1):
-        status = projection.schema.cell_status(
-            projection.descriptor, projection.regions
-        )
+        regions = atlas._atlas_regions_for_schema(projection.schema)
+        status = projection.schema.cell_status(projection.descriptor, regions)
         stroke, _fill = _status_style(status)
         x_value = float(projection.descriptor.coordinate(spec.x_axis).value)
         y_value = float(projection.descriptor.coordinate(spec.y_axis).value)
@@ -613,8 +613,7 @@ def render_capability_atlas() -> str:
     lines.extend(["", "## Coverage Regions", ""])
     regions = {
         _coverage_region_name(region): region
-        for projection in atlas._capability_atlas_projections()
-        for region in projection.regions
+        for region in atlas._capability_atlas_coverage_regions()
     }
     if regions:
         for region in sorted(regions.values(), key=_coverage_region_name):

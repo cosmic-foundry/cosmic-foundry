@@ -797,14 +797,17 @@ Atlas projection text follows the same rule: titles, captions, filenames, and
 axis labels may render an object, but they must not identify, select, or join
 objects.  A descriptor evidence point is located in the unique minimal schema
 whose field set admits and validates its coordinate map; it does not store a
-parallel schema identity.  Generated plots are discovered by the equivalence
-relation induced by that derived schema.  Plot titles, filenames, captions,
-ranges, point labels, and coordinate labels are rendering consequences.
-Projection axes are schema field objects.  Axis roles such as shown, fixed, and
-marginalized are derived from the plot plane plus descriptor evidence; they are
-not maintained as parallel annotations on evidence points.  Structural tests
-reject any return to presentation strings, stored schema identities, or
-hand-declared axis roles as semantic keys.
+parallel schema identity or ownership-region list.  Ownership regions are
+assigned to schemas by validating the region against the schema, not by
+attaching them to evidence points.  Generated plots are discovered by the
+equivalence relation induced by that derived schema.  Plot titles, filenames,
+captions, ranges, point labels, and coordinate labels are rendering
+consequences.  Projection axes are schema field objects.  Axis roles such as
+shown, fixed, and marginalized are derived from the plot plane plus descriptor
+evidence; they are not maintained as parallel annotations on evidence points.
+Structural tests reject any return to presentation strings, stored schema
+identities, stored ownership-region lists, or hand-declared axis roles as
+semantic keys.
 
 The sprint is complete when the following are true:
 
