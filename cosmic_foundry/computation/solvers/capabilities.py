@@ -9,7 +9,6 @@ from types import ModuleType
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmCapability,
     AlgorithmRegistry,
-    AlgorithmRequest,
     CoveragePatch,
     ParameterDescriptor,
     linear_solver_parameter_schema,
@@ -20,7 +19,6 @@ from cosmic_foundry.computation.solvers._capability_claims import (
 
 LinearSolverCapability = AlgorithmCapability
 LinearSolverRegistry = AlgorithmRegistry
-LinearSolverRequest = AlgorithmRequest
 
 
 def _solver_package_modules() -> tuple[ModuleType, ...]:
@@ -52,11 +50,6 @@ LINEAR_SOLVER_REGISTRY = LinearSolverRegistry(_declared_capabilities())
 def linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
     """Return autodiscovered linear-solver algorithm capabilities."""
     return LINEAR_SOLVER_REGISTRY.capabilities
-
-
-def select_linear_solver(request: LinearSolverRequest) -> LinearSolverCapability:
-    """Select a linear-solver implementation declaration by capability."""
-    return LINEAR_SOLVER_REGISTRY.select(request)
 
 
 def linear_solver_coverage_patches() -> tuple[CoveragePatch, ...]:
@@ -106,8 +99,6 @@ __all__ = [
     "linear_solver_capabilities",
     "linear_solver_coverage_patches",
     "LinearSolverRegistry",
-    "LinearSolverRequest",
     "LINEAR_SOLVER_REGISTRY",
-    "select_linear_solver",
     "select_linear_solver_for_descriptor",
 ]

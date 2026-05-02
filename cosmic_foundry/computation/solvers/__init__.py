@@ -3,10 +3,8 @@
 from cosmic_foundry.computation.solvers.capabilities import (
     LinearSolverCapability,
     LinearSolverRegistry,
-    LinearSolverRequest,
     linear_solver_capabilities,
     linear_solver_coverage_patches,
-    select_linear_solver,
     select_linear_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
@@ -44,8 +42,6 @@ __all__ = [
     "linear_solver_capabilities",
     "linear_solver_coverage_patches",
     "LinearSolverRegistry",
-    "LinearSolverRequest",
     "LinearSolver",
-    "select_linear_solver",
     "select_linear_solver_for_descriptor",
 ]
