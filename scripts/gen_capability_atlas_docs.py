@@ -209,8 +209,8 @@ def _render_region_shape(
     y_min: float,
     y_max: float,
 ) -> str:
-    stroke, fill = _status_style(region.status)
-    if region.geometry == "line":
+    stroke, fill = _status_style(str(atlas._atlas_source_status(region.source)))
+    if region.geometry is atlas._AtlasGeometryKind.LINE:
         (x0, y0), (x1, y1) = region.points
         px0, py0 = _svg_plot_point(
             x0,
@@ -241,7 +241,7 @@ def _render_region_shape(
             f'stroke="{stroke}" stroke-width="7" stroke-linecap="round" '
             'stroke-opacity="0.72"/>'
         )
-    if region.geometry == "polygon":
+    if region.geometry is atlas._AtlasGeometryKind.POLYGON:
         points = [
             _svg_plot_point(
                 x,
@@ -262,7 +262,7 @@ def _render_region_shape(
             f'<polygon points="{svg_points}" fill="{fill}" fill-opacity="0.22" '
             f'stroke="{stroke}" stroke-width="2" stroke-opacity="0.62"/>'
         )
-    if region.geometry == "rectangle":
+    if region.geometry is atlas._AtlasGeometryKind.RECTANGLE:
         (x0, y0), (x1, y1) = region.points
         px0, py0 = _svg_plot_point(
             min(x0, x1),
@@ -295,6 +295,27 @@ def _render_region_shape(
             'stroke-opacity="0.62"/>'
         )
     raise AssertionError(f"unsupported atlas geometry {region.geometry!r}")
+
+
+def _shape_name(region: atlas._AtlasRegionShape) -> str:
+    name = str(atlas._atlas_source_label(region.source))
+    if region.alternative_count == 1:
+        return name
+    return f"{name} alt {region.alternative_index}"
+
+
+def _shape_condition(region: atlas._AtlasRegionShape) -> str:
+    if isinstance(region.source, atlas.InvalidCellRule):
+        condition = region.source.reason
+    elif isinstance(region.source, atlas.CoverageRegion):
+        condition = f"{_coverage_region_name(region.source)} coverage region"
+    else:
+        condition = "; ".join(
+            atlas._predicate_label(predicate) for predicate in region.predicates
+        )
+    if region.alternative_count == 1:
+        return condition
+    return f"alternative {region.alternative_index}: {condition}"
 
 
 def _matched_regions(descriptor: atlas.ParameterDescriptor) -> str:
@@ -377,12 +398,12 @@ def _render_region_card(
             ),
             (
                 '<span class="cf-atlas-card-title">'
-                f"{index}. {html.escape(region.name)}</span>"
+                f"{index}. {html.escape(_shape_name(region))}</span>"
             ),
             (
                 '<span class="cf-atlas-card-meta">'
-                f"{html.escape(region.status)} from "
-                f"{html.escape(region.source_name)}</span>"
+                f"{html.escape(str(atlas._atlas_source_status(region.source)))} from "
+                f"{html.escape(str(atlas._atlas_source_label(region.source)))}</span>"
             ),
             (
                 '<span class="cf-atlas-card-meta">test descriptors inside: '
@@ -390,7 +411,7 @@ def _render_region_card(
             ),
             (
                 '<span class="cf-atlas-card-meta">'
-                f"{html.escape(region.condition)}</span>"
+                f"{html.escape(_shape_condition(region))}</span>"
             ),
             "</button>",
         ]
@@ -453,7 +474,7 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
     cards: list[str] = []
     region_targets_by_source: dict[int, list[str]] = {}
     for index, region in enumerate(region_shapes, start=1):
-        target_id = _dom_id(atlas_id, "region", index, region.name)
+        target_id = _dom_id(atlas_id, "region", index, _shape_name(region))
         region_targets_by_source.setdefault(id(region.source), []).append(target_id)
         shape = _render_region_shape(
             region,
@@ -473,8 +494,8 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
                     f'data-cf-atlas-member="{_html_attr(target_id)}">'
                 ),
                 (
-                    f"<title>{html.escape(region.name)}: "
-                    f"{html.escape(region.condition)}</title>"
+                    f"<title>{html.escape(_shape_name(region))}: "
+                    f"{html.escape(_shape_condition(region))}</title>"
                 ),
                 shape,
                 "</g>",
