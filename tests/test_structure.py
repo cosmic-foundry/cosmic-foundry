@@ -2497,13 +2497,15 @@ def _atlas_group_y_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
 
 
 def _atlas_group_x_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
-    """Range derived from projected descriptor coordinates."""
-    return _atlas_axis_range(group, _atlas_group_x_axis(group))
+    """Visual range derived from the projected schema axis partition."""
+    axis = _atlas_schema_axis(_atlas_group_schema(group), _atlas_group_x_axis(group))
+    return _atlas_axis_range(axis)
 
 
 def _atlas_group_y_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
-    """Range derived from projected descriptor coordinates."""
-    return _atlas_axis_range(group, _atlas_group_y_axis(group))
+    """Visual range derived from the projected schema axis partition."""
+    axis = _atlas_schema_axis(_atlas_group_schema(group), _atlas_group_y_axis(group))
+    return _atlas_axis_range(axis)
 
 
 def _atlas_group_filename(group: _AtlasDescriptorGroup) -> _AtlasText:
@@ -2544,17 +2546,28 @@ def _axis_uses_log_scale(axis: ParameterAxis) -> bool:
     )
 
 
-def _atlas_axis_range(
-    descriptors: tuple[ParameterDescriptor, ...],
+def _atlas_schema_axis(
+    schema: ParameterSpaceSchema,
     field: _AtlasDescriptorField,
-) -> tuple[float, float]:
-    values = tuple(
-        float(descriptor.coordinate(field).value)
-        for descriptor in descriptors
-        if descriptor.coordinate(field).known
+) -> ParameterAxis:
+    return next(axis for axis in schema.axes if axis.field == field)
+
+
+def _atlas_axis_range(axis: ParameterAxis) -> tuple[float, float]:
+    view = _atlas_axis_view(axis)
+    return (0.0, float(len(view.cells)))
+
+
+def _atlas_axis_coordinate(
+    axis: ParameterAxis,
+    coordinate: DescriptorCoordinate,
+) -> float:
+    assert coordinate.known
+    return next(
+        index + 0.5
+        for index, cell in enumerate(_atlas_axis_view(axis).cells)
+        if coordinate.value is not None and cell.contains(coordinate.value)
     )
-    assert values
-    return (max(1.0, float(int(min(values))) - 2.0), float(int(max(values))) + 1.0)
 
 
 def _atlas_axis_field(axis: ParameterAxis) -> _AtlasDescriptorField:
@@ -2785,190 +2798,30 @@ def _coverage_region_name(region: CoverageRegion) -> str:
     return region.owner.__name__
 
 
-def _predicate_affine_projection(
-    predicate: Any, x_axis: _AtlasDescriptorField, y_axis: _AtlasDescriptorField
-) -> tuple[dict[_AtlasDescriptorField, float], str, float] | None:
-    if isinstance(predicate, AffineComparisonPredicate):
-        visible = {
-            field: coefficient
-            for field, coefficient in predicate.terms.items()
-            if field in {x_axis, y_axis}
-        }
-        hidden = set(predicate.terms) - {x_axis, y_axis}
-        if visible and not hidden:
-            return (
-                {
-                    x_axis: visible.get(x_axis, 0.0),
-                    y_axis: visible.get(y_axis, 0.0),
-                },
-                predicate.operator,
-                predicate.value - predicate.offset,
-            )
-        return None
-    if isinstance(predicate, ComparisonPredicate) and predicate.field in {
-        x_axis,
-        y_axis,
-    }:
-        field = predicate.field
-        return (
-            {
-                x_axis: 1.0 if field == x_axis else 0.0,
-                y_axis: 1.0 if field == y_axis else 0.0,
-            },
-            predicate.operator,
-            float(predicate.value),
-        )
-    return None
-
-
-def _affine_value(
-    point: tuple[float, float],
-    terms: dict[_AtlasDescriptorField, float],
-    x_axis: _AtlasDescriptorField,
-    y_axis: _AtlasDescriptorField,
-    value: float,
-) -> float:
-    x, y = point
-    return terms.get(x_axis, 0.0) * x + terms.get(y_axis, 0.0) * y - value
-
-
-def _clip_polygon_to_half_plane(
-    polygon: tuple[tuple[float, float], ...],
-    terms: dict[_AtlasDescriptorField, float],
-    operator: str,
-    value: float,
-    x_axis: _AtlasDescriptorField,
-    y_axis: _AtlasDescriptorField,
-) -> tuple[tuple[float, float], ...]:
-    def inside(point: tuple[float, float]) -> bool:
-        signed = _affine_value(point, terms, x_axis, y_axis, value)
-        if operator in {">", ">="}:
-            return signed >= -1.0e-12
-        if operator in {"<", "<="}:
-            return signed <= 1.0e-12
-        raise AssertionError(f"unsupported half-plane operator {operator!r}")
-
-    def intersection(
-        start: tuple[float, float], end: tuple[float, float]
-    ) -> tuple[float, float]:
-        start_value = _affine_value(start, terms, x_axis, y_axis, value)
-        end_value = _affine_value(end, terms, x_axis, y_axis, value)
-        if abs(start_value - end_value) <= 1.0e-12:
-            return end
-        fraction = start_value / (start_value - end_value)
-        return (
-            start[0] + fraction * (end[0] - start[0]),
-            start[1] + fraction * (end[1] - start[1]),
-        )
-
-    clipped: list[tuple[float, float]] = []
-    for index, start in enumerate(polygon):
-        end = polygon[(index + 1) % len(polygon)]
-        start_inside = inside(start)
-        end_inside = inside(end)
-        if start_inside and end_inside:
-            clipped.append(end)
-        elif start_inside and not end_inside:
-            clipped.append(intersection(start, end))
-        elif not start_inside and end_inside:
-            clipped.append(intersection(start, end))
-            clipped.append(end)
-    return tuple(clipped)
-
-
-def _affine_equality_line(
-    terms: dict[_AtlasDescriptorField, float],
-    value: float,
-    x_axis: _AtlasDescriptorField,
-    y_axis: _AtlasDescriptorField,
-    x_range: tuple[float, float],
-    y_range: tuple[float, float],
-) -> tuple[tuple[float, float], ...]:
-    x_min, x_max = x_range
-    y_min, y_max = y_range
-    x_coefficient = terms.get(x_axis, 0.0)
-    y_coefficient = terms.get(y_axis, 0.0)
-    points: list[tuple[float, float]] = []
-
-    if abs(y_coefficient) > 1.0e-12:
-        for x_value in (x_min, x_max):
-            y_value = (value - x_coefficient * x_value) / y_coefficient
-            if y_min - 1.0e-12 <= y_value <= y_max + 1.0e-12:
-                points.append((x_value, y_value))
-    if abs(x_coefficient) > 1.0e-12:
-        for y_value in (y_min, y_max):
-            x_value = (value - y_coefficient * y_value) / x_coefficient
-            if x_min - 1.0e-12 <= x_value <= x_max + 1.0e-12:
-                points.append((x_value, y_value))
-
-    deduplicated: list[tuple[float, float]] = []
-    for point in points:
-        rounded = (round(point[0], 12), round(point[1], 12))
-        if rounded not in deduplicated:
-            deduplicated.append(rounded)
-    return tuple(deduplicated[:2])
-
-
 def _project_alternative_geometry(
     predicates: tuple[Any, ...],
     *,
-    x_axis: _AtlasDescriptorField,
-    y_axis: _AtlasDescriptorField,
-    x_range: tuple[float, float],
-    y_range: tuple[float, float],
+    x_axis: ParameterAxis,
+    y_axis: ParameterAxis,
 ) -> tuple[tuple[tuple[float, float], ...], ...]:
-    rectangle = (
-        (x_range[0], y_range[0]),
-        (x_range[1], y_range[0]),
-        (x_range[1], y_range[1]),
-        (x_range[0], y_range[1]),
-    )
-    projected = [
-        projection
-        for predicate in predicates
-        if (projection := _predicate_affine_projection(predicate, x_axis, y_axis))
-        is not None
-    ]
-    if not projected:
-        return (rectangle,)
-
-    equality = [projection for projection in projected if projection[1] == "=="]
-    inequalities = [
-        projection
-        for projection in projected
-        if projection[1] in {">", ">=", "<", "<="}
-    ]
-    not_equal = [projection for projection in projected if projection[1] == "!="]
-
-    if equality:
-        terms, _operator, value = equality[0]
-        line = _affine_equality_line(terms, value, x_axis, y_axis, x_range, y_range)
-        return (line,) if len(line) == 2 else ()
-
-    polygons: list[tuple[tuple[float, float], ...]] = [rectangle]
-    for terms, operator, value in inequalities:
-        polygons = [
-            clipped
-            for polygon in polygons
-            if (
-                clipped := _clip_polygon_to_half_plane(
-                    polygon, terms, operator, value, x_axis, y_axis
+    polygons: list[tuple[tuple[float, float], ...]] = []
+    for x_index, x_cell in enumerate(_axis_cells(x_axis)):
+        for y_index, y_cell in enumerate(_axis_cells(y_axis)):
+            cell = x_cell + y_cell
+            if any(
+                predicate_sets_are_disjoint(cell, (predicate,))
+                for predicate in predicates
+            ):
+                continue
+            polygons.append(
+                (
+                    (float(x_index), float(y_index)),
+                    (float(x_index + 1), float(y_index)),
+                    (float(x_index + 1), float(y_index + 1)),
+                    (float(x_index), float(y_index + 1)),
                 )
             )
-        ]
-
-    for terms, _operator, value in not_equal:
-        split_polygons: list[tuple[tuple[float, float], ...]] = []
-        for polygon in polygons:
-            for operator in (">", "<"):
-                clipped = _clip_polygon_to_half_plane(
-                    polygon, terms, operator, value, x_axis, y_axis
-                )
-                if clipped:
-                    split_polygons.append(clipped)
-        polygons = split_polygons
-
-    return tuple(polygon for polygon in polygons if len(polygon) >= 3)
+    return tuple(polygons)
 
 
 _AtlasProjectedRegion: TypeAlias = tuple[
@@ -2989,10 +2842,8 @@ def _projected_region_shapes(
         for predicates in alternatives:
             geometry = _project_alternative_geometry(
                 predicates,
-                x_axis=_atlas_group_x_axis(group),
-                y_axis=_atlas_group_y_axis(group),
-                x_range=_atlas_group_x_range(group),
-                y_range=_atlas_group_y_range(group),
+                x_axis=_atlas_schema_axis(schema, _atlas_group_x_axis(group)),
+                y_axis=_atlas_schema_axis(schema, _atlas_group_y_axis(group)),
             )
             if not geometry:
                 axes = (_atlas_group_x_axis(group), _atlas_group_y_axis(group))
@@ -3159,6 +3010,13 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 view = _atlas_axis_view(axis)
                 assert view.cells == axis.bins
                 assert view.use_log_scale == _axis_uses_log_scale(axis)
+                assert _atlas_axis_range(axis) == (0.0, float(len(axis.bins)))
+        for group in _capability_atlas_descriptor_groups():
+            schema = _atlas_group_schema(group)
+            x_axis = _atlas_schema_axis(schema, _atlas_group_x_axis(group))
+            y_axis = _atlas_schema_axis(schema, _atlas_group_y_axis(group))
+            assert _atlas_group_x_range(group) == _atlas_axis_range(x_axis)
+            assert _atlas_group_y_range(group) == _atlas_axis_range(y_axis)
 
     @classmethod
     def _assert_descriptor_groups_are_schema_equivalence_classes(cls) -> None:

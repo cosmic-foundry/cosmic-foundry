@@ -400,6 +400,10 @@ def _render_interactive_plot(group: atlas._AtlasDescriptorGroup) -> str:
     region_shapes = atlas._projected_region_shapes(group)
     x_axis = atlas._atlas_group_x_axis(group)
     y_axis = atlas._atlas_group_y_axis(group)
+    schema = atlas._atlas_group_schema(group)
+    axis_by_field = {axis.field: axis for axis in schema.axes}
+    x_axis_object = axis_by_field[x_axis]
+    y_axis_object = axis_by_field[y_axis]
     x_axis_label = atlas._field_label(x_axis)
     y_axis_label = atlas._field_label(y_axis)
     x_min, x_max = atlas._atlas_group_x_range(group)
@@ -431,24 +435,49 @@ def _render_interactive_plot(group: atlas._AtlasDescriptorGroup) -> str:
             f"{html.escape(y_axis_label)}</text>"
         ),
     ]
-    for tick in range(5):
-        x_frac = tick / 4
-        y_frac = tick / 4
-        x = left + x_frac * plot_w
-        y = top + plot_h - y_frac * plot_h
-        x_value = x_min + x_frac * (x_max - x_min)
-        y_value = y_min + y_frac * (y_max - y_min)
+    x_view = atlas._atlas_axis_view(x_axis_object)
+    y_view = atlas._atlas_axis_view(y_axis_object)
+    for tick in range(len(x_view.cells) + 1):
+        x_value = float(tick)
+        x = left + _plot_coordinate(x_value, axis_min=x_min, axis_max=x_max) * plot_w
         svg_parts.extend(
             [
                 f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" '
                 f'y2="{top + plot_h}" stroke="#eaecf0" stroke-width="1"/>',
-                f'<line x1="{left}" y1="{y:.1f}" x2="{left + plot_w}" '
-                f'y2="{y:.1f}" stroke="#eaecf0" stroke-width="1"/>',
-                _svg_text(
-                    x, top + plot_h + 20, f"{x_value:.1f}", size=10, anchor="middle"
-                ),
-                _svg_text(left - 10, y + 4, f"{y_value:.1f}", size=10, anchor="end"),
             ]
+        )
+    for index, cell in enumerate(x_view.cells):
+        x_value = index + 0.5
+        x = left + _plot_coordinate(x_value, axis_min=x_min, axis_max=x_max) * plot_w
+        svg_parts.append(
+            _svg_text(
+                x,
+                top + plot_h + 20,
+                _axis_cell_label(cell),
+                size=10,
+                anchor="middle",
+            )
+        )
+    for tick in range(len(y_view.cells) + 1):
+        y_value = float(tick)
+        y = (
+            top
+            + plot_h
+            - _plot_coordinate(y_value, axis_min=y_min, axis_max=y_max) * plot_h
+        )
+        svg_parts.append(
+            f'<line x1="{left}" y1="{y:.1f}" x2="{left + plot_w}" '
+            f'y2="{y:.1f}" stroke="#eaecf0" stroke-width="1"/>'
+        )
+    for index, cell in enumerate(y_view.cells):
+        y_value = index + 0.5
+        y = (
+            top
+            + plot_h
+            - _plot_coordinate(y_value, axis_min=y_min, axis_max=y_max) * plot_h
+        )
+        svg_parts.append(
+            _svg_text(left - 10, y + 4, _axis_cell_label(cell), size=10, anchor="end")
         )
 
     cards: list[str] = []
@@ -502,8 +531,12 @@ def _render_interactive_plot(group: atlas._AtlasDescriptorGroup) -> str:
         regions = atlas._atlas_regions_for_schema(schema)
         status = schema.cell_status(descriptor, regions)
         stroke, _fill = _status_style(status)
-        x_value = float(descriptor.coordinate(x_axis).value)
-        y_value = float(descriptor.coordinate(y_axis).value)
+        x_value = atlas._atlas_axis_coordinate(
+            x_axis_object, descriptor.coordinate(x_axis)
+        )
+        y_value = atlas._atlas_axis_coordinate(
+            y_axis_object, descriptor.coordinate(y_axis)
+        )
         x, y = _svg_plot_point(
             x_value,
             y_value,
