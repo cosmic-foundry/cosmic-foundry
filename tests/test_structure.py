@@ -2375,15 +2375,6 @@ class _AtlasGap:
 
 
 @dataclass(frozen=True)
-class _AtlasRegionShape:
-    """Projected region geometry derived from schema predicates."""
-
-    source: _AtlasRegionSource
-    predicates: tuple[Any, ...]
-    points: tuple[tuple[float, float], ...]
-
-
-@dataclass(frozen=True)
 class _AtlasPlotSpec:
     """One generated SVG projection of descriptor cells."""
 
@@ -2894,10 +2885,17 @@ def _project_alternative_geometry(
     return tuple(polygon for polygon in polygons if len(polygon) >= 3)
 
 
-def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, ...]:
+_AtlasProjectedRegion: TypeAlias = tuple[
+    _AtlasRegionSource,
+    tuple[Any, ...],
+    tuple[tuple[float, float], ...],
+]
+
+
+def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasProjectedRegion, ...]:
     schema = spec.schema
     regions = _atlas_regions_for_schema(schema)
-    shapes: list[_AtlasRegionShape] = []
+    shapes: list[_AtlasProjectedRegion] = []
     for source in _schema_atlas_regions(schema, regions):
         alternatives = _source_alternatives(schema, source, regions)
         for predicates in alternatives:
@@ -2915,20 +2913,12 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
                     f"onto {spec.x_axis!r}/{spec.y_axis!r}"
                 )
             for points in geometry:
-                shapes.append(
-                    _AtlasRegionShape(
-                        source,
-                        predicates,
-                        points,
-                    )
-                )
+                shapes.append((source, predicates, points))
     return tuple(shapes)
 
 
 def _capability_atlas_model_objects() -> tuple[object, ...]:
-    specs = _capability_atlas_plot_specs()
-    shapes = tuple(shape for spec in specs for shape in _projected_region_shapes(spec))
-    return (*specs, *_capability_atlas_gaps(), *shapes)
+    return (*_capability_atlas_plot_specs(), *_capability_atlas_gaps())
 
 
 def _capability_atlas_semantic_model_objects() -> tuple[object, ...]:
@@ -2995,9 +2985,9 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             }
             shapes = _projected_region_shapes(spec)
             assert shapes
-            for shape in shapes:
-                assert _atlas_source_label(shape.source)
-                assert shape.points
+            for source, _predicates, points in shapes:
+                assert _atlas_source_label(source)
+                assert points
 
     @classmethod
     def _assert_atlas_models_do_not_store_raw_text(cls) -> None:

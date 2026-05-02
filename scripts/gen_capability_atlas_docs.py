@@ -198,7 +198,8 @@ def _svg_text(
 
 
 def _render_region_shape(
-    region: atlas._AtlasRegionShape,
+    source: atlas._AtlasRegionSource,
+    points: tuple[tuple[float, float], ...],
     *,
     left: float,
     top: float,
@@ -209,9 +210,9 @@ def _render_region_shape(
     y_min: float,
     y_max: float,
 ) -> str:
-    stroke, fill = _status_style(str(atlas._atlas_source_status(region.source)))
-    if len(region.points) == 2:
-        (x0, y0), (x1, y1) = region.points
+    stroke, fill = _status_style(str(atlas._atlas_source_status(source)))
+    if len(points) == 2:
+        (x0, y0), (x1, y1) = points
         px0, py0 = _svg_plot_point(
             x0,
             y0,
@@ -241,8 +242,8 @@ def _render_region_shape(
             f'stroke="{stroke}" stroke-width="7" stroke-linecap="round" '
             'stroke-opacity="0.72"/>'
         )
-    if len(region.points) >= 3:
-        points = [
+    if len(points) >= 3:
+        svg_points = [
             _svg_plot_point(
                 x,
                 y,
@@ -255,28 +256,29 @@ def _render_region_shape(
                 y_min=y_min,
                 y_max=y_max,
             )
-            for x, y in region.points
+            for x, y in points
         ]
-        svg_points = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+        point_text = " ".join(f"{x:.1f},{y:.1f}" for x, y in svg_points)
         return (
-            f'<polygon points="{svg_points}" fill="{fill}" fill-opacity="0.22" '
+            f'<polygon points="{point_text}" fill="{fill}" fill-opacity="0.22" '
             f'stroke="{stroke}" stroke-width="2" stroke-opacity="0.62"/>'
         )
-    raise AssertionError(f"unsupported atlas geometry with {len(region.points)} points")
+    raise AssertionError(f"unsupported atlas geometry with {len(points)} points")
 
 
-def _shape_name(region: atlas._AtlasRegionShape) -> str:
-    return str(atlas._atlas_source_label(region.source))
+def _shape_name(source: atlas._AtlasRegionSource) -> str:
+    return str(atlas._atlas_source_label(source))
 
 
-def _shape_condition(region: atlas._AtlasRegionShape) -> str:
-    if isinstance(region.source, atlas.InvalidCellRule):
-        return region.source.reason
-    if isinstance(region.source, atlas.CoverageRegion):
-        return f"{_coverage_region_name(region.source)} coverage region"
-    return "; ".join(
-        atlas._predicate_label(predicate) for predicate in region.predicates
-    )
+def _shape_condition(
+    source: atlas._AtlasRegionSource,
+    predicates: tuple[object, ...],
+) -> str:
+    if isinstance(source, atlas.InvalidCellRule):
+        return source.reason
+    if isinstance(source, atlas.CoverageRegion):
+        return f"{_coverage_region_name(source)} coverage region"
+    return "; ".join(atlas._predicate_label(predicate) for predicate in predicates)
 
 
 def _matched_regions(descriptor: atlas.ParameterDescriptor) -> str:
@@ -293,21 +295,21 @@ def _coverage_region_name(region: atlas.CoverageRegion) -> str:
 
 def _shape_evidence_labels(
     schema: atlas.ParameterSpaceSchema,
-    region: atlas._AtlasRegionShape,
+    source: atlas._AtlasRegionSource,
     descriptors: tuple[atlas.ParameterDescriptor, ...],
 ) -> str:
     labels: list[str] = []
-    if isinstance(region.source, atlas.InvalidCellRule):
+    if isinstance(source, atlas.InvalidCellRule):
         for index, descriptor in enumerate(descriptors, start=1):
-            if region.source.matches(descriptor):
+            if source.matches(descriptor):
                 labels.append(str(index))
-    elif isinstance(region.source, atlas.DerivedParameterRegion):
+    elif isinstance(source, atlas.DerivedParameterRegion):
         for index, descriptor in enumerate(descriptors, start=1):
-            if region.source.contains(descriptor):
+            if source.contains(descriptor):
                 labels.append(str(index))
     else:
         for index, descriptor in enumerate(descriptors, start=1):
-            if region.source.contains(descriptor):
+            if source.contains(descriptor):
                 labels.append(str(index))
     return ", ".join(labels) if labels else "none"
 
@@ -346,7 +348,8 @@ def _projection_title(
 def _render_region_card(
     *,
     index: int,
-    region: atlas._AtlasRegionShape,
+    source: atlas._AtlasRegionSource,
+    predicates: tuple[object, ...],
     target_id: str,
     evidence_labels: str,
 ) -> str:
@@ -359,12 +362,12 @@ def _render_region_card(
             ),
             (
                 '<span class="cf-atlas-card-title">'
-                f"{index}. {html.escape(_shape_name(region))}</span>"
+                f"{index}. {html.escape(_shape_name(source))}</span>"
             ),
             (
                 '<span class="cf-atlas-card-meta">'
-                f"{html.escape(str(atlas._atlas_source_status(region.source)))} from "
-                f"{html.escape(str(atlas._atlas_source_label(region.source)))}</span>"
+                f"{html.escape(str(atlas._atlas_source_status(source)))} from "
+                f"{html.escape(str(atlas._atlas_source_label(source)))}</span>"
             ),
             (
                 '<span class="cf-atlas-card-meta">test descriptors inside: '
@@ -372,7 +375,7 @@ def _render_region_card(
             ),
             (
                 '<span class="cf-atlas-card-meta">'
-                f"{html.escape(_shape_condition(region))}</span>"
+                f"{html.escape(_shape_condition(source, predicates))}</span>"
             ),
             "</button>",
         ]
@@ -434,11 +437,12 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
 
     cards: list[str] = []
     region_targets_by_source: dict[int, list[str]] = {}
-    for index, region in enumerate(region_shapes, start=1):
-        target_id = _dom_id(atlas_id, "region", index, _shape_name(region))
-        region_targets_by_source.setdefault(id(region.source), []).append(target_id)
+    for index, (source, predicates, points) in enumerate(region_shapes, start=1):
+        target_id = _dom_id(atlas_id, "region", index, _shape_name(source))
+        region_targets_by_source.setdefault(id(source), []).append(target_id)
         shape = _render_region_shape(
-            region,
+            source,
+            points,
             left=left,
             top=top,
             plot_w=plot_w,
@@ -456,8 +460,8 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
                 ),
                 (
                     f"<title>"
-                    f"{html.escape(_shape_name(region))}: "
-                    f"{html.escape(_shape_condition(region))}"
+                    f"{html.escape(_shape_name(source))}: "
+                    f"{html.escape(_shape_condition(source, predicates))}"
                     f"</title>"
                 ),
                 shape,
@@ -467,9 +471,10 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         cards.append(
             _render_region_card(
                 index=index,
-                region=region,
+                source=source,
+                predicates=predicates,
                 target_id=target_id,
-                evidence_labels=_shape_evidence_labels(schema, region, selected),
+                evidence_labels=_shape_evidence_labels(schema, source, selected),
             )
         )
 
