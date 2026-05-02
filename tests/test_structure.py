@@ -2368,6 +2368,14 @@ class _AtlasAxisView(NamedTuple):
     use_log_scale: bool
 
 
+class _AtlasProjection(NamedTuple):
+    """Schema-axis projection selected by status separation."""
+
+    x_axis: ParameterAxis
+    y_axis: ParameterAxis
+    score: tuple[int, int, int, int, int, int, int]
+
+
 class _AtlasUncoveredCell(NamedTuple):
     """Computed valid schema cell not owned by any coverage claim."""
 
@@ -2378,6 +2386,13 @@ class _AtlasUncoveredCell(NamedTuple):
 
 
 _AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredCell
+_AtlasCellStatus: TypeAlias = (
+    type[InvalidCellRule] | type[CoverageRegion] | type[_AtlasUncoveredCell]
+)
+_ATLAS_PROJECTIONS_BY_SCHEMA: dict[tuple[object, ...], _AtlasProjection] = {}
+_ATLAS_STATUS_CELLS_BY_SCHEMA: dict[
+    tuple[object, ...], tuple[tuple[tuple[int, ...], _AtlasCellStatus], ...]
+] = {}
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -2487,13 +2502,126 @@ def _atlas_group_schema(group: _AtlasDescriptorGroup) -> ParameterSpaceSchema:
 
 
 def _atlas_group_x_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
-    """First coordinate axis of the schema projection plane."""
-    return _atlas_axis_field(_atlas_group_schema(group).axes[0])
+    """X axis selected by schema-cell status separation."""
+    return _atlas_axis_field(_atlas_group_projection(group).x_axis)
 
 
 def _atlas_group_y_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
-    """Second coordinate axis of the schema projection plane."""
-    return _atlas_axis_field(_atlas_group_schema(group).axes[1])
+    """Y axis selected by schema-cell status separation."""
+    return _atlas_axis_field(_atlas_group_projection(group).y_axis)
+
+
+def _atlas_group_projection(group: _AtlasDescriptorGroup) -> _AtlasProjection:
+    schema = _atlas_group_schema(group)
+    regions = _atlas_regions_for_schema(schema)
+    key = _atlas_schema_region_key(schema, regions)
+    if key not in _ATLAS_PROJECTIONS_BY_SCHEMA:
+        _ATLAS_PROJECTIONS_BY_SCHEMA[key] = max(
+            _atlas_candidate_projections(schema, regions), key=lambda item: item.score
+        )
+    return _ATLAS_PROJECTIONS_BY_SCHEMA[key]
+
+
+def _atlas_schema_region_key(
+    schema: ParameterSpaceSchema,
+    regions: tuple[CoverageRegion, ...],
+) -> tuple[object, ...]:
+    return (
+        tuple((axis.field, axis.bins) for axis in schema.axes),
+        tuple(
+            tuple(_predicate_key(predicate) for predicate in rule.predicates)
+            for rule in schema.invalid_cells
+        ),
+        tuple(
+            (
+                region.owner,
+                tuple(_predicate_key(predicate) for predicate in region.predicates),
+            )
+            for region in regions
+        ),
+    )
+
+
+def _atlas_candidate_projections(
+    schema: ParameterSpaceSchema,
+    regions: tuple[CoverageRegion, ...],
+) -> tuple[_AtlasProjection, ...]:
+    candidates: list[_AtlasProjection] = []
+    status_cells = _schema_status_cells(schema, regions)
+    for x_index, x_axis in enumerate(schema.axes):
+        for y_axis in schema.axes[x_index + 1 :]:
+            candidates.append(
+                _AtlasProjection(
+                    x_axis,
+                    y_axis,
+                    _atlas_projection_score(schema, status_cells, x_axis, y_axis),
+                )
+            )
+    return tuple(candidates)
+
+
+def _atlas_projection_score(
+    schema: ParameterSpaceSchema,
+    status_cells: tuple[tuple[tuple[int, ...], _AtlasCellStatus], ...],
+    x_axis: ParameterAxis,
+    y_axis: ParameterAxis,
+) -> tuple[int, int, int, int, int, int, int]:
+    projected: dict[tuple[int, int], set[_AtlasCellStatus]] = {}
+    x_index = schema.axes.index(x_axis)
+    y_index = schema.axes.index(y_axis)
+    for coordinates, status in status_cells:
+        bucket = (
+            coordinates[x_index],
+            coordinates[y_index],
+        )
+        projected.setdefault(bucket, set()).add(status)
+    pure = tuple(statuses for statuses in projected.values() if len(statuses) == 1)
+    status_signatures = frozenset(
+        frozenset(statuses) for statuses in projected.values()
+    )
+    mixed = len(projected) - len(pure)
+    return (
+        sum(
+            _AtlasUncoveredCell in statuses and CoverageRegion not in statuses
+            for statuses in projected.values()
+        ),
+        sum(CoverageRegion in statuses for statuses in projected.values()),
+        len(status_signatures),
+        sum(statuses == {_AtlasUncoveredCell} for statuses in pure),
+        len(pure),
+        -mixed,
+        len(_atlas_axis_view(x_axis).cells) * len(_atlas_axis_view(y_axis).cells),
+    )
+
+
+def _schema_status_cells(
+    schema: ParameterSpaceSchema,
+    regions: tuple[CoverageRegion, ...],
+) -> tuple[tuple[tuple[int, ...], _AtlasCellStatus], ...]:
+    key = _atlas_schema_region_key(schema, regions)
+    if key not in _ATLAS_STATUS_CELLS_BY_SCHEMA:
+        _ATLAS_STATUS_CELLS_BY_SCHEMA[key] = tuple(
+            (coordinates, _schema_cell_status(schema, regions, cell))
+            for coordinates, cell in _schema_indexed_cells(schema)
+        )
+    return _ATLAS_STATUS_CELLS_BY_SCHEMA[key]
+
+
+def _schema_cell_status(
+    schema: ParameterSpaceSchema,
+    regions: tuple[CoverageRegion, ...],
+    cell: tuple[StructuredPredicate, ...],
+) -> _AtlasCellStatus:
+    if any(
+        not predicate_sets_are_disjoint(cell, rule.predicates)
+        for rule in schema.invalid_cells
+    ):
+        return InvalidCellRule
+    if any(
+        not predicate_sets_are_disjoint(cell, region.predicates) for region in regions
+    ):
+        return CoverageRegion
+    return _AtlasUncoveredCell
 
 
 def _atlas_group_x_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
@@ -2696,10 +2824,25 @@ def _capability_atlas_uncovered_cells(
 def _schema_cells(
     schema: ParameterSpaceSchema,
 ) -> tuple[tuple[StructuredPredicate, ...], ...]:
+    return tuple(cell for _coordinates, cell in _schema_indexed_cells(schema))
+
+
+def _schema_indexed_cells(
+    schema: ParameterSpaceSchema,
+) -> tuple[tuple[tuple[int, ...], tuple[StructuredPredicate, ...]], ...]:
     axis_cells = tuple(_axis_cells(axis) for axis in schema.axes)
     return tuple(
-        tuple(predicate for axis_cell in cell for predicate in axis_cell)
-        for cell in product(*axis_cells)
+        (
+            coordinates,
+            tuple(
+                predicate
+                for axis_index, cell_index in enumerate(coordinates)
+                for predicate in axis_cells[axis_index][cell_index]
+            ),
+        )
+        for coordinates in product(
+            *(tuple(range(len(axis_cell))) for axis_cell in axis_cells)
+        )
     )
 
 
@@ -2836,17 +2979,19 @@ def _projected_region_shapes(
 ) -> tuple[_AtlasProjectedRegion, ...]:
     schema = _atlas_group_schema(group)
     regions = _atlas_regions_for_schema(schema)
+    x_axis = _atlas_schema_axis(schema, _atlas_group_x_axis(group))
+    y_axis = _atlas_schema_axis(schema, _atlas_group_y_axis(group))
     shapes: list[_AtlasProjectedRegion] = []
     for source in _schema_atlas_regions(schema, regions):
         alternatives = _source_alternatives(schema, source, regions)
         for predicates in alternatives:
             geometry = _project_alternative_geometry(
                 predicates,
-                x_axis=_atlas_schema_axis(schema, _atlas_group_x_axis(group)),
-                y_axis=_atlas_schema_axis(schema, _atlas_group_y_axis(group)),
+                x_axis=x_axis,
+                y_axis=y_axis,
             )
             if not geometry:
-                axes = (_atlas_group_x_axis(group), _atlas_group_y_axis(group))
+                axes = (_atlas_axis_field(x_axis), _atlas_axis_field(y_axis))
                 raise AssertionError(
                     f"atlas region {_atlas_source_label(source)!r} has no "
                     f"visible projection onto {axes!r}"
@@ -2887,6 +3032,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_no_atlas_dataclass_stores_presentation_text()
         self._assert_uncovered_regions_are_computed()
         self._assert_axis_views_are_schema_partitions()
+        self._assert_projection_axes_are_status_discovered()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
@@ -3017,6 +3163,20 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             y_axis = _atlas_schema_axis(schema, _atlas_group_y_axis(group))
             assert _atlas_group_x_range(group) == _atlas_axis_range(x_axis)
             assert _atlas_group_y_range(group) == _atlas_axis_range(y_axis)
+
+    @staticmethod
+    def _assert_projection_axes_are_status_discovered() -> None:
+        for group in _capability_atlas_descriptor_groups():
+            schema = _atlas_group_schema(group)
+            regions = _atlas_regions_for_schema(schema)
+            projection = _atlas_group_projection(group)
+            candidates = _atlas_candidate_projections(schema, regions)
+            assert projection in candidates
+            assert projection.score == max(candidate.score for candidate in candidates)
+            assert {_atlas_group_x_axis(group), _atlas_group_y_axis(group)} == {
+                _atlas_axis_field(projection.x_axis),
+                _atlas_axis_field(projection.y_axis),
+            }
 
     @classmethod
     def _assert_descriptor_groups_are_schema_equivalence_classes(cls) -> None:
