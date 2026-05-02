@@ -92,6 +92,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/capability_atlas_plots/
 docs/continuous/
 docs/schwarzschild/
 

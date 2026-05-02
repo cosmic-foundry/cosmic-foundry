@@ -62,7 +62,6 @@ from tests.claims import Claim
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
 _CAPABILITY_ATLAS_DOC = _PROJECT_ROOT / "docs" / "capability_atlas.md"
-_CAPABILITY_ATLAS_PLOT_DIR = _PROJECT_ROOT / "docs" / "capability_atlas_plots"
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -1905,9 +1904,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         expected = _render_capability_atlas()
         actual = _CAPABILITY_ATLAS_DOC.read_text()
         assert actual == expected
-        for filename, expected_plot in _render_capability_atlas_plots().items():
-            actual_plot = (_CAPABILITY_ATLAS_PLOT_DIR / filename).read_text()
-            assert actual_plot == expected_plot
+        assert _render_capability_atlas_plots()
 
 
 # ---------------------------------------------------------------------------
