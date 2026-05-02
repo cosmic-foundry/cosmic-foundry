@@ -793,6 +793,11 @@ that space, the regions our implementations claim, and the projection used to
 explain those claims to humans.  Prose names such as "linear solver" or "SPD"
 are allowed only as views over that model.  They must not become independent
 sources of truth.
+Atlas projection text follows the same rule: titles, captions, filenames, and
+axis labels may render an object, but they must not identify, select, or join
+objects.  A generated plot carries the projection objects it explains, derives
+its schema from those objects, and lets structural tests reject any return to
+presentation strings as semantic keys.
 
 The sprint is complete when the following are true:
 
