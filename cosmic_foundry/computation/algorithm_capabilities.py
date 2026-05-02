@@ -237,9 +237,8 @@ class DescriptorCoordinate:
 
 @dataclass(frozen=True)
 class ParameterDescriptor:
-    """Concrete problem location in a parameter-space schema."""
+    """Concrete problem location in descriptor coordinates."""
 
-    schema: str
     coordinates: dict[DescriptorField, DescriptorCoordinate]
 
     def coordinate(self, field: DescriptorField) -> DescriptorCoordinate:
@@ -671,7 +670,7 @@ def _value_satisfies_comparisons(
     value: ScalarValue,
     comparisons: tuple[ComparisonPredicate, ...],
 ) -> bool:
-    descriptor = ParameterDescriptor("witness", {field: DescriptorCoordinate(value)})
+    descriptor = ParameterDescriptor({field: DescriptorCoordinate(value)})
     return all(predicate.evaluate(descriptor) for predicate in comparisons)
 
 
@@ -747,10 +746,6 @@ class ParameterSpaceSchema:
     def validate_descriptor(self, descriptor: ParameterDescriptor) -> None:
         """Raise if ``descriptor`` does not match this schema."""
         self.validate_schema()
-        if descriptor.schema != self.name:
-            raise ValueError(
-                f"descriptor schema {descriptor.schema!r} does not match {self.name!r}"
-            )
         unknown_fields = set(descriptor.coordinates) - self.descriptor_fields
         if unknown_fields:
             raise ValueError(
@@ -1446,8 +1441,7 @@ def linear_operator_descriptor_from_assembled_operator(
     memory_estimate = float(8 * (n * n + n))
 
     descriptor = ParameterDescriptor(
-        schema="linear_solver",
-        coordinates={
+        {
             LinearSolverField.DIM_X: DescriptorCoordinate(n),
             LinearSolverField.DIM_Y: DescriptorCoordinate(n),
             LinearSolverField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
@@ -1519,7 +1513,7 @@ def linear_operator_descriptor_from_assembled_operator(
             LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
                 rhs_consistency_defect
             ),
-        },
+        }
     )
     return LinearOperatorDescriptor(descriptor, matrix)
 

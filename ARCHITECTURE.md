@@ -807,7 +807,9 @@ The sprint is complete when the following are true:
   (`n = 128`, `symmetry_defect = 2e-14`) or a conservative cell
   (`conditioning = unknown_condition`).  Unknown descriptor values are explicit:
   selection must either reject the request, choose a capability that can certify
-  the value internally, or require an explicit fallback policy.
+  the value internally, or require an explicit fallback policy.  A descriptor is
+  only a coordinate map; schema membership is established by validating that map
+  against a `ParameterSpaceSchema`, not by storing a schema name on the point.
 - **Capabilities are coverage regions.**  A capability declares a bounded region
   in the parameter space plus the guarantees it provides inside that region.
   The region may be a conjunction of bins, numeric intervals, and feasibility
