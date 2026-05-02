@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
-    CoveragePatch,
+    CoverageRegion,
     MembershipPredicate,
     StructuredPredicate,
 )
@@ -21,7 +21,7 @@ class LinearSolverCoverage:
     """Descriptor-space coverage owned by one linear-solver implementation."""
 
     implementation: str
-    coverage_patches: tuple[CoveragePatch, ...]
+    coverage_regions: tuple[CoverageRegion, ...]
 
 
 def coverage(
@@ -33,7 +33,7 @@ def coverage(
     return LinearSolverCoverage(
         owner.__name__,
         (
-            CoveragePatch(
+            CoverageRegion(
                 owner.__name__,
                 owner.__name__,
                 coverage_predicates,

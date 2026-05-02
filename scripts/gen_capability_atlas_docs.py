@@ -480,7 +480,7 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
     seen_points: dict[tuple[float, float], int] = {}
     for index, projection in enumerate(selected, start=1):
         status = projection.schema.cell_status(
-            projection.descriptor, projection.patches
+            projection.descriptor, projection.regions
         )
         stroke, _fill = _status_style(status)
         x_value = float(projection.descriptor.coordinate(spec.x_axis).value)
@@ -566,14 +566,14 @@ def render_capability_atlas() -> str:
         "that are only summarized.  Region geometry is drawn first; concrete",
         "descriptor fixtures from `tests/test_structure.py` are overlaid as",
         "numbered evidence points.  Plot region lists are autodiscovered from",
-        "`DerivedParameterRegion`, `InvalidCellRule`, and `CoveragePatch`",
+        "`DerivedParameterRegion`, `InvalidCellRule`, and `CoverageRegion`",
         "declarations reachable from each schema projection.",
         "",
         "Status legend:",
         "",
         "- `invalid`: the descriptor violates a schema validity rule.",
-        "- `owned`: a coverage patch owns the descriptor.",
-        "- `uncovered`: the descriptor is valid but no coverage patch owns it.",
+        "- `owned`: a coverage region owns the descriptor.",
+        "- `uncovered`: the descriptor is valid but no coverage region owns it.",
         "",
         _ATLAS_STYLE_AND_SCRIPT,
         "",
@@ -610,31 +610,31 @@ def render_capability_atlas() -> str:
             ]
         )
 
-    lines.extend(["", "## Coverage Patches", ""])
-    patches = {
-        patch.name: patch
+    lines.extend(["", "## Coverage Regions", ""])
+    regions = {
+        region.name: region
         for projection in atlas._capability_atlas_projections()
-        for patch in projection.patches
+        for region in projection.regions
     }
-    if patches:
-        for patch in sorted(patches.values(), key=lambda item: item.name):
+    if regions:
+        for region in sorted(regions.values(), key=lambda item: item.name):
             lines.extend(
                 [
-                    f"### {patch.name}",
+                    f"### {region.name}",
                     "",
-                    f"- Owner: `{patch.owner}`",
+                    f"- Owner: `{region.owner}`",
                     "- Predicates:",
                 ]
             )
             lines.extend(
                 f"  - `{atlas._predicate_label(predicate)}`"
-                for predicate in patch.predicates
+                for predicate in region.predicates
             )
             lines.append("")
     else:
         lines.extend(
             [
-                "No solver or decomposition ownership patches are declared in this",
+                "No solver or decomposition ownership regions are declared in this",
                 "atlas yet.",
                 "",
             ]
@@ -666,8 +666,8 @@ def render_capability_atlas() -> str:
         [
             "## Numerical Evidence Overlay",
             "",
-            "No owned solver or decomposition coverage patch has numerical evidence",
-            "metadata in this atlas yet.  Until ownership patches exist, numerical",
+            "No owned solver or decomposition coverage region has numerical evidence",
+            "metadata in this atlas yet.  Until ownership regions exist, numerical",
             "correctness, convergence, performance, and regression claims remain",
             "outside this projection rather than being attached to cells.",
             "",

@@ -31,7 +31,7 @@ class AlgorithmCapability:
     order_step: int | None = None
     supported_orders: frozenset[int] | None = None
     priority: int | None = None
-    coverage_patches: tuple[CoveragePatch, ...] = ()
+    coverage_regions: tuple[CoverageRegion, ...] = ()
 
     def supports(self, request: AlgorithmRequest) -> bool:
         """Return whether this declaration inhabits ``request``."""
@@ -410,7 +410,7 @@ class InvalidCellRule:
 
 
 @dataclass(frozen=True)
-class CoveragePatch:
+class CoverageRegion:
     """Owned parameter-space region claimed by one implementation."""
 
     name: str
@@ -419,13 +419,13 @@ class CoveragePatch:
 
     @property
     def referenced_fields(self) -> frozenset[str]:
-        """Descriptor fields referenced by this coverage patch."""
+        """Descriptor fields referenced by this coverage region."""
         return frozenset().union(
             *(predicate.referenced_fields for predicate in self.predicates)
         )
 
     def contains(self, descriptor: ParameterDescriptor) -> bool:
-        """Return whether ``descriptor`` lies inside this patch."""
+        """Return whether ``descriptor`` lies inside this region."""
         return all(predicate.evaluate(descriptor) for predicate in self.predicates)
 
 
@@ -451,10 +451,10 @@ def predicate_sets_are_disjoint(
     ) or _affine_predicates_are_disjoint(left + right)
 
 
-def coverage_patches_are_disjoint(patches: tuple[CoveragePatch, ...]) -> bool:
-    """Return whether coverage patches form a pairwise-disjoint partition."""
-    for pair_index, left in enumerate(patches):
-        for right in patches[pair_index + 1 :]:
+def coverage_regions_are_disjoint(regions: tuple[CoverageRegion, ...]) -> bool:
+    """Return whether coverage regions form a pairwise-disjoint partition."""
+    for pair_index, left in enumerate(regions):
+        for right in regions[pair_index + 1 :]:
             if not predicate_sets_are_disjoint(left.predicates, right.predicates):
                 return False
     return True
@@ -701,15 +701,15 @@ class ParameterSpaceSchema:
                     f"descriptor field {axis.field!r} is outside declared axis bins"
                 )
 
-    def validate_coverage_patch(self, patch: CoveragePatch) -> None:
-        """Raise if ``patch`` is not expressed over this schema."""
+    def validate_coverage_region(self, region: CoverageRegion) -> None:
+        """Raise if ``region`` is not expressed over this schema."""
         self.validate_schema()
-        for predicate in patch.predicates:
+        for predicate in region.predicates:
             self._validate_predicate(predicate)
-        unknown_fields = patch.referenced_fields - self.descriptor_fields
+        unknown_fields = region.referenced_fields - self.descriptor_fields
         if unknown_fields:
             raise ValueError(
-                f"coverage patch {patch.name!r} references undeclared fields: "
+                f"coverage region {region.name!r} references undeclared fields: "
                 f"{sorted(unknown_fields)}"
             )
 
@@ -749,36 +749,36 @@ class ParameterSpaceSchema:
     def cell_status(
         self,
         descriptor: ParameterDescriptor,
-        patches: tuple[CoveragePatch, ...],
+        regions: tuple[CoverageRegion, ...],
     ) -> CellStatus:
         """Classify ``descriptor`` as invalid, owned, or uncovered."""
         self.validate_descriptor(descriptor)
-        for patch in patches:
-            self.validate_coverage_patch(patch)
+        for region in regions:
+            self.validate_coverage_region(region)
         if any(rule.matches(descriptor) for rule in self.invalid_cells):
             return "invalid"
-        covering = self.covering_patch(descriptor, patches)
+        covering = self.covering_region(descriptor, regions)
         if covering is None:
             return "uncovered"
         return "owned"
 
-    def covering_patch(
+    def covering_region(
         self,
         descriptor: ParameterDescriptor,
-        patches: tuple[CoveragePatch, ...],
-    ) -> CoveragePatch | None:
-        """Return the unique coverage patch containing ``descriptor``."""
+        regions: tuple[CoverageRegion, ...],
+    ) -> CoverageRegion | None:
+        """Return the unique coverage region containing ``descriptor``."""
         self.validate_descriptor(descriptor)
-        for patch in patches:
-            self.validate_coverage_patch(patch)
+        for region in regions:
+            self.validate_coverage_region(region)
         if any(rule.matches(descriptor) for rule in self.invalid_cells):
             raise ValueError(f"invalid descriptor {descriptor!r}")
-        containing = tuple(patch for patch in patches if patch.contains(descriptor))
+        containing = tuple(region for region in regions if region.contains(descriptor))
         if not containing:
             return None
         if len(containing) > 1:
-            names = ", ".join(patch.name for patch in containing)
-            raise ValueError(f"descriptor lies in multiple coverage patches: {names}")
+            names = ", ".join(region.name for region in containing)
+            raise ValueError(f"descriptor lies in multiple coverage regions: {names}")
         return containing[0]
 
     @staticmethod
@@ -1399,8 +1399,8 @@ __all__ = [
     "AlgorithmRequest",
     "AlgorithmStructureContract",
     "ComparisonPredicate",
-    "coverage_patches_are_disjoint",
-    "CoveragePatch",
+    "coverage_regions_are_disjoint",
+    "CoverageRegion",
     "DerivedParameterRegion",
     "DescriptorCoordinate",
     "decomposition_parameter_schema",

@@ -7,7 +7,7 @@ from pkgutil import iter_modules
 from types import ModuleType
 
 from cosmic_foundry.computation.algorithm_capabilities import (
-    CoveragePatch,
+    CoverageRegion,
     ParameterDescriptor,
     linear_solver_parameter_schema,
 )
@@ -53,12 +53,12 @@ def linear_solver_coverages() -> tuple[LinearSolverCoverage, ...]:
     return LINEAR_SOLVER_COVERAGES
 
 
-def linear_solver_coverage_patches() -> tuple[CoveragePatch, ...]:
-    """Return autodiscovered descriptor-space coverage patches."""
-    patches: list[CoveragePatch] = []
+def linear_solver_coverage_regions() -> tuple[CoverageRegion, ...]:
+    """Return autodiscovered descriptor-space coverage regions."""
+    regions: list[CoverageRegion] = []
     for record in LINEAR_SOLVER_COVERAGES:
-        patches.extend(record.coverage_patches)
-    return tuple(patches)
+        regions.extend(record.coverage_regions)
+    return tuple(regions)
 
 
 def select_linear_solver_for_descriptor(
@@ -66,19 +66,19 @@ def select_linear_solver_for_descriptor(
 ) -> LinearSolverCoverage:
     """Select a linear solver by parameter-space descriptor coverage."""
     schema = linear_solver_parameter_schema()
-    patches = linear_solver_coverage_patches()
-    patch = schema.covering_patch(descriptor, patches)
-    if patch is None:
+    regions = linear_solver_coverage_regions()
+    region = schema.covering_region(descriptor, regions)
+    if region is None:
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
 
     owners = {record.implementation: record for record in LINEAR_SOLVER_COVERAGES}
-    return owners[patch.owner]
+    return owners[region.owner]
 
 
 __all__ = [
     "LinearSolverCoverage",
     "linear_solver_coverages",
-    "linear_solver_coverage_patches",
+    "linear_solver_coverage_regions",
     "LINEAR_SOLVER_COVERAGES",
     "select_linear_solver_for_descriptor",
 ]

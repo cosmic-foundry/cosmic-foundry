@@ -38,7 +38,7 @@ import pytest
 from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
-    CoveragePatch,
+    CoverageRegion,
     DerivedParameterRegion,
     DescriptorCoordinate,
     EvidencePredicate,
@@ -49,7 +49,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
-    coverage_patches_are_disjoint,
+    coverage_regions_are_disjoint,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
@@ -59,7 +59,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.capabilities import (
-    linear_solver_coverage_patches,
+    linear_solver_coverage_regions,
     select_linear_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
@@ -870,7 +870,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 ),
             ),
         )
-        owned_patch = CoveragePatch(
+        owned_region = CoverageRegion(
             name="well_conditioned_spd",
             owner="DenseCGSolver",
             predicates=(
@@ -885,11 +885,11 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 ),
             ),
         )
-        patches = (owned_patch,)
+        regions = (owned_region,)
 
-        assert schema.cell_status(self._descriptor(), patches) == "owned"
-        assert schema.covering_patch(self._descriptor(), patches) == owned_patch
-        assert schema.cell_status(self._descriptor(dim_x=5), patches) == "invalid"
+        assert schema.cell_status(self._descriptor(), regions) == "owned"
+        assert schema.covering_region(self._descriptor(), regions) == owned_region
+        assert schema.cell_status(self._descriptor(dim_x=5), regions) == "invalid"
         assert (
             schema.cell_status(
                 self._descriptor(
@@ -897,28 +897,28 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                     coercivity_lower_bound=0.0,
                     operator_representation="matrix_free",
                 ),
-                patches,
+                regions,
             )
             == "uncovered"
         )
         unknown_condition = self._descriptor(condition_estimate=None)
-        assert schema.cell_status(unknown_condition, patches) == "uncovered"
-        assert schema.covering_patch(unknown_condition, patches) is None
+        assert schema.cell_status(unknown_condition, regions) == "uncovered"
+        assert schema.covering_region(unknown_condition, regions) is None
 
         with pytest.raises(ValueError):
             schema.cell_status(
                 self._descriptor(),
                 (
-                    owned_patch,
-                    CoveragePatch(
+                    owned_region,
+                    CoverageRegion(
                         name="duplicate_region",
                         owner="OtherSolver",
-                        predicates=owned_patch.predicates,
+                        predicates=owned_region.predicates,
                     ),
                 ),
             )
         with pytest.raises(ValueError):
-            schema.covering_patch(self._descriptor(dim_x=5), patches)
+            schema.covering_region(self._descriptor(dim_x=5), regions)
 
         with pytest.raises(ValueError):
             ParameterSpaceSchema(
@@ -942,16 +942,16 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 ),
             ).validate_schema()
         with pytest.raises(ValueError):
-            schema.validate_coverage_patch(
-                CoveragePatch(
+            schema.validate_coverage_region(
+                CoverageRegion(
                     name="undeclared_axis",
                     owner="BadSolver",
                     predicates=(ComparisonPredicate("undeclared", "==", 1),),
                 )
             )
         with pytest.raises(TypeError):
-            schema.validate_coverage_patch(
-                CoveragePatch(
+            schema.validate_coverage_region(
+                CoverageRegion(
                     name="unsupported_predicate",
                     owner="BadSolver",
                     predicates=(object(),),  # type: ignore[arg-type]
@@ -1375,59 +1375,60 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
         assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
 
 
-class _LinearSolverCoveragePatchClaim(Claim[None]):
-    """Claim: linear-solver selection is driven by schema coverage patches."""
+class _LinearSolverCoverageRegionClaim(Claim[None]):
+    """Claim: linear-solver selection is driven by schema coverage regions."""
 
     @property
     def description(self) -> str:
-        return "algorithm_capabilities/linear_solver_coverage_patches"
+        return "algorithm_capabilities/linear_solver_coverage_regions"
 
     def check(self, _calibration: None) -> None:
         self._assert_no_local_disjointness_algebra()
-        self._assert_no_coverage_patch_priority_model()
-        self._assert_no_coverage_patch_status_model()
+        self._assert_no_legacy_coverage_region_names()
+        self._assert_no_coverage_region_priority_model()
+        self._assert_no_coverage_region_status_model()
         self._assert_no_solver_local_point_query()
         self._assert_no_solver_error_string_dispatch()
         schema = linear_solver_parameter_schema()
-        patches = linear_solver_coverage_patches()
-        self._assert_no_declared_coverage_literals(patches)
-        for patch in patches:
-            schema.validate_coverage_patch(patch)
+        regions = linear_solver_coverage_regions()
+        self._assert_no_declared_coverage_literals(regions)
+        for region in regions:
+            schema.validate_coverage_region(region)
 
         selected_owners: set[str] = set()
-        self._assert_coverage_patches_disjoint(patches)
-        for patch in patches:
-            descriptor = self._descriptor_witness_for_patch(schema, patch)
-            assert schema.cell_status(descriptor, patches) == "owned"
+        self._assert_coverage_regions_disjoint(regions)
+        for region in regions:
+            descriptor = self._descriptor_witness_for_region(schema, region)
+            assert schema.cell_status(descriptor, regions) == "owned"
             selected = select_linear_solver_for_descriptor(descriptor)
-            expected_owner = self._selected_patch_owner(descriptor, patches)
+            expected_owner = self._selected_region_owner(descriptor, regions)
             assert selected.implementation == expected_owner
             selected_owners.add(expected_owner)
-        assert selected_owners == {patch.owner for patch in patches}
+        assert selected_owners == {region.owner for region in regions}
 
     @classmethod
-    def _selected_patch_owner(
+    def _selected_region_owner(
         cls,
         descriptor: ParameterDescriptor,
-        patches: tuple[CoveragePatch, ...],
+        regions: tuple[CoverageRegion, ...],
     ) -> str:
-        matches = tuple(patch for patch in patches if patch.contains(descriptor))
+        matches = tuple(region for region in regions if region.contains(descriptor))
         assert matches
         assert len(matches) == cls._one(), (
-            "owned linear-solver coverage patches must be pairwise disjoint at "
-            f"selected descriptors: {[patch.name for patch in matches]}"
+            "owned linear-solver coverage regions must be pairwise disjoint at "
+            f"selected descriptors: {[region.name for region in matches]}"
         )
         return next(iter(matches)).owner
 
     @classmethod
-    def _assert_coverage_patches_disjoint(
+    def _assert_coverage_regions_disjoint(
         cls,
-        patches: tuple[CoveragePatch, ...],
+        regions: tuple[CoverageRegion, ...],
     ) -> None:
         cls._assert_coverage_disjointness_algebra()
-        assert coverage_patches_are_disjoint(
-            patches
-        ), "linear-solver coverage patches must be pairwise disjoint"
+        assert coverage_regions_are_disjoint(
+            regions
+        ), "linear-solver coverage regions must be pairwise disjoint"
 
     @classmethod
     def _assert_coverage_disjointness_algebra(cls) -> None:
@@ -1477,7 +1478,45 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         assert not forbidden & local_helpers
 
     @staticmethod
-    def _assert_no_coverage_patch_priority_model() -> None:
+    def _assert_no_legacy_coverage_region_names() -> None:
+        source_paths = (
+            _PACKAGE_ROOT / "computation" / "algorithm_capabilities.py",
+            _PACKAGE_ROOT / "computation" / "solvers" / "__init__.py",
+            _PACKAGE_ROOT / "computation" / "solvers" / "capabilities.py",
+            _PACKAGE_ROOT / "computation" / "solvers" / "coverage.py",
+            _PROJECT_ROOT / "scripts" / "gen_capability_atlas_docs.py",
+        )
+        forbidden_fragments = ("CoveragePatch", "coverage_patch", "coverage_patches")
+        forbidden_words = ("patch", "patches")
+        for source_path in source_paths:
+            tree = ast.parse(source_path.read_text())
+            for node in ast.walk(tree):
+                names: tuple[str, ...]
+                if isinstance(node, ast.ClassDef | ast.FunctionDef):
+                    names = (node.name,)
+                elif isinstance(node, ast.Name):
+                    names = (node.id,)
+                elif isinstance(node, ast.Attribute):
+                    names = (node.attr,)
+                elif isinstance(node, ast.arg):
+                    names = (node.arg,)
+                elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    names = (node.value,)
+                else:
+                    continue
+                for name in names:
+                    words = tuple(name.replace("_", " ").split())
+                    if any(fragment in name for fragment in forbidden_fragments) or (
+                        "coverage" in words
+                        and any(word in words for word in forbidden_words)
+                    ):
+                        raise AssertionError(
+                            "coverage ownership must use region terminology: "
+                            f"{source_path.relative_to(_PROJECT_ROOT)}: {name!r}"
+                        )
+
+    @staticmethod
+    def _assert_no_coverage_region_priority_model() -> None:
         source_paths = (_PROJECT_ROOT / "scripts" / "gen_capability_atlas_docs.py",)
         for source_path in source_paths:
             tree = ast.parse(source_path.read_text())
@@ -1497,7 +1536,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
         )
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "CoveragePatch":
+            if isinstance(node, ast.ClassDef) and node.name == "CoverageRegion":
                 fields = {
                     child.target.id
                     for child in node.body
@@ -1506,10 +1545,10 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                 }
                 assert "priority" not in fields
                 return
-        raise AssertionError("CoveragePatch class not found")
+        raise AssertionError("CoverageRegion class not found")
 
     @staticmethod
-    def _assert_no_coverage_patch_status_model() -> None:
+    def _assert_no_coverage_region_status_model() -> None:
         source_paths = (
             _PACKAGE_ROOT / "computation" / "algorithm_capabilities.py",
             _PROJECT_ROOT / "scripts" / "gen_capability_atlas_docs.py",
@@ -1517,25 +1556,21 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         for source_path in source_paths:
             tree = ast.parse(source_path.read_text())
             for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.Attribute)
-                    and node.attr == "status"
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id == "patch"
-                ):
-                    raise AssertionError(
-                        "coverage machinery must not read patch status: "
-                        f"{source_path.relative_to(_PROJECT_ROOT)}"
-                    )
-                if isinstance(node, ast.keyword) and node.arg == "status":
-                    raise AssertionError(
-                        "coverage machinery must not pass patch status: "
-                        f"{source_path.relative_to(_PROJECT_ROOT)}"
-                    )
+                if not isinstance(node, ast.Call):
+                    continue
+                call_name = node.func.id if isinstance(node.func, ast.Name) else None
+                if call_name != "CoverageRegion":
+                    continue
+                for keyword in node.keywords:
+                    if keyword.arg == "status":
+                        raise AssertionError(
+                            "coverage machinery must not pass region status: "
+                            f"{source_path.relative_to(_PROJECT_ROOT)}"
+                        )
 
         tree = ast.parse(next(iter(source_paths)).read_text())
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "CoveragePatch":
+            if isinstance(node, ast.ClassDef) and node.name == "CoverageRegion":
                 fields = {
                     child.target.id
                     for child in node.body
@@ -1544,7 +1579,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                 }
                 assert "status" not in fields
                 return
-        raise AssertionError("CoveragePatch class not found")
+        raise AssertionError("CoverageRegion class not found")
 
     @staticmethod
     def _assert_no_solver_local_point_query() -> None:
@@ -1567,7 +1602,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             }
             assert not (
                 "contains" in call_names and "status" in comparisons
-            ), "solver selection must use ParameterSpaceSchema.covering_patch"
+            ), "solver selection must use ParameterSpaceSchema.covering_region"
 
     @staticmethod
     def _assert_no_solver_error_string_dispatch() -> None:
@@ -1584,20 +1619,20 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
     @classmethod
     def _assert_no_declared_coverage_literals(
         cls,
-        patches: tuple[CoveragePatch, ...],
+        regions: tuple[CoverageRegion, ...],
     ) -> None:
-        declared = cls._declared_coverage_literals(patches)
+        declared = cls._declared_coverage_literals(regions)
         leaked = declared & cls._claim_source_literals()
         assert not leaked, f"coverage facts leaked into structural claim: {leaked}"
 
     @staticmethod
     def _declared_coverage_literals(
-        patches: tuple[CoveragePatch, ...],
+        regions: tuple[CoverageRegion, ...],
     ) -> frozenset[str | int | float]:
         literals: set[str | int | float] = set()
-        for patch in patches:
-            literals.update({patch.name, patch.owner})
-            for predicate in patch.predicates:
+        for region in regions:
+            literals.update({region.name, region.owner})
+            for predicate in region.predicates:
                 literals.update(predicate.referenced_fields)
                 if isinstance(predicate, ComparisonPredicate):
                     if not isinstance(predicate.value, bool):
@@ -1629,17 +1664,17 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         return frozenset(literals)
 
     @classmethod
-    def _descriptor_witness_for_patch(
+    def _descriptor_witness_for_region(
         cls,
         schema: ParameterSpaceSchema,
-        patch: CoveragePatch,
+        region: CoverageRegion,
     ) -> ParameterDescriptor:
         fields = {axis.field: axis for axis in schema.axes}
         coordinates = {
             field: DescriptorCoordinate(cls._axis_witness(axis))
             for field, axis in fields.items()
         }
-        for predicate in patch.predicates:
+        for predicate in region.predicates:
             if isinstance(predicate, MembershipPredicate):
                 coordinates[predicate.field] = DescriptorCoordinate(
                     cls._membership_witness(fields[predicate.field], predicate)
@@ -1658,7 +1693,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             elif isinstance(predicate, AffineComparisonPredicate):
                 cls._satisfy_affine_predicate(fields, coordinates, predicate)
         descriptor = ParameterDescriptor(schema.name, coordinates)
-        assert patch.contains(descriptor)
+        assert region.contains(descriptor)
         return descriptor
 
     @classmethod
@@ -1680,20 +1715,20 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                 return interval.upper
             return (
                 interval.lower + interval.upper
-            ) / _LinearSolverCoveragePatchClaim._two()
+            ) / _LinearSolverCoverageRegionClaim._two()
         if interval.lower is not None:
             if interval.include_lower and interval.contains(interval.lower):
                 return interval.lower
             return interval.lower + max(
-                abs(interval.lower), _LinearSolverCoveragePatchClaim._one()
+                abs(interval.lower), _LinearSolverCoverageRegionClaim._one()
             )
         if interval.upper is not None:
             if interval.include_upper and interval.contains(interval.upper):
                 return interval.upper
             return interval.upper - max(
-                abs(interval.upper), _LinearSolverCoveragePatchClaim._one()
+                abs(interval.upper), _LinearSolverCoverageRegionClaim._one()
             )
-        return _LinearSolverCoveragePatchClaim._zero()
+        return _LinearSolverCoverageRegionClaim._zero()
 
     @classmethod
     def _membership_witness(
@@ -1806,7 +1841,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
 
 
 class _LinearSolverCoverageLocalityClaim(Claim[None]):
-    """Claim: owned solver coverage patches are declared inside implementations."""
+    """Claim: owned solver coverage regions are declared inside implementations."""
 
     @property
     def description(self) -> str:
@@ -1832,7 +1867,7 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             tree = ast.parse(path.read_text())
             for owner, class_name in self._owned_coverage_locations(tree):
                 assert owner == class_name, (
-                    "owned linear-solver coverage patch must be declared in "
+                    "owned linear-solver coverage region must be declared in "
                     f"class {owner}: {path.relative_to(_PROJECT_ROOT)}"
                 )
             manual_categories = self._manual_coverage_categories(tree)
@@ -1845,9 +1880,9 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                 "linear-solver coverage names must come from class identity: "
                 f"{path.relative_to(_PROJECT_ROOT)}"
             )
-            manual_patches = self._manual_owned_patch_calls(tree)
-            assert not manual_patches, (
-                "owned linear-solver coverage patches must be built from class "
+            manual_regions = self._manual_owned_region_calls(tree)
+            assert not manual_regions, (
+                "owned linear-solver coverage regions must be built from class "
                 f"identity: {path.relative_to(_PROJECT_ROOT)}"
             )
             manual_contracts = self._manual_contract_calls(tree)
@@ -1916,15 +1951,15 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         return tuple(names)
 
     @classmethod
-    def _manual_owned_patch_calls(cls, tree: ast.Module) -> tuple[str, ...]:
+    def _manual_owned_region_calls(cls, tree: ast.Module) -> tuple[str, ...]:
         calls: list[str] = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             call_name = cls._call_name(node.func)
-            if call_name == "owned_patch":
+            if call_name == "owned_region":
                 calls.append(call_name)
-            elif call_name == "CoveragePatch":
+            elif call_name == "CoverageRegion":
                 calls.append(call_name)
         return tuple(calls)
 
@@ -1989,9 +2024,9 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
         call_name = cls._call_name(node.func)
-        if call_name == "owned_patch":
+        if call_name == "owned_region":
             return cls._string_arg(node, 1, "owner")
-        if call_name != "CoveragePatch":
+        if call_name != "CoverageRegion":
             return None
         return cls._string_arg(node, 1, "owner")
 
@@ -2026,7 +2061,7 @@ class _AtlasProjection:
     shown_axes: tuple[str, ...]
     fixed_axes: tuple[str, ...]
     marginalized_axes: tuple[str, ...]
-    patches: tuple[CoveragePatch, ...] = ()
+    regions: tuple[CoverageRegion, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -2093,7 +2128,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
     solve_schema = solve_relation_parameter_schema()
     linear_schema = linear_solver_parameter_schema()
     decomposition_schema = decomposition_parameter_schema()
-    solver_patches = linear_solver_coverage_patches()
+    solver_regions = linear_solver_coverage_regions()
 
     return (
         _AtlasProjection(
@@ -2194,7 +2229,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 "linear_operator_matrix_available",
             ),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
-            solver_patches,
+            solver_regions,
         ),
         _AtlasProjection(
             linear_schema,
@@ -2212,7 +2247,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("dim_x", "dim_y", "objective_relation"),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
-            solver_patches,
+            solver_regions,
         ),
         _AtlasProjection(
             linear_schema,
@@ -2228,7 +2263,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("dim_x", "dim_y", "map_linearity_defect"),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
-            solver_patches,
+            solver_regions,
         ),
         _AtlasProjection(
             linear_schema,
@@ -2242,7 +2277,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("map_linearity_defect",),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
-            solver_patches,
+            solver_regions,
         ),
         _AtlasProjection(
             decomposition_schema,
@@ -2388,7 +2423,7 @@ def _predicate_label(predicate: Any) -> str:
 def _source_alternatives(
     schema: ParameterSpaceSchema,
     region: _AtlasRegionProjection,
-    patches: tuple[CoveragePatch, ...] = (),
+    regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
     if region.source_kind == "derived_region":
         matches = [
@@ -2414,23 +2449,23 @@ def _source_alternatives(
                 f"invalid cell {region.source_name!r}"
             )
         return (matches[0].predicates,)
-    if region.source_kind == "coverage_patch":
+    if region.source_kind == "coverage_region":
         matches = [
-            candidate for candidate in patches if candidate.name == region.source_name
+            candidate for candidate in regions if candidate.name == region.source_name
         ]
         if not matches:
             raise AssertionError(
                 f"atlas region {region.name!r} references missing "
-                f"coverage patch {region.source_name!r}"
+                f"coverage region {region.source_name!r}"
             )
-        schema.validate_coverage_patch(matches[0])
+        schema.validate_coverage_region(matches[0])
         return (matches[0].predicates,)
     raise AssertionError(f"unsupported atlas source kind {region.source_kind!r}")
 
 
 def _schema_atlas_regions(
     schema: ParameterSpaceSchema,
-    patches: tuple[CoveragePatch, ...] = (),
+    regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[_AtlasRegionProjection, ...]:
     """Return every schema region that should appear in atlas projections."""
     derived = tuple(
@@ -2454,25 +2489,25 @@ def _schema_atlas_regions(
     )
     coverage = tuple(
         _AtlasRegionProjection(
-            name=patch.name,
+            name=region.name,
             status="owned",
-            source_kind="coverage_patch",
-            source_name=patch.name,
-            condition=f"{patch.owner} coverage patch",
+            source_kind="coverage_region",
+            source_name=region.name,
+            condition=f"{region.owner} coverage region",
         )
-        for patch in patches
+        for region in regions
     )
     return derived + invalid + coverage
 
 
-def _atlas_patches_for_schema(schema_name: str) -> tuple[CoveragePatch, ...]:
-    patches: dict[str, CoveragePatch] = {}
+def _atlas_regions_for_schema(schema_name: str) -> tuple[CoverageRegion, ...]:
+    regions: dict[str, CoverageRegion] = {}
     for projection in _capability_atlas_projections():
         if projection.schema.name != schema_name:
             continue
-        for patch in projection.patches:
-            patches[patch.name] = patch
-    return tuple(patches.values())
+        for region in projection.regions:
+            regions[region.name] = region
+    return tuple(regions.values())
 
 
 def _predicate_affine_projection(
@@ -2670,10 +2705,10 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
         )
     }
     schema = schemas[spec.schema]
-    patches = _atlas_patches_for_schema(spec.schema)
+    regions = _atlas_regions_for_schema(spec.schema)
     shapes: list[_AtlasRegionShape] = []
-    for region in _schema_atlas_regions(schema, patches):
-        alternatives = _source_alternatives(schema, region, patches)
+    for region in _schema_atlas_regions(schema, regions):
+        alternatives = _source_alternatives(schema, region, regions)
         for alternative_index, predicates in enumerate(alternatives, start=1):
             geometry = _project_alternative_geometry(
                 predicates,
@@ -2730,8 +2765,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         }
         for spec in _capability_atlas_plot_specs():
             schema = schemas[spec.schema]
-            patches = _atlas_patches_for_schema(spec.schema)
-            discovered = _schema_atlas_regions(schema, patches)
+            regions = _atlas_regions_for_schema(spec.schema)
+            discovered = _schema_atlas_regions(schema, regions)
             assert {
                 (region.source_kind, region.source_name) for region in discovered
             } == {
@@ -2739,7 +2774,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             } | {
                 ("invalid_cell", rule.name) for rule in schema.invalid_cells
             } | {
-                ("coverage_patch", patch.name) for patch in patches
+                ("coverage_region", region.name) for region in regions
             }
             shapes = _projected_region_shapes(spec)
             assert shapes
@@ -3040,7 +3075,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LinearSolverCoverage",
                 "LINEAR_SOLVER_COVERAGES",
                 "linear_solver_coverages",
-                "linear_solver_coverage_patches",
+                "linear_solver_coverage_regions",
                 "select_linear_solver_for_descriptor",
             }
         ),
@@ -3508,7 +3543,7 @@ _CLAIMS: list[Claim[None]] = [
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
     _LinearSolverCoverageLocalityClaim(),
-    _LinearSolverCoveragePatchClaim(),
+    _LinearSolverCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),
 ]
 

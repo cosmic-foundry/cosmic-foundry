@@ -3,7 +3,7 @@
 from cosmic_foundry.computation.solvers.capabilities import (
     LINEAR_SOLVER_COVERAGES,
     LinearSolverCoverage,
-    linear_solver_coverage_patches,
+    linear_solver_coverage_regions,
     linear_solver_coverages,
     select_linear_solver_for_descriptor,
 )
@@ -41,7 +41,7 @@ __all__ = [
     "LinearSolverCoverage",
     "LinearOperator",
     "linear_solver_coverages",
-    "linear_solver_coverage_patches",
+    "linear_solver_coverage_regions",
     "LinearSolver",
     "select_linear_solver_for_descriptor",
 ]
