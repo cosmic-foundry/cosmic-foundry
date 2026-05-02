@@ -7,18 +7,14 @@ from pkgutil import iter_modules
 from types import ModuleType
 
 from cosmic_foundry.computation.algorithm_capabilities import (
-    AlgorithmCapability,
-    AlgorithmRegistry,
     CoveragePatch,
     ParameterDescriptor,
     linear_solver_parameter_schema,
 )
 from cosmic_foundry.computation.solvers._capability_claims import (
+    LinearSolverCapability,
     selector_rejection_patches,
 )
-
-LinearSolverCapability = AlgorithmCapability
-LinearSolverRegistry = AlgorithmRegistry
 
 
 def _solver_package_modules() -> tuple[ModuleType, ...]:
@@ -44,18 +40,18 @@ def _declared_capabilities() -> tuple[LinearSolverCapability, ...]:
     return tuple(capabilities)
 
 
-LINEAR_SOLVER_REGISTRY = LinearSolverRegistry(_declared_capabilities())
+LINEAR_SOLVER_CAPABILITIES = _declared_capabilities()
 
 
 def linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return autodiscovered linear-solver algorithm capabilities."""
-    return LINEAR_SOLVER_REGISTRY.capabilities
+    """Return autodiscovered linear-solver descriptor coverage records."""
+    return LINEAR_SOLVER_CAPABILITIES
 
 
 def linear_solver_coverage_patches() -> tuple[CoveragePatch, ...]:
     """Return autodiscovered descriptor-space coverage patches."""
     patches: list[CoveragePatch] = []
-    for capability in LINEAR_SOLVER_REGISTRY.capabilities:
+    for capability in LINEAR_SOLVER_CAPABILITIES:
         patches.extend(capability.coverage_patches)
     patches.extend(selector_rejection_patches())
     return tuple(patches)
@@ -77,7 +73,7 @@ def select_linear_solver_for_descriptor(
 
     owners = {
         capability.implementation: capability
-        for capability in LINEAR_SOLVER_REGISTRY.capabilities
+        for capability in LINEAR_SOLVER_CAPABILITIES
     }
     matches = tuple(
         patch
@@ -98,7 +94,6 @@ __all__ = [
     "LinearSolverCapability",
     "linear_solver_capabilities",
     "linear_solver_coverage_patches",
-    "LinearSolverRegistry",
-    "LINEAR_SOLVER_REGISTRY",
+    "LINEAR_SOLVER_CAPABILITIES",
     "select_linear_solver_for_descriptor",
 ]

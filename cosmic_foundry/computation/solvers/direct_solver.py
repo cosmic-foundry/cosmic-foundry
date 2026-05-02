@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
-from cosmic_foundry.computation.solvers._capability_claims import (
-    LinearSolverCapability,
-    Requirement,
-    capability,
-    contract,
-)
 from cosmic_foundry.computation.solvers.linear_solver import (
     LinearOperator,
     LinearSolver,
@@ -51,21 +45,6 @@ class DirectSolver(LinearSolver):
     def solve(self, op: LinearOperator, b: Tensor) -> Tensor:
         a = self._assemble(op, b)
         return self._decomposition.decompose(a).solve(b)
-
-    @classmethod
-    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return capability declarations owned by this solver implementation."""
-        return (
-            capability(
-                cls,
-                contract(
-                    requires=(
-                        Requirement.LINEAR_OPERATOR,
-                        Requirement.DECOMPOSITION,
-                    ),
-                ),
-            ),
-        )
 
 
 __all__ = ["DirectSolver"]

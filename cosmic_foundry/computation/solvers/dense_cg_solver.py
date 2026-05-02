@@ -13,11 +13,8 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
-    Provision,
-    Requirement,
     budget_predicates,
     capability,
-    contract,
     linear_system_predicates,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
@@ -110,18 +107,10 @@ class DenseCGSolver(KrylovSolver):
 
     @classmethod
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return capability declarations owned by this solver implementation."""
+        """Return descriptor-space coverage owned by this solver implementation."""
         return (
             capability(
                 cls,
-                contract(
-                    requires=(
-                        Requirement.LINEAR_OPERATOR,
-                        Requirement.SYMMETRIC_POSITIVE_DEFINITE,
-                    ),
-                    provides=(Provision.SPD,),
-                ),
-                priority=10,
                 coverage_predicates=cls._coverage_predicates,
                 coverage_priority=10,
             ),

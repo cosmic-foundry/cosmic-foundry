@@ -7,11 +7,8 @@ from cosmic_foundry.computation.decompositions.svd_factorization import SVDFacto
 from cosmic_foundry.computation.solvers._capability_claims import (
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
-    Provision,
-    Requirement,
     budget_predicates,
     capability,
-    contract,
     dense_matrix_predicates,
     linear_system_predicates,
 )
@@ -57,19 +54,10 @@ class DenseSVDSolver(DirectSolver):
 
     @classmethod
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return capability declarations owned by this solver implementation."""
+        """Return descriptor-space coverage owned by this solver implementation."""
         return (
             capability(
                 cls,
-                contract(
-                    requires=(Requirement.DENSE_OPERATOR,),
-                    provides=(
-                        Provision.LEAST_SQUARES,
-                        Provision.MINIMUM_NORM,
-                        Provision.RANK_DEFICIENT,
-                        Provision.FACTORIZED_DENSE,
-                    ),
-                ),
                 coverage_predicates=cls._coverage_predicates,
                 coverage_priority=20,
             ),

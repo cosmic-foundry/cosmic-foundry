@@ -8,11 +8,8 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
-    Provision,
-    Requirement,
     budget_predicates,
     capability,
-    contract,
     dense_matrix_predicates,
     linear_system_predicates,
 )
@@ -42,22 +39,10 @@ class DenseLUSolver(DirectSolver):
 
     @classmethod
     def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
-        """Return capability declarations owned by this solver implementation."""
+        """Return descriptor-space coverage owned by this solver implementation."""
         return (
             capability(
                 cls,
-                contract(
-                    requires=(
-                        Requirement.DENSE_OPERATOR,
-                        Requirement.SQUARE_SYSTEM,
-                        Requirement.FULL_RANK,
-                    ),
-                    provides=(
-                        Provision.EXACT,
-                        Provision.FACTORIZED_DENSE,
-                    ),
-                ),
-                priority=10,
                 coverage_predicates=cls._coverage_predicates,
                 coverage_priority=30,
             ),

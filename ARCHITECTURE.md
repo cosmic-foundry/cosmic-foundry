@@ -802,9 +802,8 @@ The sprint is complete when the following are true:
   norm definitions, and the descriptor fields needed to place a concrete problem
   into the space.  Capabilities are not allowed to introduce private axes; a new
   ownership claim first extends the schema, then declares coverage over it.
-- **Descriptors are points or cells.**  `AlgorithmRequest` and
-  `AlgorithmCapability` can be evaluated against a typed descriptor that locates
-  a concrete problem in the schema.  A descriptor may be a point
+- **Descriptors are points or cells.**  Selection inputs are typed descriptors
+  that locate a concrete problem in the schema.  A descriptor may be a point
   (`n = 128`, `symmetry_defect = 2e-14`) or a conservative cell
   (`conditioning = unknown_condition`).  Unknown descriptor values are explicit:
   selection must either reject the request, choose a capability that can certify
@@ -813,7 +812,10 @@ The sprint is complete when the following are true:
   in the parameter space plus the guarantees it provides inside that region.
   The region may be a conjunction of bins, numeric intervals, and cost-model
   inequalities over schema axes.  The implementation name is metadata attached
-  to the region, not the root of the model.
+  to the region, not the root of the model.  Implementation-local coverage
+  declarations must not carry an independent tag contract such as
+  `requires`/`provides`; any human-facing label is either inferred from code
+  structure or derived as a schema alias over descriptor predicates.
 - **Selection is a point query.**  Runtime dispatch becomes a query of the
   parameter-space atlas: locate the descriptor cell, find all coverage patches
   containing it, reject if none own it, and fail on overlap unless priority data
@@ -993,14 +995,13 @@ The sprint is complete when the following are true:
   dispatch behavior must appear in the generated atlas or in an explicit
   machine-readable exclusion list.  This prevents the documentation from
   becoming a parallel taxonomy that can drift from the selector.
-- **Qualitative tags become schema aliases.**  Existing string-set capability
-  tags may remain temporarily, but the sprint should move high-value tags onto
-  schema aliases.  An alias such as `full_rank` must expand to a rank or
-  singular-value interval; `matrix_free` must expand to operator-representation
-  and assembly-cost axes; `linear_system`, `least_squares`, `nonlinear_root`,
-  and `eigenproblem` must expand to solve-relation regions; and
-  `domain_aware_acceptance` must later expand to domain-distance and
-  retry-policy axes.
+- **Qualitative tags are schema aliases, not contracts.**  Capability selection
+  must not depend on string-set contracts parallel to coverage predicates.  An
+  alias such as `full_rank` must expand to a rank or singular-value interval;
+  `matrix_free` must expand to operator-representation and assembly-cost axes;
+  `linear_system`, `least_squares`, `nonlinear_root`, and `eigenproblem` must
+  expand to solve-relation regions; and `domain_aware_acceptance` must later
+  expand to domain-distance and retry-policy axes.
 - **Generalization path.**  After the linear solver/decomposition version is in
   place, time integrators should receive descriptors for domain distance,
   stiffness estimates, Jacobian availability, local error target, step retry
