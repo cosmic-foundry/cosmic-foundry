@@ -43,6 +43,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     DescriptorCoordinate,
     EvidencePredicate,
     InvalidCellRule,
+    LinearSolverField,
     MembershipPredicate,
     NumericInterval,
     ParameterAxis,
@@ -1404,6 +1405,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         self._assert_no_solver_local_point_query()
         self._assert_no_solver_error_string_dispatch()
         schema = linear_solver_parameter_schema()
+        assert {field.value for field in LinearSolverField} == schema.descriptor_fields
         regions = linear_solver_coverage_regions()
         self._assert_no_declared_coverage_literals(regions)
         for region in regions:
@@ -1919,6 +1921,11 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         assert not self._coverage_priority_support(
             support_tree
         ), "linear-solver coverage records must not carry selector priority"
+        support_field_literals = self._raw_descriptor_field_arguments(support_tree)
+        assert not support_field_literals, (
+            "linear-solver coverage predicates must use schema-owned field "
+            "symbols: computation/solvers/coverage.py"
+        )
         for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
             if path.name.startswith("_") or path.name in {
                 "capabilities.py",
@@ -1966,6 +1973,12 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             assert not nonlocal_requirements, (
                 "implementation-local solver coverage must be irreducible "
                 "predicate data; inherited contracts come from class structure: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
+            )
+            raw_field_literals = self._raw_descriptor_field_arguments(tree)
+            assert not raw_field_literals, (
+                "implementation-local solver coverage predicates must use "
+                "schema-owned field symbols: "
                 f"{path.relative_to(_PROJECT_ROOT)}"
             )
 
@@ -2126,6 +2139,44 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                     violations.append("linear_solver_coverage")
                     break
         return tuple(violations)
+
+    @classmethod
+    def _raw_descriptor_field_arguments(cls, tree: ast.Module) -> tuple[str, ...]:
+        violations: list[str] = []
+        unary_predicates = {
+            "ComparisonPredicate",
+            "EvidencePredicate",
+            "MembershipPredicate",
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            call_name = cls._call_name(node.func)
+            if call_name in unary_predicates:
+                field = cls._argument(node, 0, "field")
+                if cls._contains_string_literal(field):
+                    violations.append(call_name)
+            if call_name == "AffineComparisonPredicate":
+                terms = cls._argument(node, 0, "terms")
+                if cls._mapping_has_string_keys(terms):
+                    violations.append(call_name)
+        return tuple(violations)
+
+    @staticmethod
+    def _argument(node: ast.Call, position: int, keyword: str) -> ast.expr | None:
+        if len(node.args) > position:
+            return node.args[position]
+        return next((kw.value for kw in node.keywords if kw.arg == keyword), None)
+
+    @staticmethod
+    def _contains_string_literal(node: ast.AST | None) -> bool:
+        return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+    @classmethod
+    def _mapping_has_string_keys(cls, node: ast.AST | None) -> bool:
+        if isinstance(node, ast.Dict):
+            return any(cls._contains_string_literal(key) for key in node.keys)
+        return False
 
     @staticmethod
     def _coverage_category_support(tree: ast.Module) -> tuple[str, ...]:

@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor as tensor_module
-from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicate
+from cosmic_foundry.computation.algorithm_capabilities import (
+    ComparisonPredicate,
+    LinearSolverField,
+)
 from cosmic_foundry.computation.solvers.coverage import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
@@ -88,11 +91,17 @@ class DenseJacobiSolver(StationaryIterationSolver):
         return s.u
 
     linear_solver_coverage = (
-        ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
-        ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
-        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+        ComparisonPredicate(LinearSolverField.DIAGONAL_NONZERO_MARGIN, ">", 0.0),
+        ComparisonPredicate(LinearSolverField.DIAGONAL_DOMINANCE_MARGIN, ">", 0.0),
+        ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
+        ComparisonPredicate(
+            LinearSolverField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
+        ),
+        ComparisonPredicate(
+            LinearSolverField.RHS_CONSISTENCY_DEFECT,
+            "<=",
+            LINEARITY_TOLERANCE,
+        ),
     )
 
 
