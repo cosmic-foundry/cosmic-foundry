@@ -150,24 +150,19 @@ def select_linear_solver_for_descriptor(
     """Select a linear solver by parameter-space descriptor coverage."""
     schema = linear_solver_parameter_schema()
     patches = linear_solver_coverage_patches()
-    status = schema.cell_status(descriptor, patches)
-    if status == "invalid":
-        raise ValueError(f"invalid linear-solver descriptor {descriptor!r}")
-    if status == "rejected":
-        raise ValueError(f"rejected linear-solver descriptor {descriptor!r}")
-    if status == "uncovered":
+    try:
+        patch = schema.covering_patch(descriptor, patches)
+    except ValueError as exc:
+        if "invalid descriptor" not in str(exc):
+            raise
+        raise ValueError(f"invalid linear-solver descriptor {descriptor!r}") from exc
+    if patch is None:
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
+    if patch.status == "rejected":
+        raise ValueError(f"rejected linear-solver descriptor {descriptor!r}")
 
     owners = {record.implementation: record for record in LINEAR_SOLVER_COVERAGES}
-    matches = tuple(
-        patch
-        for patch in patches
-        if patch.status == "owned" and patch.contains(descriptor)
-    )
-    if len(matches) > 1:
-        names = ", ".join(patch.name for patch in matches)
-        raise ValueError(f"ambiguous linear-solver descriptor coverage: {names}")
-    return owners[matches[0].owner]
+    return owners[patch.owner]
 
 
 __all__ = [
