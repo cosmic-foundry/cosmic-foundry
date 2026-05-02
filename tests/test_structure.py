@@ -901,6 +901,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         patches = (owned_patch, rejected_patch)
 
         assert schema.cell_status(self._descriptor(), patches) == "owned"
+        assert schema.covering_patch(self._descriptor(), patches) == owned_patch
         assert schema.cell_status(self._descriptor(dim_x=5), patches) == "invalid"
         assert (
             schema.cell_status(
@@ -915,6 +916,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         )
         unknown_condition = self._descriptor(condition_estimate=None)
         assert schema.cell_status(unknown_condition, patches) == "uncovered"
+        assert schema.covering_patch(unknown_condition, patches) is None
 
         with pytest.raises(ValueError):
             schema.cell_status(
@@ -929,6 +931,8 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                     ),
                 ),
             )
+        with pytest.raises(ValueError):
+            schema.covering_patch(self._descriptor(dim_x=5), patches)
 
         with pytest.raises(ValueError):
             ParameterSpaceSchema(
@@ -1397,6 +1401,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         self._assert_no_local_disjointness_algebra()
         self._assert_no_coverage_patch_priority_model()
+        self._assert_no_solver_local_point_query()
         schema = linear_solver_parameter_schema()
         patches = linear_solver_coverage_patches()
         self._assert_no_declared_coverage_literals(patches)
@@ -1530,6 +1535,29 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                 assert "priority" not in fields
                 return
         raise AssertionError("CoveragePatch class not found")
+
+    @staticmethod
+    def _assert_no_solver_local_point_query() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "solvers" / "capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.BoolOp):
+                continue
+            call_names = {
+                child.func.attr
+                for child in ast.walk(node)
+                if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute)
+            }
+            comparisons = {
+                child.left.attr
+                for child in ast.walk(node)
+                if isinstance(child, ast.Compare)
+                and isinstance(child.left, ast.Attribute)
+            }
+            assert not (
+                "contains" in call_names and "status" in comparisons
+            ), "solver selection must use ParameterSpaceSchema.covering_patch"
 
     @classmethod
     def _assert_no_declared_coverage_literals(

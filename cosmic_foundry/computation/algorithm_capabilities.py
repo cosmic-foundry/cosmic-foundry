@@ -759,15 +759,29 @@ class ParameterSpaceSchema:
             self.validate_coverage_patch(patch)
         if any(rule.matches(descriptor) for rule in self.invalid_cells):
             return "invalid"
+        covering = self.covering_patch(descriptor, patches)
+        if covering is None:
+            return "uncovered"
+        return covering.status
+
+    def covering_patch(
+        self,
+        descriptor: ParameterDescriptor,
+        patches: tuple[CoveragePatch, ...],
+    ) -> CoveragePatch | None:
+        """Return the unique coverage patch containing ``descriptor``."""
+        self.validate_descriptor(descriptor)
+        for patch in patches:
+            self.validate_coverage_patch(patch)
+        if any(rule.matches(descriptor) for rule in self.invalid_cells):
+            raise ValueError(f"invalid descriptor {descriptor!r}")
         containing = tuple(patch for patch in patches if patch.contains(descriptor))
         if not containing:
-            return "uncovered"
+            return None
         if len(containing) > 1:
             names = ", ".join(patch.name for patch in containing)
             raise ValueError(f"descriptor lies in multiple coverage patches: {names}")
-        if all(patch.status == "rejected" for patch in containing):
-            return "rejected"
-        return "owned"
+        return containing[0]
 
     @staticmethod
     def _validate_predicate(predicate: StructuredPredicate) -> None:
