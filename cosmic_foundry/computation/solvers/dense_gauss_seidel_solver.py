@@ -5,7 +5,15 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers._capability_claims import (
+    LinearSolverCapability,
+    Requirement,
+    capability,
+    contract,
+)
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    StationaryIterationSolver,
+)
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -25,7 +33,7 @@ class _GSState(NamedTuple):
     iteration: Tensor  # 0-d int Tensor
 
 
-class DenseGaussSeidelSolver(IterativeSolver):
+class DenseGaussSeidelSolver(StationaryIterationSolver):
     """Gauss-Seidel iterative solver for A u = b.
 
     Each sweep updates every component sequentially:
@@ -93,6 +101,21 @@ class DenseGaussSeidelSolver(IterativeSolver):
     def extract(self, state: Any) -> Tensor:
         s: _GSState = state
         return s.u
+
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            capability(
+                cls,
+                contract(
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.SQUARE_SYSTEM,
+                    ),
+                ),
+            ),
+        )
 
 
 __all__ = ["DenseGaussSeidelSolver"]

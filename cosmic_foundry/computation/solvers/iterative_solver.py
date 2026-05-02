@@ -59,4 +59,12 @@ class IterativeSolver(LinearSolver):
         return self.extract(final)
 
 
-__all__ = ["IterativeSolver"]
+class KrylovSolver(IterativeSolver):
+    """Iterative solver whose update is a Krylov-subspace method."""
+
+
+class StationaryIterationSolver(IterativeSolver):
+    """Iterative solver whose update is a stationary fixed-point iteration."""
+
+
+__all__ = ["IterativeSolver", "KrylovSolver", "StationaryIterationSolver"]

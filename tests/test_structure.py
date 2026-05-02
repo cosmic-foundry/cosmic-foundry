@@ -15,6 +15,8 @@ Claim types:
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
   _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
   _ArchitectureOwnershipClaim — package exports and capability ownership are explicit
+  _LinearSolverCoverageLocalityClaim — owned solver coverage lives in
+                                      implementation classes
   _TestAxisConventionClaim  — module tests use correctness/convergence/performance
   _NoTopLevelDefaultBackendMutationClaim — tests do not mutate Tensor backend at import
 """
@@ -1652,6 +1654,161 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         return cls._one() + cls._one()
 
 
+class _LinearSolverCoverageLocalityClaim(Claim[None]):
+    """Claim: owned solver coverage patches are declared inside implementations."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/linear_solver_coverage_locality"
+
+    def check(self, _calibration: None) -> None:
+        for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
+            if path.name.startswith("_") or path.name == "capabilities.py":
+                continue
+            tree = ast.parse(path.read_text())
+            for owner, class_name in self._owned_coverage_locations(tree):
+                assert owner == class_name, (
+                    "owned linear-solver coverage patch must be declared in "
+                    f"class {owner}: {path.relative_to(_PROJECT_ROOT)}"
+                )
+            manual_categories = self._manual_capability_categories(tree)
+            assert not manual_categories, (
+                "linear-solver categories must be inferred from implementation "
+                f"inheritance: {path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_names = self._manual_capability_names(tree)
+            assert not manual_names, (
+                "linear-solver capability names must come from class identity: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_patches = self._manual_owned_patch_calls(tree)
+            assert not manual_patches, (
+                "owned linear-solver coverage patches must be built from class "
+                f"identity: {path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_contract_atoms = self._manual_contract_atoms(tree)
+            assert not manual_contract_atoms, (
+                "linear-solver contract atoms must use canonical typed atoms: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
+            )
+
+    @classmethod
+    def _owned_coverage_locations(
+        cls,
+        tree: ast.Module,
+    ) -> tuple[tuple[str, str | None], ...]:
+        locations: list[tuple[str, str | None]] = []
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call):
+                        owner = cls._owned_coverage_owner(child)
+                        if owner is not None:
+                            locations.append((owner, node.name))
+            else:
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call):
+                        owner = cls._owned_coverage_owner(child)
+                        if owner is not None:
+                            locations.append((owner, None))
+        return tuple(locations)
+
+    @classmethod
+    def _manual_capability_categories(cls, tree: ast.Module) -> tuple[str, ...]:
+        categories: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if cls._call_name(node.func) != "LinearSolverCapability":
+                continue
+            category = cls._string_arg(node, 2, "category")
+            if category is not None:
+                categories.append(category)
+        return tuple(categories)
+
+    @classmethod
+    def _manual_capability_names(cls, tree: ast.Module) -> tuple[str, ...]:
+        names: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if cls._call_name(node.func) != "capability":
+                continue
+            name = cls._string_arg(node, 1, "name")
+            if name is not None:
+                names.append(name)
+        return tuple(names)
+
+    @classmethod
+    def _manual_owned_patch_calls(cls, tree: ast.Module) -> tuple[str, ...]:
+        calls: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            call_name = cls._call_name(node.func)
+            if call_name == "owned_patch":
+                calls.append(call_name)
+            elif call_name == "CoveragePatch":
+                status = cls._string_arg(node, 2, "status")
+                if status == "owned":
+                    calls.append(call_name)
+        return tuple(calls)
+
+    @classmethod
+    def _manual_contract_atoms(cls, tree: ast.Module) -> tuple[str, ...]:
+        atoms: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if cls._call_name(node.func) != "contract":
+                continue
+            for kw in node.keywords:
+                if kw.arg not in {"requires", "provides"}:
+                    continue
+                atoms.extend(cls._string_literals(kw.value))
+        return tuple(atoms)
+
+    @classmethod
+    def _string_literals(cls, node: ast.AST) -> tuple[str, ...]:
+        values: list[str] = []
+        for child in ast.walk(node):
+            if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                values.append(child.value)
+        return tuple(values)
+
+    @classmethod
+    def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
+        call_name = cls._call_name(node.func)
+        if call_name == "owned_patch":
+            return cls._string_arg(node, 1, "owner")
+        if call_name != "CoveragePatch":
+            return None
+        status = cls._string_arg(node, 2, "status")
+        if status != "owned":
+            return None
+        return cls._string_arg(node, 1, "owner")
+
+    @staticmethod
+    def _call_name(func: ast.expr) -> str | None:
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            return func.attr
+        return None
+
+    @staticmethod
+    def _string_arg(node: ast.Call, position: int, keyword: str) -> str | None:
+        if len(node.args) > position:
+            arg = node.args[position]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                return arg.value
+        for kw in node.keywords:
+            if kw.arg == keyword and isinstance(kw.value, ast.Constant):
+                if isinstance(kw.value.value, str):
+                    return kw.value.value
+        return None
+
+
 @dataclass(frozen=True)
 class _AtlasProjection:
     """One descriptor template rendered into the capability atlas."""
@@ -2689,8 +2846,10 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             {
                 "DirectSolver",
                 "IterativeSolver",
+                "KrylovSolver",
                 "LinearOperator",
                 "LinearSolver",
+                "StationaryIterationSolver",
             }
         ),
         "direct_solver": frozenset(
@@ -2776,11 +2935,13 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
         "IterativeSolver": "iterative_solver",
+        "KrylovSolver": "iterative_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
         "LinearSolverCapability": "algorithm_capabilities",
         "LinearSolverRegistry": "algorithm_capabilities",
         "LinearSolverRequest": "algorithm_capabilities",
+        "StationaryIterationSolver": "iterative_solver",
     },
     required_name_fragments={
         "DenseCGSolver": ("Dense", "Solver"),
@@ -3204,6 +3365,7 @@ _CLAIMS: list[Claim[None]] = [
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
+    _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoveragePatchClaim(),
     _CapabilityAtlasDocClaim(),
 ]

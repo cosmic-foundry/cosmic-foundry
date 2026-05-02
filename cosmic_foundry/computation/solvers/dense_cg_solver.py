@@ -5,7 +5,22 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.algorithm_capabilities import (
+    ComparisonPredicate,
+    MembershipPredicate,
+)
+from cosmic_foundry.computation.solvers._capability_claims import (
+    CONDITION_LIMIT,
+    LINEARITY_TOLERANCE,
+    LinearSolverCapability,
+    Provision,
+    Requirement,
+    budget_predicates,
+    capability,
+    contract,
+    linear_system_predicates,
+)
+from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -19,7 +34,7 @@ class _CGState(NamedTuple):
     iteration: Tensor  # 0-d int Tensor
 
 
-class DenseCGSolver(IterativeSolver):
+class DenseCGSolver(KrylovSolver):
     """Conjugate Gradient solver for A u = b; A must be symmetric positive definite.
 
     CG minimizes ‖u − u*‖_A² over successive Krylov subspaces
@@ -79,6 +94,38 @@ class DenseCGSolver(IterativeSolver):
     def extract(self, state: Any) -> Tensor:
         s: _CGState = state
         return s.u
+
+    _coverage_predicates = (
+        linear_system_predicates()
+        + budget_predicates()
+        + (
+            MembershipPredicate("operator_application_available", frozenset({True})),
+            ComparisonPredicate("symmetry_defect", "<=", LINEARITY_TOLERANCE),
+            ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+        )
+    )
+
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            capability(
+                cls,
+                contract(
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.SYMMETRIC_POSITIVE_DEFINITE,
+                    ),
+                    provides=(Provision.SPD,),
+                ),
+                priority=10,
+                coverage_predicates=cls._coverage_predicates,
+                coverage_priority=10,
+            ),
+        )
 
 
 __all__ = ["DenseCGSolver"]

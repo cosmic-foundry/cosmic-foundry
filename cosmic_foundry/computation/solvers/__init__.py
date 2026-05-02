@@ -18,7 +18,11 @@ from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSo
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    IterativeSolver,
+    KrylovSolver,
+    StationaryIterationSolver,
+)
 from cosmic_foundry.computation.solvers.linear_solver import (
     LinearOperator,
     LinearSolver,
@@ -33,6 +37,8 @@ __all__ = [
     "DenseSVDSolver",
     "DirectSolver",
     "IterativeSolver",
+    "KrylovSolver",
+    "StationaryIterationSolver",
     "LinearSolverCapability",
     "LinearOperator",
     "linear_solver_capabilities",

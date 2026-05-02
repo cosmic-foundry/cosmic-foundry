@@ -5,7 +5,21 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor as tensor_module
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicate
+from cosmic_foundry.computation.solvers._capability_claims import (
+    CONDITION_LIMIT,
+    LINEARITY_TOLERANCE,
+    LinearSolverCapability,
+    Requirement,
+    budget_predicates,
+    capability,
+    contract,
+    dense_matrix_predicates,
+    linear_system_predicates,
+)
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    StationaryIterationSolver,
+)
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor, where
 
@@ -19,7 +33,7 @@ class _JacobiState(NamedTuple):
     iteration: Tensor  # 0-d int Tensor
 
 
-class DenseJacobiSolver(IterativeSolver):
+class DenseJacobiSolver(StationaryIterationSolver):
     """Jacobi iterative solver for A u = b.
 
     The damped fixed-point iteration u^{k+1} = u^k + ω D⁻¹(b − Au^k) is a
@@ -79,6 +93,36 @@ class DenseJacobiSolver(IterativeSolver):
     def extract(self, state: Any) -> Tensor:
         s: _JacobiState = state
         return s.u
+
+    _coverage_predicates = (
+        linear_system_predicates()
+        + dense_matrix_predicates()
+        + budget_predicates()
+        + (
+            ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
+            ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
+            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+        )
+    )
+
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            capability(
+                cls,
+                contract(
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.DIAGONAL,
+                        Requirement.ROW_ABS_SUMS,
+                    ),
+                ),
+                coverage_predicates=cls._coverage_predicates,
+                coverage_priority=25,
+            ),
+        )
 
 
 __all__ = ["DenseJacobiSolver"]
