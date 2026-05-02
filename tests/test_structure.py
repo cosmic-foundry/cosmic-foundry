@@ -2556,9 +2556,6 @@ _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 _TimeIntegrationRequest = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.TimeIntegrationRequest"
 )
-_LinearSolverRequest = _resolve_dotted(
-    "cosmic_foundry.computation.solvers.LinearSolverRequest"
-)
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -2837,8 +2834,6 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "linear_solver_capabilities",
                 "linear_solver_coverage_patches",
                 "LinearSolverRegistry",
-                "LinearSolverRequest",
-                "select_linear_solver",
                 "select_linear_solver_for_descriptor",
             }
         ),
@@ -2868,64 +2863,6 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
     },
     capability_provider="cosmic_foundry.computation.solvers.linear_solver_capabilities",
-    request_selector="cosmic_foundry.computation.solvers.select_linear_solver",
-    request_expectations=(
-        _CapabilityRequestExpectation(
-            _LinearSolverRequest(
-                available_structure=frozenset(
-                    {"dense_operator", "square_system", "full_rank"}
-                ),
-                requested_properties=frozenset({"solve", "direct", "exact"}),
-            ),
-            "DenseLUSolver",
-        ),
-        _CapabilityRequestExpectation(
-            _LinearSolverRequest(
-                available_structure=frozenset({"dense_operator"}),
-                requested_properties=frozenset(
-                    {"solve", "direct", "minimum_norm", "rank_deficient"}
-                ),
-            ),
-            "DenseSVDSolver",
-        ),
-        _CapabilityRequestExpectation(
-            _LinearSolverRequest(
-                available_structure=frozenset(
-                    {"linear_operator", "symmetric_positive_definite"}
-                ),
-                requested_properties=frozenset({"solve", "iterative", "krylov"}),
-            ),
-            "DenseCGSolver",
-        ),
-        _CapabilityRequestExpectation(
-            _LinearSolverRequest(
-                available_structure=frozenset({"linear_operator", "nonsingular"}),
-                requested_properties=frozenset(
-                    {"solve", "iterative", "krylov", "general"}
-                ),
-            ),
-            "DenseGMRESSolver",
-        ),
-        _CapabilityRequestExpectation(
-            _LinearSolverRequest(
-                available_structure=frozenset(
-                    {"linear_operator", "diagonal", "row_abs_sums"}
-                ),
-                requested_properties=frozenset(
-                    {"solve", "iterative", "stationary", "matrix_free"}
-                ),
-            ),
-            "DenseJacobiSolver",
-        ),
-    ),
-    rejected_requests=(
-        _CapabilityRejectionExpectation(
-            _LinearSolverRequest(
-                available_structure=frozenset({"linear_operator"}),
-                requested_properties=frozenset({"solve", "direct", "exact"}),
-            )
-        ),
-    ),
     expected_class_modules={
         "DenseCGSolver": "dense_cg_solver",
         "DenseGMRESSolver": "dense_gmres_solver",
@@ -2940,7 +2877,6 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LinearSolver": "linear_solver",
         "LinearSolverCapability": "algorithm_capabilities",
         "LinearSolverRegistry": "algorithm_capabilities",
-        "LinearSolverRequest": "algorithm_capabilities",
         "StationaryIterationSolver": "iterative_solver",
     },
     required_name_fragments={
