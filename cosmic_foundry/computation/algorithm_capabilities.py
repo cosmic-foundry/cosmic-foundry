@@ -204,15 +204,14 @@ class NumericInterval:
 class ParameterAxis:
     """Declared coordinate axis in a parameter-space schema."""
 
-    name: str
+    field: DescriptorField
     bins: tuple[ParameterBin | NumericInterval, ...]
-    descriptor_field: DescriptorField | None = None
     units: str | None = None
 
     @property
-    def field(self) -> DescriptorField:
-        """Descriptor field that locates a value on this axis."""
-        return self.descriptor_field or self.name
+    def label(self) -> str:
+        """Human-readable field label for diagnostics and rendering."""
+        return _field_label(self.field)
 
     def contains(self, coordinate: DescriptorCoordinate) -> bool:
         """Return whether ``coordinate`` belongs to one of the axis regions."""
@@ -739,7 +738,7 @@ class ParameterSpaceSchema:
         )
         if duplicates:
             raise ValueError(f"duplicate descriptor fields: {duplicates}")
-        empty_axes = [axis.name for axis in self.axes if not axis.bins]
+        empty_axes = [axis.label for axis in self.axes if not axis.bins]
         if empty_axes:
             raise ValueError(f"axes without bins or intervals: {empty_axes}")
         self.validate_derived_regions()
@@ -868,17 +867,16 @@ def _axis(
     *,
     units: str | None = None,
 ) -> ParameterAxis:
-    return ParameterAxis(_field_label(field), bins, descriptor_field=field, units=units)
+    return ParameterAxis(field, bins, units=units)
 
 
 def _bool_axis(field: DescriptorField) -> ParameterAxis:
     return ParameterAxis(
-        _field_label(field),
+        field,
         (
             ParameterBin("false", frozenset({False})),
             ParameterBin("true", frozenset({True})),
         ),
-        descriptor_field=field,
     )
 
 
