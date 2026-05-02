@@ -1686,6 +1686,11 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                 "owned linear-solver coverage patches must be built from class "
                 f"identity: {path.relative_to(_PROJECT_ROOT)}"
             )
+            manual_contract_atoms = self._manual_contract_atoms(tree)
+            assert not manual_contract_atoms, (
+                "linear-solver contract atoms must use canonical typed atoms: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
+            )
 
     @classmethod
     def _owned_coverage_locations(
@@ -1748,6 +1753,28 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                 if status == "owned":
                     calls.append(call_name)
         return tuple(calls)
+
+    @classmethod
+    def _manual_contract_atoms(cls, tree: ast.Module) -> tuple[str, ...]:
+        atoms: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if cls._call_name(node.func) != "contract":
+                continue
+            for kw in node.keywords:
+                if kw.arg not in {"requires", "provides"}:
+                    continue
+                atoms.extend(cls._string_literals(kw.value))
+        return tuple(atoms)
+
+    @classmethod
+    def _string_literals(cls, node: ast.AST) -> tuple[str, ...]:
+        values: list[str] = []
+        for child in ast.walk(node):
+            if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                values.append(child.value)
+        return tuple(values)
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
@@ -2819,8 +2846,10 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             {
                 "DirectSolver",
                 "IterativeSolver",
+                "KrylovSolver",
                 "LinearOperator",
                 "LinearSolver",
+                "StationaryIterationSolver",
             }
         ),
         "direct_solver": frozenset(
@@ -2906,11 +2935,13 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
         "IterativeSolver": "iterative_solver",
+        "KrylovSolver": "iterative_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
         "LinearSolverCapability": "algorithm_capabilities",
         "LinearSolverRegistry": "algorithm_capabilities",
         "LinearSolverRequest": "algorithm_capabilities",
+        "StationaryIterationSolver": "iterative_solver",
     },
     required_name_fragments={
         "DenseCGSolver": ("Dense", "Solver"),

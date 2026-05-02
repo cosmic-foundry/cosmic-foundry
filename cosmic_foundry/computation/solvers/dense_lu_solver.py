@@ -8,6 +8,8 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
+    Provision,
+    Requirement,
     budget_predicates,
     capability,
     contract,
@@ -45,8 +47,15 @@ class DenseLUSolver(DirectSolver):
             capability(
                 cls,
                 contract(
-                    requires=("dense_operator", "square_system", "full_rank"),
-                    provides=("solve", "direct", "exact", "factorized_dense"),
+                    requires=(
+                        Requirement.DENSE_OPERATOR,
+                        Requirement.SQUARE_SYSTEM,
+                        Requirement.FULL_RANK,
+                    ),
+                    provides=(
+                        Provision.EXACT,
+                        Provision.FACTORIZED_DENSE,
+                    ),
                 ),
                 priority=10,
                 coverage_predicates=cls._coverage_predicates,

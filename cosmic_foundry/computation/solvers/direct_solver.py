@@ -5,6 +5,7 @@ from __future__ import annotations
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
 from cosmic_foundry.computation.solvers._capability_claims import (
     LinearSolverCapability,
+    Requirement,
     capability,
     contract,
 )
@@ -58,8 +59,10 @@ class DirectSolver(LinearSolver):
             capability(
                 cls,
                 contract(
-                    requires=("linear_operator", "decomposition"),
-                    provides=("solve", "direct", "assembled_matrix"),
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.DECOMPOSITION,
+                    ),
                 ),
             ),
         )

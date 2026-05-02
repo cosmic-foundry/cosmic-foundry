@@ -7,6 +7,8 @@ from cosmic_foundry.computation.decompositions.svd_factorization import SVDFacto
 from cosmic_foundry.computation.solvers._capability_claims import (
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
+    Provision,
+    Requirement,
     budget_predicates,
     capability,
     contract,
@@ -60,14 +62,12 @@ class DenseSVDSolver(DirectSolver):
             capability(
                 cls,
                 contract(
-                    requires=("dense_operator",),
+                    requires=(Requirement.DENSE_OPERATOR,),
                     provides=(
-                        "solve",
-                        "direct",
-                        "least_squares",
-                        "minimum_norm",
-                        "rank_deficient",
-                        "factorized_dense",
+                        Provision.LEAST_SQUARES,
+                        Provision.MINIMUM_NORM,
+                        Provision.RANK_DEFICIENT,
+                        Provision.FACTORIZED_DENSE,
                     ),
                 ),
                 coverage_predicates=cls._coverage_predicates,

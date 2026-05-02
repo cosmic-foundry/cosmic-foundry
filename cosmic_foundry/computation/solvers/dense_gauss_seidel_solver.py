@@ -7,10 +7,13 @@ from typing import Any, NamedTuple
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.solvers._capability_claims import (
     LinearSolverCapability,
+    Requirement,
     capability,
     contract,
 )
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    StationaryIterationSolver,
+)
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -30,7 +33,7 @@ class _GSState(NamedTuple):
     iteration: Tensor  # 0-d int Tensor
 
 
-class DenseGaussSeidelSolver(IterativeSolver):
+class DenseGaussSeidelSolver(StationaryIterationSolver):
     """Gauss-Seidel iterative solver for A u = b.
 
     Each sweep updates every component sequentially:
@@ -106,8 +109,10 @@ class DenseGaussSeidelSolver(IterativeSolver):
             capability(
                 cls,
                 contract(
-                    requires=("linear_operator", "square_system"),
-                    provides=("solve", "iterative", "stationary", "assembled_matrix"),
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.SQUARE_SYSTEM,
+                    ),
                 ),
             ),
         )

@@ -10,13 +10,16 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
+    Requirement,
     budget_predicates,
     capability,
     contract,
     dense_matrix_predicates,
     linear_system_predicates,
 )
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    StationaryIterationSolver,
+)
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor, where
 
@@ -30,7 +33,7 @@ class _JacobiState(NamedTuple):
     iteration: Tensor  # 0-d int Tensor
 
 
-class DenseJacobiSolver(IterativeSolver):
+class DenseJacobiSolver(StationaryIterationSolver):
     """Jacobi iterative solver for A u = b.
 
     The damped fixed-point iteration u^{k+1} = u^k + ω D⁻¹(b − Au^k) is a
@@ -110,8 +113,11 @@ class DenseJacobiSolver(IterativeSolver):
             capability(
                 cls,
                 contract(
-                    requires=("linear_operator", "diagonal", "row_abs_sums"),
-                    provides=("solve", "iterative", "stationary", "matrix_free"),
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.DIAGONAL,
+                        Requirement.ROW_ABS_SUMS,
+                    ),
                 ),
                 coverage_predicates=cls._coverage_predicates,
                 coverage_priority=25,

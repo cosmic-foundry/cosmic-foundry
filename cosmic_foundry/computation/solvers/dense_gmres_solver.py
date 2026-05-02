@@ -14,12 +14,14 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
+    Provision,
+    Requirement,
     budget_predicates,
     capability,
     contract,
     linear_system_predicates,
 )
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -31,7 +33,7 @@ class _GMRESState(NamedTuple):
     iteration: Tensor  # restart cycle count, rank-0 int Tensor
 
 
-class DenseGMRESSolver(IterativeSolver):
+class DenseGMRESSolver(KrylovSolver):
     """GMRES(k) solver for A u = b; A must be non-singular (not necessarily SPD).
 
     Each restart cycle builds a rank-k Krylov subspace
@@ -158,8 +160,8 @@ class DenseGMRESSolver(IterativeSolver):
             capability(
                 cls,
                 contract(
-                    requires=("linear_operator", "nonsingular"),
-                    provides=("solve", "iterative", "krylov", "matrix_free", "general"),
+                    requires=(Requirement.LINEAR_OPERATOR, Requirement.NONSINGULAR),
+                    provides=(Provision.GENERAL,),
                 ),
                 coverage_predicates=cls._coverage_predicates,
                 coverage_priority=15,

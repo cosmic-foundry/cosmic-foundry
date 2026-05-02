@@ -13,12 +13,14 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
     LinearSolverCapability,
+    Provision,
+    Requirement,
     budget_predicates,
     capability,
     contract,
     linear_system_predicates,
 )
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -32,7 +34,7 @@ class _CGState(NamedTuple):
     iteration: Tensor  # 0-d int Tensor
 
 
-class DenseCGSolver(IterativeSolver):
+class DenseCGSolver(KrylovSolver):
     """Conjugate Gradient solver for A u = b; A must be symmetric positive definite.
 
     CG minimizes ‖u − u*‖_A² over successive Krylov subspaces
@@ -113,8 +115,11 @@ class DenseCGSolver(IterativeSolver):
             capability(
                 cls,
                 contract(
-                    requires=("linear_operator", "symmetric_positive_definite"),
-                    provides=("solve", "iterative", "krylov", "matrix_free", "spd"),
+                    requires=(
+                        Requirement.LINEAR_OPERATOR,
+                        Requirement.SYMMETRIC_POSITIVE_DEFINITE,
+                    ),
+                    provides=(Provision.SPD,),
                 ),
                 priority=10,
                 coverage_predicates=cls._coverage_predicates,
