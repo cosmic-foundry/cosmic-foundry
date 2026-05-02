@@ -137,6 +137,13 @@ def _render_page(class_name: str, module_path: str, test_module: str) -> str:
 
 
 def _render_index(stems: list[str]) -> str:
+    if not stems:
+        return """\
+# Continuous layer
+
+No auto-generated continuous-layer notebooks are available.  The generator
+only emits notebooks for modules that have matching per-module test files.
+"""
     entries = "\n".join(stems)
     return f"""\
 # Continuous layer
@@ -168,6 +175,11 @@ def generate(out_dir: Path = _DOCS_OUT) -> None:
         page = _render_page(class_name, module_path, test_module)
         (out_dir / f"{stem}.md").write_text(page)
         stems.append(stem)
+
+    current = {f"{stem}.md" for stem in stems} | {"index.md"}
+    for path in out_dir.glob("*.md"):
+        if path.name not in current:
+            path.unlink()
 
     (out_dir / "index.md").write_text(_render_index(stems))
 

@@ -7,6 +7,7 @@ A computational astrophysics engine for multi-physics simulation.
 :caption: Concepts
 
 continuous/index
+capability_atlas
 ```
 
 ```{toctree}

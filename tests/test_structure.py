@@ -22,6 +22,7 @@ Claim types:
 from __future__ import annotations
 
 import ast
+import html
 import importlib
 import inspect
 import pkgutil
@@ -1297,6 +1298,615 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
 
 
+@dataclass(frozen=True)
+class _AtlasProjection:
+    """One descriptor template rendered into the capability atlas."""
+
+    schema: ParameterSpaceSchema
+    descriptor: ParameterDescriptor
+    title: str
+    shown_axes: tuple[str, ...]
+    fixed_axes: tuple[str, ...]
+    marginalized_axes: tuple[str, ...]
+    patches: tuple[CoveragePatch, ...] = ()
+
+
+@dataclass(frozen=True)
+class _AtlasGap:
+    """Known uncovered descriptor region rendered into the atlas."""
+
+    name: str
+    region: str
+    descriptor: tuple[str, ...]
+    selected_owner: str
+    partial_owners: tuple[str, ...]
+    required_capability: str
+
+
+@dataclass(frozen=True)
+class _AtlasEvidence:
+    """Numerical claim metadata rendered on top of an atlas cell."""
+
+    cell: str
+    claim_file: str
+    evidence_kind: str
+    sampling: str
+
+
+@dataclass(frozen=True)
+class _AtlasPlotSpec:
+    """One generated SVG projection of descriptor cells."""
+
+    filename: str
+    title: str
+    schema: str
+    x_axis: str
+    y_axis: str
+    cells: tuple[str, ...]
+    caption: str
+
+
+def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
+    solve_schema = solve_relation_parameter_schema()
+    linear_schema = linear_solver_parameter_schema()
+    decomposition_schema = decomposition_parameter_schema()
+
+    return (
+        _AtlasProjection(
+            solve_schema,
+            _SolveRelationSchemaClaim._solve_descriptor(),
+            "Solve relation: square linear system",
+            (
+                "map_linearity_defect",
+                "dim_x",
+                "dim_y",
+                "acceptance_relation",
+            ),
+            (
+                "residual_target_available",
+                "objective_relation",
+                "target_is_zero",
+            ),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            solve_schema,
+            _SolveRelationSchemaClaim._solve_descriptor(
+                dim_x=3,
+                dim_y=5,
+                objective_relation="least_squares",
+            ),
+            "Solve relation: least-squares relation",
+            (
+                "map_linearity_defect",
+                "dim_x",
+                "dim_y",
+                "objective_relation",
+            ),
+            ("residual_target_available", "acceptance_relation"),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            solve_schema,
+            _SolveRelationSchemaClaim._solve_descriptor(
+                map_linearity_defect=None,
+                map_linearity_evidence="unavailable",
+                residual_target_available=False,
+            ),
+            "Solve relation: public nonlinear-solver gap",
+            (
+                "map_linearity_defect",
+                "residual_target_available",
+                "acceptance_relation",
+            ),
+            ("target_is_zero", "derivative_oracle_kind"),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            solve_schema,
+            _SolveRelationSchemaClaim._solve_descriptor(
+                auxiliary_scalar_count=1,
+                normalization_constraint_count=1,
+                acceptance_relation="eigenpair_residual",
+                objective_relation="spectral_residual",
+            ),
+            "Solve relation: eigenproblem region",
+            (
+                "auxiliary_scalar_count",
+                "normalization_constraint_count",
+                "acceptance_relation",
+            ),
+            ("objective_relation", "dim_x", "dim_y"),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            solve_schema,
+            _SolveRelationSchemaClaim._solve_descriptor(
+                acceptance_relation="eigenpair_residual",
+            ),
+            "Invalid solve relation: eigenpair without spectral data",
+            (
+                "auxiliary_scalar_count",
+                "normalization_constraint_count",
+                "acceptance_relation",
+            ),
+            ("objective_relation",),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            linear_schema,
+            _SolveRelationSchemaClaim._linear_descriptor(),
+            "Linear solver: SPD full-rank dense descriptor",
+            (
+                "dim_x",
+                "dim_y",
+                "symmetry_defect",
+                "coercivity_lower_bound",
+                "condition_estimate",
+            ),
+            (
+                "singular_value_lower_bound",
+                "operator_application_available",
+                "linear_operator_matrix_available",
+            ),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            linear_schema,
+            _SolveRelationSchemaClaim._linear_descriptor(
+                singular_value_lower_bound=0.0,
+                rank_estimate=3,
+                nullity_estimate=1,
+            ),
+            "Linear solver: rank-deficient descriptor",
+            (
+                "singular_value_lower_bound",
+                "rank_estimate",
+                "nullity_estimate",
+                "rhs_consistency_defect",
+            ),
+            ("dim_x", "dim_y", "objective_relation"),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            linear_schema,
+            _SolveRelationSchemaClaim._linear_descriptor(
+                linear_operator_matrix_available=False,
+                matrix_representation_available=False,
+            ),
+            "Linear solver: matrix-free descriptor",
+            (
+                "linear_operator_matrix_available",
+                "operator_application_available",
+                "matvec_cost_fmas",
+            ),
+            ("dim_x", "dim_y", "map_linearity_defect"),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            linear_schema,
+            _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
+            "Invalid linear solver: nonsquare SPD descriptor",
+            (
+                "dim_x",
+                "dim_y",
+                "symmetry_defect",
+                "coercivity_lower_bound",
+            ),
+            ("map_linearity_defect",),
+            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+        ),
+        _AtlasProjection(
+            decomposition_schema,
+            _SolveRelationSchemaClaim._decomposition_descriptor(),
+            "Decomposition: square full-rank dense descriptor",
+            (
+                "matrix_rows",
+                "matrix_columns",
+                "singular_value_lower_bound",
+                "condition_estimate",
+            ),
+            ("factorization_work_budget_fmas", "factorization_memory_budget_bytes"),
+            ("linear_operator_memory_bytes", "assembly_cost_fmas"),
+        ),
+        _AtlasProjection(
+            decomposition_schema,
+            _SolveRelationSchemaClaim._decomposition_descriptor(
+                matrix_columns=5,
+            ),
+            "Invalid decomposition: nonsquare coercive descriptor",
+            (
+                "matrix_rows",
+                "matrix_columns",
+                "coercivity_lower_bound",
+            ),
+            ("factorization_work_budget_fmas", "factorization_memory_budget_bytes"),
+            ("linear_operator_memory_bytes", "assembly_cost_fmas"),
+        ),
+    )
+
+
+def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
+    return (
+        _AtlasGap(
+            name="nonlinear algebraic solve F(x) = 0",
+            region="nonlinear_root",
+            descriptor=(
+                "map_linearity_defect > eps or unavailable",
+                "residual_target_available = false or target_is_zero = true",
+                "derivative_oracle_kind in {none, matrix, jvp, vjp, jacobian_callback}",
+                "acceptance_relation = residual_below_tolerance",
+                "requested_residual_tolerance = finite",
+            ),
+            selected_owner="none",
+            partial_owners=(
+                "time_integrators._newton.nonlinear_solve is internal stage machinery, "
+                "not a public nonlinear-system solver capability.",
+            ),
+            required_capability=(
+                "NonlinearSolver with descriptor bounds for residual norm, Jacobian "
+                "availability, local convergence radius or globalization policy, "
+                "line-search or trust-region safeguards, max residual evaluations, "
+                "and failure reporting."
+            ),
+        ),
+    )
+
+
+def _capability_atlas_evidence() -> tuple[_AtlasEvidence, ...]:
+    return ()
+
+
+def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
+    return (
+        _AtlasPlotSpec(
+            "solve_relation.svg",
+            "Solve-Relation Regions",
+            "solve_relation",
+            "dim_x",
+            "dim_y",
+            (
+                "Solve relation: square linear system",
+                "Solve relation: least-squares relation",
+                "Solve relation: public nonlinear-solver gap",
+                "Solve relation: eigenproblem region",
+                "Invalid solve relation: eigenpair without spectral data",
+            ),
+            "Solve-relation projection over unknown and residual dimensions.",
+        ),
+        _AtlasPlotSpec(
+            "linear_solver.svg",
+            "Linear-Solver Descriptor Cells",
+            "linear_solver",
+            "dim_x",
+            "dim_y",
+            (
+                "Linear solver: SPD full-rank dense descriptor",
+                "Linear solver: rank-deficient descriptor",
+                "Linear solver: matrix-free descriptor",
+                "Invalid linear solver: nonsquare SPD descriptor",
+            ),
+            "Linear-solver projection over unknown and residual dimensions.",
+        ),
+        _AtlasPlotSpec(
+            "decomposition.svg",
+            "Decomposition Descriptor Cells",
+            "decomposition",
+            "matrix_rows",
+            "matrix_columns",
+            (
+                "Decomposition: square full-rank dense descriptor",
+                "Invalid decomposition: nonsquare coercive descriptor",
+            ),
+            "Decomposition projection over matrix row and column dimensions.",
+        ),
+    )
+
+
+def _descriptor_value(descriptor: ParameterDescriptor, field: str) -> str:
+    coordinate = descriptor.coordinate(field)
+    value = "unknown" if coordinate.value is None else str(coordinate.value)
+    if coordinate.evidence != "exact":
+        return f"{value} ({coordinate.evidence})"
+    return value
+
+
+def _matched_regions(
+    schema: ParameterSpaceSchema,
+    descriptor: ParameterDescriptor,
+) -> str:
+    matched = [
+        region.name for region in schema.derived_regions if region.contains(descriptor)
+    ]
+    return ", ".join(matched) if matched else "none"
+
+
+def _status_style(status: str) -> tuple[str, str]:
+    if status == "invalid":
+        return "#b42318", "#fee4e2"
+    if status == "owned":
+        return "#027a48", "#d1fadf"
+    if status == "rejected":
+        return "#b54708", "#fef0c7"
+    return "#475467", "#f2f4f7"
+
+
+def _plot_coordinate(value: str, *, axis_min: float, axis_max: float) -> float:
+    numeric = float(value)
+    if axis_max == axis_min:
+        return 0.5
+    return (numeric - axis_min) / (axis_max - axis_min)
+
+
+def _svg_text(
+    x: float,
+    y: float,
+    text: str,
+    *,
+    size: int = 13,
+    anchor: str = "start",
+    weight: str = "400",
+) -> str:
+    return (
+        f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" '
+        f'font-weight="{weight}" text-anchor="{anchor}" '
+        f'font-family="Inter, Arial, sans-serif" fill="#101828">'
+        f"{html.escape(text)}</text>"
+    )
+
+
+def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
+    projections = {
+        projection.title: projection
+        for projection in _capability_atlas_projections()
+        if projection.schema.name == spec.schema
+    }
+    selected = [projections[cell] for cell in spec.cells]
+    x_values = [
+        float(projection.descriptor.coordinate(spec.x_axis).value)
+        for projection in selected
+        if projection.descriptor.coordinate(spec.x_axis).value is not None
+    ]
+    y_values = [
+        float(projection.descriptor.coordinate(spec.y_axis).value)
+        for projection in selected
+        if projection.descriptor.coordinate(spec.y_axis).value is not None
+    ]
+    x_min, x_max = min(x_values), max(x_values)
+    y_min, y_max = min(y_values), max(y_values)
+    x_pad = max(1.0, (x_max - x_min) * 0.2)
+    y_pad = max(1.0, (y_max - y_min) * 0.2)
+    x_min -= x_pad
+    x_max += x_pad
+    y_min -= y_pad
+    y_max += y_pad
+
+    width = 980
+    height = 560
+    left = 94
+    right = 330
+    top = 72
+    bottom = 88
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img" '
+        f'aria-labelledby="{spec.filename}-title {spec.filename}-desc">',
+        f'<title id="{spec.filename}-title">{html.escape(spec.title)}</title>',
+        f'<desc id="{spec.filename}-desc">{html.escape(spec.caption)}</desc>',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        _svg_text(30, 38, spec.title, size=24, weight="700"),
+        _svg_text(30, 60, spec.caption, size=13),
+        f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" '
+        f'y2="{top + plot_h}" stroke="#475467" stroke-width="1.4"/>',
+        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" '
+        f'stroke="#475467" stroke-width="1.4"/>',
+        _svg_text(
+            left + plot_w / 2, height - 28, spec.x_axis, size=14, anchor="middle"
+        ),
+        (
+            f'<text x="24" y="{top + plot_h / 2:.1f}" font-size="14" '
+            'font-family="Inter, Arial, sans-serif" fill="#101828" '
+            f'text-anchor="middle" transform="rotate(-90 24 {top + plot_h / 2:.1f})">'
+            f"{html.escape(spec.y_axis)}</text>"
+        ),
+    ]
+
+    for tick in range(5):
+        x_frac = tick / 4
+        y_frac = tick / 4
+        x = left + x_frac * plot_w
+        y = top + plot_h - y_frac * plot_h
+        x_value = x_min + x_frac * (x_max - x_min)
+        y_value = y_min + y_frac * (y_max - y_min)
+        parts.extend(
+            [
+                f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" '
+                f'y2="{top + plot_h}" stroke="#eaecf0" stroke-width="1"/>',
+                f'<line x1="{left}" y1="{y:.1f}" x2="{left + plot_w}" '
+                f'y2="{y:.1f}" stroke="#eaecf0" stroke-width="1"/>',
+                _svg_text(
+                    x, top + plot_h + 22, f"{x_value:.1f}", size=11, anchor="middle"
+                ),
+                _svg_text(left - 12, y + 4, f"{y_value:.1f}", size=11, anchor="end"),
+            ]
+        )
+
+    legend_y = 98
+    for status in ("uncovered", "invalid", "owned", "rejected"):
+        stroke, fill = _status_style(status)
+        parts.extend(
+            [
+                f'<circle cx="{width - 250}" cy="{legend_y}" r="7" '
+                f'fill="{fill}" stroke="{stroke}" stroke-width="2"/>',
+                _svg_text(width - 234, legend_y + 4, status, size=12),
+            ]
+        )
+        legend_y += 24
+
+    label_y = 225
+    for index, projection in enumerate(selected, start=1):
+        status = projection.schema.cell_status(
+            projection.descriptor, projection.patches
+        )
+        stroke, fill = _status_style(status)
+        x_raw = str(projection.descriptor.coordinate(spec.x_axis).value)
+        y_raw = str(projection.descriptor.coordinate(spec.y_axis).value)
+        x = left + _plot_coordinate(x_raw, axis_min=x_min, axis_max=x_max) * plot_w
+        y = (
+            top
+            + plot_h
+            - _plot_coordinate(y_raw, axis_min=y_min, axis_max=y_max) * plot_h
+        )
+        regions = _matched_regions(projection.schema, projection.descriptor)
+        parts.extend(
+            [
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="13" fill="{fill}" '
+                f'stroke="{stroke}" stroke-width="2.4"/>',
+                _svg_text(x, y + 5, str(index), size=12, anchor="middle", weight="700"),
+                _svg_text(
+                    width - 292, label_y, f"{index}. {projection.title}", size=12
+                ),
+                _svg_text(width - 274, label_y + 17, f"status: {status}", size=11),
+                _svg_text(width - 274, label_y + 32, f"regions: {regions}", size=11),
+            ]
+        )
+        label_y += 58
+
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
+def _render_capability_atlas_plots() -> dict[str, str]:
+    return {
+        spec.filename: _render_capability_atlas_plot(spec)
+        for spec in _capability_atlas_plot_specs()
+    }
+
+
+def _render_capability_atlas() -> str:
+    lines = [
+        "# Capability Coverage Atlas",
+        "",
+        "<!-- Generated from tests/test_structure.py; do not edit by hand. -->",
+        "",
+        "This page is a projection of the parameter-space schemas used by the",
+        "structural test registry.  Each plot names the axes shown directly, the",
+        "coordinates fixed outside the projection, and the higher-dimensional axes",
+        "that are only summarized.  Ownership is intentionally sparse at this",
+        "stage: solver and decomposition implementations have not yet been",
+        "converted from string-set capability tags to coverage patches.",
+        "",
+        "Status legend:",
+        "",
+        "- `invalid`: the descriptor violates a schema validity rule.",
+        "- `owned`: at least one coverage patch owns the descriptor.",
+        "- `rejected`: coverage patches intentionally reject the descriptor.",
+        "- `uncovered`: the descriptor is valid but no coverage patch owns it.",
+        "",
+        "## Projection Plots",
+        "",
+    ]
+    projections = {
+        projection.title: projection for projection in _capability_atlas_projections()
+    }
+    for spec in _capability_atlas_plot_specs():
+        lines.extend(
+            [
+                f"### {spec.title}",
+                "",
+                f"![{spec.title}](capability_atlas_plots/{spec.filename})",
+                "",
+                f"Shown axes: `{spec.x_axis}` and `{spec.y_axis}`.",
+            ]
+        )
+        fixed = sorted(
+            {field for cell in spec.cells for field in projections[cell].fixed_axes}
+        )
+        marginalized = sorted(
+            {
+                field
+                for cell in spec.cells
+                for field in projections[cell].marginalized_axes
+            }
+        )
+        lines.extend(
+            [
+                "Fixed axes: " + ", ".join(f"`{field}`" for field in fixed) + ".",
+                "Marginalized axes: "
+                + ", ".join(f"`{field}`" for field in marginalized)
+                + ".",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Coverage Patches",
+            "",
+            "No solver or decomposition ownership patches are declared in this",
+            "atlas yet.  The next sprint items convert existing linear-solver and",
+            "decomposition capabilities into bounded coverage patches with explicit",
+            "cost models and priority rules.",
+            "",
+            "## Known Gaps",
+            "",
+        ]
+    )
+    for gap in _capability_atlas_gaps():
+        lines.extend(
+            [
+                f"### {gap.name}",
+                "",
+                f"- Region: `{gap.region}`",
+                f"- Selected owner: {gap.selected_owner}",
+                "- Descriptor:",
+            ]
+        )
+        lines.extend(f"  - `{entry}`" for entry in gap.descriptor)
+        lines.append("- Existing partial owners:")
+        lines.extend(f"  - {owner}" for owner in gap.partial_owners)
+        lines.extend(
+            [
+                "- Required capability before this region is owned: "
+                f"{gap.required_capability}",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "## Numerical Evidence Overlay",
+            "",
+            "No owned solver or decomposition coverage patch has numerical evidence",
+            "metadata in this atlas yet.  Until ownership patches exist, numerical",
+            "correctness, convergence, performance, and regression claims remain",
+            "outside this projection rather than being attached to cells.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+class _CapabilityAtlasDocClaim(Claim[None]):
+    """Claim: capability atlas documentation can be generated."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/capability_atlas_doc_generates"
+
+    def check(self, _calibration: None) -> None:
+        expected = _render_capability_atlas()
+        assert "![Solve-Relation Regions]" in expected
+        assert "![Linear-Solver Descriptor Cells]" in expected
+        assert "![Decomposition Descriptor Cells]" in expected
+        assert _render_capability_atlas_plots()
+
+
 # ---------------------------------------------------------------------------
 # Auto-discovery and registry
 # ---------------------------------------------------------------------------
@@ -2114,6 +2724,7 @@ _CLAIMS: list[Claim[None]] = [
     _AutoDiscoveryImportClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
+    _CapabilityAtlasDocClaim(),
 ]
 
 
