@@ -41,6 +41,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     CoverageRegion,
     DerivedParameterRegion,
     DescriptorCoordinate,
+    DescriptorField,
     EvidencePredicate,
     InvalidCellRule,
     LinearSolverField,
@@ -818,6 +819,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_axis_has_one_identity()
+        self._assert_descriptor_has_no_schema_identity()
         schema = ParameterSpaceSchema(
             name="demo_solve_relation",
             axes=(
@@ -985,6 +987,25 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         raise AssertionError("ParameterAxis class not found")
 
     @staticmethod
+    def _assert_descriptor_has_no_schema_identity() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != "ParameterDescriptor":
+                continue
+            fields = {
+                child.target.id
+                for child in node.body
+                if isinstance(child, ast.AnnAssign)
+                and isinstance(child.target, ast.Name)
+            }
+            assert "coordinates" in fields
+            assert "schema" not in fields
+            return
+        raise AssertionError("ParameterDescriptor class not found")
+
+    @staticmethod
     def _descriptor(
         *,
         map_linearity_defect: float | None = 0.0,
@@ -995,8 +1016,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         operator_representation: str = "assembled_dense",
     ) -> ParameterDescriptor:
         return ParameterDescriptor(
-            schema="demo_solve_relation",
-            coordinates={
+            {
                 "map_linearity_defect": DescriptorCoordinate(map_linearity_defect),
                 "dim_x": DescriptorCoordinate(dim_x),
                 "dim_y": DescriptorCoordinate(dim_y),
@@ -1005,7 +1025,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 "operator_representation": DescriptorCoordinate(
                     operator_representation
                 ),
-            },
+            }
         )
 
 
@@ -1195,11 +1215,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
         device_kind: str = "cpu",
         work_budget_fmas: float = 1.0e9,
         memory_budget_bytes: float = 1.0e9,
-        schema: str = "solve_relation",
     ) -> ParameterDescriptor:
         return ParameterDescriptor(
-            schema=schema,
-            coordinates={
+            {
                 LinearSolverField.DIM_X: DescriptorCoordinate(dim_x),
                 LinearSolverField.DIM_Y: DescriptorCoordinate(dim_y),
                 LinearSolverField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(
@@ -1248,7 +1266,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 LinearSolverField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
                     memory_budget_bytes
                 ),
-            },
+            }
         )
 
     @classmethod
@@ -1272,10 +1290,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
         rhs_consistency_defect: float = 0.0,
         **solve_overrides: Any,
     ) -> ParameterDescriptor:
-        descriptor = cls._solve_descriptor(schema="linear_solver", **solve_overrides)
+        descriptor = cls._solve_descriptor(**solve_overrides)
         return ParameterDescriptor(
-            schema=descriptor.schema,
-            coordinates=descriptor.coordinates
+            descriptor.coordinates
             | {
                 LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: (
                     DescriptorCoordinate(linear_operator_matrix_available)
@@ -1318,7 +1335,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
                     rhs_consistency_defect
                 ),
-            },
+            }
         )
 
     @staticmethod
@@ -1344,8 +1361,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         linear_operator_matrix_available: bool = True,
     ) -> ParameterDescriptor:
         return ParameterDescriptor(
-            schema="decomposition",
-            coordinates={
+            {
                 "matrix_rows": DescriptorCoordinate(matrix_rows),
                 "matrix_columns": DescriptorCoordinate(matrix_columns),
                 "factorization_work_budget_fmas": DescriptorCoordinate(
@@ -1394,7 +1410,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
                     rhs_consistency_defect
                 ),
-            },
+            }
         )
 
 
@@ -1865,7 +1881,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
                 )
             elif isinstance(predicate, AffineComparisonPredicate):
                 cls._satisfy_affine_predicate(fields, coordinates, predicate)
-        descriptor = ParameterDescriptor(schema.name, coordinates)
+        descriptor = ParameterDescriptor(coordinates)
         assert region.contains(descriptor)
         return descriptor
 
@@ -1935,10 +1951,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             for candidate in candidates:
                 coordinate = DescriptorCoordinate(candidate)
                 if axis.contains(coordinate) and predicate.evaluate(
-                    ParameterDescriptor(
-                        axis.label,
-                        {axis.field: coordinate},
-                    )
+                    ParameterDescriptor({axis.field: coordinate})
                 ):
                     return candidate
         raise AssertionError(f"comparison predicate {predicate!r} has no axis witness")
@@ -1957,11 +1970,11 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
     @classmethod
     def _satisfy_affine_predicate(
         cls,
-        fields: dict[str, ParameterAxis],
-        coordinates: dict[str, DescriptorCoordinate],
+        fields: dict[DescriptorField, ParameterAxis],
+        coordinates: dict[DescriptorField, DescriptorCoordinate],
         predicate: AffineComparisonPredicate,
     ) -> None:
-        if predicate.evaluate(ParameterDescriptor("witness", coordinates)):
+        if predicate.evaluate(ParameterDescriptor(coordinates)):
             return
         adjustable = next(iter(predicate.terms))
         coefficient = predicate.terms[adjustable]
@@ -1979,7 +1992,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             coordinates[adjustable] = DescriptorCoordinate(candidate)
             if fields[adjustable].contains(
                 coordinates[adjustable]
-            ) and predicate.evaluate(ParameterDescriptor("witness", coordinates)):
+            ) and predicate.evaluate(ParameterDescriptor(coordinates)):
                 return
         raise AssertionError(
             f"affine predicate {predicate!r} has no descriptor witness"
