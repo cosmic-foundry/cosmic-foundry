@@ -924,8 +924,12 @@ The sprint is complete when the following are true:
   selected owners, intentional rejections, invalid cells, and
   uncovered-but-valid cells.  It must include the predicate bounds, the
   certificate sources accepted by the selector, the cost model, and the priority
-  rule for every owned overlap.  Uncovered cells remain visible even before
-  anyone has written a missing-capability note for them.
+  rule for every owned overlap.  It must also overlay numerical-test coverage:
+  which descriptor cells have correctness, convergence, performance, or
+  regression claims exercising the owned capability, which claim file owns that
+  evidence, and whether the evidence is representative sampling or boundary
+  sampling.  Uncovered cells remain visible even before anyone has written a
+  missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
   a higher-dimensional schema, not the schema itself.  Each plot or table must
   state which axes are shown, which axes are fixed, which axes are marginalized
@@ -969,7 +973,12 @@ The sprint is complete when the following are true:
   why; rank-deficient minimum-norm requests select SVD; strictly diagonally
   dominant systems select Jacobi when the iteration budget is satisfied;
   nonsymmetric matrix-free systems select GMRES; unsupported descriptors reject.
-  Ambiguous overlap without explicit priority remains a test failure.
+  Numerical claim registries should expose enough descriptor metadata for the
+  atlas to overlay tested cells on top of owned cells.  An owned region without
+  numerical evidence is allowed only when it is explicitly marked structural-only
+  or deferred, so the documentation can distinguish "claimed and tested" from
+  "claimed but not numerically exercised".  Ambiguous overlap without explicit
+  priority remains a test failure.
 - **No prose-only ownership.**  The generated documentation may contain human
   explanation, but every ownership, rejection, invalidity, overlap, priority, and
   missing-region statement in it must trace back to a structural claim in
@@ -996,32 +1005,27 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add `ParameterSpaceSchema`, axis, bin/interval, invalid-cell, descriptor, and
-   coverage-patch machinery to
-   `cosmic_foundry.computation.algorithm_capabilities`, with structural tests
-   proving that coverage patches reference declared axes, unknown values are
-   handled explicitly, unsupported predicate kinds fail closed, and invalid
-   cells are distinguishable from uncovered valid cells.
-2. Add the solve-relation, linear-solver, and decomposition parameter-space
+1. Add the solve-relation, linear-solver, and decomposition parameter-space
    schemas before changing any solver ownership.  Tests should prove that named
    problem classes such as linear system, least squares, nonlinear root, and
    eigenproblem are derived regions over primitive axes, not primary axes, and
    that every generated coverage cell maps to a valid descriptor template.
-3. Generate a capability coverage document from the schemas and coverage patches,
+2. Generate a capability coverage document from the schemas and coverage patches,
    all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
-   invalid, and uncovered cells.  The structural test should fail if the
-   generated documentation is stale.  Seed it with the public nonlinear-solver
-   gap as an annotation on an already-visible uncovered nonlinear-root region.
-4. Add `LinearOperatorDescriptor` construction for small assembled operators and
+   invalid, uncovered, and numerically tested cells.  The structural test should
+   fail if the generated documentation is stale.  Seed it with the public
+   nonlinear-solver gap as an annotation on an already-visible uncovered
+   nonlinear-root region.
+3. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-5. Convert linear solver capabilities to coverage patches and update
+4. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-6. Convert decomposition capabilities to coverage patches, including
+5. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-7. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+6. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
