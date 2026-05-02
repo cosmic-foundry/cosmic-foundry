@@ -809,12 +809,12 @@ Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
 primitive choices, and alternative ordinals are rendering consequences.
-Atlas-local dataclasses that store atlas text are documentation notes, not
-semantic atlas models.  Known gap notes annotate already-derived uncovered
-regions; they do not own, select, define, or group regions.  Structural tests
-reject any return to presentation strings in notes, wrapper evidence objects,
-stored schema identities, stored ownership-region lists, generated-artifact
-models, or hand-declared axis roles as semantic keys.
+Atlas-local dataclasses must not store atlas presentation text.  Gap sections
+are computed from valid descriptor evidence whose schema cell status is
+uncovered; they are not manually recorded notes.  Structural tests reject any
+return to presentation-text dataclasses, wrapper evidence objects, stored schema
+identities, stored ownership-region lists, generated-artifact models, or
+hand-declared axis roles as semantic keys.
 
 The sprint is complete when the following are true:
 
@@ -990,33 +990,13 @@ The sprint is complete when the following are true:
   certificate, budget, tolerance, or backend axis; in that case the projection
   must show conditional ownership or split the projection until the dependency is
   visible.
-- **Gaps are first-class regions.**  A missing algorithm can be represented as an
-  explicitly named unowned descriptor region after the coverage atlas exposes
-  it.  For example, the current solver coverage page should show blank coverage
-  over the derived nonlinear-root region; that blank can then be
-  tagged as:
-
-  ```
-  Region: nonlinear algebraic solve F(x) = 0
-  Descriptor:
-    map_linearity_defect > eps or unknown
-    residual_target_available = false or target_is_zero = true
-    jacobian_available in {true, false}
-    acceptance_relation = residual_below_tolerance
-    requested_residual_tolerance = finite
-  Selected owner: none
-  Existing partial owners:
-    time_integrators._newton.nonlinear_solve is internal stage machinery, not a
-    public nonlinear-system solver capability.
-  Required capability before this region is owned:
-    NonlinearSolver with descriptor bounds for residual norm, Jacobian
-    availability, local convergence radius or globalization policy, line-search
-    or trust-region safeguards, max residual evaluations, and failure reporting.
-  ```
-
-  The important point is that the nonlinear-root region is derived from
-  primitive axes before this note is written.  The note records a known gap; the
-  axis grid is what gives us a chance to find unknown gaps.
+- **Gaps are computed from uncovered cells.**  A missing algorithm is not a
+  manually recorded note.  The atlas computes gaps by classifying descriptor
+  evidence and schema regions against the current ownership regions: invalid
+  cells are excluded, owned cells are excluded, and valid cells with no covering
+  owner are rendered as uncovered.  Human-readable missing-capability prose can
+  be generated from those objects later, but it must not become a parallel
+  source of region identity.
 - **Coverage is tested at the schema level.**  Structural tests validate the
   schema before any algorithm selection: every axis has bins or intervals; every
   descriptor field referenced by an axis exists; every coverage region references

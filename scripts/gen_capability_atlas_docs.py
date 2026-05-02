@@ -635,24 +635,37 @@ def render_capability_atlas() -> str:
             ]
         )
 
-    lines.extend(["## Known Gaps", ""])
-    for gap in atlas._capability_atlas_gap_notes():
+    lines.extend(["## Computed Gaps", ""])
+    uncovered = atlas._capability_atlas_uncovered_descriptors()
+    if uncovered:
+        for index, (schema, descriptor) in enumerate(uncovered, start=1):
+            regions = atlas._atlas_regions_for_schema(schema)
+            assert schema.cell_status(descriptor, regions) == "uncovered"
+            lines.extend(
+                [
+                    f"### Uncovered descriptor {index}",
+                    "",
+                    f"- Schema: `{schema.name}`",
+                    "- Coordinates:",
+                ]
+            )
+            lines.extend(
+                "  - "
+                f"`{atlas._field_label(axis.field)}`: "
+                f"`{atlas._descriptor_value(descriptor, axis.field)}`"
+                for axis in schema.axes
+            )
+            lines.extend(
+                [
+                    "- Matched schema regions: " f"{_matched_regions(descriptor)}",
+                    "",
+                ]
+            )
+    else:
         lines.extend(
             [
-                f"### {gap.name}",
-                "",
-                f"- Region: `{gap.region}`",
-                f"- Selected owner: {gap.selected_owner}",
-                "- Descriptor:",
-            ]
-        )
-        lines.extend(f"  - `{entry}`" for entry in gap.descriptor)
-        lines.append("- Existing partial owners:")
-        lines.extend(f"  - {owner}" for owner in gap.partial_owners)
-        lines.extend(
-            [
-                "- Required capability before this region is owned: "
-                f"{gap.required_capability}",
+                "No valid descriptor evidence is currently outside declared",
+                "ownership regions.",
                 "",
             ]
         )

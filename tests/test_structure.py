@@ -29,9 +29,9 @@ import inspect
 import pkgutil
 import sys
 import types
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NewType, TypeAlias, get_args, get_origin, get_type_hints
+from typing import Any, NewType, TypeAlias
 
 import pytest
 
@@ -2361,19 +2361,8 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         return None
 
 
-@dataclass(frozen=True)
-class _AtlasGapNote:
-    """Documentation note for a known uncovered descriptor region."""
-
-    name: _AtlasText
-    region: _AtlasText
-    descriptor: tuple[_AtlasText, ...]
-    selected_owner: _AtlasText
-    partial_owners: tuple[_AtlasText, ...]
-    required_capability: _AtlasText
-
-
 _AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
+_AtlasUncoveredDescriptor: TypeAlias = tuple[ParameterSpaceSchema, ParameterDescriptor]
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -2465,38 +2454,14 @@ def _descriptor_inhabits_schema(
     return True
 
 
-def _capability_atlas_gap_notes() -> tuple[_AtlasGapNote, ...]:
-    return (
-        _AtlasGapNote(
-            name=_AtlasText("nonlinear algebraic solve F(x) = 0"),
-            region=_AtlasText("nonlinear_root"),
-            descriptor=(
-                _AtlasText("map_linearity_defect > eps or unavailable"),
-                _AtlasText(
-                    "residual_target_available = false or target_is_zero = true"
-                ),
-                _AtlasText(
-                    "derivative_oracle_kind in "
-                    "{none, matrix, jvp, vjp, jacobian_callback}"
-                ),
-                _AtlasText("acceptance_relation = residual_below_tolerance"),
-                _AtlasText("requested_residual_tolerance = finite"),
-            ),
-            selected_owner=_AtlasText("none"),
-            partial_owners=(
-                _AtlasText(
-                    "time_integrators._newton.nonlinear_solve is internal stage "
-                    "machinery, not a public nonlinear-system solver capability."
-                ),
-            ),
-            required_capability=_AtlasText(
-                "NonlinearSolver with descriptor bounds for residual norm, "
-                "Jacobian availability, local convergence radius or globalization "
-                "policy, line-search or trust-region safeguards, max residual "
-                "evaluations, and failure reporting."
-            ),
-        ),
-    )
+def _capability_atlas_uncovered_descriptors() -> tuple[_AtlasUncoveredDescriptor, ...]:
+    uncovered: list[_AtlasUncoveredDescriptor] = []
+    for descriptor in _capability_atlas_descriptors():
+        schema = _atlas_schema_for_descriptor(descriptor)
+        regions = _atlas_regions_for_schema(schema)
+        if schema.cell_status(descriptor, regions) == "uncovered":
+            uncovered.append((schema, descriptor))
+    return tuple(uncovered)
 
 
 def _capability_atlas_descriptor_groups() -> tuple[_AtlasDescriptorGroup, ...]:
@@ -2920,14 +2885,6 @@ def _projected_region_shapes(
     return tuple(shapes)
 
 
-def _capability_atlas_note_classes() -> frozenset[type]:
-    return frozenset({_AtlasGapNote})
-
-
-def _capability_atlas_notes() -> tuple[object, ...]:
-    return _capability_atlas_gap_notes()
-
-
 def _atlas_source_label(
     source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
 ) -> _AtlasText:
@@ -2954,10 +2911,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         return "algorithm_capabilities/capability_atlas_doc_generates"
 
     def check(self, _calibration: None) -> None:
-        self._assert_atlas_notes_are_admitted_by_type()
-        self._assert_atlas_notes_do_not_store_raw_text()
-        self._assert_atlas_text_dataclasses_are_documentation_notes()
-        self._assert_atlas_notes_are_not_trivial_wrappers()
+        self._assert_no_atlas_dataclass_stores_presentation_text()
+        self._assert_uncovered_descriptors_are_computed()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
@@ -2977,61 +2932,85 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 assert _atlas_source_label(source)
                 assert points
 
-    @classmethod
-    def _assert_atlas_notes_are_admitted_by_type(cls) -> None:
-        admitted = _capability_atlas_note_classes()
-        assert {type(note) for note in _capability_atlas_notes()} == admitted
-
-    @classmethod
-    def _assert_atlas_notes_do_not_store_raw_text(cls) -> None:
-        for atlas_class in _capability_atlas_note_classes():
-            for annotation in get_type_hints(atlas_class).values():
-                assert not cls._annotation_contains_raw_text(annotation)
-
-    @classmethod
-    def _annotation_contains_raw_text(cls, annotation: object) -> bool:
-        if annotation is str:
-            return True
-        return any(
-            cls._annotation_contains_raw_text(argument)
-            for argument in get_args(annotation)
+    @staticmethod
+    def _assert_no_atlas_dataclass_stores_presentation_text() -> None:
+        tree = ast.parse(Path(__file__).read_text())
+        presentation_text_aliases = _CapabilityAtlasDocClaim._presentation_text_aliases(
+            tree
         )
-
-    @classmethod
-    def _assert_atlas_text_dataclasses_are_documentation_notes(cls) -> None:
-        assert set(cls._atlas_text_dataclasses()) == _capability_atlas_note_classes()
-
-    @classmethod
-    def _assert_atlas_notes_are_not_trivial_wrappers(cls) -> None:
-        atlas_classes = {
-            atlas_class
-            for atlas_class in _capability_atlas_note_classes()
-            if is_dataclass(atlas_class)
-        }
-        for atlas_class in atlas_classes:
-            if len(fields(atlas_class)) != 1:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
                 continue
-            derived_properties = [
-                value
-                for value in vars(atlas_class).values()
-                if isinstance(value, property)
-            ]
-            assert derived_properties
+            if not _CapabilityAtlasDocClaim._is_dataclass(node):
+                continue
+            annotations = (
+                child.annotation
+                for child in node.body
+                if isinstance(child, ast.AnnAssign)
+            )
+            assert not any(
+                _CapabilityAtlasDocClaim._annotation_mentions_presentation_text(
+                    annotation,
+                    presentation_text_aliases,
+                )
+                for annotation in annotations
+            )
 
     @staticmethod
-    def _atlas_text_dataclasses() -> tuple[type, ...]:
-        return tuple(
-            value
-            for value in globals().values()
-            if isinstance(value, type)
-            and is_dataclass(value)
-            and any(
-                _CapabilityAtlasDocClaim._annotation_contains_type(
-                    annotation,
-                    _AtlasText,
-                )
-                for annotation in get_type_hints(value).values()
+    def _presentation_text_aliases(tree: ast.Module) -> frozenset[str]:
+        aliases: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            if not isinstance(node.value, ast.Call):
+                continue
+            if not (
+                isinstance(node.value.func, ast.Name)
+                and node.value.func.id == "NewType"
+            ):
+                continue
+            if len(node.value.args) != 2:
+                continue
+            if not (
+                isinstance(node.value.args[1], ast.Name)
+                and node.value.args[1].id == "str"
+            ):
+                continue
+            aliases.update(
+                target.id for target in node.targets if isinstance(target, ast.Name)
             )
+        return frozenset(aliases)
+
+    @staticmethod
+    def _is_dataclass(node: ast.ClassDef) -> bool:
+        return any(
+            (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Name)
+                and decorator.func.id == "dataclass"
+            )
+            or (isinstance(decorator, ast.Name) and decorator.id == "dataclass")
+            for decorator in node.decorator_list
+        )
+
+    @staticmethod
+    def _annotation_mentions_presentation_text(
+        annotation: ast.AST,
+        presentation_text_aliases: frozenset[str],
+    ) -> bool:
+        return any(
+            isinstance(node, ast.Name) and node.id in presentation_text_aliases
+            for node in ast.walk(annotation)
+        )
+
+    @staticmethod
+    def _assert_uncovered_descriptors_are_computed() -> None:
+        assert _capability_atlas_uncovered_descriptors() == tuple(
+            (schema, descriptor)
+            for descriptor in _capability_atlas_descriptors()
+            for schema in (_atlas_schema_for_descriptor(descriptor),)
+            if schema.cell_status(descriptor, _atlas_regions_for_schema(schema))
+            == "uncovered"
         )
 
     @classmethod
@@ -3086,24 +3065,6 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             assert not (shown & fixed)
             assert not (shown & marginalized)
             assert not (fixed & marginalized)
-
-    @classmethod
-    def _annotation_contains_type(
-        cls, annotation: object, expected_type: object
-    ) -> bool:
-        if annotation is expected_type:
-            return True
-        return any(
-            cls._annotation_contains_type(argument, expected_type)
-            for argument in get_args(annotation)
-        )
-
-    @classmethod
-    def _annotation_is_text_collection(cls, annotation: object) -> bool:
-        return get_origin(annotation) in {tuple, list, set, frozenset} and any(
-            argument is _AtlasText or cls._annotation_is_text_collection(argument)
-            for argument in get_args(annotation)
-        )
 
 
 # ---------------------------------------------------------------------------
