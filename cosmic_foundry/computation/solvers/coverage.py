@@ -36,7 +36,6 @@ def coverage(
             CoveragePatch(
                 owner.__name__,
                 owner.__name__,
-                "owned",
                 coverage_predicates,
             ),
         ),

@@ -108,8 +108,7 @@ EvidenceSource: TypeAlias = Literal[
     "unavailable",
 ]
 ComparisonOperator: TypeAlias = Literal["<", "<=", "==", "!=", ">=", ">"]
-CoverageStatus: TypeAlias = Literal["owned", "rejected"]
-CellStatus: TypeAlias = Literal["invalid", "owned", "rejected", "uncovered"]
+CellStatus: TypeAlias = Literal["invalid", "owned", "uncovered"]
 
 
 @dataclass(frozen=True)
@@ -412,11 +411,10 @@ class InvalidCellRule:
 
 @dataclass(frozen=True)
 class CoveragePatch:
-    """Claimed owned or intentionally rejected parameter-space region."""
+    """Owned parameter-space region claimed by one implementation."""
 
     name: str
     owner: str
-    status: CoverageStatus
     predicates: tuple[StructuredPredicate, ...]
 
     @property
@@ -753,7 +751,7 @@ class ParameterSpaceSchema:
         descriptor: ParameterDescriptor,
         patches: tuple[CoveragePatch, ...],
     ) -> CellStatus:
-        """Classify ``descriptor`` as invalid, owned, rejected, or uncovered."""
+        """Classify ``descriptor`` as invalid, owned, or uncovered."""
         self.validate_descriptor(descriptor)
         for patch in patches:
             self.validate_coverage_patch(patch)
@@ -762,7 +760,7 @@ class ParameterSpaceSchema:
         covering = self.covering_patch(descriptor, patches)
         if covering is None:
             return "uncovered"
-        return covering.status
+        return "owned"
 
     def covering_patch(
         self,

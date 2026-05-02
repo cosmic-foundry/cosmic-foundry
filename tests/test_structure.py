@@ -873,7 +873,6 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         owned_patch = CoveragePatch(
             name="well_conditioned_spd",
             owner="DenseCGSolver",
-            status="owned",
             predicates=(
                 ComparisonPredicate("map_linearity_defect", "<=", 1.0e-12),
                 ComparisonPredicate("dim_x", "==", 4),
@@ -886,19 +885,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 ),
             ),
         )
-        rejected_patch = CoveragePatch(
-            name="nonlinear_root_not_yet_public",
-            owner="missing-public-nonlinear-solver",
-            status="rejected",
-            predicates=(
-                ComparisonPredicate("map_linearity_defect", ">", 1.0e-12),
-                MembershipPredicate(
-                    "operator_representation",
-                    frozenset({"matrix_free"}),
-                ),
-            ),
-        )
-        patches = (owned_patch, rejected_patch)
+        patches = (owned_patch,)
 
         assert schema.cell_status(self._descriptor(), patches) == "owned"
         assert schema.covering_patch(self._descriptor(), patches) == owned_patch
@@ -912,7 +899,7 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 ),
                 patches,
             )
-            == "rejected"
+            == "uncovered"
         )
         unknown_condition = self._descriptor(condition_estimate=None)
         assert schema.cell_status(unknown_condition, patches) == "uncovered"
@@ -926,7 +913,6 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                     CoveragePatch(
                         name="duplicate_region",
                         owner="OtherSolver",
-                        status="owned",
                         predicates=owned_patch.predicates,
                     ),
                 ),
@@ -960,7 +946,6 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 CoveragePatch(
                     name="undeclared_axis",
                     owner="BadSolver",
-                    status="owned",
                     predicates=(ComparisonPredicate("undeclared", "==", 1),),
                 )
             )
@@ -969,7 +954,6 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
                 CoveragePatch(
                     name="unsupported_predicate",
                     owner="BadSolver",
-                    status="owned",
                     predicates=(object(),),  # type: ignore[arg-type]
                 )
             )
@@ -1401,6 +1385,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         self._assert_no_local_disjointness_algebra()
         self._assert_no_coverage_patch_priority_model()
+        self._assert_no_coverage_patch_status_model()
         self._assert_no_solver_local_point_query()
         self._assert_no_solver_error_string_dispatch()
         schema = linear_solver_parameter_schema()
@@ -1410,25 +1395,15 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             schema.validate_coverage_patch(patch)
 
         selected_owners: set[str] = set()
-        owned_patches = tuple(patch for patch in patches if patch.status == "owned")
-        rejected_patches = tuple(
-            patch for patch in patches if patch.status == "rejected"
-        )
         self._assert_coverage_patches_disjoint(patches)
-        for patch in owned_patches:
+        for patch in patches:
             descriptor = self._descriptor_witness_for_patch(schema, patch)
             assert schema.cell_status(descriptor, patches) == "owned"
             selected = select_linear_solver_for_descriptor(descriptor)
             expected_owner = self._selected_patch_owner(descriptor, patches)
             assert selected.implementation == expected_owner
             selected_owners.add(expected_owner)
-        assert selected_owners == {patch.owner for patch in owned_patches}
-
-        for patch in rejected_patches:
-            descriptor = self._descriptor_witness_for_patch(schema, patch)
-            assert schema.cell_status(descriptor, patches) == "rejected"
-            with pytest.raises(ValueError):
-                select_linear_solver_for_descriptor(descriptor)
+        assert selected_owners == {patch.owner for patch in patches}
 
     @classmethod
     def _selected_patch_owner(
@@ -1436,11 +1411,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         descriptor: ParameterDescriptor,
         patches: tuple[CoveragePatch, ...],
     ) -> str:
-        matches = tuple(
-            patch
-            for patch in patches
-            if patch.status == "owned" and patch.contains(descriptor)
-        )
+        matches = tuple(patch for patch in patches if patch.contains(descriptor))
         assert matches
         assert len(matches) == cls._one(), (
             "owned linear-solver coverage patches must be pairwise disjoint at "
@@ -1534,6 +1505,44 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                     and isinstance(child.target, ast.Name)
                 }
                 assert "priority" not in fields
+                return
+        raise AssertionError("CoveragePatch class not found")
+
+    @staticmethod
+    def _assert_no_coverage_patch_status_model() -> None:
+        source_paths = (
+            _PACKAGE_ROOT / "computation" / "algorithm_capabilities.py",
+            _PROJECT_ROOT / "scripts" / "gen_capability_atlas_docs.py",
+        )
+        for source_path in source_paths:
+            tree = ast.parse(source_path.read_text())
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr == "status"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "patch"
+                ):
+                    raise AssertionError(
+                        "coverage machinery must not read patch status: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+                if isinstance(node, ast.keyword) and node.arg == "status":
+                    raise AssertionError(
+                        "coverage machinery must not pass patch status: "
+                        f"{source_path.relative_to(_PROJECT_ROOT)}"
+                    )
+
+        tree = ast.parse(next(iter(source_paths)).read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "CoveragePatch":
+                fields = {
+                    child.target.id
+                    for child in node.body
+                    if isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                }
+                assert "status" not in fields
                 return
         raise AssertionError("CoveragePatch class not found")
 
@@ -1916,9 +1925,7 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             if call_name == "owned_patch":
                 calls.append(call_name)
             elif call_name == "CoveragePatch":
-                status = cls._string_arg(node, 2, "status")
-                if status == "owned":
-                    calls.append(call_name)
+                calls.append(call_name)
         return tuple(calls)
 
     @classmethod
@@ -1985,9 +1992,6 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         if call_name == "owned_patch":
             return cls._string_arg(node, 1, "owner")
         if call_name != "CoveragePatch":
-            return None
-        status = cls._string_arg(node, 2, "status")
-        if status != "owned":
             return None
         return cls._string_arg(node, 1, "owner")
 
@@ -2451,7 +2455,7 @@ def _schema_atlas_regions(
     coverage = tuple(
         _AtlasRegionProjection(
             name=patch.name,
-            status=patch.status,
+            status="owned",
             source_kind="coverage_patch",
             source_name=patch.name,
             condition=f"{patch.owner} coverage patch",

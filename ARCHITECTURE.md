@@ -779,8 +779,8 @@ check the mathematics.
 
 The same schema should generate capability coverage documentation.  A developer
 should be able to open one generated page and see the gridded parameter space
-with owned, explicitly rejected, and uncovered regions.  The primary artifact is
-literal region coverage over schema coordinates: intervals, categorical bins,
+with owned, invalid, and uncovered regions.  The primary artifact is literal
+region coverage over schema coordinates: intervals, categorical bins,
 invalid subregions, gaps, and ownership patches.  Discrete descriptor points from
 tests are overlaid on top of those regions as evidence markers; they are not the
 coverage model itself.  Explicit missing regions are useful after a gap is
@@ -930,8 +930,8 @@ The sprint is complete when the following are true:
   coverage patches are declared as structural claims or claim inputs there, and
   a generator renders the documentation page from that same data.  The page
   projects literal coverage regions onto readable axis-pair plots: owned
-  regions, intentionally rejected regions, invalid regions, and
-  uncovered-but-valid regions.  Sampled descriptor points from tests are
+  regions, invalid regions, and uncovered-but-valid regions.  Sampled
+  descriptor points from tests are
   rendered only as an overlay on those plots, with marker metadata identifying
   which numerical claim file owns the evidence and whether it is representative,
   boundary, regression, convergence, correctness, or performance sampling.  It
@@ -987,14 +987,14 @@ The sprint is complete when the following are true:
   rank-deficient minimum-norm requests select SVD; strictly diagonally dominant
   systems select Jacobi when the iteration budget is satisfied; nonsymmetric
   matrix-free systems select GMRES;
-  unsupported descriptors reject.  Numerical claim registries should expose
+  unsupported descriptors remain uncovered or invalid.  Numerical claim registries should expose
   enough descriptor metadata for the atlas to overlay those tested points on top
   of owned regions.  An owned region without numerical evidence is allowed only
   when it is explicitly marked structural-only or deferred, so the documentation
   can distinguish "claimed and tested" from "claimed but not numerically
   exercised".  Same-descriptor ownership is a test failure.
 - **No prose-only ownership.**  The generated documentation may contain human
-  explanation, but every ownership, rejection, invalidity, partition boundary,
+  explanation, but every ownership, invalidity, partition boundary,
   and missing-region statement in it must trace back to a structural claim in
   `tests/test_structure.py`.  Conversely, every structural claim that changes
   dispatch behavior must appear in the generated atlas or in an explicit
