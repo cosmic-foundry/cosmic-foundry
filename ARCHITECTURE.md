@@ -779,9 +779,12 @@ check the mathematics.
 
 The same schema should generate capability coverage documentation.  A developer
 should be able to open one generated page and see the gridded parameter space
-with owned, explicitly rejected, and uncovered cells.  Explicit missing regions
-are useful after a gap is noticed; the grid is what exposes gaps that nobody has
-named yet.
+with owned, explicitly rejected, and uncovered regions.  The primary artifact is
+literal region coverage over schema coordinates: intervals, categorical bins,
+invalid subregions, gaps, and ownership patches.  Discrete descriptor points from
+tests are overlaid on top of those regions as evidence markers; they are not the
+coverage model itself.  Explicit missing regions are useful after a gap is
+noticed; the region grid is what exposes gaps that nobody has named yet.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -920,22 +923,25 @@ The sprint is complete when the following are true:
   truth for coverage documentation.  Parameter-space schemas and capability
   coverage patches are declared as structural claims or claim inputs there, and
   a generator renders the documentation page from that same data.  The page
-  projects the space onto readable axis pairs or small tables, then overlays
-  selected owners, intentional rejections, invalid cells, and
-  uncovered-but-valid cells.  It must include the predicate bounds, the
-  certificate sources accepted by the selector, the cost model, and the priority
-  rule for every owned overlap.  It must also overlay numerical-test coverage:
-  which descriptor cells have correctness, convergence, performance, or
-  regression claims exercising the owned capability, which claim file owns that
-  evidence, and whether the evidence is representative sampling or boundary
-  sampling.  Uncovered cells remain visible even before anyone has written a
+  projects literal coverage regions onto readable axis-pair plots: owned
+  regions, intentionally rejected regions, invalid regions, and
+  uncovered-but-valid regions.  Sampled descriptor points from tests are
+  rendered only as an overlay on those plots, with marker metadata identifying
+  which numerical claim file owns the evidence and whether it is representative,
+  boundary, regression, convergence, correctness, or performance sampling.  It
+  must include the predicate bounds, the certificate sources accepted by the
+  selector, the cost model, and the priority rule for every owned overlap.
+  Uncovered regions remain visible even before anyone has written a
   missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
-  a higher-dimensional schema, not the schema itself.  Each plot or table must
-  state which axes are shown, which axes are fixed, which axes are marginalized
-  into a summary marker, and whether any hidden-axis overlap or gap exists.  A
-  cell may not be rendered as simply "owned" when ownership depends on an
-  unshown certificate, budget, tolerance, or backend axis.
+  a higher-dimensional schema, not the schema itself.  Each plot must render
+  region area first and sampled test points second.  It must state which axes
+  are shown, which axes are fixed, which axes are marginalized into a summary
+  marker, and whether any hidden-axis overlap or gap exists.  A region may not
+  be rendered as simply "owned" when ownership depends on an unshown
+  certificate, budget, tolerance, or backend axis; in that case the projection
+  must show conditional ownership or split the projection until the dependency is
+  visible.
 - **Gaps are first-class regions.**  A missing algorithm can be represented as an
   explicitly named unowned descriptor region after the coverage atlas exposes
   it.  For example, the current solver coverage page should show blank coverage
@@ -966,19 +972,20 @@ The sprint is complete when the following are true:
 - **Coverage is tested at the schema level.**  Structural tests validate the
   schema before any algorithm selection: every axis has bins or intervals; every
   descriptor field referenced by an axis exists; every coverage patch references
-  declared axes; every invalid cell has a reason; every generated documentation
-  cell comes from the schema; and the rendered coverage document is byte-for-byte
-  current with the claim registry.  Then tests sample representative cells: SPD
-  well-conditioned dense systems select CG or LU only when priority data says
-  why; rank-deficient minimum-norm requests select SVD; strictly diagonally
-  dominant systems select Jacobi when the iteration budget is satisfied;
-  nonsymmetric matrix-free systems select GMRES; unsupported descriptors reject.
-  Numerical claim registries should expose enough descriptor metadata for the
-  atlas to overlay tested cells on top of owned cells.  An owned region without
-  numerical evidence is allowed only when it is explicitly marked structural-only
-  or deferred, so the documentation can distinguish "claimed and tested" from
-  "claimed but not numerically exercised".  Ambiguous overlap without explicit
-  priority remains a test failure.
+  declared axes; every invalid region has a reason; every generated
+  documentation region comes from the schema; and the rendered coverage document
+  is byte-for-byte current with the claim registry.  Then tests sample
+  representative descriptor points: SPD well-conditioned dense systems select CG
+  or LU only when priority data says why; rank-deficient minimum-norm requests
+  select SVD; strictly diagonally dominant systems select Jacobi when the
+  iteration budget is satisfied; nonsymmetric matrix-free systems select GMRES;
+  unsupported descriptors reject.  Numerical claim registries should expose
+  enough descriptor metadata for the atlas to overlay those tested points on top
+  of owned regions.  An owned region without numerical evidence is allowed only
+  when it is explicitly marked structural-only or deferred, so the documentation
+  can distinguish "claimed and tested" from "claimed but not numerically
+  exercised".  Ambiguous overlap without explicit priority remains a test
+  failure.
 - **No prose-only ownership.**  The generated documentation may contain human
   explanation, but every ownership, rejection, invalidity, overlap, priority, and
   missing-region statement in it must trace back to a structural claim in
