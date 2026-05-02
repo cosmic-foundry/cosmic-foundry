@@ -30,7 +30,6 @@ import pkgutil
 import sys
 import types
 from dataclasses import dataclass, fields, is_dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any, NewType, TypeAlias, get_args, get_origin, get_type_hints
 
@@ -2363,8 +2362,8 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 
 
 @dataclass(frozen=True)
-class _AtlasGap:
-    """Known uncovered descriptor region rendered into the atlas."""
+class _AtlasGapNote:
+    """Documentation note for a known uncovered descriptor region."""
 
     name: _AtlasText
     region: _AtlasText
@@ -2466,9 +2465,9 @@ def _descriptor_inhabits_schema(
     return True
 
 
-def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
+def _capability_atlas_gap_notes() -> tuple[_AtlasGapNote, ...]:
     return (
-        _AtlasGap(
+        _AtlasGapNote(
             name=_AtlasText("nonlinear algebraic solve F(x) = 0"),
             region=_AtlasText("nonlinear_root"),
             descriptor=(
@@ -2921,16 +2920,12 @@ def _projected_region_shapes(
     return tuple(shapes)
 
 
-def _capability_atlas_carrier_classes() -> frozenset[type]:
-    return frozenset({_AtlasGap})
+def _capability_atlas_note_classes() -> frozenset[type]:
+    return frozenset({_AtlasGapNote})
 
 
-def _capability_atlas_semantic_carrier_classes() -> frozenset[type]:
-    return frozenset()
-
-
-def _capability_atlas_carriers() -> tuple[object, ...]:
-    return _capability_atlas_gaps()
+def _capability_atlas_notes() -> tuple[object, ...]:
+    return _capability_atlas_gap_notes()
 
 
 def _atlas_source_label(
@@ -2959,12 +2954,10 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         return "algorithm_capabilities/capability_atlas_doc_generates"
 
     def check(self, _calibration: None) -> None:
-        self._assert_atlas_carriers_are_admitted_by_type()
-        self._assert_atlas_carriers_do_not_store_raw_text()
-        self._assert_semantic_atlas_carriers_do_not_store_presentation_text()
-        self._assert_semantic_atlas_carriers_do_not_store_render_categories()
-        self._assert_semantic_atlas_carriers_do_not_store_scalar_bookkeeping()
-        self._assert_atlas_dataclasses_are_not_trivial_wrappers()
+        self._assert_atlas_notes_are_admitted_by_type()
+        self._assert_atlas_notes_do_not_store_raw_text()
+        self._assert_atlas_text_dataclasses_are_documentation_notes()
+        self._assert_atlas_notes_are_not_trivial_wrappers()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
@@ -2985,13 +2978,13 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 assert points
 
     @classmethod
-    def _assert_atlas_carriers_are_admitted_by_type(cls) -> None:
-        admitted = _capability_atlas_carrier_classes()
-        assert {type(carrier) for carrier in _capability_atlas_carriers()} == admitted
+    def _assert_atlas_notes_are_admitted_by_type(cls) -> None:
+        admitted = _capability_atlas_note_classes()
+        assert {type(note) for note in _capability_atlas_notes()} == admitted
 
     @classmethod
-    def _assert_atlas_carriers_do_not_store_raw_text(cls) -> None:
-        for atlas_class in _capability_atlas_carrier_classes():
+    def _assert_atlas_notes_do_not_store_raw_text(cls) -> None:
+        for atlas_class in _capability_atlas_note_classes():
             for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_raw_text(annotation)
 
@@ -3005,36 +2998,14 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
 
     @classmethod
-    def _assert_semantic_atlas_carriers_do_not_store_presentation_text(cls) -> None:
-        for atlas_class in _capability_atlas_semantic_carrier_classes():
-            for annotation in get_type_hints(atlas_class).values():
-                assert not cls._annotation_contains_type(annotation, _AtlasText)
+    def _assert_atlas_text_dataclasses_are_documentation_notes(cls) -> None:
+        assert set(cls._atlas_text_dataclasses()) == _capability_atlas_note_classes()
 
     @classmethod
-    def _assert_semantic_atlas_carriers_do_not_store_render_categories(cls) -> None:
-        for atlas_class in _capability_atlas_semantic_carrier_classes():
-            for annotation in get_type_hints(atlas_class).values():
-                assert not cls._annotation_contains_enum(annotation)
-
-    @classmethod
-    def _annotation_contains_enum(cls, annotation: object) -> bool:
-        if isinstance(annotation, type) and issubclass(annotation, Enum):
-            return True
-        return any(
-            cls._annotation_contains_enum(argument) for argument in get_args(annotation)
-        )
-
-    @classmethod
-    def _assert_semantic_atlas_carriers_do_not_store_scalar_bookkeeping(cls) -> None:
-        for atlas_class in _capability_atlas_semantic_carrier_classes():
-            for annotation in get_type_hints(atlas_class).values():
-                assert not cls._annotation_contains_type(annotation, int)
-
-    @classmethod
-    def _assert_atlas_dataclasses_are_not_trivial_wrappers(cls) -> None:
+    def _assert_atlas_notes_are_not_trivial_wrappers(cls) -> None:
         atlas_classes = {
             atlas_class
-            for atlas_class in _capability_atlas_carrier_classes()
+            for atlas_class in _capability_atlas_note_classes()
             if is_dataclass(atlas_class)
         }
         for atlas_class in atlas_classes:
@@ -3046,6 +3017,22 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 if isinstance(value, property)
             ]
             assert derived_properties
+
+    @staticmethod
+    def _atlas_text_dataclasses() -> tuple[type, ...]:
+        return tuple(
+            value
+            for value in globals().values()
+            if isinstance(value, type)
+            and is_dataclass(value)
+            and any(
+                _CapabilityAtlasDocClaim._annotation_contains_type(
+                    annotation,
+                    _AtlasText,
+                )
+                for annotation in get_type_hints(value).values()
+            )
+        )
 
     @classmethod
     def _assert_descriptor_groups_are_schema_equivalence_classes(cls) -> None:

@@ -636,7 +636,7 @@ def render_capability_atlas() -> str:
         )
 
     lines.extend(["## Known Gaps", ""])
-    for gap in atlas._capability_atlas_gaps():
+    for gap in atlas._capability_atlas_gap_notes():
         lines.extend(
             [
                 f"### {gap.name}",
