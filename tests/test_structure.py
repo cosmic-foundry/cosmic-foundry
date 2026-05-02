@@ -2361,7 +2361,6 @@ class _AtlasEvidencePoint:
     """One descriptor evidence point rendered into the capability atlas."""
 
     descriptor: ParameterDescriptor
-    regions: tuple[CoverageRegion, ...] = ()
 
     @property
     def schema(self) -> ParameterSpaceSchema:
@@ -2469,8 +2468,6 @@ class _AtlasPlotSpec:
 
 
 def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
-    solver_regions = linear_solver_coverage_regions()
-
     return (
         _AtlasEvidencePoint(
             _SolveRelationSchemaClaim._solve_descriptor(),
@@ -2504,7 +2501,6 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
         ),
         _AtlasEvidencePoint(
             _SolveRelationSchemaClaim._linear_descriptor(),
-            solver_regions,
         ),
         _AtlasEvidencePoint(
             _SolveRelationSchemaClaim._linear_descriptor(
@@ -2512,18 +2508,15 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
                 rank_estimate=3,
                 nullity_estimate=1,
             ),
-            solver_regions,
         ),
         _AtlasEvidencePoint(
             _SolveRelationSchemaClaim._linear_descriptor(
                 linear_operator_matrix_available=False,
                 matrix_representation_available=False,
             ),
-            solver_regions,
         ),
         _AtlasEvidencePoint(
             _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
-            solver_regions,
         ),
         _AtlasEvidencePoint(
             _SolveRelationSchemaClaim._decomposition_descriptor(),
@@ -2542,6 +2535,13 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
         linear_solver_parameter_schema(),
         decomposition_parameter_schema(),
     )
+
+
+def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
+    regions: dict[type, CoverageRegion] = {}
+    for region in linear_solver_coverage_regions():
+        regions[region.owner] = region
+    return tuple(regions.values())
 
 
 def _atlas_schema_for_descriptor(
@@ -2758,14 +2758,25 @@ def _schema_atlas_regions(
     return derived + invalid + coverage
 
 
-def _atlas_regions_for_projections(
-    projections: tuple[_AtlasEvidencePoint, ...],
+def _atlas_regions_for_schema(
+    schema: ParameterSpaceSchema,
 ) -> tuple[CoverageRegion, ...]:
-    regions: dict[type, CoverageRegion] = {}
-    for projection in projections:
-        for region in projection.regions:
-            regions[region.owner] = region
-    return tuple(regions.values())
+    return tuple(
+        region
+        for region in _capability_atlas_coverage_regions()
+        if _region_inhabits_schema(region, schema)
+    )
+
+
+def _region_inhabits_schema(
+    region: CoverageRegion,
+    schema: ParameterSpaceSchema,
+) -> bool:
+    try:
+        schema.validate_coverage_region(region)
+    except ValueError:
+        return False
+    return True
 
 
 def _coverage_region_name(region: CoverageRegion) -> str:
@@ -2960,7 +2971,7 @@ def _project_alternative_geometry(
 
 def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, ...]:
     schema = spec.schema
-    regions = _atlas_regions_for_projections(spec.projections)
+    regions = _atlas_regions_for_schema(schema)
     shapes: list[_AtlasRegionShape] = []
     for region in _schema_atlas_regions(schema, regions):
         alternatives = _source_alternatives(schema, region, regions)
@@ -3030,10 +3041,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_atlas_models_do_not_store_raw_text()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
+        self._assert_evidence_points_are_descriptors()
+        self._assert_coverage_regions_are_schema_discovered()
         self._assert_plot_specs_select_projection_objects()
         for spec in _capability_atlas_plot_specs():
             schema = spec.schema
-            regions = _atlas_regions_for_projections(spec.projections)
+            regions = _atlas_regions_for_schema(schema)
             discovered = _schema_atlas_regions(schema, regions)
             assert {id(region.source) for region in discovered} == {
                 id(source)
@@ -3106,6 +3119,20 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         for point in _capability_atlas_projections():
             assert _atlas_schema_for_descriptor(point.descriptor).descriptor_fields == (
                 point.schema.descriptor_fields
+            )
+
+    @classmethod
+    def _assert_evidence_points_are_descriptors(cls) -> None:
+        annotations = get_type_hints(_AtlasEvidencePoint)
+        assert set(annotations.values()) == {ParameterDescriptor}
+
+    @classmethod
+    def _assert_coverage_regions_are_schema_discovered(cls) -> None:
+        for schema in _capability_atlas_schemas():
+            assert _atlas_regions_for_schema(schema) == tuple(
+                region
+                for region in _capability_atlas_coverage_regions()
+                if _region_inhabits_schema(region, schema)
             )
 
     @classmethod
