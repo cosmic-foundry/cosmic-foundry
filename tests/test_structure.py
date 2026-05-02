@@ -30,6 +30,7 @@ import pkgutil
 import sys
 import types
 from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum, auto
 from pathlib import Path
 from typing import Any, NewType, TypeAlias, get_args, get_origin, get_type_hints
 
@@ -75,6 +76,19 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = LinearSolverField | DecompositionField
+_AtlasRegionSource: TypeAlias = (
+    DerivedParameterRegion | InvalidCellRule | CoverageRegion
+)
+
+
+class _AtlasGeometryKind(Enum):
+    """Symbolic projected-geometry kind for rendered atlas regions."""
+
+    LINE = auto()
+    POLYGON = auto()
+    RECTANGLE = auto()
+
+
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -2369,38 +2383,15 @@ class _AtlasGap:
 
 
 @dataclass(frozen=True)
-class _AtlasRegionProjection:
-    """Schema region selected for projection onto a plot."""
-
-    name: _AtlasText
-    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion
-    condition: _AtlasText = _AtlasText("")
-
-    @property
-    def status(self) -> _AtlasText:
-        """Derived atlas status for the source region."""
-        return _atlas_source_status(self.source)
-
-
-@dataclass(frozen=True)
 class _AtlasRegionShape:
     """Projected region geometry derived from schema predicates."""
 
-    name: _AtlasText
-    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion
-    geometry: _AtlasText
+    source: _AtlasRegionSource
+    predicates: tuple[Any, ...]
+    alternative_index: int
+    alternative_count: int
+    geometry: _AtlasGeometryKind
     points: tuple[tuple[float, float], ...]
-    condition: _AtlasText
-
-    @property
-    def status(self) -> _AtlasText:
-        """Derived atlas status for the source region."""
-        return _atlas_source_status(self.source)
-
-    @property
-    def source_name(self) -> _AtlasText:
-        """Human label for the projected source region."""
-        return _atlas_source_label(self.source)
 
 
 @dataclass(frozen=True)
@@ -2680,50 +2671,27 @@ def _predicate_label(predicate: Any) -> str:
 
 def _source_alternatives(
     schema: ParameterSpaceSchema,
-    region: _AtlasRegionProjection,
+    source: _AtlasRegionSource,
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
-    if isinstance(region.source, DerivedParameterRegion):
-        assert region.source in schema.derived_regions
-        return region.source.alternatives
-    if isinstance(region.source, InvalidCellRule):
-        assert region.source in schema.invalid_cells
-        return (region.source.predicates,)
-    assert isinstance(region.source, CoverageRegion)
-    assert region.source in regions
-    schema.validate_coverage_region(region.source)
-    return (region.source.predicates,)
+    if isinstance(source, DerivedParameterRegion):
+        assert source in schema.derived_regions
+        return source.alternatives
+    if isinstance(source, InvalidCellRule):
+        assert source in schema.invalid_cells
+        return (source.predicates,)
+    assert isinstance(source, CoverageRegion)
+    assert source in regions
+    schema.validate_coverage_region(source)
+    return (source.predicates,)
 
 
 def _schema_atlas_regions(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...] = (),
-) -> tuple[_AtlasRegionProjection, ...]:
+) -> tuple[_AtlasRegionSource, ...]:
     """Return every schema region that should appear in atlas projections."""
-    derived = tuple(
-        _AtlasRegionProjection(
-            name=_AtlasText(region.name),
-            source=region,
-        )
-        for region in schema.derived_regions
-    )
-    invalid = tuple(
-        _AtlasRegionProjection(
-            name=_AtlasText(rule.name),
-            source=rule,
-            condition=_AtlasText(rule.reason),
-        )
-        for rule in schema.invalid_cells
-    )
-    coverage = tuple(
-        _AtlasRegionProjection(
-            name=_AtlasText(_coverage_region_name(region)),
-            source=region,
-            condition=_AtlasText(f"{_coverage_region_name(region)} coverage region"),
-        )
-        for region in regions
-    )
-    return derived + invalid + coverage
+    return (*schema.derived_regions, *schema.invalid_cells, *regions)
 
 
 def _atlas_regions_for_schema(
@@ -2882,7 +2850,7 @@ def _project_alternative_geometry(
     y_axis: _AtlasDescriptorField,
     x_range: tuple[float, float],
     y_range: tuple[float, float],
-) -> tuple[tuple[str, tuple[tuple[float, float], ...]], ...]:
+) -> tuple[tuple[_AtlasGeometryKind, tuple[tuple[float, float], ...]], ...]:
     rectangle = (
         (x_range[0], y_range[0]),
         (x_range[1], y_range[0]),
@@ -2896,7 +2864,12 @@ def _project_alternative_geometry(
         is not None
     ]
     if not projected:
-        return (("rectangle", ((x_range[0], y_range[0]), (x_range[1], y_range[1]))),)
+        return (
+            (
+                _AtlasGeometryKind.RECTANGLE,
+                ((x_range[0], y_range[0]), (x_range[1], y_range[1])),
+            ),
+        )
 
     equality = [projection for projection in projected if projection[1] == "=="]
     inequalities = [
@@ -2909,7 +2882,7 @@ def _project_alternative_geometry(
     if equality:
         terms, _operator, value = equality[0]
         line = _affine_equality_line(terms, value, x_axis, y_axis, x_range, y_range)
-        return (("line", line),) if len(line) == 2 else ()
+        return ((_AtlasGeometryKind.LINE, line),) if len(line) == 2 else ()
 
     polygons: list[tuple[tuple[float, float], ...]] = [rectangle]
     for terms, operator, value in inequalities:
@@ -2934,15 +2907,19 @@ def _project_alternative_geometry(
                     split_polygons.append(clipped)
         polygons = split_polygons
 
-    return tuple(("polygon", polygon) for polygon in polygons if len(polygon) >= 3)
+    return tuple(
+        (_AtlasGeometryKind.POLYGON, polygon)
+        for polygon in polygons
+        if len(polygon) >= 3
+    )
 
 
 def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, ...]:
     schema = spec.schema
     regions = _atlas_regions_for_schema(schema)
     shapes: list[_AtlasRegionShape] = []
-    for region in _schema_atlas_regions(schema, regions):
-        alternatives = _source_alternatives(schema, region, regions)
+    for source in _schema_atlas_regions(schema, regions):
+        alternatives = _source_alternatives(schema, source, regions)
         for alternative_index, predicates in enumerate(alternatives, start=1):
             geometry = _project_alternative_geometry(
                 predicates,
@@ -2953,28 +2930,19 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
             )
             if not geometry:
                 raise AssertionError(
-                    f"atlas region {region.name!r} has no visible projection "
+                    f"atlas region {_atlas_source_label(source)!r} has no "
+                    "visible projection "
                     f"onto {spec.x_axis!r}/{spec.y_axis!r}"
                 )
-            predicate_summary = "; ".join(
-                _predicate_label(predicate) for predicate in predicates
-            )
-            condition = region.condition or _AtlasText(predicate_summary)
-            if len(alternatives) > 1:
-                condition = _AtlasText(f"alternative {alternative_index}: {condition}")
-            shape_name = (
-                region.name
-                if len(alternatives) == 1
-                else _AtlasText(f"{region.name} alt {alternative_index}")
-            )
             for geometry_name, points in geometry:
                 shapes.append(
                     _AtlasRegionShape(
-                        shape_name,
-                        region.source,
-                        _AtlasText(geometry_name),
+                        source,
+                        predicates,
+                        alternative_index,
+                        len(alternatives),
+                        geometry_name,
                         points,
-                        condition,
                     )
                 )
     return tuple(shapes)
@@ -2982,20 +2950,26 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
 
 def _capability_atlas_model_objects() -> tuple[object, ...]:
     specs = _capability_atlas_plot_specs()
-    schema_regions = tuple(
-        region
-        for spec in specs
-        for region in _schema_atlas_regions(
-            spec.schema,
-            _atlas_regions_for_schema(spec.schema),
-        )
-    )
     shapes = tuple(shape for spec in specs for shape in _projected_region_shapes(spec))
-    return (*specs, *_capability_atlas_gaps(), *schema_regions, *shapes)
+    return (*specs, *_capability_atlas_gaps(), *shapes)
+
+
+def _capability_atlas_semantic_model_objects() -> tuple[object, ...]:
+    return tuple(
+        model
+        for model in _capability_atlas_model_objects()
+        if not isinstance(model, _AtlasGap)
+    )
 
 
 def _capability_atlas_model_classes() -> frozenset[type]:
     return frozenset(type(model) for model in _capability_atlas_model_objects())
+
+
+def _capability_atlas_semantic_model_classes() -> frozenset[type]:
+    return frozenset(
+        type(model) for model in _capability_atlas_semantic_model_objects()
+    )
 
 
 def _atlas_source_label(
@@ -3025,6 +2999,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_atlas_models_do_not_store_raw_text()
+        self._assert_semantic_atlas_models_do_not_store_presentation_text()
         self._assert_atlas_dataclasses_are_not_trivial_wrappers()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
@@ -3035,14 +3010,14 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema = spec.schema
             regions = _atlas_regions_for_schema(schema)
             discovered = _schema_atlas_regions(schema, regions)
-            assert {id(region.source) for region in discovered} == {
+            assert {id(source) for source in discovered} == {
                 id(source)
                 for source in schema.derived_regions + schema.invalid_cells + regions
             }
             shapes = _projected_region_shapes(spec)
             assert shapes
             for shape in shapes:
-                assert shape.source_name
+                assert _atlas_source_label(shape.source)
                 assert shape.points
 
     @classmethod
@@ -3059,6 +3034,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             cls._annotation_contains_raw_text(argument)
             for argument in get_args(annotation)
         )
+
+    @classmethod
+    def _assert_semantic_atlas_models_do_not_store_presentation_text(cls) -> None:
+        for atlas_class in _capability_atlas_semantic_model_classes():
+            for annotation in get_type_hints(atlas_class).values():
+                assert not cls._annotation_contains_type(annotation, _AtlasText)
 
     @classmethod
     def _assert_atlas_dataclasses_are_not_trivial_wrappers(cls) -> None:
