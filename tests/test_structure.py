@@ -2380,8 +2380,6 @@ class _AtlasRegionShape:
 
     source: _AtlasRegionSource
     predicates: tuple[Any, ...]
-    alternative_index: int
-    alternative_count: int
     points: tuple[tuple[float, float], ...]
 
 
@@ -2902,7 +2900,7 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
     shapes: list[_AtlasRegionShape] = []
     for source in _schema_atlas_regions(schema, regions):
         alternatives = _source_alternatives(schema, source, regions)
-        for alternative_index, predicates in enumerate(alternatives, start=1):
+        for predicates in alternatives:
             geometry = _project_alternative_geometry(
                 predicates,
                 x_axis=spec.x_axis,
@@ -2921,8 +2919,6 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
                     _AtlasRegionShape(
                         source,
                         predicates,
-                        alternative_index,
-                        len(alternatives),
                         points,
                     )
                 )
@@ -2982,6 +2978,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_atlas_models_do_not_store_raw_text()
         self._assert_semantic_atlas_models_do_not_store_presentation_text()
         self._assert_semantic_atlas_models_do_not_store_render_categories()
+        self._assert_semantic_atlas_models_do_not_store_scalar_bookkeeping()
         self._assert_atlas_dataclasses_are_not_trivial_wrappers()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
@@ -3036,6 +3033,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         return any(
             cls._annotation_contains_enum(argument) for argument in get_args(annotation)
         )
+
+    @classmethod
+    def _assert_semantic_atlas_models_do_not_store_scalar_bookkeeping(cls) -> None:
+        for atlas_class in _capability_atlas_semantic_model_classes():
+            for annotation in get_type_hints(atlas_class).values():
+                assert not cls._annotation_contains_type(annotation, int)
 
     @classmethod
     def _assert_atlas_dataclasses_are_not_trivial_wrappers(cls) -> None:

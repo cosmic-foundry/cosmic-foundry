@@ -266,24 +266,17 @@ def _render_region_shape(
 
 
 def _shape_name(region: atlas._AtlasRegionShape) -> str:
-    name = str(atlas._atlas_source_label(region.source))
-    if region.alternative_count == 1:
-        return name
-    return f"{name} alt {region.alternative_index}"
+    return str(atlas._atlas_source_label(region.source))
 
 
 def _shape_condition(region: atlas._AtlasRegionShape) -> str:
     if isinstance(region.source, atlas.InvalidCellRule):
-        condition = region.source.reason
-    elif isinstance(region.source, atlas.CoverageRegion):
-        condition = f"{_coverage_region_name(region.source)} coverage region"
-    else:
-        condition = "; ".join(
-            atlas._predicate_label(predicate) for predicate in region.predicates
-        )
-    if region.alternative_count == 1:
-        return condition
-    return f"alternative {region.alternative_index}: {condition}"
+        return region.source.reason
+    if isinstance(region.source, atlas.CoverageRegion):
+        return f"{_coverage_region_name(region.source)} coverage region"
+    return "; ".join(
+        atlas._predicate_label(predicate) for predicate in region.predicates
+    )
 
 
 def _matched_regions(descriptor: atlas.ParameterDescriptor) -> str:
@@ -462,8 +455,10 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
                     f'data-cf-atlas-member="{_html_attr(target_id)}">'
                 ),
                 (
-                    f"<title>{html.escape(_shape_name(region))}: "
-                    f"{html.escape(_shape_condition(region))}</title>"
+                    f"<title>"
+                    f"{html.escape(_shape_name(region))}: "
+                    f"{html.escape(_shape_condition(region))}"
+                    f"</title>"
                 ),
                 shape,
                 "</g>",
