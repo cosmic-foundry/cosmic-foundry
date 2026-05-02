@@ -12,7 +12,6 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     contract,
     dense_matrix_predicates,
     linear_system_predicates,
-    owned_patch,
 )
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 
@@ -44,17 +43,14 @@ class DenseSVDSolver(DirectSolver):
     def __init__(self, rcond: float = 1e-10) -> None:
         super().__init__(SVDFactorization(rcond))
 
-    _coverage_patch = owned_patch(
-        "dense_svd_rank_deficient_dense",
-        "DenseSVDSolver",
+    _coverage_predicates = (
         linear_system_predicates()
         + dense_matrix_predicates()
         + budget_predicates()
         + (
             ComparisonPredicate("nullity_estimate", ">", 0),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        ),
-        priority=20,
+        )
     )
 
     @classmethod
@@ -63,7 +59,6 @@ class DenseSVDSolver(DirectSolver):
         return (
             capability(
                 cls,
-                "dense_svd_direct",
                 contract(
                     requires=("dense_operator",),
                     provides=(
@@ -75,7 +70,8 @@ class DenseSVDSolver(DirectSolver):
                         "factorized_dense",
                     ),
                 ),
-                coverage_patches=(cls._coverage_patch,),
+                coverage_predicates=cls._coverage_predicates,
+                coverage_priority=20,
             ),
         )
 

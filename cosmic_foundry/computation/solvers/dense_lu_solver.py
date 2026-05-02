@@ -13,7 +13,6 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     contract,
     dense_matrix_predicates,
     linear_system_predicates,
-    owned_patch,
 )
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 
@@ -28,9 +27,7 @@ class DenseLUSolver(DirectSolver):
     def __init__(self) -> None:
         super().__init__(LUFactorization())
 
-    _coverage_patch = owned_patch(
-        "dense_lu_square_full_rank_dense",
-        "DenseLUSolver",
+    _coverage_predicates = (
         linear_system_predicates()
         + dense_matrix_predicates()
         + budget_predicates()
@@ -38,8 +35,7 @@ class DenseLUSolver(DirectSolver):
             ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
             ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        ),
-        priority=30,
+        )
     )
 
     @classmethod
@@ -48,13 +44,13 @@ class DenseLUSolver(DirectSolver):
         return (
             capability(
                 cls,
-                "dense_lu_direct",
                 contract(
                     requires=("dense_operator", "square_system", "full_rank"),
                     provides=("solve", "direct", "exact", "factorized_dense"),
                 ),
                 priority=10,
-                coverage_patches=(cls._coverage_patch,),
+                coverage_predicates=cls._coverage_predicates,
+                coverage_priority=30,
             ),
         )
 

@@ -1663,6 +1663,8 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
+            if path.name.startswith("_") or path.name == "capabilities.py":
+                continue
             tree = ast.parse(path.read_text())
             for owner, class_name in self._owned_coverage_locations(tree):
                 assert owner == class_name, (
@@ -1673,6 +1675,16 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             assert not manual_categories, (
                 "linear-solver categories must be inferred from implementation "
                 f"inheritance: {path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_names = self._manual_capability_names(tree)
+            assert not manual_names, (
+                "linear-solver capability names must come from class identity: "
+                f"{path.relative_to(_PROJECT_ROOT)}"
+            )
+            manual_patches = self._manual_owned_patch_calls(tree)
+            assert not manual_patches, (
+                "owned linear-solver coverage patches must be built from class "
+                f"identity: {path.relative_to(_PROJECT_ROOT)}"
             )
 
     @classmethod
@@ -1708,6 +1720,34 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             if category is not None:
                 categories.append(category)
         return tuple(categories)
+
+    @classmethod
+    def _manual_capability_names(cls, tree: ast.Module) -> tuple[str, ...]:
+        names: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if cls._call_name(node.func) != "capability":
+                continue
+            name = cls._string_arg(node, 1, "name")
+            if name is not None:
+                names.append(name)
+        return tuple(names)
+
+    @classmethod
+    def _manual_owned_patch_calls(cls, tree: ast.Module) -> tuple[str, ...]:
+        calls: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            call_name = cls._call_name(node.func)
+            if call_name == "owned_patch":
+                calls.append(call_name)
+            elif call_name == "CoveragePatch":
+                status = cls._string_arg(node, 2, "status")
+                if status == "owned":
+                    calls.append(call_name)
+        return tuple(calls)
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:

@@ -15,7 +15,6 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     contract,
     dense_matrix_predicates,
     linear_system_predicates,
-    owned_patch,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
@@ -92,9 +91,7 @@ class DenseJacobiSolver(IterativeSolver):
         s: _JacobiState = state
         return s.u
 
-    _coverage_patch = owned_patch(
-        "dense_jacobi_strictly_diagonally_dominant",
-        "DenseJacobiSolver",
+    _coverage_predicates = (
         linear_system_predicates()
         + dense_matrix_predicates()
         + budget_predicates()
@@ -103,8 +100,7 @@ class DenseJacobiSolver(IterativeSolver):
             ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
             ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        ),
-        priority=25,
+        )
     )
 
     @classmethod
@@ -113,12 +109,12 @@ class DenseJacobiSolver(IterativeSolver):
         return (
             capability(
                 cls,
-                "dense_jacobi_iteration",
                 contract(
                     requires=("linear_operator", "diagonal", "row_abs_sums"),
                     provides=("solve", "iterative", "stationary", "matrix_free"),
                 ),
-                coverage_patches=(cls._coverage_patch,),
+                coverage_predicates=cls._coverage_predicates,
+                coverage_priority=25,
             ),
         )
 

@@ -17,7 +17,6 @@ from cosmic_foundry.computation.solvers._capability_claims import (
     capability,
     contract,
     linear_system_predicates,
-    owned_patch,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
@@ -94,9 +93,7 @@ class DenseCGSolver(IterativeSolver):
         s: _CGState = state
         return s.u
 
-    _coverage_patch = owned_patch(
-        "dense_cg_well_conditioned_spd",
-        "DenseCGSolver",
+    _coverage_predicates = (
         linear_system_predicates()
         + budget_predicates()
         + (
@@ -106,8 +103,7 @@ class DenseCGSolver(IterativeSolver):
             ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
             ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
             ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        ),
-        priority=10,
+        )
     )
 
     @classmethod
@@ -116,13 +112,13 @@ class DenseCGSolver(IterativeSolver):
         return (
             capability(
                 cls,
-                "dense_cg_iteration",
                 contract(
                     requires=("linear_operator", "symmetric_positive_definite"),
                     provides=("solve", "iterative", "krylov", "matrix_free", "spd"),
                 ),
                 priority=10,
-                coverage_patches=(cls._coverage_patch,),
+                coverage_predicates=cls._coverage_predicates,
+                coverage_priority=10,
             ),
         )
 

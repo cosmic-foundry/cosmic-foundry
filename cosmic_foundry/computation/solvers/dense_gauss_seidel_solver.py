@@ -105,7 +105,6 @@ class DenseGaussSeidelSolver(IterativeSolver):
         return (
             capability(
                 cls,
-                "dense_gauss_seidel_iteration",
                 contract(
                     requires=("linear_operator", "square_system"),
                     provides=("solve", "iterative", "stationary", "assembled_matrix"),

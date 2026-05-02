@@ -57,7 +57,6 @@ class DirectSolver(LinearSolver):
         return (
             capability(
                 cls,
-                "generic_direct",
                 contract(
                     requires=("linear_operator", "decomposition"),
                     provides=("solve", "direct", "assembled_matrix"),

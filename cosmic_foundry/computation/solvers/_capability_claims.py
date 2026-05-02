@@ -30,15 +30,26 @@ def contract(
 
 def capability(
     owner: type,
-    name: str,
     structure_contract: AlgorithmStructureContract,
     *,
     priority: int | None = None,
-    coverage_patches: tuple[CoveragePatch, ...] = (),
+    coverage_predicates: tuple[StructuredPredicate, ...] = (),
+    coverage_priority: int | None = None,
 ) -> LinearSolverCapability:
     """Return a capability whose category is inferred from solver inheritance."""
+    coverage_patches: tuple[CoveragePatch, ...] = ()
+    if coverage_predicates:
+        coverage_patches = (
+            CoveragePatch(
+                owner.__name__,
+                owner.__name__,
+                "owned",
+                coverage_predicates,
+                priority=coverage_priority,
+            ),
+        )
     return LinearSolverCapability(
-        name,
+        owner.__name__,
         owner.__name__,
         category_for(owner),
         structure_contract,
@@ -100,17 +111,6 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
             0.0,
         ),
     )
-
-
-def owned_patch(
-    name: str,
-    owner: str,
-    predicates: tuple[StructuredPredicate, ...],
-    *,
-    priority: int,
-) -> CoveragePatch:
-    """Return an owned coverage patch for one solver implementation."""
-    return CoveragePatch(name, owner, "owned", predicates, priority=priority)
 
 
 def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
