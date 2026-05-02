@@ -31,7 +31,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NewType, get_args
 
 import pytest
 
@@ -72,6 +72,7 @@ from tests.claims import Claim
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
+_AtlasText = NewType("_AtlasText", str)
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -2359,10 +2360,10 @@ class _AtlasProjection:
 
     schema: ParameterSpaceSchema
     descriptor: ParameterDescriptor
-    title: str
-    shown_axes: tuple[str, ...]
-    fixed_axes: tuple[str, ...]
-    marginalized_axes: tuple[str, ...]
+    title: _AtlasText
+    shown_axes: tuple[DescriptorField, ...]
+    fixed_axes: tuple[DescriptorField, ...]
+    marginalized_axes: tuple[DescriptorField, ...]
     regions: tuple[CoverageRegion, ...] = ()
 
 
@@ -2370,47 +2371,45 @@ class _AtlasProjection:
 class _AtlasGap:
     """Known uncovered descriptor region rendered into the atlas."""
 
-    name: str
-    region: str
-    descriptor: tuple[str, ...]
-    selected_owner: str
-    partial_owners: tuple[str, ...]
-    required_capability: str
-
-
-@dataclass(frozen=True)
-class _AtlasEvidence:
-    """Numerical claim metadata rendered on top of an atlas cell."""
-
-    cell: str
-    claim_file: str
-    evidence_kind: str
-    sampling: str
+    name: _AtlasText
+    region: _AtlasText
+    descriptor: tuple[_AtlasText, ...]
+    selected_owner: _AtlasText
+    partial_owners: tuple[_AtlasText, ...]
+    required_capability: _AtlasText
 
 
 @dataclass(frozen=True)
 class _AtlasRegionProjection:
     """Schema region selected for projection onto a plot."""
 
-    name: str
-    status: str
+    name: _AtlasText
     source: DerivedParameterRegion | InvalidCellRule | CoverageRegion
-    condition: str = ""
+    condition: _AtlasText = _AtlasText("")
+
+    @property
+    def status(self) -> _AtlasText:
+        """Derived atlas status for the source region."""
+        return _atlas_source_status(self.source)
 
 
 @dataclass(frozen=True)
 class _AtlasRegionShape:
     """Projected region geometry derived from schema predicates."""
 
-    name: str
-    status: str
+    name: _AtlasText
     source: DerivedParameterRegion | InvalidCellRule | CoverageRegion
-    geometry: str
+    geometry: _AtlasText
     points: tuple[tuple[float, float], ...]
-    condition: str
+    condition: _AtlasText
 
     @property
-    def source_name(self) -> str:
+    def status(self) -> _AtlasText:
+        """Derived atlas status for the source region."""
+        return _atlas_source_status(self.source)
+
+    @property
+    def source_name(self) -> _AtlasText:
         """Human label for the projected source region."""
         return _atlas_source_label(self.source)
 
@@ -2419,15 +2418,15 @@ class _AtlasRegionShape:
 class _AtlasPlotSpec:
     """One generated SVG projection of descriptor cells."""
 
-    filename: str
-    title: str
-    schema: str
-    x_axis: str
-    y_axis: str
+    filename: _AtlasText
+    title: _AtlasText
+    schema: _AtlasText
+    x_axis: _AtlasText
+    y_axis: _AtlasText
     x_range: tuple[float, float]
     y_range: tuple[float, float]
-    cells: tuple[str, ...]
-    caption: str
+    cells: tuple[_AtlasText, ...]
+    caption: _AtlasText
 
 
 def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
@@ -2440,7 +2439,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
         _AtlasProjection(
             solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(),
-            "Solve relation: square linear system",
+            _AtlasText("Solve relation: square linear system"),
             (
                 "map_linearity_defect",
                 "dim_x",
@@ -2461,7 +2460,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 dim_y=5,
                 objective_relation="least_squares",
             ),
-            "Solve relation: least-squares relation",
+            _AtlasText("Solve relation: least-squares relation"),
             (
                 "map_linearity_defect",
                 "dim_x",
@@ -2478,7 +2477,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 map_linearity_evidence="unavailable",
                 residual_target_available=False,
             ),
-            "Solve relation: public nonlinear-solver gap",
+            _AtlasText("Solve relation: public nonlinear-solver gap"),
             (
                 "map_linearity_defect",
                 "residual_target_available",
@@ -2495,7 +2494,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 acceptance_relation="eigenpair_residual",
                 objective_relation="spectral_residual",
             ),
-            "Solve relation: eigenproblem region",
+            _AtlasText("Solve relation: eigenproblem region"),
             (
                 "auxiliary_scalar_count",
                 "normalization_constraint_count",
@@ -2509,7 +2508,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             _SolveRelationSchemaClaim._solve_descriptor(
                 acceptance_relation="eigenpair_residual",
             ),
-            "Invalid solve relation: eigenpair without spectral data",
+            _AtlasText("Invalid solve relation: eigenpair without spectral data"),
             (
                 "auxiliary_scalar_count",
                 "normalization_constraint_count",
@@ -2521,7 +2520,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
         _AtlasProjection(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(),
-            "Linear solver: SPD full-rank dense descriptor",
+            _AtlasText("Linear solver: SPD full-rank dense descriptor"),
             (
                 "dim_x",
                 "dim_y",
@@ -2544,7 +2543,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 rank_estimate=3,
                 nullity_estimate=1,
             ),
-            "Linear solver: rank-deficient descriptor",
+            _AtlasText("Linear solver: rank-deficient descriptor"),
             (
                 "singular_value_lower_bound",
                 "rank_estimate",
@@ -2561,7 +2560,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 linear_operator_matrix_available=False,
                 matrix_representation_available=False,
             ),
-            "Linear solver: matrix-free descriptor",
+            _AtlasText("Linear solver: matrix-free descriptor"),
             (
                 "linear_operator_matrix_available",
                 "operator_application_available",
@@ -2574,7 +2573,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
         _AtlasProjection(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
-            "Invalid linear solver: nonsquare SPD descriptor",
+            _AtlasText("Invalid linear solver: nonsquare SPD descriptor"),
             (
                 "dim_x",
                 "dim_y",
@@ -2588,7 +2587,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
         _AtlasProjection(
             decomposition_schema,
             _SolveRelationSchemaClaim._decomposition_descriptor(),
-            "Decomposition: square full-rank dense descriptor",
+            _AtlasText("Decomposition: square full-rank dense descriptor"),
             (
                 "matrix_rows",
                 "matrix_columns",
@@ -2603,7 +2602,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             _SolveRelationSchemaClaim._decomposition_descriptor(
                 matrix_columns=5,
             ),
-            "Invalid decomposition: nonsquare coercive descriptor",
+            _AtlasText("Invalid decomposition: nonsquare coercive descriptor"),
             (
                 "matrix_rows",
                 "matrix_columns",
@@ -2618,82 +2617,91 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
 def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
     return (
         _AtlasGap(
-            name="nonlinear algebraic solve F(x) = 0",
-            region="nonlinear_root",
+            name=_AtlasText("nonlinear algebraic solve F(x) = 0"),
+            region=_AtlasText("nonlinear_root"),
             descriptor=(
-                "map_linearity_defect > eps or unavailable",
-                "residual_target_available = false or target_is_zero = true",
-                "derivative_oracle_kind in {none, matrix, jvp, vjp, jacobian_callback}",
-                "acceptance_relation = residual_below_tolerance",
-                "requested_residual_tolerance = finite",
+                _AtlasText("map_linearity_defect > eps or unavailable"),
+                _AtlasText(
+                    "residual_target_available = false or target_is_zero = true"
+                ),
+                _AtlasText(
+                    "derivative_oracle_kind in "
+                    "{none, matrix, jvp, vjp, jacobian_callback}"
+                ),
+                _AtlasText("acceptance_relation = residual_below_tolerance"),
+                _AtlasText("requested_residual_tolerance = finite"),
             ),
-            selected_owner="none",
+            selected_owner=_AtlasText("none"),
             partial_owners=(
-                "time_integrators._newton.nonlinear_solve is internal stage machinery, "
-                "not a public nonlinear-system solver capability.",
+                _AtlasText(
+                    "time_integrators._newton.nonlinear_solve is internal stage "
+                    "machinery, not a public nonlinear-system solver capability."
+                ),
             ),
-            required_capability=(
-                "NonlinearSolver with descriptor bounds for residual norm, Jacobian "
-                "availability, local convergence radius or globalization policy, "
-                "line-search or trust-region safeguards, max residual evaluations, "
-                "and failure reporting."
+            required_capability=_AtlasText(
+                "NonlinearSolver with descriptor bounds for residual norm, "
+                "Jacobian availability, local convergence radius or globalization "
+                "policy, line-search or trust-region safeguards, max residual "
+                "evaluations, and failure reporting."
             ),
         ),
     )
 
 
-def _capability_atlas_evidence() -> tuple[_AtlasEvidence, ...]:
-    return ()
-
-
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
     return (
         _AtlasPlotSpec(
-            "solve_relation.svg",
-            "Solve-Relation Regions",
-            "solve_relation",
-            "dim_x",
-            "dim_y",
+            _AtlasText("solve_relation.svg"),
+            _AtlasText("Solve-Relation Regions"),
+            _AtlasText("solve_relation"),
+            _AtlasText("dim_x"),
+            _AtlasText("dim_y"),
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                "Solve relation: square linear system",
-                "Solve relation: least-squares relation",
-                "Solve relation: public nonlinear-solver gap",
-                "Solve relation: eigenproblem region",
-                "Invalid solve relation: eigenpair without spectral data",
+                _AtlasText("Solve relation: square linear system"),
+                _AtlasText("Solve relation: least-squares relation"),
+                _AtlasText("Solve relation: public nonlinear-solver gap"),
+                _AtlasText("Solve relation: eigenproblem region"),
+                _AtlasText("Invalid solve relation: eigenpair without spectral data"),
             ),
-            "Solve-relation projection over unknown and residual dimensions.",
+            _AtlasText(
+                "Solve-relation projection over unknown and residual dimensions."
+            ),
         ),
         _AtlasPlotSpec(
-            "linear_solver.svg",
-            "Linear-Solver Regions",
-            "linear_solver",
-            "dim_x",
-            "dim_y",
+            _AtlasText("linear_solver.svg"),
+            _AtlasText("Linear-Solver Regions"),
+            _AtlasText("linear_solver"),
+            _AtlasText("dim_x"),
+            _AtlasText("dim_y"),
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                "Linear solver: SPD full-rank dense descriptor",
-                "Linear solver: rank-deficient descriptor",
-                "Linear solver: matrix-free descriptor",
-                "Invalid linear solver: nonsquare SPD descriptor",
+                _AtlasText("Linear solver: SPD full-rank dense descriptor"),
+                _AtlasText("Linear solver: rank-deficient descriptor"),
+                _AtlasText("Linear solver: matrix-free descriptor"),
+                _AtlasText("Invalid linear solver: nonsquare SPD descriptor"),
             ),
-            "Linear-solver projection over unknown and residual dimensions.",
+            _AtlasText(
+                "Linear-solver projection over unknown and residual dimensions."
+            ),
         ),
         _AtlasPlotSpec(
-            "decomposition.svg",
-            "Decomposition Regions",
-            "decomposition",
-            "matrix_rows",
-            "matrix_columns",
+            _AtlasText("decomposition.svg"),
+            _AtlasText("Decomposition Regions"),
+            _AtlasText("decomposition"),
+            _AtlasText("matrix_rows"),
+            _AtlasText("matrix_columns"),
             (1.0, 6.0),
             (1.0, 6.0),
             (
-                "Decomposition: square full-rank dense descriptor",
-                "Invalid decomposition: nonsquare coercive descriptor",
+                _AtlasText("Decomposition: square full-rank dense descriptor"),
+                _AtlasText("Invalid decomposition: nonsquare coercive descriptor"),
             ),
-            "Decomposition projection over matrix row and column dimensions.",
+            _AtlasText(
+                "Decomposition projection over matrix row and column dimensions."
+            ),
         ),
     )
 
@@ -2756,27 +2764,24 @@ def _schema_atlas_regions(
     """Return every schema region that should appear in atlas projections."""
     derived = tuple(
         _AtlasRegionProjection(
-            name=region.name,
-            status="uncovered",
+            name=_AtlasText(region.name),
             source=region,
         )
         for region in schema.derived_regions
     )
     invalid = tuple(
         _AtlasRegionProjection(
-            name=rule.name,
-            status="invalid",
+            name=_AtlasText(rule.name),
             source=rule,
-            condition=rule.reason,
+            condition=_AtlasText(rule.reason),
         )
         for rule in schema.invalid_cells
     )
     coverage = tuple(
         _AtlasRegionProjection(
-            name=_coverage_region_name(region),
-            status="owned",
+            name=_AtlasText(_coverage_region_name(region)),
             source=region,
-            condition=f"{_coverage_region_name(region)} coverage region",
+            condition=_AtlasText(f"{_coverage_region_name(region)} coverage region"),
         )
         for region in regions
     )
@@ -3013,21 +3018,20 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
             predicate_summary = "; ".join(
                 _predicate_label(predicate) for predicate in predicates
             )
-            condition = region.condition or predicate_summary
+            condition = region.condition or _AtlasText(predicate_summary)
             if len(alternatives) > 1:
-                condition = f"alternative {alternative_index}: {condition}"
+                condition = _AtlasText(f"alternative {alternative_index}: {condition}")
             shape_name = (
                 region.name
                 if len(alternatives) == 1
-                else f"{region.name} alt {alternative_index}"
+                else _AtlasText(f"{region.name} alt {alternative_index}")
             )
             for geometry_name, points in geometry:
                 shapes.append(
                     _AtlasRegionShape(
                         shape_name,
-                        region.status,
                         region.source,
-                        geometry_name,
+                        _AtlasText(geometry_name),
                         points,
                         condition,
                     )
@@ -3037,10 +3041,20 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
 
 def _atlas_source_label(
     source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
-) -> str:
+) -> _AtlasText:
     if isinstance(source, CoverageRegion):
-        return _coverage_region_name(source)
-    return source.name
+        return _AtlasText(_coverage_region_name(source))
+    return _AtlasText(source.name)
+
+
+def _atlas_source_status(
+    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
+) -> _AtlasText:
+    if isinstance(source, InvalidCellRule):
+        return _AtlasText("invalid")
+    if isinstance(source, CoverageRegion):
+        return _AtlasText("owned")
+    return _AtlasText("uncovered")
 
 
 class _CapabilityAtlasDocClaim(Claim[None]):
@@ -3063,7 +3077,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema = schemas[spec.schema]
             regions = _atlas_regions_for_schema(spec.schema)
             discovered = _schema_atlas_regions(schema, regions)
-            self._assert_projection_sources_are_objects()
+            self._assert_atlas_models_do_not_store_raw_text()
             assert {id(region.source) for region in discovered} == {
                 id(source)
                 for source in schema.derived_regions + schema.invalid_cells + regions
@@ -3074,15 +3088,25 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 assert shape.source_name
                 assert shape.points
 
-    @staticmethod
-    def _assert_projection_sources_are_objects() -> None:
-        tree = ast.parse(inspect.getsource(_AtlasRegionProjection))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.AnnAssign) or not isinstance(
-                node.target, ast.Name
-            ):
-                continue
-            assert node.target.id not in {"source_kind", "source_name"}
+    @classmethod
+    def _assert_atlas_models_do_not_store_raw_text(cls) -> None:
+        atlas_classes = [
+            obj
+            for obj in globals().values()
+            if isinstance(obj, type) and obj.__name__.startswith("_Atlas")
+        ]
+        for atlas_class in atlas_classes:
+            for annotation in atlas_class.__annotations__.values():
+                assert not cls._annotation_contains_raw_text(annotation)
+
+    @classmethod
+    def _annotation_contains_raw_text(cls, annotation: object) -> bool:
+        if annotation is str:
+            return True
+        return any(
+            cls._annotation_contains_raw_text(argument)
+            for argument in get_args(annotation)
+        )
 
 
 # ---------------------------------------------------------------------------

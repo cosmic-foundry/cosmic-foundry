@@ -951,10 +951,12 @@ The sprint is complete when the following are true:
   must include the predicate bounds, the certificate sources accepted by the
   selector, and feasibility inequalities.  Atlas projections reference schema
   region objects directly rather than resolving region names through a parallel
-  string registry.  Coverage regions are not resolved by selector priority;
-  same-descriptor claims must be removed by sharper predicates or by deleting at
-  least one claim.  Uncovered regions remain visible even before anyone has
-  written a missing-capability note for them.
+  string registry, and projection status is derived from the source object:
+  invalid cells render invalid, coverage regions render owned, and derived
+  regions without an owner render uncovered.  Coverage regions are not resolved
+  by selector priority; same-descriptor claims must be removed by sharper
+  predicates or by deleting at least one claim.  Uncovered regions remain
+  visible even before anyone has written a missing-capability note for them.
 - **Coverage projections are honest.**  A rendered atlas page is a projection of
   a higher-dimensional schema, not the schema itself.  Each plot must render
   region area first and sampled test points second.  It must state which axes
