@@ -316,21 +316,17 @@ def _shape_evidence_labels(
     projections: tuple[atlas._AtlasProjection, ...],
 ) -> str:
     labels: list[str] = []
-    if region.status == "invalid":
-        rules = [
-            rule for rule in schema.invalid_cells if rule.name == region.source_name
-        ]
+    if isinstance(region.source, atlas.InvalidCellRule):
         for index, projection in enumerate(projections, start=1):
-            if rules and rules[0].matches(projection.descriptor):
+            if region.source.matches(projection.descriptor):
+                labels.append(str(index))
+    elif isinstance(region.source, atlas.DerivedParameterRegion):
+        for index, projection in enumerate(projections, start=1):
+            if region.source.contains(projection.descriptor):
                 labels.append(str(index))
     else:
-        regions = [
-            candidate
-            for candidate in schema.derived_regions
-            if candidate.name == region.source_name
-        ]
         for index, projection in enumerate(projections, start=1):
-            if regions and regions[0].contains(projection.descriptor):
+            if region.source.contains(projection.descriptor):
                 labels.append(str(index))
     return ", ".join(labels) if labels else "none"
 
@@ -338,15 +334,18 @@ def _shape_evidence_labels(
 def _projection_region_targets(
     schema: atlas.ParameterSpaceSchema,
     projection: atlas._AtlasProjection,
-    region_targets_by_source: dict[str, list[str]],
+    region_targets_by_source: dict[int, list[str]],
 ) -> str:
     targets: list[str] = []
     for region in schema.derived_regions:
         if region.contains(projection.descriptor):
-            targets.extend(region_targets_by_source.get(region.name, ()))
+            targets.extend(region_targets_by_source.get(id(region), ()))
     for rule in schema.invalid_cells:
         if rule.matches(projection.descriptor):
-            targets.extend(region_targets_by_source.get(rule.name, ()))
+            targets.extend(region_targets_by_source.get(id(rule), ()))
+    for region in projection.regions:
+        if region.contains(projection.descriptor):
+            targets.extend(region_targets_by_source.get(id(region), ()))
     return " ".join(dict.fromkeys(targets))
 
 
@@ -443,10 +442,10 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         )
 
     cards: list[str] = []
-    region_targets_by_source: dict[str, list[str]] = {}
+    region_targets_by_source: dict[int, list[str]] = {}
     for index, region in enumerate(region_shapes, start=1):
         target_id = _dom_id(atlas_id, "region", index, region.name)
-        region_targets_by_source.setdefault(region.source_name, []).append(target_id)
+        region_targets_by_source.setdefault(id(region.source), []).append(target_id)
         shape = _render_region_shape(
             region,
             left=left,
