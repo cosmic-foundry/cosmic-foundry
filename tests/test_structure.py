@@ -1382,45 +1382,25 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         for patch in patches:
             schema.validate_coverage_patch(patch)
 
-        owned_cases = (
-            _SolveRelationSchemaClaim._linear_descriptor(),
-            _SolveRelationSchemaClaim._linear_descriptor(
-                singular_value_lower_bound=0.0,
-                rank_estimate=3,
-                nullity_estimate=1,
-            ),
-            _SolveRelationSchemaClaim._linear_descriptor(
-                symmetry_defect=0.5,
-                coercivity_lower_bound=0.0,
-                singular_value_lower_bound=0.5,
-            ),
-            _SolveRelationSchemaClaim._linear_descriptor(
-                linear_operator_matrix_available=False,
-                matrix_representation_available=False,
-                symmetry_defect=0.5,
-                coercivity_lower_bound=0.0,
-            ),
-        )
         selected_owners: set[str] = set()
-        for descriptor in owned_cases:
+        owned_patches = tuple(patch for patch in patches if patch.status == "owned")
+        rejected_patches = tuple(
+            patch for patch in patches if patch.status == "rejected"
+        )
+        for patch in owned_patches:
+            descriptor = self._descriptor_witness_for_patch(schema, patch)
             assert schema.cell_status(descriptor, patches) == "owned"
             selected = select_linear_solver_for_descriptor(descriptor)
             expected_owner = self._selected_patch_owner(descriptor, patches)
             assert selected.implementation == expected_owner
             selected_owners.add(expected_owner)
-        assert len(selected_owners) == len(owned_cases)
+        assert selected_owners == {patch.owner for patch in owned_patches}
 
-        for rejected in (
-            _SolveRelationSchemaClaim._linear_descriptor(work_budget_fmas=1.0),
-            _SolveRelationSchemaClaim._linear_descriptor(memory_budget_bytes=1.0),
-            _SolveRelationSchemaClaim._linear_descriptor(
-                condition_estimate=None,
-                condition_evidence="unavailable",
-            ),
-        ):
-            assert schema.cell_status(rejected, patches) == "rejected"
+        for patch in rejected_patches:
+            descriptor = self._descriptor_witness_for_patch(schema, patch)
+            assert schema.cell_status(descriptor, patches) == "rejected"
             with pytest.raises(ValueError):
-                select_linear_solver_for_descriptor(rejected)
+                select_linear_solver_for_descriptor(descriptor)
 
     @staticmethod
     def _selected_patch_owner(
@@ -1441,6 +1421,167 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         )
         assert len(ranked) == 1 or ranked[0].priority != ranked[1].priority
         return ranked[0].owner
+
+    @classmethod
+    def _descriptor_witness_for_patch(
+        cls,
+        schema: ParameterSpaceSchema,
+        patch: CoveragePatch,
+    ) -> ParameterDescriptor:
+        fields = {axis.field: axis for axis in schema.axes}
+        coordinates = {
+            field: DescriptorCoordinate(cls._axis_witness(axis))
+            for field, axis in fields.items()
+        }
+        for predicate in patch.predicates:
+            if isinstance(predicate, MembershipPredicate):
+                coordinates[predicate.field] = DescriptorCoordinate(
+                    cls._membership_witness(fields[predicate.field], predicate)
+                )
+            elif isinstance(predicate, ComparisonPredicate):
+                coordinates[predicate.field] = DescriptorCoordinate(
+                    cls._comparison_witness(fields[predicate.field], predicate)
+                )
+            elif isinstance(predicate, EvidencePredicate):
+                evidence = sorted(predicate.evidence)[0]
+                value = (
+                    None
+                    if evidence == "unavailable"
+                    else coordinates[predicate.field].value
+                )
+                coordinates[predicate.field] = DescriptorCoordinate(
+                    value,
+                    evidence=evidence,  # type: ignore[arg-type]
+                )
+            elif isinstance(predicate, AffineComparisonPredicate):
+                cls._satisfy_affine_predicate(fields, coordinates, predicate)
+        descriptor = ParameterDescriptor(schema.name, coordinates)
+        assert patch.contains(descriptor)
+        return descriptor
+
+    @classmethod
+    def _axis_witness(cls, axis: ParameterAxis) -> Any:
+        for bin_or_interval in axis.bins:
+            if isinstance(bin_or_interval, ParameterBin):
+                return sorted(bin_or_interval.values, key=str)[0]
+            value = cls._interval_witness(bin_or_interval)
+            if axis.contains(DescriptorCoordinate(value)):
+                return value
+        raise AssertionError(f"axis {axis.name!r} has no witness value")
+
+    @staticmethod
+    def _interval_witness(interval: NumericInterval) -> float:
+        if interval.lower is not None and interval.upper is not None:
+            if interval.include_lower and interval.contains(interval.lower):
+                return interval.lower
+            if interval.include_upper and interval.contains(interval.upper):
+                return interval.upper
+            return (interval.lower + interval.upper) / 2.0
+        if interval.lower is not None:
+            if interval.include_lower and interval.contains(interval.lower):
+                return interval.lower
+            return interval.lower + max(abs(interval.lower), 1.0)
+        if interval.upper is not None:
+            if interval.include_upper and interval.contains(interval.upper):
+                return interval.upper
+            return interval.upper - max(abs(interval.upper), 1.0)
+        return 0.0
+
+    @classmethod
+    def _membership_witness(
+        cls,
+        axis: ParameterAxis,
+        predicate: MembershipPredicate,
+    ) -> Any:
+        for value in sorted(predicate.values, key=str):
+            if axis.contains(DescriptorCoordinate(value)):
+                return value
+        raise AssertionError(f"membership predicate {predicate!r} has no axis witness")
+
+    @classmethod
+    def _comparison_witness(
+        cls,
+        axis: ParameterAxis,
+        predicate: ComparisonPredicate,
+    ) -> Any:
+        if predicate.operator in {"==", "<=", ">="} and axis.contains(
+            DescriptorCoordinate(predicate.value)
+        ):
+            return predicate.value
+        for bin_or_interval in axis.bins:
+            if isinstance(bin_or_interval, ParameterBin):
+                candidates = sorted(bin_or_interval.values, key=str)
+            else:
+                candidates = (
+                    cls._interval_witness(bin_or_interval),
+                    cls._nudged_value(predicate),
+                )
+            for candidate in candidates:
+                coordinate = DescriptorCoordinate(candidate)
+                if axis.contains(coordinate) and predicate.evaluate(
+                    ParameterDescriptor(
+                        axis.name,
+                        {axis.field: coordinate},
+                    )
+                ):
+                    return candidate
+        raise AssertionError(f"comparison predicate {predicate!r} has no axis witness")
+
+    @staticmethod
+    def _nudged_value(predicate: ComparisonPredicate) -> float:
+        assert not isinstance(predicate.value, bool | str)
+        value = float(predicate.value)
+        step = max(abs(value), 1.0)
+        if predicate.operator in {">", ">="}:
+            return value + step
+        if predicate.operator in {"<", "<="}:
+            return value - step
+        raise AssertionError(f"unsupported comparison witness {predicate!r}")
+
+    @classmethod
+    def _satisfy_affine_predicate(
+        cls,
+        fields: dict[str, ParameterAxis],
+        coordinates: dict[str, DescriptorCoordinate],
+        predicate: AffineComparisonPredicate,
+    ) -> None:
+        if predicate.evaluate(ParameterDescriptor("witness", coordinates)):
+            return
+        adjustable = next(iter(predicate.terms))
+        coefficient = predicate.terms[adjustable]
+        other_total = predicate.offset + sum(
+            term_coefficient * float(coordinates[field].value)
+            for field, term_coefficient in predicate.terms.items()
+            if field != adjustable
+        )
+        boundary = (predicate.value - other_total) / coefficient
+        candidates = (
+            boundary,
+            cls._affine_nudged_value(boundary, coefficient, predicate),
+        )
+        for candidate in candidates:
+            coordinates[adjustable] = DescriptorCoordinate(candidate)
+            if fields[adjustable].contains(
+                coordinates[adjustable]
+            ) and predicate.evaluate(ParameterDescriptor("witness", coordinates)):
+                return
+        raise AssertionError(
+            f"affine predicate {predicate!r} has no descriptor witness"
+        )
+
+    @staticmethod
+    def _affine_nudged_value(
+        boundary: float,
+        coefficient: float,
+        predicate: AffineComparisonPredicate,
+    ) -> float:
+        step = max(abs(boundary), 1.0) / 2.0
+        direction = 1.0 if coefficient > 0.0 else -1.0
+        if predicate.operator in {">", ">="}:
+            return boundary + direction * step
+        if predicate.operator in {"<", "<="}:
+            return boundary - direction * step
+        return boundary
 
 
 @dataclass(frozen=True)
