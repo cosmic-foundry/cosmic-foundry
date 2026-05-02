@@ -386,13 +386,8 @@ def _render_region_card(
 
 
 def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
-    projections = {
-        projection.title: projection
-        for projection in atlas._capability_atlas_projections()
-        if projection.schema.name == spec.schema
-    }
-    selected = tuple(projections[cell] for cell in spec.cells)
-    schema = selected[0].schema
+    selected = spec.projections
+    schema = spec.schema
     region_shapes = atlas._projected_region_shapes(spec)
     x_min, x_max = spec.x_range
     y_min, y_max = spec.y_range
@@ -583,19 +578,19 @@ def render_capability_atlas() -> str:
         "## Projection Plots",
         "",
     ]
-    projections = {
-        projection.title: projection
-        for projection in atlas._capability_atlas_projections()
-    }
     for spec in atlas._capability_atlas_plot_specs():
         fixed = sorted(
-            {field for cell in spec.cells for field in projections[cell].fixed_axes}
+            {
+                field
+                for projection in spec.projections
+                for field in projection.fixed_axes
+            }
         )
         marginalized = sorted(
             {
                 field
-                for cell in spec.cells
-                for field in projections[cell].marginalized_axes
+                for projection in spec.projections
+                for field in projection.marginalized_axes
             }
         )
         lines.extend(

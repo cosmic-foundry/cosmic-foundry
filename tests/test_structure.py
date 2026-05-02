@@ -31,7 +31,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NewType, get_args, get_type_hints
+from typing import Any, NewType, get_args, get_origin, get_type_hints
 
 import pytest
 
@@ -2420,13 +2420,19 @@ class _AtlasPlotSpec:
 
     filename: _AtlasText
     title: _AtlasText
-    schema: _AtlasText
+    projections: tuple[_AtlasProjection, ...]
     x_axis: _AtlasText
     y_axis: _AtlasText
     x_range: tuple[float, float]
     y_range: tuple[float, float]
-    cells: tuple[_AtlasText, ...]
     caption: _AtlasText
+
+    @property
+    def schema(self) -> ParameterSpaceSchema:
+        """Common schema for the projections shown by this plot."""
+        schema = self.projections[0].schema
+        assert all(projection.schema is schema for projection in self.projections)
+        return schema
 
 
 def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
@@ -2649,22 +2655,34 @@ def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
 
 
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
+    (
+        solve_linear,
+        solve_least_squares,
+        solve_nonlinear_gap,
+        solve_eigenproblem,
+        solve_invalid_eigenpair,
+        linear_spd,
+        linear_rank_deficient,
+        linear_matrix_free,
+        linear_invalid_nonsquare,
+        decomposition_square,
+        decomposition_invalid_nonsquare,
+    ) = _capability_atlas_projections()
     return (
         _AtlasPlotSpec(
             _AtlasText("solve_relation.svg"),
             _AtlasText("Solve-Relation Regions"),
-            _AtlasText("solve_relation"),
+            (
+                solve_linear,
+                solve_least_squares,
+                solve_nonlinear_gap,
+                solve_eigenproblem,
+                solve_invalid_eigenpair,
+            ),
             _AtlasText("dim_x"),
             _AtlasText("dim_y"),
             (1.0, 6.0),
             (1.0, 6.0),
-            (
-                _AtlasText("Solve relation: square linear system"),
-                _AtlasText("Solve relation: least-squares relation"),
-                _AtlasText("Solve relation: public nonlinear-solver gap"),
-                _AtlasText("Solve relation: eigenproblem region"),
-                _AtlasText("Invalid solve relation: eigenpair without spectral data"),
-            ),
             _AtlasText(
                 "Solve-relation projection over unknown and residual dimensions."
             ),
@@ -2672,17 +2690,16 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
         _AtlasPlotSpec(
             _AtlasText("linear_solver.svg"),
             _AtlasText("Linear-Solver Regions"),
-            _AtlasText("linear_solver"),
+            (
+                linear_spd,
+                linear_rank_deficient,
+                linear_matrix_free,
+                linear_invalid_nonsquare,
+            ),
             _AtlasText("dim_x"),
             _AtlasText("dim_y"),
             (1.0, 6.0),
             (1.0, 6.0),
-            (
-                _AtlasText("Linear solver: SPD full-rank dense descriptor"),
-                _AtlasText("Linear solver: rank-deficient descriptor"),
-                _AtlasText("Linear solver: matrix-free descriptor"),
-                _AtlasText("Invalid linear solver: nonsquare SPD descriptor"),
-            ),
             _AtlasText(
                 "Linear-solver projection over unknown and residual dimensions."
             ),
@@ -2690,15 +2707,14 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
         _AtlasPlotSpec(
             _AtlasText("decomposition.svg"),
             _AtlasText("Decomposition Regions"),
-            _AtlasText("decomposition"),
+            (
+                decomposition_square,
+                decomposition_invalid_nonsquare,
+            ),
             _AtlasText("matrix_rows"),
             _AtlasText("matrix_columns"),
             (1.0, 6.0),
             (1.0, 6.0),
-            (
-                _AtlasText("Decomposition: square full-rank dense descriptor"),
-                _AtlasText("Invalid decomposition: nonsquare coercive descriptor"),
-            ),
             _AtlasText(
                 "Decomposition projection over matrix row and column dimensions."
             ),
@@ -2788,13 +2804,13 @@ def _schema_atlas_regions(
     return derived + invalid + coverage
 
 
-def _atlas_regions_for_schema(schema_name: str) -> tuple[CoverageRegion, ...]:
-    regions: dict[str, CoverageRegion] = {}
-    for projection in _capability_atlas_projections():
-        if projection.schema.name != schema_name:
-            continue
+def _atlas_regions_for_projections(
+    projections: tuple[_AtlasProjection, ...],
+) -> tuple[CoverageRegion, ...]:
+    regions: dict[type, CoverageRegion] = {}
+    for projection in projections:
         for region in projection.regions:
-            regions[_coverage_region_name(region)] = region
+            regions[region.owner] = region
     return tuple(regions.values())
 
 
@@ -2989,16 +3005,8 @@ def _project_alternative_geometry(
 
 
 def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, ...]:
-    schemas = {
-        schema.name: schema
-        for schema in (
-            solve_relation_parameter_schema(),
-            linear_solver_parameter_schema(),
-            decomposition_parameter_schema(),
-        )
-    }
-    schema = schemas[spec.schema]
-    regions = _atlas_regions_for_schema(spec.schema)
+    schema = spec.schema
+    regions = _atlas_regions_for_projections(spec.projections)
     shapes: list[_AtlasRegionShape] = []
     for region in _schema_atlas_regions(schema, regions):
         alternatives = _source_alternatives(schema, region, regions)
@@ -3065,19 +3073,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         return "algorithm_capabilities/capability_atlas_doc_generates"
 
     def check(self, _calibration: None) -> None:
-        schemas = {
-            schema.name: schema
-            for schema in (
-                solve_relation_parameter_schema(),
-                linear_solver_parameter_schema(),
-                decomposition_parameter_schema(),
-            )
-        }
+        self._assert_atlas_models_do_not_store_raw_text()
+        self._assert_plot_specs_select_projection_objects()
         for spec in _capability_atlas_plot_specs():
-            schema = schemas[spec.schema]
-            regions = _atlas_regions_for_schema(spec.schema)
+            schema = spec.schema
+            regions = _atlas_regions_for_projections(spec.projections)
             discovered = _schema_atlas_regions(schema, regions)
-            self._assert_atlas_models_do_not_store_raw_text()
             assert {id(region.source) for region in discovered} == {
                 id(source)
                 for source in schema.derived_regions + schema.invalid_cells + regions
@@ -3105,6 +3106,38 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             return True
         return any(
             cls._annotation_contains_raw_text(argument)
+            for argument in get_args(annotation)
+        )
+
+    @classmethod
+    def _assert_plot_specs_select_projection_objects(cls) -> None:
+        annotations = get_type_hints(_AtlasPlotSpec)
+        assert any(
+            cls._annotation_contains_type(annotation, _AtlasProjection)
+            for annotation in annotations.values()
+        )
+        assert not any(
+            cls._annotation_is_text_collection(annotation)
+            for annotation in annotations.values()
+        )
+        for spec in _capability_atlas_plot_specs():
+            assert spec.projections
+            schema = spec.projections[0].schema
+            assert all(projection.schema is schema for projection in spec.projections)
+
+    @classmethod
+    def _annotation_contains_type(cls, annotation: object, expected_type: type) -> bool:
+        if annotation is expected_type:
+            return True
+        return any(
+            cls._annotation_contains_type(argument, expected_type)
+            for argument in get_args(annotation)
+        )
+
+    @classmethod
+    def _annotation_is_text_collection(cls, annotation: object) -> bool:
+        return get_origin(annotation) in {tuple, list, set, frozenset} and any(
+            argument is _AtlasText or cls._annotation_is_text_collection(argument)
             for argument in get_args(annotation)
         )
 
