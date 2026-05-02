@@ -413,8 +413,7 @@ class InvalidCellRule:
 class CoverageRegion:
     """Owned parameter-space region claimed by one implementation."""
 
-    name: str
-    owner: str
+    owner: type
     predicates: tuple[StructuredPredicate, ...]
 
     @property
@@ -709,7 +708,7 @@ class ParameterSpaceSchema:
         unknown_fields = region.referenced_fields - self.descriptor_fields
         if unknown_fields:
             raise ValueError(
-                f"coverage region {region.name!r} references undeclared fields: "
+                f"coverage region {region.owner!r} references undeclared fields: "
                 f"{sorted(unknown_fields)}"
             )
 
@@ -777,8 +776,8 @@ class ParameterSpaceSchema:
         if not containing:
             return None
         if len(containing) > 1:
-            names = ", ".join(region.name for region in containing)
-            raise ValueError(f"descriptor lies in multiple coverage regions: {names}")
+            owners = ", ".join(repr(region.owner) for region in containing)
+            raise ValueError(f"descriptor lies in multiple coverage regions: {owners}")
         return containing[0]
 
     @staticmethod

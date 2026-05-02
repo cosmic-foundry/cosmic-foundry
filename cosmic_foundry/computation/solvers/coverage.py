@@ -20,7 +20,7 @@ CONDITION_LIMIT = 1.0e8
 class LinearSolverCoverage:
     """Descriptor-space coverage owned by one linear-solver implementation."""
 
-    implementation: str
+    implementation: type
     coverage_regions: tuple[CoverageRegion, ...]
 
 
@@ -31,11 +31,10 @@ def coverage(
 ) -> LinearSolverCoverage:
     """Return descriptor-space coverage whose identity comes from ``owner``."""
     return LinearSolverCoverage(
-        owner.__name__,
+        owner,
         (
             CoverageRegion(
-                owner.__name__,
-                owner.__name__,
+                owner,
                 coverage_predicates,
             ),
         ),
