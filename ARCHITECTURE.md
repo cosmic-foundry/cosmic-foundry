@@ -809,11 +809,12 @@ Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
 primitive choices, and alternative ordinals are rendering consequences.
-Atlas carrier types are admitted by premise rather than inferred from rendered
-objects; plot groupings are not carriers.  Structural tests reject any return to
-presentation strings, render-category enums, scalar bookkeeping fields, wrapper
-evidence objects, stored schema identities, stored ownership-region lists,
-generated-artifact carrier types, or hand-declared axis roles as semantic keys.
+Atlas-local dataclasses that store atlas text are documentation notes, not
+semantic atlas models.  Known gap notes annotate already-derived uncovered
+regions; they do not own, select, define, or group regions.  Structural tests
+reject any return to presentation strings in notes, wrapper evidence objects,
+stored schema identities, stored ownership-region lists, generated-artifact
+models, or hand-declared axis roles as semantic keys.
 
 The sprint is complete when the following are true:
 
