@@ -293,6 +293,22 @@ def _coverage_region_name(region: atlas.CoverageRegion) -> str:
     return region.owner.__name__
 
 
+def _axis_partition_summary(axis: atlas.ParameterAxis) -> str:
+    view = atlas._atlas_axis_view(axis)
+    cells = "; ".join(_axis_cell_label(cell) for cell in view.cells)
+    scale = "log-eligible" if view.use_log_scale else "partition"
+    return f"{scale}: {cells}"
+
+
+def _axis_cell_label(cell: atlas.ParameterBin | atlas.NumericInterval) -> str:
+    if isinstance(cell, atlas.ParameterBin):
+        values = ", ".join(str(value) for value in sorted(cell.values, key=str))
+        return f"{cell.label} {{{values}}}"
+    lower = "[" if cell.include_lower else "("
+    upper = "]" if cell.include_upper else ")"
+    return f"{cell.label} {lower}{cell.lower}, {cell.upper}{upper}"
+
+
 def _shape_evidence_labels(
     schema: atlas.ParameterSpaceSchema,
     source: atlas._AtlasRegionSource,
@@ -587,6 +603,8 @@ def render_capability_atlas() -> str:
         marginalized = atlas._atlas_marginalized_axes(group)
         x_axis = atlas._atlas_group_x_axis(group)
         y_axis = atlas._atlas_group_y_axis(group)
+        schema = atlas._atlas_group_schema(group)
+        axis_by_field = {axis.field: axis for axis in schema.axes}
         lines.extend(
             [
                 f"### {atlas._atlas_group_title(group)}",
@@ -601,6 +619,11 @@ def render_capability_atlas() -> str:
                 "Marginalized axes: "
                 + ", ".join(f"`{atlas._field_label(field)}`" for field in marginalized)
                 + ".",
+                "Visual axis partitions:",
+                f"- `{atlas._field_label(x_axis)}`: "
+                f"{_axis_partition_summary(axis_by_field[x_axis])}",
+                f"- `{atlas._field_label(y_axis)}`: "
+                f"{_axis_partition_summary(axis_by_field[y_axis])}",
                 "",
             ]
         )

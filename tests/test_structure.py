@@ -2361,6 +2361,13 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 _AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
 
 
+class _AtlasAxisView(NamedTuple):
+    """Visualization policy derived from a schema axis partition."""
+
+    cells: tuple[ParameterBin | NumericInterval, ...]
+    use_log_scale: bool
+
+
 class _AtlasUncoveredCell(NamedTuple):
     """Computed valid schema cell not owned by any coverage claim."""
 
@@ -2515,6 +2522,25 @@ def _atlas_group_caption(group: _AtlasDescriptorGroup) -> _AtlasText:
     return _AtlasText(
         f"{_atlas_group_title(group)} over {_field_label(_atlas_group_x_axis(group))} "
         f"and {_field_label(_atlas_group_y_axis(group))}."
+    )
+
+
+def _atlas_axis_view(axis: ParameterAxis) -> _AtlasAxisView:
+    return _AtlasAxisView(
+        cells=axis.bins,
+        use_log_scale=_axis_uses_log_scale(axis),
+    )
+
+
+def _axis_uses_log_scale(axis: ParameterAxis) -> bool:
+    numeric_cells = tuple(
+        cell for cell in axis.bins if isinstance(cell, NumericInterval)
+    )
+    return bool(numeric_cells) and all(
+        cell.lower is not None
+        and (cell.lower > 0.0 or (cell.lower == 0.0 and not cell.include_lower))
+        and (cell.upper is None or cell.upper > 0.0)
+        for cell in numeric_cells
     )
 
 
@@ -3009,6 +3035,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         self._assert_no_atlas_dataclass_stores_presentation_text()
         self._assert_uncovered_regions_are_computed()
+        self._assert_axis_views_are_schema_partitions()
         self._assert_projection_axis_roles_are_derived()
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
@@ -3124,6 +3151,14 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                     predicate_sets_are_disjoint(source.predicates, region.predicates)
                     for region in regions
                 )
+
+    @staticmethod
+    def _assert_axis_views_are_schema_partitions() -> None:
+        for schema in _capability_atlas_schemas():
+            for axis in schema.axes:
+                view = _atlas_axis_view(axis)
+                assert view.cells == axis.bins
+                assert view.use_log_scale == _axis_uses_log_scale(axis)
 
     @classmethod
     def _assert_descriptor_groups_are_schema_equivalence_classes(cls) -> None:
