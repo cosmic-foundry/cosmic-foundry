@@ -31,7 +31,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NewType, get_args
+from typing import Any, NewType, get_args, get_type_hints
 
 import pytest
 
@@ -2361,9 +2361,9 @@ class _AtlasProjection:
     schema: ParameterSpaceSchema
     descriptor: ParameterDescriptor
     title: _AtlasText
-    shown_axes: tuple[DescriptorField, ...]
-    fixed_axes: tuple[DescriptorField, ...]
-    marginalized_axes: tuple[DescriptorField, ...]
+    shown_axes: tuple[_AtlasText, ...]
+    fixed_axes: tuple[_AtlasText, ...]
+    marginalized_axes: tuple[_AtlasText, ...]
     regions: tuple[CoverageRegion, ...] = ()
 
 
@@ -3096,7 +3096,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             if isinstance(obj, type) and obj.__name__.startswith("_Atlas")
         ]
         for atlas_class in atlas_classes:
-            for annotation in atlas_class.__annotations__.values():
+            for annotation in get_type_hints(atlas_class).values():
                 assert not cls._annotation_contains_raw_text(annotation)
 
     @classmethod
