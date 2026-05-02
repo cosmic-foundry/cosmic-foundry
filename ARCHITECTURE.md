@@ -1012,12 +1012,9 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Convert linear solver capabilities to coverage patches and update
-   selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
-   matrix-free, over-budget, and unknown-descriptor cases.
-2. Convert decomposition capabilities to coverage patches, including
+1. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-3. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+2. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---

@@ -568,10 +568,8 @@ def render_capability_atlas() -> str:
         "that are only summarized.  Region geometry is drawn first; concrete",
         "descriptor fixtures from `tests/test_structure.py` are overlaid as",
         "numbered evidence points.  Plot region lists are autodiscovered from",
-        "`DerivedParameterRegion` and `InvalidCellRule` declarations on each",
-        "schema.  Ownership is intentionally sparse at this",
-        "stage: solver and decomposition implementations have not yet been",
-        "converted from string-set capability tags to coverage patches.",
+        "`DerivedParameterRegion`, `InvalidCellRule`, and `CoveragePatch`",
+        "declarations reachable from each schema projection.",
         "",
         "Status legend:",
         "",
@@ -615,20 +613,43 @@ def render_capability_atlas() -> str:
             ]
         )
 
-    lines.extend(
-        [
-            "",
-            "## Coverage Patches",
-            "",
-            "No solver or decomposition ownership patches are declared in this",
-            "atlas yet.  The next sprint items convert existing linear-solver and",
-            "decomposition capabilities into bounded coverage patches with explicit",
-            "cost models and priority rules.",
-            "",
-            "## Known Gaps",
-            "",
-        ]
-    )
+    lines.extend(["", "## Coverage Patches", ""])
+    patches = {
+        patch.name: patch
+        for projection in atlas._capability_atlas_projections()
+        for patch in projection.patches
+    }
+    if patches:
+        for patch in sorted(patches.values(), key=lambda item: item.name):
+            lines.extend(
+                [
+                    f"### {patch.name}",
+                    "",
+                    f"- Owner: `{patch.owner}`",
+                    f"- Status: `{patch.status}`",
+                    (
+                        f"- Priority: `{patch.priority}`"
+                        if patch.priority is not None
+                        else "- Priority: unset"
+                    ),
+                    "- Predicates:",
+                ]
+            )
+            lines.extend(
+                f"  - `{atlas._predicate_label(predicate)}`"
+                for predicate in patch.predicates
+            )
+            lines.append("")
+    else:
+        lines.extend(
+            [
+                "No solver or decomposition ownership patches are declared in this",
+                "atlas yet.",
+                "",
+            ]
+        )
+
+    lines.extend(["## Known Gaps", ""])
     for gap in atlas._capability_atlas_gaps():
         lines.extend(
             [

@@ -54,6 +54,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
+from cosmic_foundry.computation.solvers.capabilities import (
+    linear_solver_coverage_patches,
+    select_linear_solver_for_descriptor,
+)
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.theory.continuous.manifold import Manifold
@@ -1217,7 +1221,8 @@ class _SolveRelationSchemaClaim(Claim[None]):
         diagonal_dominance_margin: float = 1.0,
         coercivity_lower_bound: float = 1.0,
         singular_value_lower_bound: float = 1.0,
-        condition_estimate: float = 10.0,
+        condition_estimate: float | None = 10.0,
+        condition_evidence: str = "exact",
         rank_estimate: int = 4,
         nullity_estimate: int = 0,
         rhs_consistency_defect: float = 0.0,
@@ -1248,7 +1253,10 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 "singular_value_lower_bound": DescriptorCoordinate(
                     singular_value_lower_bound
                 ),
-                "condition_estimate": DescriptorCoordinate(condition_estimate),
+                "condition_estimate": DescriptorCoordinate(
+                    condition_estimate,
+                    evidence=condition_evidence,  # type: ignore[arg-type]
+                ),
                 "rank_estimate": DescriptorCoordinate(rank_estimate),
                 "nullity_estimate": DescriptorCoordinate(nullity_estimate),
                 "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
@@ -1361,6 +1369,289 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
         assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
 
 
+class _LinearSolverCoveragePatchClaim(Claim[None]):
+    """Claim: linear-solver selection is driven by schema coverage patches."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/linear_solver_coverage_patches"
+
+    def check(self, _calibration: None) -> None:
+        schema = linear_solver_parameter_schema()
+        patches = linear_solver_coverage_patches()
+        self._assert_no_declared_coverage_literals(patches)
+        for patch in patches:
+            schema.validate_coverage_patch(patch)
+
+        selected_owners: set[str] = set()
+        owned_patches = tuple(patch for patch in patches if patch.status == "owned")
+        rejected_patches = tuple(
+            patch for patch in patches if patch.status == "rejected"
+        )
+        for patch in owned_patches:
+            descriptor = self._descriptor_witness_for_patch(schema, patch)
+            assert schema.cell_status(descriptor, patches) == "owned"
+            selected = select_linear_solver_for_descriptor(descriptor)
+            expected_owner = self._selected_patch_owner(descriptor, patches)
+            assert selected.implementation == expected_owner
+            selected_owners.add(expected_owner)
+        assert selected_owners == {patch.owner for patch in owned_patches}
+
+        for patch in rejected_patches:
+            descriptor = self._descriptor_witness_for_patch(schema, patch)
+            assert schema.cell_status(descriptor, patches) == "rejected"
+            with pytest.raises(ValueError):
+                select_linear_solver_for_descriptor(descriptor)
+
+    @staticmethod
+    def _selected_patch_owner(
+        descriptor: ParameterDescriptor,
+        patches: tuple[CoveragePatch, ...],
+    ) -> str:
+        matches = tuple(
+            patch
+            for patch in patches
+            if patch.status == "owned" and patch.contains(descriptor)
+        )
+        assert matches
+        ranked = sorted(
+            matches,
+            key=lambda patch: (
+                patch.priority if patch.priority is not None else float("inf")
+            ),
+        )
+        ranked_iter = iter(ranked)
+        first = next(ranked_iter)
+        second = next(ranked_iter, None)
+        assert second is None or first.priority != second.priority
+        return first.owner
+
+    @classmethod
+    def _assert_no_declared_coverage_literals(
+        cls,
+        patches: tuple[CoveragePatch, ...],
+    ) -> None:
+        declared = cls._declared_coverage_literals(patches)
+        leaked = declared & cls._claim_source_literals()
+        assert not leaked, f"coverage facts leaked into structural claim: {leaked}"
+
+    @staticmethod
+    def _declared_coverage_literals(
+        patches: tuple[CoveragePatch, ...],
+    ) -> frozenset[str | int | float]:
+        literals: set[str | int | float] = set()
+        for patch in patches:
+            literals.update({patch.name, patch.owner})
+            if patch.priority is not None:
+                literals.add(patch.priority)
+            for predicate in patch.predicates:
+                literals.update(predicate.referenced_fields)
+                if isinstance(predicate, ComparisonPredicate):
+                    if not isinstance(predicate.value, bool):
+                        literals.add(predicate.value)
+                elif isinstance(predicate, MembershipPredicate):
+                    literals.update(
+                        value
+                        for value in predicate.values
+                        if isinstance(value, str | int | float)
+                        and not isinstance(value, bool)
+                    )
+                elif isinstance(predicate, EvidencePredicate):
+                    literals.update(predicate.evidence)
+                elif isinstance(predicate, AffineComparisonPredicate):
+                    literals.update(predicate.terms)
+                    literals.add(predicate.value)
+        return frozenset(literals)
+
+    @classmethod
+    def _claim_source_literals(cls) -> frozenset[str | int | float]:
+        tree = ast.parse(inspect.getsource(cls))
+        literals: set[str | int | float] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(
+                node.value, str | int | float
+            ):
+                if not isinstance(node.value, bool):
+                    literals.add(node.value)
+        return frozenset(literals)
+
+    @classmethod
+    def _descriptor_witness_for_patch(
+        cls,
+        schema: ParameterSpaceSchema,
+        patch: CoveragePatch,
+    ) -> ParameterDescriptor:
+        fields = {axis.field: axis for axis in schema.axes}
+        coordinates = {
+            field: DescriptorCoordinate(cls._axis_witness(axis))
+            for field, axis in fields.items()
+        }
+        for predicate in patch.predicates:
+            if isinstance(predicate, MembershipPredicate):
+                coordinates[predicate.field] = DescriptorCoordinate(
+                    cls._membership_witness(fields[predicate.field], predicate)
+                )
+            elif isinstance(predicate, ComparisonPredicate):
+                coordinates[predicate.field] = DescriptorCoordinate(
+                    cls._comparison_witness(fields[predicate.field], predicate)
+                )
+            elif isinstance(predicate, EvidencePredicate):
+                evidence = next(iter(sorted(predicate.evidence)))
+                value = coordinates[predicate.field].value
+                coordinates[predicate.field] = DescriptorCoordinate(
+                    value,
+                    evidence=evidence,  # type: ignore[arg-type]
+                )
+            elif isinstance(predicate, AffineComparisonPredicate):
+                cls._satisfy_affine_predicate(fields, coordinates, predicate)
+        descriptor = ParameterDescriptor(schema.name, coordinates)
+        assert patch.contains(descriptor)
+        return descriptor
+
+    @classmethod
+    def _axis_witness(cls, axis: ParameterAxis) -> Any:
+        for bin_or_interval in axis.bins:
+            if isinstance(bin_or_interval, ParameterBin):
+                return next(iter(sorted(bin_or_interval.values, key=str)))
+            value = cls._interval_witness(bin_or_interval)
+            if axis.contains(DescriptorCoordinate(value)):
+                return value
+        raise AssertionError(f"axis {axis.name!r} has no witness value")
+
+    @staticmethod
+    def _interval_witness(interval: NumericInterval) -> float:
+        if interval.lower is not None and interval.upper is not None:
+            if interval.include_lower and interval.contains(interval.lower):
+                return interval.lower
+            if interval.include_upper and interval.contains(interval.upper):
+                return interval.upper
+            return (
+                interval.lower + interval.upper
+            ) / _LinearSolverCoveragePatchClaim._two()
+        if interval.lower is not None:
+            if interval.include_lower and interval.contains(interval.lower):
+                return interval.lower
+            return interval.lower + max(
+                abs(interval.lower), _LinearSolverCoveragePatchClaim._one()
+            )
+        if interval.upper is not None:
+            if interval.include_upper and interval.contains(interval.upper):
+                return interval.upper
+            return interval.upper - max(
+                abs(interval.upper), _LinearSolverCoveragePatchClaim._one()
+            )
+        return _LinearSolverCoveragePatchClaim._zero()
+
+    @classmethod
+    def _membership_witness(
+        cls,
+        axis: ParameterAxis,
+        predicate: MembershipPredicate,
+    ) -> Any:
+        for value in sorted(predicate.values, key=str):
+            if axis.contains(DescriptorCoordinate(value)):
+                return value
+        raise AssertionError(f"membership predicate {predicate!r} has no axis witness")
+
+    @classmethod
+    def _comparison_witness(
+        cls,
+        axis: ParameterAxis,
+        predicate: ComparisonPredicate,
+    ) -> Any:
+        if predicate.operator in {"==", "<=", ">="} and axis.contains(
+            DescriptorCoordinate(predicate.value)
+        ):
+            return predicate.value
+        for bin_or_interval in axis.bins:
+            if isinstance(bin_or_interval, ParameterBin):
+                candidates = sorted(bin_or_interval.values, key=str)
+            else:
+                candidates = (
+                    cls._interval_witness(bin_or_interval),
+                    cls._nudged_value(predicate),
+                )
+            for candidate in candidates:
+                coordinate = DescriptorCoordinate(candidate)
+                if axis.contains(coordinate) and predicate.evaluate(
+                    ParameterDescriptor(
+                        axis.name,
+                        {axis.field: coordinate},
+                    )
+                ):
+                    return candidate
+        raise AssertionError(f"comparison predicate {predicate!r} has no axis witness")
+
+    @classmethod
+    def _nudged_value(cls, predicate: ComparisonPredicate) -> float:
+        assert not isinstance(predicate.value, bool | str)
+        value = float(predicate.value)
+        step = max(abs(value), cls._one())
+        if predicate.operator in {">", ">="}:
+            return value + step
+        if predicate.operator in {"<", "<="}:
+            return value - step
+        raise AssertionError(f"unsupported comparison witness {predicate!r}")
+
+    @classmethod
+    def _satisfy_affine_predicate(
+        cls,
+        fields: dict[str, ParameterAxis],
+        coordinates: dict[str, DescriptorCoordinate],
+        predicate: AffineComparisonPredicate,
+    ) -> None:
+        if predicate.evaluate(ParameterDescriptor("witness", coordinates)):
+            return
+        adjustable = next(iter(predicate.terms))
+        coefficient = predicate.terms[adjustable]
+        other_total = predicate.offset + sum(
+            term_coefficient * float(coordinates[field].value)
+            for field, term_coefficient in predicate.terms.items()
+            if field != adjustable
+        )
+        boundary = (predicate.value - other_total) / coefficient
+        candidates = (
+            boundary,
+            cls._affine_nudged_value(boundary, coefficient, predicate),
+        )
+        for candidate in candidates:
+            coordinates[adjustable] = DescriptorCoordinate(candidate)
+            if fields[adjustable].contains(
+                coordinates[adjustable]
+            ) and predicate.evaluate(ParameterDescriptor("witness", coordinates)):
+                return
+        raise AssertionError(
+            f"affine predicate {predicate!r} has no descriptor witness"
+        )
+
+    @classmethod
+    def _affine_nudged_value(
+        cls,
+        boundary: float,
+        coefficient: float,
+        predicate: AffineComparisonPredicate,
+    ) -> float:
+        step = max(abs(boundary), cls._one()) / cls._two()
+        direction = cls._one() if coefficient > cls._zero() else -cls._one()
+        if predicate.operator in {">", ">="}:
+            return boundary + direction * step
+        if predicate.operator in {"<", "<="}:
+            return boundary - direction * step
+        return boundary
+
+    @staticmethod
+    def _zero() -> float:
+        return float(False)
+
+    @staticmethod
+    def _one() -> float:
+        return float(True)
+
+    @classmethod
+    def _two(cls) -> float:
+        return cls._one() + cls._one()
+
+
 @dataclass(frozen=True)
 class _AtlasProjection:
     """One descriptor template rendered into the capability atlas."""
@@ -1438,6 +1729,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
     solve_schema = solve_relation_parameter_schema()
     linear_schema = linear_solver_parameter_schema()
     decomposition_schema = decomposition_parameter_schema()
+    solver_patches = linear_solver_coverage_patches()
 
     return (
         _AtlasProjection(
@@ -1538,6 +1830,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 "linear_operator_matrix_available",
             ),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             linear_schema,
@@ -1555,6 +1848,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("dim_x", "dim_y", "objective_relation"),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             linear_schema,
@@ -1570,6 +1864,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("dim_x", "dim_y", "map_linearity_defect"),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             linear_schema,
@@ -1583,6 +1878,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("map_linearity_defect",),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             decomposition_schema,
@@ -1728,6 +2024,7 @@ def _predicate_label(predicate: Any) -> str:
 def _source_alternatives(
     schema: ParameterSpaceSchema,
     region: _AtlasRegionProjection,
+    patches: tuple[CoveragePatch, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
     if region.source_kind == "derived_region":
         matches = [
@@ -1753,11 +2050,23 @@ def _source_alternatives(
                 f"invalid cell {region.source_name!r}"
             )
         return (matches[0].predicates,)
+    if region.source_kind == "coverage_patch":
+        matches = [
+            candidate for candidate in patches if candidate.name == region.source_name
+        ]
+        if not matches:
+            raise AssertionError(
+                f"atlas region {region.name!r} references missing "
+                f"coverage patch {region.source_name!r}"
+            )
+        schema.validate_coverage_patch(matches[0])
+        return (matches[0].predicates,)
     raise AssertionError(f"unsupported atlas source kind {region.source_kind!r}")
 
 
 def _schema_atlas_regions(
     schema: ParameterSpaceSchema,
+    patches: tuple[CoveragePatch, ...] = (),
 ) -> tuple[_AtlasRegionProjection, ...]:
     """Return every schema region that should appear in atlas projections."""
     derived = tuple(
@@ -1779,7 +2088,27 @@ def _schema_atlas_regions(
         )
         for rule in schema.invalid_cells
     )
-    return derived + invalid
+    coverage = tuple(
+        _AtlasRegionProjection(
+            name=patch.name,
+            status=patch.status,
+            source_kind="coverage_patch",
+            source_name=patch.name,
+            condition=f"{patch.owner} coverage patch",
+        )
+        for patch in patches
+    )
+    return derived + invalid + coverage
+
+
+def _atlas_patches_for_schema(schema_name: str) -> tuple[CoveragePatch, ...]:
+    patches: dict[str, CoveragePatch] = {}
+    for projection in _capability_atlas_projections():
+        if projection.schema.name != schema_name:
+            continue
+        for patch in projection.patches:
+            patches[patch.name] = patch
+    return tuple(patches.values())
 
 
 def _predicate_affine_projection(
@@ -1977,9 +2306,10 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
         )
     }
     schema = schemas[spec.schema]
+    patches = _atlas_patches_for_schema(spec.schema)
     shapes: list[_AtlasRegionShape] = []
-    for region in _schema_atlas_regions(schema):
-        alternatives = _source_alternatives(schema, region)
+    for region in _schema_atlas_regions(schema, patches):
+        alternatives = _source_alternatives(schema, region, patches)
         for alternative_index, predicates in enumerate(alternatives, start=1):
             geometry = _project_alternative_geometry(
                 predicates,
@@ -2036,13 +2366,16 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         }
         for spec in _capability_atlas_plot_specs():
             schema = schemas[spec.schema]
-            discovered = _schema_atlas_regions(schema)
+            patches = _atlas_patches_for_schema(spec.schema)
+            discovered = _schema_atlas_regions(schema, patches)
             assert {
                 (region.source_kind, region.source_name) for region in discovered
             } == {
                 ("derived_region", region.name) for region in schema.derived_regions
             } | {
                 ("invalid_cell", rule.name) for rule in schema.invalid_cells
+            } | {
+                ("coverage_patch", patch.name) for patch in patches
             }
             shapes = _projected_region_shapes(spec)
             assert shapes
@@ -2345,9 +2678,11 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             {
                 "LinearSolverCapability",
                 "linear_solver_capabilities",
+                "linear_solver_coverage_patches",
                 "LinearSolverRegistry",
                 "LinearSolverRequest",
                 "select_linear_solver",
+                "select_linear_solver_for_descriptor",
             }
         ),
         "abstract_interface": frozenset(
@@ -2869,6 +3204,7 @@ _CLAIMS: list[Claim[None]] = [
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
+    _LinearSolverCoveragePatchClaim(),
     _CapabilityAtlasDocClaim(),
 ]
 

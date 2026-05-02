@@ -31,6 +31,7 @@ class AlgorithmCapability:
     order_step: int | None = None
     supported_orders: frozenset[int] | None = None
     priority: int | None = None
+    coverage_patches: tuple[CoveragePatch, ...] = ()
 
     def supports(self, request: AlgorithmRequest) -> bool:
         """Return whether this declaration inhabits ``request``."""
