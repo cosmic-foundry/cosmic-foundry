@@ -2394,8 +2394,7 @@ class _AtlasRegionProjection:
 
     name: str
     status: str
-    source_kind: str
-    source_name: str
+    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion
     condition: str = ""
 
 
@@ -2405,10 +2404,15 @@ class _AtlasRegionShape:
 
     name: str
     status: str
-    source_name: str
+    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion
     geometry: str
     points: tuple[tuple[float, float], ...]
     condition: str
+
+    @property
+    def source_name(self) -> str:
+        """Human label for the projected source region."""
+        return _atlas_source_label(self.source)
 
 
 @dataclass(frozen=True)
@@ -2733,44 +2737,16 @@ def _source_alternatives(
     region: _AtlasRegionProjection,
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
-    if region.source_kind == "derived_region":
-        matches = [
-            candidate
-            for candidate in schema.derived_regions
-            if candidate.name == region.source_name
-        ]
-        if not matches:
-            raise AssertionError(
-                f"atlas region {region.name!r} references missing "
-                f"derived region {region.source_name!r}"
-            )
-        return matches[0].alternatives
-    if region.source_kind == "invalid_cell":
-        matches = [
-            candidate
-            for candidate in schema.invalid_cells
-            if candidate.name == region.source_name
-        ]
-        if not matches:
-            raise AssertionError(
-                f"atlas region {region.name!r} references missing "
-                f"invalid cell {region.source_name!r}"
-            )
-        return (matches[0].predicates,)
-    if region.source_kind == "coverage_region":
-        matches = [
-            candidate
-            for candidate in regions
-            if _coverage_region_name(candidate) == region.source_name
-        ]
-        if not matches:
-            raise AssertionError(
-                f"atlas region {region.name!r} references missing "
-                f"coverage region {region.source_name!r}"
-            )
-        schema.validate_coverage_region(matches[0])
-        return (matches[0].predicates,)
-    raise AssertionError(f"unsupported atlas source kind {region.source_kind!r}")
+    if isinstance(region.source, DerivedParameterRegion):
+        assert region.source in schema.derived_regions
+        return region.source.alternatives
+    if isinstance(region.source, InvalidCellRule):
+        assert region.source in schema.invalid_cells
+        return (region.source.predicates,)
+    assert isinstance(region.source, CoverageRegion)
+    assert region.source in regions
+    schema.validate_coverage_region(region.source)
+    return (region.source.predicates,)
 
 
 def _schema_atlas_regions(
@@ -2782,8 +2758,7 @@ def _schema_atlas_regions(
         _AtlasRegionProjection(
             name=region.name,
             status="uncovered",
-            source_kind="derived_region",
-            source_name=region.name,
+            source=region,
         )
         for region in schema.derived_regions
     )
@@ -2791,8 +2766,7 @@ def _schema_atlas_regions(
         _AtlasRegionProjection(
             name=rule.name,
             status="invalid",
-            source_kind="invalid_cell",
-            source_name=rule.name,
+            source=rule,
             condition=rule.reason,
         )
         for rule in schema.invalid_cells
@@ -2801,8 +2775,7 @@ def _schema_atlas_regions(
         _AtlasRegionProjection(
             name=_coverage_region_name(region),
             status="owned",
-            source_kind="coverage_region",
-            source_name=_coverage_region_name(region),
+            source=region,
             condition=f"{_coverage_region_name(region)} coverage region",
         )
         for region in regions
@@ -3053,13 +3026,21 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
                     _AtlasRegionShape(
                         shape_name,
                         region.status,
-                        region.source_name,
+                        region.source,
                         geometry_name,
                         points,
                         condition,
                     )
                 )
     return tuple(shapes)
+
+
+def _atlas_source_label(
+    source: DerivedParameterRegion | InvalidCellRule | CoverageRegion,
+) -> str:
+    if isinstance(source, CoverageRegion):
+        return _coverage_region_name(source)
+    return source.name
 
 
 class _CapabilityAtlasDocClaim(Claim[None]):
@@ -3082,20 +3063,26 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema = schemas[spec.schema]
             regions = _atlas_regions_for_schema(spec.schema)
             discovered = _schema_atlas_regions(schema, regions)
-            assert {
-                (region.source_kind, region.source_name) for region in discovered
-            } == {
-                ("derived_region", region.name) for region in schema.derived_regions
-            } | {
-                ("invalid_cell", rule.name) for rule in schema.invalid_cells
-            } | {
-                ("coverage_region", _coverage_region_name(region)) for region in regions
+            self._assert_projection_sources_are_objects()
+            assert {id(region.source) for region in discovered} == {
+                id(source)
+                for source in schema.derived_regions + schema.invalid_cells + regions
             }
             shapes = _projected_region_shapes(spec)
             assert shapes
             for shape in shapes:
                 assert shape.source_name
                 assert shape.points
+
+    @staticmethod
+    def _assert_projection_sources_are_objects() -> None:
+        tree = ast.parse(inspect.getsource(_AtlasRegionProjection))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.AnnAssign) or not isinstance(
+                node.target, ast.Name
+            ):
+                continue
+            assert node.target.id not in {"source_kind", "source_name"}
 
 
 # ---------------------------------------------------------------------------
