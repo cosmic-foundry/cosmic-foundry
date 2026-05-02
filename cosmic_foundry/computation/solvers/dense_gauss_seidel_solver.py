@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation.solvers._capability_claims import (
+    LinearSolverCapability,
+    contract,
+)
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
@@ -95,4 +99,19 @@ class DenseGaussSeidelSolver(IterativeSolver):
         return s.u
 
 
-__all__ = ["DenseGaussSeidelSolver"]
+def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
+    """Return capability declarations owned by this solver implementation."""
+    return (
+        LinearSolverCapability(
+            "dense_gauss_seidel_iteration",
+            "DenseGaussSeidelSolver",
+            "iterative_solver",
+            contract(
+                requires=("linear_operator", "square_system"),
+                provides=("solve", "iterative", "stationary", "assembled_matrix"),
+            ),
+        ),
+    )
+
+
+__all__ = ["DenseGaussSeidelSolver", "declare_linear_solver_capabilities"]

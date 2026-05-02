@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicate
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
+from cosmic_foundry.computation.solvers._capability_claims import (
+    LINEARITY_TOLERANCE,
+    LinearSolverCapability,
+    budget_predicates,
+    contract,
+    dense_matrix_predicates,
+    linear_system_predicates,
+    owned_patch,
+)
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 
 
@@ -34,4 +44,41 @@ class DenseSVDSolver(DirectSolver):
         super().__init__(SVDFactorization(rcond))
 
 
-__all__ = ["DenseSVDSolver"]
+_COVERAGE_PATCH = owned_patch(
+    "dense_svd_rank_deficient_dense",
+    "DenseSVDSolver",
+    linear_system_predicates()
+    + dense_matrix_predicates()
+    + budget_predicates()
+    + (
+        ComparisonPredicate("nullity_estimate", ">", 0),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+    ),
+    priority=20,
+)
+
+
+def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
+    """Return capability declarations owned by this solver implementation."""
+    return (
+        LinearSolverCapability(
+            "dense_svd_direct",
+            "DenseSVDSolver",
+            "direct_solver",
+            contract(
+                requires=("dense_operator",),
+                provides=(
+                    "solve",
+                    "direct",
+                    "least_squares",
+                    "minimum_norm",
+                    "rank_deficient",
+                    "factorized_dense",
+                ),
+            ),
+            coverage_patches=(_COVERAGE_PATCH,),
+        ),
+    )
+
+
+__all__ = ["DenseSVDSolver", "declare_linear_solver_capabilities"]

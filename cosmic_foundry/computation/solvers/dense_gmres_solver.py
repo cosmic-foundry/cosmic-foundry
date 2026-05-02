@@ -5,7 +5,20 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation.algorithm_capabilities import (
+    ComparisonPredicate,
+    MembershipPredicate,
+)
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
+from cosmic_foundry.computation.solvers._capability_claims import (
+    CONDITION_LIMIT,
+    LINEARITY_TOLERANCE,
+    LinearSolverCapability,
+    budget_predicates,
+    contract,
+    linear_system_predicates,
+    owned_patch,
+)
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
@@ -125,4 +138,38 @@ class DenseGMRESSolver(IterativeSolver):
         return s.u
 
 
-__all__ = ["DenseGMRESSolver"]
+_COVERAGE_PATCH = owned_patch(
+    "dense_gmres_matrix_free_nonsymmetric",
+    "DenseGMRESSolver",
+    linear_system_predicates()
+    + budget_predicates()
+    + (
+        MembershipPredicate("matrix_representation_available", frozenset({False})),
+        MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
+        MembershipPredicate("operator_application_available", frozenset({True})),
+        ComparisonPredicate("symmetry_defect", ">", LINEARITY_TOLERANCE),
+        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+    ),
+    priority=15,
+)
+
+
+def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
+    """Return capability declarations owned by this solver implementation."""
+    return (
+        LinearSolverCapability(
+            "dense_gmres_iteration",
+            "DenseGMRESSolver",
+            "iterative_solver",
+            contract(
+                requires=("linear_operator", "nonsingular"),
+                provides=("solve", "iterative", "krylov", "matrix_free", "general"),
+            ),
+            coverage_patches=(_COVERAGE_PATCH,),
+        ),
+    )
+
+
+__all__ = ["DenseGMRESSolver", "declare_linear_solver_capabilities"]

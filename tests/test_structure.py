@@ -15,6 +15,7 @@ Claim types:
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
   _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
   _ArchitectureOwnershipClaim — package exports and capability ownership are explicit
+  _LinearSolverCoverageLocalityClaim — owned solver coverage lives with implementation
   _TestAxisConventionClaim  — module tests use correctness/convergence/performance
   _NoTopLevelDefaultBackendMutationClaim — tests do not mutate Tensor backend at import
 """
@@ -1652,6 +1653,63 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         return cls._one() + cls._one()
 
 
+class _LinearSolverCoverageLocalityClaim(Claim[None]):
+    """Claim: owned solver coverage patches are declared beside implementations."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/linear_solver_coverage_locality"
+
+    def check(self, _calibration: None) -> None:
+        for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
+            tree = ast.parse(path.read_text())
+            class_names = {
+                node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+            }
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                owner = self._owned_coverage_owner(node)
+                if owner is None:
+                    continue
+                assert owner in class_names, (
+                    "owned linear-solver coverage patch must live beside "
+                    f"{owner}: {path.relative_to(_PROJECT_ROOT)}"
+                )
+
+    @classmethod
+    def _owned_coverage_owner(cls, node: ast.Call) -> str | None:
+        call_name = cls._call_name(node.func)
+        if call_name == "owned_patch":
+            return cls._string_arg(node, 1, "owner")
+        if call_name != "CoveragePatch":
+            return None
+        status = cls._string_arg(node, 2, "status")
+        if status != "owned":
+            return None
+        return cls._string_arg(node, 1, "owner")
+
+    @staticmethod
+    def _call_name(func: ast.expr) -> str | None:
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            return func.attr
+        return None
+
+    @staticmethod
+    def _string_arg(node: ast.Call, position: int, keyword: str) -> str | None:
+        if len(node.args) > position:
+            arg = node.args[position]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                return arg.value
+        for kw in node.keywords:
+            if kw.arg == keyword and isinstance(kw.value, ast.Constant):
+                if isinstance(kw.value.value, str):
+                    return kw.value.value
+        return None
+
+
 @dataclass(frozen=True)
 class _AtlasProjection:
     """One descriptor template rendered into the capability atlas."""
@@ -3204,6 +3262,7 @@ _CLAIMS: list[Claim[None]] = [
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
+    _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoveragePatchClaim(),
     _CapabilityAtlasDocClaim(),
 ]

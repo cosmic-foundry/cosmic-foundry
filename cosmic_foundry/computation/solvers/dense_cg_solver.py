@@ -5,6 +5,19 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation.algorithm_capabilities import (
+    ComparisonPredicate,
+    MembershipPredicate,
+)
+from cosmic_foundry.computation.solvers._capability_claims import (
+    CONDITION_LIMIT,
+    LINEARITY_TOLERANCE,
+    LinearSolverCapability,
+    budget_predicates,
+    contract,
+    linear_system_predicates,
+    owned_patch,
+)
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor
@@ -81,4 +94,38 @@ class DenseCGSolver(IterativeSolver):
         return s.u
 
 
-__all__ = ["DenseCGSolver"]
+_COVERAGE_PATCH = owned_patch(
+    "dense_cg_well_conditioned_spd",
+    "DenseCGSolver",
+    linear_system_predicates()
+    + budget_predicates()
+    + (
+        MembershipPredicate("operator_application_available", frozenset({True})),
+        ComparisonPredicate("symmetry_defect", "<=", LINEARITY_TOLERANCE),
+        ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+    ),
+    priority=10,
+)
+
+
+def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
+    """Return capability declarations owned by this solver implementation."""
+    return (
+        LinearSolverCapability(
+            "dense_cg_iteration",
+            "DenseCGSolver",
+            "iterative_solver",
+            contract(
+                requires=("linear_operator", "symmetric_positive_definite"),
+                provides=("solve", "iterative", "krylov", "matrix_free", "spd"),
+            ),
+            priority=10,
+            coverage_patches=(_COVERAGE_PATCH,),
+        ),
+    )
+
+
+__all__ = ["DenseCGSolver", "declare_linear_solver_capabilities"]

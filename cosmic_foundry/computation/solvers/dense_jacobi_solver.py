@@ -5,6 +5,17 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from cosmic_foundry.computation import tensor as tensor_module
+from cosmic_foundry.computation.algorithm_capabilities import ComparisonPredicate
+from cosmic_foundry.computation.solvers._capability_claims import (
+    CONDITION_LIMIT,
+    LINEARITY_TOLERANCE,
+    LinearSolverCapability,
+    budget_predicates,
+    contract,
+    dense_matrix_predicates,
+    linear_system_predicates,
+    owned_patch,
+)
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
 from cosmic_foundry.computation.tensor import Tensor, where
@@ -81,4 +92,36 @@ class DenseJacobiSolver(IterativeSolver):
         return s.u
 
 
-__all__ = ["DenseJacobiSolver"]
+_COVERAGE_PATCH = owned_patch(
+    "dense_jacobi_strictly_diagonally_dominant",
+    "DenseJacobiSolver",
+    linear_system_predicates()
+    + dense_matrix_predicates()
+    + budget_predicates()
+    + (
+        ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
+        ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
+        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
+    ),
+    priority=25,
+)
+
+
+def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
+    """Return capability declarations owned by this solver implementation."""
+    return (
+        LinearSolverCapability(
+            "dense_jacobi_iteration",
+            "DenseJacobiSolver",
+            "iterative_solver",
+            contract(
+                requires=("linear_operator", "diagonal", "row_abs_sums"),
+                provides=("solve", "iterative", "stationary", "matrix_free"),
+            ),
+            coverage_patches=(_COVERAGE_PATCH,),
+        ),
+    )
+
+
+__all__ = ["DenseJacobiSolver", "declare_linear_solver_capabilities"]
