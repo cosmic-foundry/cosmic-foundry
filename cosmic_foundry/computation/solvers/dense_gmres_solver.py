@@ -7,14 +7,11 @@ from typing import Any, NamedTuple
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.algorithm_capabilities import (
     ComparisonPredicate,
-    MembershipPredicate,
 )
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.coverage import (
     CONDITION_LIMIT,
     LINEARITY_TOLERANCE,
-    budget_predicates,
-    linear_system_predicates,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearOperator
@@ -135,17 +132,10 @@ class DenseGMRESSolver(KrylovSolver):
         return s.u
 
     linear_solver_coverage = (
-        linear_system_predicates()
-        + budget_predicates()
-        + (
-            MembershipPredicate("matrix_representation_available", frozenset({False})),
-            MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
-            MembershipPredicate("operator_application_available", frozenset({True})),
-            ComparisonPredicate("symmetry_defect", ">", LINEARITY_TOLERANCE),
-            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-        )
+        ComparisonPredicate("symmetry_defect", ">", LINEARITY_TOLERANCE),
+        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
     )
 
 

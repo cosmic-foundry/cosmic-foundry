@@ -71,4 +71,13 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
     )
 
 
+def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
+    """Return predicates for solvers that use operator application directly."""
+    return (
+        MembershipPredicate("matrix_representation_available", frozenset({False})),
+        MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
+        MembershipPredicate("operator_application_available", frozenset({True})),
+    )
+
+
 __all__: list[str] = []

@@ -9,9 +9,22 @@ from types import ModuleType
 from cosmic_foundry.computation.algorithm_capabilities import (
     CoverageRegion,
     ParameterDescriptor,
+    StructuredPredicate,
     linear_solver_parameter_schema,
 )
-from cosmic_foundry.computation.solvers.coverage import coverage
+from cosmic_foundry.computation.solvers.coverage import (
+    budget_predicates,
+    coverage,
+    dense_matrix_predicates,
+    linear_system_predicates,
+    matrix_free_operator_predicates,
+)
+from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    KrylovSolver,
+    StationaryIterationSolver,
+)
+from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 
 
 def _solver_package_modules() -> tuple[ModuleType, ...]:
@@ -25,6 +38,17 @@ def _solver_package_modules() -> tuple[ModuleType, ...]:
     return tuple(modules)
 
 
+def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ...]:
+    predicates: tuple[StructuredPredicate, ...] = ()
+    if issubclass(owner, LinearSolver):
+        predicates += linear_system_predicates() + budget_predicates()
+    if issubclass(owner, DirectSolver | StationaryIterationSolver):
+        predicates += dense_matrix_predicates()
+    if issubclass(owner, KrylovSolver):
+        predicates += matrix_free_operator_predicates()
+    return predicates
+
+
 def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
     regions: list[CoverageRegion] = []
     for module in _solver_package_modules():
@@ -36,7 +60,8 @@ def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
                 regions.append(
                     coverage(
                         item,
-                        coverage_predicates=predicates,
+                        coverage_predicates=_inherited_coverage_predicates(item)
+                        + predicates,
                     )
                 )
     return tuple(regions)
