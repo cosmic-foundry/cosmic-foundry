@@ -43,42 +43,41 @@ class DenseSVDSolver(DirectSolver):
     def __init__(self, rcond: float = 1e-10) -> None:
         super().__init__(SVDFactorization(rcond))
 
-
-_COVERAGE_PATCH = owned_patch(
-    "dense_svd_rank_deficient_dense",
-    "DenseSVDSolver",
-    linear_system_predicates()
-    + dense_matrix_predicates()
-    + budget_predicates()
-    + (
-        ComparisonPredicate("nullity_estimate", ">", 0),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-    ),
-    priority=20,
-)
-
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "dense_svd_direct",
-            "DenseSVDSolver",
-            "direct_solver",
-            contract(
-                requires=("dense_operator",),
-                provides=(
-                    "solve",
-                    "direct",
-                    "least_squares",
-                    "minimum_norm",
-                    "rank_deficient",
-                    "factorized_dense",
-                ),
-            ),
-            coverage_patches=(_COVERAGE_PATCH,),
+    _coverage_patch = owned_patch(
+        "dense_svd_rank_deficient_dense",
+        "DenseSVDSolver",
+        linear_system_predicates()
+        + dense_matrix_predicates()
+        + budget_predicates()
+        + (
+            ComparisonPredicate("nullity_estimate", ">", 0),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         ),
+        priority=20,
     )
 
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "dense_svd_direct",
+                cls.__name__,
+                "direct_solver",
+                contract(
+                    requires=("dense_operator",),
+                    provides=(
+                        "solve",
+                        "direct",
+                        "least_squares",
+                        "minimum_norm",
+                        "rank_deficient",
+                        "factorized_dense",
+                    ),
+                ),
+                coverage_patches=(cls._coverage_patch,),
+            ),
+        )
 
-__all__ = ["DenseSVDSolver", "declare_linear_solver_capabilities"]
+
+__all__ = ["DenseSVDSolver"]

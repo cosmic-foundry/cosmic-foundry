@@ -15,7 +15,8 @@ Claim types:
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
   _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
   _ArchitectureOwnershipClaim — package exports and capability ownership are explicit
-  _LinearSolverCoverageLocalityClaim — owned solver coverage lives with implementation
+  _LinearSolverCoverageLocalityClaim — owned solver coverage lives in
+                                      implementation classes
   _TestAxisConventionClaim  — module tests use correctness/convergence/performance
   _NoTopLevelDefaultBackendMutationClaim — tests do not mutate Tensor backend at import
 """
@@ -1654,7 +1655,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
 
 
 class _LinearSolverCoverageLocalityClaim(Claim[None]):
-    """Claim: owned solver coverage patches are declared beside implementations."""
+    """Claim: owned solver coverage patches are declared inside implementations."""
 
     @property
     def description(self) -> str:
@@ -1663,19 +1664,32 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
             tree = ast.parse(path.read_text())
-            class_names = {
-                node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
-            }
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                owner = self._owned_coverage_owner(node)
-                if owner is None:
-                    continue
-                assert owner in class_names, (
-                    "owned linear-solver coverage patch must live beside "
-                    f"{owner}: {path.relative_to(_PROJECT_ROOT)}"
+            for owner, class_name in self._owned_coverage_locations(tree):
+                assert owner == class_name, (
+                    "owned linear-solver coverage patch must be declared in "
+                    f"class {owner}: {path.relative_to(_PROJECT_ROOT)}"
                 )
+
+    @classmethod
+    def _owned_coverage_locations(
+        cls,
+        tree: ast.Module,
+    ) -> tuple[tuple[str, str | None], ...]:
+        locations: list[tuple[str, str | None]] = []
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call):
+                        owner = cls._owned_coverage_owner(child)
+                        if owner is not None:
+                            locations.append((owner, node.name))
+            else:
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call):
+                        owner = cls._owned_coverage_owner(child)
+                        if owner is not None:
+                            locations.append((owner, None))
+        return tuple(locations)
 
     @classmethod
     def _owned_coverage_owner(cls, node: ast.Call) -> str | None:

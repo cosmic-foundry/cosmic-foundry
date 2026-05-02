@@ -91,37 +91,36 @@ class DenseJacobiSolver(IterativeSolver):
         s: _JacobiState = state
         return s.u
 
-
-_COVERAGE_PATCH = owned_patch(
-    "dense_jacobi_strictly_diagonally_dominant",
-    "DenseJacobiSolver",
-    linear_system_predicates()
-    + dense_matrix_predicates()
-    + budget_predicates()
-    + (
-        ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
-        ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
-        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-    ),
-    priority=25,
-)
-
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "dense_jacobi_iteration",
-            "DenseJacobiSolver",
-            "iterative_solver",
-            contract(
-                requires=("linear_operator", "diagonal", "row_abs_sums"),
-                provides=("solve", "iterative", "stationary", "matrix_free"),
-            ),
-            coverage_patches=(_COVERAGE_PATCH,),
+    _coverage_patch = owned_patch(
+        "dense_jacobi_strictly_diagonally_dominant",
+        "DenseJacobiSolver",
+        linear_system_predicates()
+        + dense_matrix_predicates()
+        + budget_predicates()
+        + (
+            ComparisonPredicate("diagonal_nonzero_margin", ">", 0.0),
+            ComparisonPredicate("diagonal_dominance_margin", ">", 0.0),
+            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         ),
+        priority=25,
     )
 
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "dense_jacobi_iteration",
+                cls.__name__,
+                "iterative_solver",
+                contract(
+                    requires=("linear_operator", "diagonal", "row_abs_sums"),
+                    provides=("solve", "iterative", "stationary", "matrix_free"),
+                ),
+                coverage_patches=(cls._coverage_patch,),
+            ),
+        )
 
-__all__ = ["DenseJacobiSolver", "declare_linear_solver_capabilities"]
+
+__all__ = ["DenseJacobiSolver"]

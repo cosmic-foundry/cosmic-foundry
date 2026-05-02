@@ -27,37 +27,36 @@ class DenseLUSolver(DirectSolver):
     def __init__(self) -> None:
         super().__init__(LUFactorization())
 
-
-_COVERAGE_PATCH = owned_patch(
-    "dense_lu_square_full_rank_dense",
-    "DenseLUSolver",
-    linear_system_predicates()
-    + dense_matrix_predicates()
-    + budget_predicates()
-    + (
-        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-    ),
-    priority=30,
-)
-
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "dense_lu_direct",
-            "DenseLUSolver",
-            "direct_solver",
-            contract(
-                requires=("dense_operator", "square_system", "full_rank"),
-                provides=("solve", "direct", "exact", "factorized_dense"),
-            ),
-            priority=10,
-            coverage_patches=(_COVERAGE_PATCH,),
+    _coverage_patch = owned_patch(
+        "dense_lu_square_full_rank_dense",
+        "DenseLUSolver",
+        linear_system_predicates()
+        + dense_matrix_predicates()
+        + budget_predicates()
+        + (
+            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         ),
+        priority=30,
     )
 
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "dense_lu_direct",
+                cls.__name__,
+                "direct_solver",
+                contract(
+                    requires=("dense_operator", "square_system", "full_rank"),
+                    provides=("solve", "direct", "exact", "factorized_dense"),
+                ),
+                priority=10,
+                coverage_patches=(cls._coverage_patch,),
+            ),
+        )
 
-__all__ = ["DenseLUSolver", "declare_linear_solver_capabilities"]
+
+__all__ = ["DenseLUSolver"]

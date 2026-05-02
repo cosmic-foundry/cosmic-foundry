@@ -37,9 +37,12 @@ def _solver_package_modules() -> tuple[ModuleType, ...]:
 def _declared_capabilities() -> tuple[LinearSolverCapability, ...]:
     capabilities: list[LinearSolverCapability] = []
     for module in _solver_package_modules():
-        declare = getattr(module, "declare_linear_solver_capabilities", None)
-        if declare is not None:
-            capabilities.extend(declare())
+        for item in module.__dict__.values():
+            if not isinstance(item, type) or item.__module__ != module.__name__:
+                continue
+            declare = getattr(item, "linear_solver_capabilities", None)
+            if declare is not None:
+                capabilities.extend(declare())
     return tuple(capabilities)
 
 

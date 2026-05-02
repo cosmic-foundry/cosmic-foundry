@@ -50,20 +50,20 @@ class DirectSolver(LinearSolver):
         a = self._assemble(op, b)
         return self._decomposition.decompose(a).solve(b)
 
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "generic_direct",
-            "DirectSolver",
-            "direct_solver",
-            contract(
-                requires=("linear_operator", "decomposition"),
-                provides=("solve", "direct", "assembled_matrix"),
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "generic_direct",
+                cls.__name__,
+                "direct_solver",
+                contract(
+                    requires=("linear_operator", "decomposition"),
+                    provides=("solve", "direct", "assembled_matrix"),
+                ),
             ),
-        ),
-    )
+        )
 
 
-__all__ = ["DirectSolver", "declare_linear_solver_capabilities"]
+__all__ = ["DirectSolver"]

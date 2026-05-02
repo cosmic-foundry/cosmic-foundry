@@ -93,39 +93,38 @@ class DenseCGSolver(IterativeSolver):
         s: _CGState = state
         return s.u
 
-
-_COVERAGE_PATCH = owned_patch(
-    "dense_cg_well_conditioned_spd",
-    "DenseCGSolver",
-    linear_system_predicates()
-    + budget_predicates()
-    + (
-        MembershipPredicate("operator_application_available", frozenset({True})),
-        ComparisonPredicate("symmetry_defect", "<=", LINEARITY_TOLERANCE),
-        ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
-        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-    ),
-    priority=10,
-)
-
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "dense_cg_iteration",
-            "DenseCGSolver",
-            "iterative_solver",
-            contract(
-                requires=("linear_operator", "symmetric_positive_definite"),
-                provides=("solve", "iterative", "krylov", "matrix_free", "spd"),
-            ),
-            priority=10,
-            coverage_patches=(_COVERAGE_PATCH,),
+    _coverage_patch = owned_patch(
+        "dense_cg_well_conditioned_spd",
+        "DenseCGSolver",
+        linear_system_predicates()
+        + budget_predicates()
+        + (
+            MembershipPredicate("operator_application_available", frozenset({True})),
+            ComparisonPredicate("symmetry_defect", "<=", LINEARITY_TOLERANCE),
+            ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         ),
+        priority=10,
     )
 
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "dense_cg_iteration",
+                cls.__name__,
+                "iterative_solver",
+                contract(
+                    requires=("linear_operator", "symmetric_positive_definite"),
+                    provides=("solve", "iterative", "krylov", "matrix_free", "spd"),
+                ),
+                priority=10,
+                coverage_patches=(cls._coverage_patch,),
+            ),
+        )
 
-__all__ = ["DenseCGSolver", "declare_linear_solver_capabilities"]
+
+__all__ = ["DenseCGSolver"]

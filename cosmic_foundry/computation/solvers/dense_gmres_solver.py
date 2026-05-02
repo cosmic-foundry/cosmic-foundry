@@ -137,39 +137,38 @@ class DenseGMRESSolver(IterativeSolver):
         s: _GMRESState = state
         return s.u
 
-
-_COVERAGE_PATCH = owned_patch(
-    "dense_gmres_matrix_free_nonsymmetric",
-    "DenseGMRESSolver",
-    linear_system_predicates()
-    + budget_predicates()
-    + (
-        MembershipPredicate("matrix_representation_available", frozenset({False})),
-        MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
-        MembershipPredicate("operator_application_available", frozenset({True})),
-        ComparisonPredicate("symmetry_defect", ">", LINEARITY_TOLERANCE),
-        ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
-        ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
-        ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
-    ),
-    priority=15,
-)
-
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "dense_gmres_iteration",
-            "DenseGMRESSolver",
-            "iterative_solver",
-            contract(
-                requires=("linear_operator", "nonsingular"),
-                provides=("solve", "iterative", "krylov", "matrix_free", "general"),
-            ),
-            coverage_patches=(_COVERAGE_PATCH,),
+    _coverage_patch = owned_patch(
+        "dense_gmres_matrix_free_nonsymmetric",
+        "DenseGMRESSolver",
+        linear_system_predicates()
+        + budget_predicates()
+        + (
+            MembershipPredicate("matrix_representation_available", frozenset({False})),
+            MembershipPredicate("linear_operator_matrix_available", frozenset({False})),
+            MembershipPredicate("operator_application_available", frozenset({True})),
+            ComparisonPredicate("symmetry_defect", ">", LINEARITY_TOLERANCE),
+            ComparisonPredicate("singular_value_lower_bound", ">", 0.0),
+            ComparisonPredicate("condition_estimate", "<=", CONDITION_LIMIT),
+            ComparisonPredicate("rhs_consistency_defect", "<=", LINEARITY_TOLERANCE),
         ),
+        priority=15,
     )
 
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "dense_gmres_iteration",
+                cls.__name__,
+                "iterative_solver",
+                contract(
+                    requires=("linear_operator", "nonsingular"),
+                    provides=("solve", "iterative", "krylov", "matrix_free", "general"),
+                ),
+                coverage_patches=(cls._coverage_patch,),
+            ),
+        )
 
-__all__ = ["DenseGMRESSolver", "declare_linear_solver_capabilities"]
+
+__all__ = ["DenseGMRESSolver"]

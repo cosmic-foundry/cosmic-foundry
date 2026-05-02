@@ -98,20 +98,20 @@ class DenseGaussSeidelSolver(IterativeSolver):
         s: _GSState = state
         return s.u
 
-
-def declare_linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
-    """Return capability declarations owned by this solver implementation."""
-    return (
-        LinearSolverCapability(
-            "dense_gauss_seidel_iteration",
-            "DenseGaussSeidelSolver",
-            "iterative_solver",
-            contract(
-                requires=("linear_operator", "square_system"),
-                provides=("solve", "iterative", "stationary", "assembled_matrix"),
+    @classmethod
+    def linear_solver_capabilities(cls) -> tuple[LinearSolverCapability, ...]:
+        """Return capability declarations owned by this solver implementation."""
+        return (
+            LinearSolverCapability(
+                "dense_gauss_seidel_iteration",
+                cls.__name__,
+                "iterative_solver",
+                contract(
+                    requires=("linear_operator", "square_system"),
+                    provides=("solve", "iterative", "stationary", "assembled_matrix"),
+                ),
             ),
-        ),
-    )
+        )
 
 
-__all__ = ["DenseGaussSeidelSolver", "declare_linear_solver_capabilities"]
+__all__ = ["DenseGaussSeidelSolver"]
