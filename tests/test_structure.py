@@ -54,6 +54,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
+from cosmic_foundry.computation.solvers.capabilities import (
+    linear_solver_coverage_patches,
+    select_linear_solver_for_descriptor,
+)
 from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.theory.continuous.manifold import Manifold
@@ -1217,7 +1221,8 @@ class _SolveRelationSchemaClaim(Claim[None]):
         diagonal_dominance_margin: float = 1.0,
         coercivity_lower_bound: float = 1.0,
         singular_value_lower_bound: float = 1.0,
-        condition_estimate: float = 10.0,
+        condition_estimate: float | None = 10.0,
+        condition_evidence: str = "exact",
         rank_estimate: int = 4,
         nullity_estimate: int = 0,
         rhs_consistency_defect: float = 0.0,
@@ -1248,7 +1253,10 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 "singular_value_lower_bound": DescriptorCoordinate(
                     singular_value_lower_bound
                 ),
-                "condition_estimate": DescriptorCoordinate(condition_estimate),
+                "condition_estimate": DescriptorCoordinate(
+                    condition_estimate,
+                    evidence=condition_evidence,  # type: ignore[arg-type]
+                ),
                 "rank_estimate": DescriptorCoordinate(rank_estimate),
                 "nullity_estimate": DescriptorCoordinate(nullity_estimate),
                 "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
@@ -1361,6 +1369,56 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
         assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
 
 
+class _LinearSolverCoveragePatchClaim(Claim[None]):
+    """Claim: linear-solver selection is driven by schema coverage patches."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/linear_solver_coverage_patches"
+
+    def check(self, _calibration: None) -> None:
+        schema = linear_solver_parameter_schema()
+        patches = linear_solver_coverage_patches()
+        for patch in patches:
+            schema.validate_coverage_patch(patch)
+
+        cases = {
+            "DenseCGSolver": _SolveRelationSchemaClaim._linear_descriptor(),
+            "DenseSVDSolver": _SolveRelationSchemaClaim._linear_descriptor(
+                singular_value_lower_bound=0.0,
+                rank_estimate=3,
+                nullity_estimate=1,
+            ),
+            "DenseJacobiSolver": _SolveRelationSchemaClaim._linear_descriptor(
+                symmetry_defect=0.5,
+                coercivity_lower_bound=0.0,
+                singular_value_lower_bound=0.5,
+            ),
+            "DenseGMRESSolver": _SolveRelationSchemaClaim._linear_descriptor(
+                linear_operator_matrix_available=False,
+                matrix_representation_available=False,
+                symmetry_defect=0.5,
+                coercivity_lower_bound=0.0,
+            ),
+        }
+        for implementation, descriptor in cases.items():
+            assert schema.cell_status(descriptor, patches) == "owned"
+            selected = select_linear_solver_for_descriptor(descriptor)
+            assert selected.implementation == implementation
+
+        for rejected in (
+            _SolveRelationSchemaClaim._linear_descriptor(work_budget_fmas=1.0),
+            _SolveRelationSchemaClaim._linear_descriptor(memory_budget_bytes=1.0),
+            _SolveRelationSchemaClaim._linear_descriptor(
+                condition_estimate=None,
+                condition_evidence="unavailable",
+            ),
+        ):
+            assert schema.cell_status(rejected, patches) == "rejected"
+            with pytest.raises(ValueError):
+                select_linear_solver_for_descriptor(rejected)
+
+
 @dataclass(frozen=True)
 class _AtlasProjection:
     """One descriptor template rendered into the capability atlas."""
@@ -1438,6 +1496,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
     solve_schema = solve_relation_parameter_schema()
     linear_schema = linear_solver_parameter_schema()
     decomposition_schema = decomposition_parameter_schema()
+    solver_patches = linear_solver_coverage_patches()
 
     return (
         _AtlasProjection(
@@ -1538,6 +1597,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
                 "linear_operator_matrix_available",
             ),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             linear_schema,
@@ -1555,6 +1615,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("dim_x", "dim_y", "objective_relation"),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             linear_schema,
@@ -1570,6 +1631,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("dim_x", "dim_y", "map_linearity_defect"),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             linear_schema,
@@ -1583,6 +1645,7 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             ("map_linearity_defect",),
             ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            solver_patches,
         ),
         _AtlasProjection(
             decomposition_schema,
@@ -1728,6 +1791,7 @@ def _predicate_label(predicate: Any) -> str:
 def _source_alternatives(
     schema: ParameterSpaceSchema,
     region: _AtlasRegionProjection,
+    patches: tuple[CoveragePatch, ...] = (),
 ) -> tuple[tuple[Any, ...], ...]:
     if region.source_kind == "derived_region":
         matches = [
@@ -1753,11 +1817,23 @@ def _source_alternatives(
                 f"invalid cell {region.source_name!r}"
             )
         return (matches[0].predicates,)
+    if region.source_kind == "coverage_patch":
+        matches = [
+            candidate for candidate in patches if candidate.name == region.source_name
+        ]
+        if not matches:
+            raise AssertionError(
+                f"atlas region {region.name!r} references missing "
+                f"coverage patch {region.source_name!r}"
+            )
+        schema.validate_coverage_patch(matches[0])
+        return (matches[0].predicates,)
     raise AssertionError(f"unsupported atlas source kind {region.source_kind!r}")
 
 
 def _schema_atlas_regions(
     schema: ParameterSpaceSchema,
+    patches: tuple[CoveragePatch, ...] = (),
 ) -> tuple[_AtlasRegionProjection, ...]:
     """Return every schema region that should appear in atlas projections."""
     derived = tuple(
@@ -1779,7 +1855,27 @@ def _schema_atlas_regions(
         )
         for rule in schema.invalid_cells
     )
-    return derived + invalid
+    coverage = tuple(
+        _AtlasRegionProjection(
+            name=patch.name,
+            status=patch.status,
+            source_kind="coverage_patch",
+            source_name=patch.name,
+            condition=f"{patch.owner} coverage patch",
+        )
+        for patch in patches
+    )
+    return derived + invalid + coverage
+
+
+def _atlas_patches_for_schema(schema_name: str) -> tuple[CoveragePatch, ...]:
+    patches: dict[str, CoveragePatch] = {}
+    for projection in _capability_atlas_projections():
+        if projection.schema.name != schema_name:
+            continue
+        for patch in projection.patches:
+            patches[patch.name] = patch
+    return tuple(patches.values())
 
 
 def _predicate_affine_projection(
@@ -1977,9 +2073,10 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasRegionShape, .
         )
     }
     schema = schemas[spec.schema]
+    patches = _atlas_patches_for_schema(spec.schema)
     shapes: list[_AtlasRegionShape] = []
-    for region in _schema_atlas_regions(schema):
-        alternatives = _source_alternatives(schema, region)
+    for region in _schema_atlas_regions(schema, patches):
+        alternatives = _source_alternatives(schema, region, patches)
         for alternative_index, predicates in enumerate(alternatives, start=1):
             geometry = _project_alternative_geometry(
                 predicates,
@@ -2036,13 +2133,16 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         }
         for spec in _capability_atlas_plot_specs():
             schema = schemas[spec.schema]
-            discovered = _schema_atlas_regions(schema)
+            patches = _atlas_patches_for_schema(spec.schema)
+            discovered = _schema_atlas_regions(schema, patches)
             assert {
                 (region.source_kind, region.source_name) for region in discovered
             } == {
                 ("derived_region", region.name) for region in schema.derived_regions
             } | {
                 ("invalid_cell", rule.name) for rule in schema.invalid_cells
+            } | {
+                ("coverage_patch", patch.name) for patch in patches
             }
             shapes = _projected_region_shapes(spec)
             assert shapes
@@ -2345,9 +2445,11 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             {
                 "LinearSolverCapability",
                 "linear_solver_capabilities",
+                "linear_solver_coverage_patches",
                 "LinearSolverRegistry",
                 "LinearSolverRequest",
                 "select_linear_solver",
+                "select_linear_solver_for_descriptor",
             }
         ),
         "abstract_interface": frozenset(
@@ -2869,6 +2971,7 @@ _CLAIMS: list[Claim[None]] = [
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
+    _LinearSolverCoveragePatchClaim(),
     _CapabilityAtlasDocClaim(),
 ]
 

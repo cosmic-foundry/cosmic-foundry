@@ -5,7 +5,9 @@ from cosmic_foundry.computation.solvers.capabilities import (
     LinearSolverRegistry,
     LinearSolverRequest,
     linear_solver_capabilities,
+    linear_solver_coverage_patches,
     select_linear_solver,
+    select_linear_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
@@ -34,8 +36,10 @@ __all__ = [
     "LinearSolverCapability",
     "LinearOperator",
     "linear_solver_capabilities",
+    "linear_solver_coverage_patches",
     "LinearSolverRegistry",
     "LinearSolverRequest",
     "LinearSolver",
     "select_linear_solver",
+    "select_linear_solver_for_descriptor",
 ]
