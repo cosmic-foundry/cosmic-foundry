@@ -1,4 +1,4 @@
-"""Autodiscovered linear-solver capability aggregation."""
+"""Autodiscovered linear-solver coverage aggregation."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 )
 from cosmic_foundry.computation.solvers.coverage import (
     LINEARITY_TOLERANCE,
-    LinearSolverCapability,
-    capability,
+    LinearSolverCoverage,
+    coverage,
 )
 
 
@@ -32,16 +32,16 @@ def _solver_package_modules() -> tuple[ModuleType, ...]:
     return tuple(modules)
 
 
-def _declared_capabilities() -> tuple[LinearSolverCapability, ...]:
-    capabilities: list[LinearSolverCapability] = []
+def _discovered_coverages() -> tuple[LinearSolverCoverage, ...]:
+    coverages: list[LinearSolverCoverage] = []
     for module in _solver_package_modules():
         for item in module.__dict__.values():
             if not isinstance(item, type) or item.__module__ != module.__name__:
                 continue
             predicates = getattr(item, "linear_solver_coverage", None)
             if predicates is not None:
-                capabilities.append(
-                    capability(
+                coverages.append(
+                    coverage(
                         item,
                         coverage_predicates=predicates,
                         coverage_priority=getattr(
@@ -51,21 +51,21 @@ def _declared_capabilities() -> tuple[LinearSolverCapability, ...]:
                         ),
                     )
                 )
-    return tuple(capabilities)
+    return tuple(coverages)
 
 
-LINEAR_SOLVER_CAPABILITIES = _declared_capabilities()
+LINEAR_SOLVER_COVERAGES = _discovered_coverages()
 
 
-def linear_solver_capabilities() -> tuple[LinearSolverCapability, ...]:
+def linear_solver_coverages() -> tuple[LinearSolverCoverage, ...]:
     """Return autodiscovered linear-solver descriptor coverage records."""
-    return LINEAR_SOLVER_CAPABILITIES
+    return LINEAR_SOLVER_COVERAGES
 
 
 def linear_solver_coverage_patches() -> tuple[CoveragePatch, ...]:
     """Return autodiscovered descriptor-space coverage patches."""
     patches: list[CoveragePatch] = []
-    for record in LINEAR_SOLVER_CAPABILITIES:
+    for record in LINEAR_SOLVER_COVERAGES:
         patches.extend(record.coverage_patches)
     patches.extend(selector_rejection_patches())
     return tuple(patches)
@@ -129,7 +129,7 @@ def selector_rejection_patches() -> tuple[CoveragePatch, ...]:
 
 def select_linear_solver_for_descriptor(
     descriptor: ParameterDescriptor,
-) -> LinearSolverCapability:
+) -> LinearSolverCoverage:
     """Select a linear solver by parameter-space descriptor coverage."""
     schema = linear_solver_parameter_schema()
     patches = linear_solver_coverage_patches()
@@ -141,7 +141,7 @@ def select_linear_solver_for_descriptor(
     if status == "uncovered":
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
 
-    owners = {record.implementation: record for record in LINEAR_SOLVER_CAPABILITIES}
+    owners = {record.implementation: record for record in LINEAR_SOLVER_COVERAGES}
     matches = tuple(
         patch
         for patch in patches
@@ -158,9 +158,9 @@ def select_linear_solver_for_descriptor(
 
 
 __all__ = [
-    "LinearSolverCapability",
-    "linear_solver_capabilities",
+    "LinearSolverCoverage",
+    "linear_solver_coverages",
     "linear_solver_coverage_patches",
-    "LINEAR_SOLVER_CAPABILITIES",
+    "LINEAR_SOLVER_COVERAGES",
     "select_linear_solver_for_descriptor",
 ]
