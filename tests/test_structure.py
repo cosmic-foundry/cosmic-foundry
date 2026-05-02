@@ -2360,9 +2360,13 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
 class _AtlasEvidencePoint:
     """One descriptor evidence point rendered into the capability atlas."""
 
-    schema: ParameterSpaceSchema
     descriptor: ParameterDescriptor
     regions: tuple[CoverageRegion, ...] = ()
+
+    @property
+    def schema(self) -> ParameterSpaceSchema:
+        """Unique atlas schema inhabited by the descriptor."""
+        return _atlas_schema_for_descriptor(self.descriptor)
 
 
 @dataclass(frozen=True)
@@ -2422,7 +2426,7 @@ class _AtlasPlotSpec:
     def schema(self) -> ParameterSpaceSchema:
         """Common schema for the projections shown by this plot."""
         schema = self.projections[0].schema
-        assert all(projection.schema is schema for projection in self.projections)
+        assert all(projection.schema == schema for projection in self.projections)
         return schema
 
     @property
@@ -2465,18 +2469,13 @@ class _AtlasPlotSpec:
 
 
 def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
-    solve_schema = solve_relation_parameter_schema()
-    linear_schema = linear_solver_parameter_schema()
-    decomposition_schema = decomposition_parameter_schema()
     solver_regions = linear_solver_coverage_regions()
 
     return (
         _AtlasEvidencePoint(
-            solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(),
         ),
         _AtlasEvidencePoint(
-            solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 dim_x=3,
                 dim_y=5,
@@ -2484,7 +2483,6 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
             ),
         ),
         _AtlasEvidencePoint(
-            solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 map_linearity_defect=None,
                 map_linearity_evidence="unavailable",
@@ -2492,7 +2490,6 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
             ),
         ),
         _AtlasEvidencePoint(
-            solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 auxiliary_scalar_count=1,
                 normalization_constraint_count=1,
@@ -2501,18 +2498,15 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
             ),
         ),
         _AtlasEvidencePoint(
-            solve_schema,
             _SolveRelationSchemaClaim._solve_descriptor(
                 acceptance_relation="eigenpair_residual",
             ),
         ),
         _AtlasEvidencePoint(
-            linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(),
             solver_regions,
         ),
         _AtlasEvidencePoint(
-            linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(
                 singular_value_lower_bound=0.0,
                 rank_estimate=3,
@@ -2521,7 +2515,6 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
             solver_regions,
         ),
         _AtlasEvidencePoint(
-            linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(
                 linear_operator_matrix_available=False,
                 matrix_representation_available=False,
@@ -2529,21 +2522,60 @@ def _capability_atlas_projections() -> tuple[_AtlasEvidencePoint, ...]:
             solver_regions,
         ),
         _AtlasEvidencePoint(
-            linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
             solver_regions,
         ),
         _AtlasEvidencePoint(
-            decomposition_schema,
             _SolveRelationSchemaClaim._decomposition_descriptor(),
         ),
         _AtlasEvidencePoint(
-            decomposition_schema,
             _SolveRelationSchemaClaim._decomposition_descriptor(
                 matrix_columns=5,
             ),
         ),
     )
+
+
+def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
+    return (
+        solve_relation_parameter_schema(),
+        linear_solver_parameter_schema(),
+        decomposition_parameter_schema(),
+    )
+
+
+def _atlas_schema_for_descriptor(
+    descriptor: ParameterDescriptor,
+) -> ParameterSpaceSchema:
+    candidates = tuple(
+        schema
+        for schema in _capability_atlas_schemas()
+        if _descriptor_inhabits_schema(descriptor, schema)
+    )
+    minimal = tuple(
+        schema
+        for schema in candidates
+        if not any(
+            other.descriptor_fields < schema.descriptor_fields for other in candidates
+        )
+    )
+    if len(minimal) != 1:
+        raise AssertionError(
+            "atlas descriptor inhabits "
+            f"{len(minimal)} minimal schemas: {[schema.name for schema in minimal]}"
+        )
+    return minimal[0]
+
+
+def _descriptor_inhabits_schema(
+    descriptor: ParameterDescriptor,
+    schema: ParameterSpaceSchema,
+) -> bool:
+    try:
+        schema.validate_descriptor(descriptor)
+    except ValueError:
+        return False
+    return True
 
 
 def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
@@ -2581,9 +2613,9 @@ def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
 
 
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
-    groups: dict[int, list[_AtlasEvidencePoint]] = {}
+    groups: dict[frozenset[DescriptorField], list[_AtlasEvidencePoint]] = {}
     for projection in _capability_atlas_projections():
-        groups.setdefault(id(projection.schema), []).append(projection)
+        groups.setdefault(projection.schema.descriptor_fields, []).append(projection)
     return tuple(_AtlasPlotSpec(tuple(group)) for group in groups.values())
 
 
@@ -2997,6 +3029,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         self._assert_atlas_models_do_not_store_raw_text()
         self._assert_projection_axis_roles_are_derived()
+        self._assert_evidence_schema_is_derived()
         self._assert_plot_specs_select_projection_objects()
         for spec in _capability_atlas_plot_specs():
             schema = spec.schema
@@ -3053,15 +3086,27 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         for spec in specs:
             assert spec.projections
             schema = spec.projections[0].schema
-            assert all(projection.schema is schema for projection in spec.projections)
+            assert all(projection.schema == schema for projection in spec.projections)
         for left in plotted:
             for right in plotted:
-                assert (left.schema is right.schema) == (
+                assert (left.schema == right.schema) == (
                     any(
                         left in spec.projections and right in spec.projections
                         for spec in specs
                     )
                 )
+
+    @classmethod
+    def _assert_evidence_schema_is_derived(cls) -> None:
+        annotations = get_type_hints(_AtlasEvidencePoint)
+        assert not any(
+            cls._annotation_contains_type(annotation, ParameterSpaceSchema)
+            for annotation in annotations.values()
+        )
+        for point in _capability_atlas_projections():
+            assert _atlas_schema_for_descriptor(point.descriptor).descriptor_fields == (
+                point.schema.descriptor_fields
+            )
 
     @classmethod
     def _assert_projection_axis_roles_are_derived(cls) -> None:
