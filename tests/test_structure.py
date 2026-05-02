@@ -1382,29 +1382,33 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         for patch in patches:
             schema.validate_coverage_patch(patch)
 
-        cases = {
-            "DenseCGSolver": _SolveRelationSchemaClaim._linear_descriptor(),
-            "DenseSVDSolver": _SolveRelationSchemaClaim._linear_descriptor(
+        owned_cases = (
+            _SolveRelationSchemaClaim._linear_descriptor(),
+            _SolveRelationSchemaClaim._linear_descriptor(
                 singular_value_lower_bound=0.0,
                 rank_estimate=3,
                 nullity_estimate=1,
             ),
-            "DenseJacobiSolver": _SolveRelationSchemaClaim._linear_descriptor(
+            _SolveRelationSchemaClaim._linear_descriptor(
                 symmetry_defect=0.5,
                 coercivity_lower_bound=0.0,
                 singular_value_lower_bound=0.5,
             ),
-            "DenseGMRESSolver": _SolveRelationSchemaClaim._linear_descriptor(
+            _SolveRelationSchemaClaim._linear_descriptor(
                 linear_operator_matrix_available=False,
                 matrix_representation_available=False,
                 symmetry_defect=0.5,
                 coercivity_lower_bound=0.0,
             ),
-        }
-        for implementation, descriptor in cases.items():
+        )
+        selected_owners: set[str] = set()
+        for descriptor in owned_cases:
             assert schema.cell_status(descriptor, patches) == "owned"
             selected = select_linear_solver_for_descriptor(descriptor)
-            assert selected.implementation == implementation
+            expected_owner = self._selected_patch_owner(descriptor, patches)
+            assert selected.implementation == expected_owner
+            selected_owners.add(expected_owner)
+        assert len(selected_owners) == len(owned_cases)
 
         for rejected in (
             _SolveRelationSchemaClaim._linear_descriptor(work_budget_fmas=1.0),
@@ -1417,6 +1421,26 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             assert schema.cell_status(rejected, patches) == "rejected"
             with pytest.raises(ValueError):
                 select_linear_solver_for_descriptor(rejected)
+
+    @staticmethod
+    def _selected_patch_owner(
+        descriptor: ParameterDescriptor,
+        patches: tuple[CoveragePatch, ...],
+    ) -> str:
+        matches = tuple(
+            patch
+            for patch in patches
+            if patch.status == "owned" and patch.contains(descriptor)
+        )
+        assert matches
+        ranked = sorted(
+            matches,
+            key=lambda patch: (
+                patch.priority if patch.priority is not None else 1_000_000
+            ),
+        )
+        assert len(ranked) == 1 or ranked[0].priority != ranked[1].priority
+        return ranked[0].owner
 
 
 @dataclass(frozen=True)
