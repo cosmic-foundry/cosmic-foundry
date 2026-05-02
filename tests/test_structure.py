@@ -553,8 +553,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
         capabilities = tuple(provider())
         implementations = [
-            self._capability_implementation_name(cap.implementation)
-            for cap in capabilities
+            self._capability_implementation_name(cap) for cap in capabilities
         ]
         missing_exports = set(implementations) - exported
         assert not missing_exports, (
@@ -570,8 +569,9 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         selector = _resolve_dotted(self._spec.request_selector)
         for expectation in self._spec.request_expectations:
             selected = selector(expectation.request)
-            assert selected.implementation == expectation.selected_implementation, (
-                f"{expectation.request!r} selected {selected.implementation}, "
+            selected_name = self._capability_implementation_name(selected)
+            assert selected_name == expectation.selected_implementation, (
+                f"{expectation.request!r} selected {selected_name}, "
                 f"expected {expectation.selected_implementation}"
             )
         for expectation in self._spec.rejected_requests:
@@ -579,16 +579,24 @@ class _ArchitectureOwnershipClaim(Claim[None]):
                 selected = selector(expectation.request)
             except ValueError:
                 continue
+            selected_name = self._capability_implementation_name(selected)
             raise AssertionError(
-                f"{expectation.request!r} unexpectedly selected "
-                f"{selected.implementation}"
+                f"{expectation.request!r} unexpectedly selected " f"{selected_name}"
             )
 
     @staticmethod
-    def _capability_implementation_name(implementation: Any) -> str:
-        if isinstance(implementation, type):
-            return implementation.__name__
-        return str(implementation)
+    def _capability_implementation_name(capability: Any) -> str:
+        if isinstance(capability, type):
+            return capability.__name__
+        implementation = getattr(capability, "implementation", None)
+        if implementation is not None:
+            return _ArchitectureOwnershipClaim._capability_implementation_name(
+                implementation
+            )
+        owner = getattr(capability, "owner", None)
+        if isinstance(owner, type):
+            return owner.__name__
+        return str(capability)
 
     def _check_class_modules(self, package: types.ModuleType) -> None:
         expected = self._spec.expected_class_modules or {}
@@ -1406,9 +1414,9 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for region in regions:
             descriptor = self._descriptor_witness_for_region(schema, region)
             assert schema.cell_status(descriptor, regions) == "owned"
-            selected = select_linear_solver_for_descriptor(descriptor)
+            selected_owner = select_linear_solver_for_descriptor(descriptor)
             expected_owner = self._selected_region_owner(descriptor, regions)
-            assert selected.implementation is expected_owner
+            assert selected_owner is expected_owner
             selected_owners.add(expected_owner)
         assert selected_owners == {region.owner for region in regions}
 
@@ -1903,6 +1911,7 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
         support_tree = ast.parse(
             (_PACKAGE_ROOT / "computation" / "solvers" / "coverage.py").read_text()
         )
+        self._assert_no_coverage_record_wrapper()
         assert not self._coverage_category_support(support_tree), (
             "linear-solver coverage records must not carry a parallel "
             "implementation category"
@@ -1975,6 +1984,35 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
                             locations.append((owner, None))
         return tuple(locations)
 
+    @staticmethod
+    def _assert_no_coverage_record_wrapper() -> None:
+        source_paths = (
+            _PACKAGE_ROOT / "computation" / "solvers" / "capabilities.py",
+            _PACKAGE_ROOT / "computation" / "solvers" / "coverage.py",
+        )
+        for source_path in source_paths:
+            tree = ast.parse(source_path.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                fields = {
+                    child.target.id
+                    for child in node.body
+                    if isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                }
+                identity_fields = fields & {"implementation", "owner"}
+                region_fields = {
+                    field
+                    for field in fields
+                    if "coverage" in field and "region" in field
+                }
+                assert not (identity_fields and region_fields), (
+                    "linear-solver coverage must not wrap an owner together "
+                    "with owned regions; aggregate CoverageRegion directly: "
+                    f"{source_path.relative_to(_PROJECT_ROOT)}:{node.name}"
+                )
+
     @classmethod
     def _manual_coverage_categories(cls, tree: ast.Module) -> tuple[str, ...]:
         categories: list[str] = []
@@ -1982,7 +2020,7 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             if not isinstance(node, ast.Call):
                 continue
             call_name = cls._call_name(node.func)
-            if call_name not in {"LinearSolverCoverage", "coverage", "capability"}:
+            if call_name not in {"coverage", "capability"}:
                 continue
             category = cls._string_arg(node, 2, "category")
             if category is not None:
@@ -2032,7 +2070,7 @@ class _LinearSolverCoverageLocalityClaim(Claim[None]):
             node.name
             for node in ast.walk(tree)
             if isinstance(node, ast.FunctionDef)
-            and node.name in {"linear_solver_capabilities", "linear_solver_coverages"}
+            and ("coverage" in node.name or "capabilit" in node.name)
         )
 
     @staticmethod
@@ -3130,9 +3168,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
     public_categories={
         "capability_contract": frozenset(
             {
-                "LinearSolverCoverage",
-                "LINEAR_SOLVER_COVERAGES",
-                "linear_solver_coverages",
+                "LINEAR_SOLVER_COVERAGE_REGIONS",
                 "linear_solver_coverage_regions",
                 "select_linear_solver_for_descriptor",
             }
@@ -3162,7 +3198,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             }
         ),
     },
-    capability_provider="cosmic_foundry.computation.solvers.linear_solver_coverages",
+    capability_provider="cosmic_foundry.computation.solvers.linear_solver_coverage_regions",
     expected_class_modules={
         "DenseCGSolver": "dense_cg_solver",
         "DenseGMRESSolver": "dense_gmres_solver",
@@ -3175,7 +3211,6 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "KrylovSolver": "iterative_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
-        "LinearSolverCoverage": "coverage",
         "StationaryIterationSolver": "iterative_solver",
     },
     required_name_fragments={

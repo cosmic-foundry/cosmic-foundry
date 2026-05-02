@@ -11,10 +11,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterDescriptor,
     linear_solver_parameter_schema,
 )
-from cosmic_foundry.computation.solvers.coverage import (
-    LinearSolverCoverage,
-    coverage,
-)
+from cosmic_foundry.computation.solvers.coverage import coverage
 
 
 def _solver_package_modules() -> tuple[ModuleType, ...]:
@@ -28,42 +25,34 @@ def _solver_package_modules() -> tuple[ModuleType, ...]:
     return tuple(modules)
 
 
-def _discovered_coverages() -> tuple[LinearSolverCoverage, ...]:
-    coverages: list[LinearSolverCoverage] = []
+def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
+    regions: list[CoverageRegion] = []
     for module in _solver_package_modules():
         for item in module.__dict__.values():
             if not isinstance(item, type) or item.__module__ != module.__name__:
                 continue
             predicates = getattr(item, "linear_solver_coverage", None)
             if predicates is not None:
-                coverages.append(
+                regions.append(
                     coverage(
                         item,
                         coverage_predicates=predicates,
                     )
                 )
-    return tuple(coverages)
+    return tuple(regions)
 
 
-LINEAR_SOLVER_COVERAGES = _discovered_coverages()
-
-
-def linear_solver_coverages() -> tuple[LinearSolverCoverage, ...]:
-    """Return autodiscovered linear-solver descriptor coverage records."""
-    return LINEAR_SOLVER_COVERAGES
+LINEAR_SOLVER_COVERAGE_REGIONS = _discovered_coverage_regions()
 
 
 def linear_solver_coverage_regions() -> tuple[CoverageRegion, ...]:
     """Return autodiscovered descriptor-space coverage regions."""
-    regions: list[CoverageRegion] = []
-    for record in LINEAR_SOLVER_COVERAGES:
-        regions.extend(record.coverage_regions)
-    return tuple(regions)
+    return LINEAR_SOLVER_COVERAGE_REGIONS
 
 
 def select_linear_solver_for_descriptor(
     descriptor: ParameterDescriptor,
-) -> LinearSolverCoverage:
+) -> type:
     """Select a linear solver by parameter-space descriptor coverage."""
     schema = linear_solver_parameter_schema()
     regions = linear_solver_coverage_regions()
@@ -71,14 +60,11 @@ def select_linear_solver_for_descriptor(
     if region is None:
         raise ValueError(f"no linear solver covers descriptor {descriptor!r}")
 
-    owners = {record.implementation: record for record in LINEAR_SOLVER_COVERAGES}
-    return owners[region.owner]
+    return region.owner
 
 
 __all__ = [
-    "LinearSolverCoverage",
-    "linear_solver_coverages",
     "linear_solver_coverage_regions",
-    "LINEAR_SOLVER_COVERAGES",
+    "LINEAR_SOLVER_COVERAGE_REGIONS",
     "select_linear_solver_for_descriptor",
 ]

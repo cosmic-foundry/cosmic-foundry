@@ -1,8 +1,6 @@
-"""Shared builders for linear-solver coverage records."""
+"""Shared builders for linear-solver coverage regions."""
 
 from __future__ import annotations
-
-from dataclasses import dataclass
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
@@ -16,28 +14,15 @@ LINEARITY_TOLERANCE = 1.0e-12
 CONDITION_LIMIT = 1.0e8
 
 
-@dataclass(frozen=True)
-class LinearSolverCoverage:
-    """Descriptor-space coverage owned by one linear-solver implementation."""
-
-    implementation: type
-    coverage_regions: tuple[CoverageRegion, ...]
-
-
 def coverage(
     owner: type,
     *,
     coverage_predicates: tuple[StructuredPredicate, ...] = (),
-) -> LinearSolverCoverage:
-    """Return descriptor-space coverage whose identity comes from ``owner``."""
-    return LinearSolverCoverage(
+) -> CoverageRegion:
+    """Return a descriptor-space coverage region owned by ``owner``."""
+    return CoverageRegion(
         owner,
-        (
-            CoverageRegion(
-                owner,
-                coverage_predicates,
-            ),
-        ),
+        coverage_predicates,
     )
 
 
@@ -86,4 +71,4 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
     )
 
 
-__all__ = ["LinearSolverCoverage"]
+__all__: list[str] = []
