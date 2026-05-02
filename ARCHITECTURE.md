@@ -1005,27 +1005,22 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Add the solve-relation, linear-solver, and decomposition parameter-space
-   schemas before changing any solver ownership.  Tests should prove that named
-   problem classes such as linear system, least squares, nonlinear root, and
-   eigenproblem are derived regions over primitive axes, not primary axes, and
-   that every generated coverage cell maps to a valid descriptor template.
-2. Generate a capability coverage document from the schemas and coverage patches,
+1. Generate a capability coverage document from the schemas and coverage patches,
    all sourced from `tests/test_structure.py`, that visualizes owned, rejected,
    invalid, uncovered, and numerically tested cells.  The structural test should
    fail if the generated documentation is stale.  Seed it with the public
    nonlinear-solver gap as an annotation on an already-visible uncovered
    nonlinear-root region.
-3. Add `LinearOperatorDescriptor` construction for small assembled operators and
+2. Add `LinearOperatorDescriptor` construction for small assembled operators and
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-4. Convert linear solver capabilities to coverage patches and update
+3. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-5. Convert decomposition capabilities to coverage patches, including
+4. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-6. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---

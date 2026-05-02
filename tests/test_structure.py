@@ -37,6 +37,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     CoveragePatch,
+    DerivedParameterRegion,
     DescriptorCoordinate,
     InvalidCellRule,
     MembershipPredicate,
@@ -45,6 +46,9 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    decomposition_parameter_schema,
+    linear_solver_parameter_schema,
+    solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
@@ -950,6 +954,349 @@ class _ParameterSpaceSchemaClaim(Claim[None]):
         )
 
 
+class _SolveRelationSchemaClaim(Claim[None]):
+    """Claim: solver schemas derive problem names from primitive coordinates."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/solve_relation_schemas"
+
+    def check(self, _calibration: None) -> None:
+        solve_schema = solve_relation_parameter_schema()
+        linear_schema = linear_solver_parameter_schema()
+        decomposition_schema = decomposition_parameter_schema()
+
+        for schema in (solve_schema, linear_schema, decomposition_schema):
+            schema.validate_schema()
+            assert "problem_kind" not in schema.descriptor_fields
+
+        solve_regions = self._regions(solve_schema)
+        assert {
+            "linear_system",
+            "least_squares",
+            "nonlinear_root",
+            "eigenproblem",
+        } <= set(solve_regions)
+        for name in (
+            "linear_system",
+            "least_squares",
+            "nonlinear_root",
+            "eigenproblem",
+        ):
+            self._assert_region_uses_primitive_axes(solve_schema, solve_regions[name])
+
+        linear_system = self._solve_descriptor()
+        least_squares = self._solve_descriptor(
+            dim_x=3,
+            dim_y=5,
+            objective_relation="least_squares",
+        )
+        nonlinear_root = self._solve_descriptor(
+            map_linearity_defect=None,
+            map_linearity_evidence="unavailable",
+            residual_target_available=False,
+        )
+        eigenproblem = self._solve_descriptor(
+            auxiliary_scalar_count=1,
+            normalization_constraint_count=1,
+            acceptance_relation="eigenpair_residual",
+            objective_relation="spectral_residual",
+        )
+
+        for descriptor in (
+            linear_system,
+            least_squares,
+            nonlinear_root,
+            eigenproblem,
+        ):
+            solve_schema.validate_descriptor(descriptor)
+        assert solve_regions["linear_system"].contains(linear_system)
+        assert solve_regions["least_squares"].contains(least_squares)
+        assert solve_regions["nonlinear_root"].contains(nonlinear_root)
+        assert solve_regions["eigenproblem"].contains(eigenproblem)
+
+        invalid_eigenproblem = self._solve_descriptor(
+            acceptance_relation="eigenpair_residual",
+        )
+        assert solve_schema.cell_status(invalid_eigenproblem, ()) == "invalid"
+
+        linear_regions = self._regions(linear_schema)
+        for name in (
+            "square",
+            "overdetermined",
+            "full_rank",
+            "rank_deficient",
+            "symmetric_positive_definite",
+            "matrix_free",
+        ):
+            self._assert_region_uses_primitive_axes(linear_schema, linear_regions[name])
+
+        spd_descriptor = self._linear_descriptor()
+        rank_deficient_descriptor = self._linear_descriptor(
+            singular_value_lower_bound=0.0,
+            rank_estimate=3,
+            nullity_estimate=1,
+        )
+        matrix_free_descriptor = self._linear_descriptor(
+            linear_operator_matrix_available=False,
+            matrix_representation_available=False,
+        )
+        overdetermined_descriptor = self._linear_descriptor(
+            dim_x=3,
+            dim_y=5,
+            symmetry_defect=1.0,
+            coercivity_lower_bound=0.0,
+        )
+
+        for descriptor in (
+            spd_descriptor,
+            rank_deficient_descriptor,
+            matrix_free_descriptor,
+            overdetermined_descriptor,
+        ):
+            linear_schema.validate_descriptor(descriptor)
+        assert linear_regions["symmetric_positive_definite"].contains(spd_descriptor)
+        assert linear_regions["full_rank"].contains(spd_descriptor)
+        assert linear_regions["rank_deficient"].contains(rank_deficient_descriptor)
+        assert linear_regions["matrix_free"].contains(matrix_free_descriptor)
+        assert linear_regions["overdetermined"].contains(overdetermined_descriptor)
+        assert linear_schema.cell_status(overdetermined_descriptor, ()) == "uncovered"
+        assert (
+            linear_schema.cell_status(
+                self._linear_descriptor(dim_y=5),
+                (),
+            )
+            == "invalid"
+        )
+
+        decomposition_regions = self._regions(decomposition_schema)
+        decomp_descriptor = self._decomposition_descriptor()
+        rank_deficient_decomp = self._decomposition_descriptor(
+            singular_value_lower_bound=0.0,
+            rank_estimate=3,
+            nullity_estimate=1,
+        )
+        for descriptor in (decomp_descriptor, rank_deficient_decomp):
+            decomposition_schema.validate_descriptor(descriptor)
+        assert decomposition_regions["square"].contains(decomp_descriptor)
+        assert decomposition_regions["full_rank"].contains(decomp_descriptor)
+        assert decomposition_regions["rank_deficient"].contains(rank_deficient_decomp)
+        assert (
+            decomposition_schema.cell_status(
+                self._decomposition_descriptor(matrix_columns=5),
+                (),
+            )
+            == "invalid"
+        )
+
+        with pytest.raises(ValueError):
+            ParameterSpaceSchema(
+                name="bad_region",
+                axes=(
+                    ParameterAxis("declared", (ParameterBin("one", frozenset({1})),)),
+                ),
+                derived_regions=(
+                    DerivedParameterRegion(
+                        "uses_private_axis",
+                        ((ComparisonPredicate("private", "==", 1),),),
+                    ),
+                ),
+            ).validate_schema()
+
+    @staticmethod
+    def _regions(
+        schema: ParameterSpaceSchema,
+    ) -> dict[str, DerivedParameterRegion]:
+        return {region.name: region for region in schema.derived_regions}
+
+    @staticmethod
+    def _assert_region_uses_primitive_axes(
+        schema: ParameterSpaceSchema,
+        region: DerivedParameterRegion,
+    ) -> None:
+        assert region.referenced_fields
+        assert region.referenced_fields <= schema.descriptor_fields
+
+    @staticmethod
+    def _solve_descriptor(
+        *,
+        dim_x: int = 4,
+        dim_y: int = 4,
+        auxiliary_scalar_count: int = 0,
+        equality_constraint_count: int = 0,
+        normalization_constraint_count: int = 0,
+        residual_target_available: bool = True,
+        target_is_zero: bool = False,
+        map_linearity_defect: float | None = 0.0,
+        map_linearity_evidence: str = "exact",
+        matrix_representation_available: bool = True,
+        operator_application_available: bool = True,
+        derivative_oracle_kind: str = "matrix",
+        objective_relation: str = "none",
+        acceptance_relation: str = "residual_below_tolerance",
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        backend_kind: str = "python",
+        device_kind: str = "cpu",
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        schema: str = "solve_relation",
+    ) -> ParameterDescriptor:
+        return ParameterDescriptor(
+            schema=schema,
+            coordinates={
+                "dim_x": DescriptorCoordinate(dim_x),
+                "dim_y": DescriptorCoordinate(dim_y),
+                "auxiliary_scalar_count": DescriptorCoordinate(auxiliary_scalar_count),
+                "equality_constraint_count": DescriptorCoordinate(
+                    equality_constraint_count
+                ),
+                "normalization_constraint_count": DescriptorCoordinate(
+                    normalization_constraint_count
+                ),
+                "residual_target_available": DescriptorCoordinate(
+                    residual_target_available
+                ),
+                "target_is_zero": DescriptorCoordinate(target_is_zero),
+                "map_linearity_defect": DescriptorCoordinate(
+                    map_linearity_defect,
+                    evidence=map_linearity_evidence,  # type: ignore[arg-type]
+                ),
+                "matrix_representation_available": DescriptorCoordinate(
+                    matrix_representation_available
+                ),
+                "operator_application_available": DescriptorCoordinate(
+                    operator_application_available
+                ),
+                "derivative_oracle_kind": DescriptorCoordinate(derivative_oracle_kind),
+                "objective_relation": DescriptorCoordinate(objective_relation),
+                "acceptance_relation": DescriptorCoordinate(acceptance_relation),
+                "requested_residual_tolerance": DescriptorCoordinate(
+                    requested_residual_tolerance
+                ),
+                "requested_solution_tolerance": DescriptorCoordinate(
+                    requested_solution_tolerance
+                ),
+                "backend_kind": DescriptorCoordinate(backend_kind),
+                "device_kind": DescriptorCoordinate(device_kind),
+                "work_budget_fmas": DescriptorCoordinate(work_budget_fmas),
+                "memory_budget_bytes": DescriptorCoordinate(memory_budget_bytes),
+            },
+        )
+
+    @classmethod
+    def _linear_descriptor(
+        cls,
+        *,
+        linear_operator_matrix_available: bool = True,
+        assembly_cost_fmas: float = 64.0,
+        matvec_cost_fmas: float = 32.0,
+        linear_operator_memory_bytes: float = 512.0,
+        symmetry_defect: float = 0.0,
+        skew_symmetry_defect: float = 1.0,
+        diagonal_nonzero_margin: float = 1.0,
+        diagonal_dominance_margin: float = 1.0,
+        coercivity_lower_bound: float = 1.0,
+        singular_value_lower_bound: float = 1.0,
+        condition_estimate: float = 10.0,
+        rank_estimate: int = 4,
+        nullity_estimate: int = 0,
+        rhs_consistency_defect: float = 0.0,
+        **solve_overrides: Any,
+    ) -> ParameterDescriptor:
+        descriptor = cls._solve_descriptor(schema="linear_solver", **solve_overrides)
+        return ParameterDescriptor(
+            schema=descriptor.schema,
+            coordinates=descriptor.coordinates
+            | {
+                "linear_operator_matrix_available": DescriptorCoordinate(
+                    linear_operator_matrix_available
+                ),
+                "assembly_cost_fmas": DescriptorCoordinate(assembly_cost_fmas),
+                "matvec_cost_fmas": DescriptorCoordinate(matvec_cost_fmas),
+                "linear_operator_memory_bytes": DescriptorCoordinate(
+                    linear_operator_memory_bytes
+                ),
+                "symmetry_defect": DescriptorCoordinate(symmetry_defect),
+                "skew_symmetry_defect": DescriptorCoordinate(skew_symmetry_defect),
+                "diagonal_nonzero_margin": DescriptorCoordinate(
+                    diagonal_nonzero_margin
+                ),
+                "diagonal_dominance_margin": DescriptorCoordinate(
+                    diagonal_dominance_margin
+                ),
+                "coercivity_lower_bound": DescriptorCoordinate(coercivity_lower_bound),
+                "singular_value_lower_bound": DescriptorCoordinate(
+                    singular_value_lower_bound
+                ),
+                "condition_estimate": DescriptorCoordinate(condition_estimate),
+                "rank_estimate": DescriptorCoordinate(rank_estimate),
+                "nullity_estimate": DescriptorCoordinate(nullity_estimate),
+                "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
+            },
+        )
+
+    @staticmethod
+    def _decomposition_descriptor(
+        *,
+        matrix_rows: int = 4,
+        matrix_columns: int = 4,
+        factorization_work_budget_fmas: float = 1.0e9,
+        factorization_memory_budget_bytes: float = 1.0e9,
+        assembly_cost_fmas: float = 64.0,
+        matvec_cost_fmas: float = 32.0,
+        linear_operator_memory_bytes: float = 512.0,
+        symmetry_defect: float = 0.0,
+        skew_symmetry_defect: float = 1.0,
+        diagonal_nonzero_margin: float = 1.0,
+        diagonal_dominance_margin: float = 1.0,
+        coercivity_lower_bound: float = 1.0,
+        singular_value_lower_bound: float = 1.0,
+        condition_estimate: float = 10.0,
+        rank_estimate: int = 4,
+        nullity_estimate: int = 0,
+        rhs_consistency_defect: float = 0.0,
+        linear_operator_matrix_available: bool = True,
+    ) -> ParameterDescriptor:
+        return ParameterDescriptor(
+            schema="decomposition",
+            coordinates={
+                "matrix_rows": DescriptorCoordinate(matrix_rows),
+                "matrix_columns": DescriptorCoordinate(matrix_columns),
+                "factorization_work_budget_fmas": DescriptorCoordinate(
+                    factorization_work_budget_fmas
+                ),
+                "factorization_memory_budget_bytes": DescriptorCoordinate(
+                    factorization_memory_budget_bytes
+                ),
+                "linear_operator_matrix_available": DescriptorCoordinate(
+                    linear_operator_matrix_available
+                ),
+                "assembly_cost_fmas": DescriptorCoordinate(assembly_cost_fmas),
+                "matvec_cost_fmas": DescriptorCoordinate(matvec_cost_fmas),
+                "linear_operator_memory_bytes": DescriptorCoordinate(
+                    linear_operator_memory_bytes
+                ),
+                "symmetry_defect": DescriptorCoordinate(symmetry_defect),
+                "skew_symmetry_defect": DescriptorCoordinate(skew_symmetry_defect),
+                "diagonal_nonzero_margin": DescriptorCoordinate(
+                    diagonal_nonzero_margin
+                ),
+                "diagonal_dominance_margin": DescriptorCoordinate(
+                    diagonal_dominance_margin
+                ),
+                "coercivity_lower_bound": DescriptorCoordinate(coercivity_lower_bound),
+                "singular_value_lower_bound": DescriptorCoordinate(
+                    singular_value_lower_bound
+                ),
+                "condition_estimate": DescriptorCoordinate(condition_estimate),
+                "rank_estimate": DescriptorCoordinate(rank_estimate),
+                "nullity_estimate": DescriptorCoordinate(nullity_estimate),
+                "rhs_consistency_defect": DescriptorCoordinate(rhs_consistency_defect),
+            },
+        )
+
+
 # ---------------------------------------------------------------------------
 # Auto-discovery and registry
 # ---------------------------------------------------------------------------
@@ -1766,6 +2113,7 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
     _AutoDiscoveryImportClaim(),
     _ParameterSpaceSchemaClaim(),
+    _SolveRelationSchemaClaim(),
 ]
 
 

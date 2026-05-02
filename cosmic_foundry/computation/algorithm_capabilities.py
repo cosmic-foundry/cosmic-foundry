@@ -310,9 +310,53 @@ class AffineComparisonPredicate:
         return _compare(total, self.operator, self.value)
 
 
+@dataclass(frozen=True)
+class EvidencePredicate:
+    """Evidence-state predicate over one descriptor field."""
+
+    field: str
+    evidence: frozenset[EvidenceSource]
+
+    @property
+    def referenced_fields(self) -> frozenset[str]:
+        """Descriptor fields referenced by this predicate."""
+        return frozenset({self.field})
+
+    def evaluate(self, descriptor: ParameterDescriptor) -> bool:
+        """Return whether the coordinate carries one accepted evidence state."""
+        return descriptor.coordinate(self.field).evidence in self.evidence
+
+
 StructuredPredicate: TypeAlias = (
-    ComparisonPredicate | MembershipPredicate | AffineComparisonPredicate
+    ComparisonPredicate
+    | MembershipPredicate
+    | AffineComparisonPredicate
+    | EvidencePredicate
 )
+
+
+@dataclass(frozen=True)
+class DerivedParameterRegion:
+    """Named region derived from primitive parameter-space coordinates."""
+
+    name: str
+    alternatives: tuple[tuple[StructuredPredicate, ...], ...]
+
+    @property
+    def referenced_fields(self) -> frozenset[str]:
+        """Descriptor fields referenced by this derived region."""
+        fields: set[str] = set()
+        for alternative in self.alternatives:
+            for predicate in alternative:
+                fields.update(predicate.referenced_fields)
+        return frozenset(fields)
+
+    def contains(self, descriptor: ParameterDescriptor) -> bool:
+        """Return whether ``descriptor`` inhabits at least one alternative."""
+        return any(
+            all(predicate.evaluate(descriptor) for predicate in alternative)
+            for alternative in self.alternatives
+        )
 
 
 @dataclass(frozen=True)
@@ -363,6 +407,7 @@ class ParameterSpaceSchema:
 
     name: str
     axes: tuple[ParameterAxis, ...]
+    derived_regions: tuple[DerivedParameterRegion, ...] = ()
     invalid_cells: tuple[InvalidCellRule, ...] = ()
 
     @property
@@ -379,6 +424,7 @@ class ParameterSpaceSchema:
         empty_axes = [axis.name for axis in self.axes if not axis.bins]
         if empty_axes:
             raise ValueError(f"axes without bins or intervals: {empty_axes}")
+        self.validate_derived_regions()
         self.validate_invalid_cells()
 
     def validate_descriptor(self, descriptor: ParameterDescriptor) -> None:
@@ -426,6 +472,25 @@ class ParameterSpaceSchema:
             if not rule.reason:
                 raise ValueError(f"invalid cell {rule.name!r} has no reason")
 
+    def validate_derived_regions(self) -> None:
+        """Raise if named regions are not expressed over this schema."""
+        for region in self.derived_regions:
+            if not region.alternatives:
+                raise ValueError(f"derived region {region.name!r} has no alternatives")
+            for alternative in region.alternatives:
+                if not alternative:
+                    raise ValueError(
+                        f"derived region {region.name!r} has an empty alternative"
+                    )
+                for predicate in alternative:
+                    self._validate_predicate(predicate)
+            unknown_fields = region.referenced_fields - self.descriptor_fields
+            if unknown_fields:
+                raise ValueError(
+                    f"derived region {region.name!r} references undeclared fields: "
+                    f"{sorted(unknown_fields)}"
+                )
+
     def cell_status(
         self,
         descriptor: ParameterDescriptor,
@@ -450,9 +515,446 @@ class ParameterSpaceSchema:
             ComparisonPredicate,
             MembershipPredicate,
             AffineComparisonPredicate,
+            EvidencePredicate,
         )
         if not isinstance(predicate, allowed):
             raise TypeError(f"unsupported parameter-space predicate {predicate!r}")
+
+
+_LINEARITY_EPS = 1.0e-12
+
+
+def _bool_axis(name: str) -> ParameterAxis:
+    return ParameterAxis(
+        name,
+        (
+            ParameterBin("false", frozenset({False})),
+            ParameterBin("true", frozenset({True})),
+        ),
+    )
+
+
+def _nonnegative_axis(name: str, *, units: str | None = None) -> ParameterAxis:
+    return ParameterAxis(
+        name, (NumericInterval("nonnegative", lower=0.0),), units=units
+    )
+
+
+def _positive_axis(name: str, *, units: str | None = None) -> ParameterAxis:
+    return ParameterAxis(
+        name,
+        (NumericInterval("positive", lower=0.0, include_lower=False),),
+        units=units,
+    )
+
+
+def _defect_axis(name: str) -> ParameterAxis:
+    return ParameterAxis(
+        name,
+        (
+            NumericInterval(
+                "zero_to_linear_tolerance", lower=0.0, upper=_LINEARITY_EPS
+            ),
+            NumericInterval(
+                "above_linear_tolerance",
+                lower=_LINEARITY_EPS,
+                include_lower=False,
+            ),
+        ),
+        units="relative Frobenius norm unless field metadata says otherwise",
+    )
+
+
+def _solve_relation_axes() -> tuple[ParameterAxis, ...]:
+    return (
+        _positive_axis("dim_x", units="scalar unknowns"),
+        _positive_axis("dim_y", units="scalar residual or target components"),
+        _nonnegative_axis("auxiliary_scalar_count", units="scalar unknowns"),
+        _nonnegative_axis("equality_constraint_count", units="constraints"),
+        _nonnegative_axis("normalization_constraint_count", units="constraints"),
+        _bool_axis("residual_target_available"),
+        _bool_axis("target_is_zero"),
+        _defect_axis("map_linearity_defect"),
+        _bool_axis("matrix_representation_available"),
+        _bool_axis("operator_application_available"),
+        ParameterAxis(
+            "derivative_oracle_kind",
+            (
+                ParameterBin(
+                    "oracle_kind",
+                    frozenset({"none", "matrix", "jvp", "vjp", "jacobian_callback"}),
+                ),
+            ),
+        ),
+        ParameterAxis(
+            "objective_relation",
+            (
+                ParameterBin(
+                    "objective_relation",
+                    frozenset(
+                        {
+                            "none",
+                            "residual_norm",
+                            "least_squares",
+                            "spectral_residual",
+                        }
+                    ),
+                ),
+            ),
+        ),
+        ParameterAxis(
+            "acceptance_relation",
+            (
+                ParameterBin(
+                    "acceptance_relation",
+                    frozenset(
+                        {
+                            "residual_below_tolerance",
+                            "objective_minimum",
+                            "stationary_point",
+                            "eigenpair_residual",
+                        }
+                    ),
+                ),
+            ),
+        ),
+        _positive_axis("requested_residual_tolerance", units="residual norm"),
+        _positive_axis("requested_solution_tolerance", units="solution norm"),
+        ParameterAxis(
+            "backend_kind",
+            (
+                ParameterBin(
+                    "backend_kind",
+                    frozenset({"python", "numpy", "jax", "unknown"}),
+                ),
+            ),
+        ),
+        ParameterAxis(
+            "device_kind",
+            (ParameterBin("device_kind", frozenset({"cpu", "gpu", "unknown"})),),
+        ),
+        _positive_axis("work_budget_fmas", units="fused multiply-adds"),
+        _positive_axis("memory_budget_bytes", units="bytes"),
+    )
+
+
+def _linear_operator_axes() -> tuple[ParameterAxis, ...]:
+    return (
+        _bool_axis("linear_operator_matrix_available"),
+        _positive_axis("assembly_cost_fmas", units="fused multiply-adds"),
+        _positive_axis("matvec_cost_fmas", units="fused multiply-adds"),
+        _positive_axis("linear_operator_memory_bytes", units="bytes"),
+        ParameterAxis(
+            "symmetry_defect",
+            (
+                NumericInterval("symmetric", lower=0.0, upper=_LINEARITY_EPS),
+                NumericInterval(
+                    "not_certified_symmetric",
+                    lower=_LINEARITY_EPS,
+                    include_lower=False,
+                ),
+            ),
+            units="||A - A.T||_F / max(||A||_F, eps)",
+        ),
+        ParameterAxis(
+            "skew_symmetry_defect",
+            (
+                NumericInterval("skew_symmetric", lower=0.0, upper=_LINEARITY_EPS),
+                NumericInterval(
+                    "not_certified_skew_symmetric",
+                    lower=_LINEARITY_EPS,
+                    include_lower=False,
+                ),
+            ),
+            units="||A + A.T||_F / max(||A||_F, eps)",
+        ),
+        ParameterAxis(
+            "diagonal_nonzero_margin",
+            (
+                NumericInterval("zero_or_uncertified", upper=0.0),
+                NumericInterval("nonzero", lower=0.0, include_lower=False),
+            ),
+        ),
+        ParameterAxis(
+            "diagonal_dominance_margin",
+            (
+                NumericInterval("not_strict", upper=0.0),
+                NumericInterval("strict", lower=0.0, include_lower=False),
+            ),
+        ),
+        ParameterAxis(
+            "coercivity_lower_bound",
+            (
+                NumericInterval("nonpositive", upper=0.0),
+                NumericInterval("positive", lower=0.0, include_lower=False),
+            ),
+        ),
+        ParameterAxis(
+            "singular_value_lower_bound",
+            (
+                NumericInterval("zero_or_uncertified", upper=0.0),
+                NumericInterval("positive", lower=0.0, include_lower=False),
+            ),
+        ),
+        ParameterAxis(
+            "condition_estimate",
+            (
+                NumericInterval("well_conditioned", lower=1.0, upper=1.0e8),
+                NumericInterval("ill_conditioned", lower=1.0e8, include_lower=False),
+            ),
+        ),
+        _nonnegative_axis("rank_estimate", units="matrix rank"),
+        _nonnegative_axis("nullity_estimate", units="matrix nullity"),
+        ParameterAxis(
+            "rhs_consistency_defect",
+            (
+                NumericInterval("consistent", lower=0.0, upper=_LINEARITY_EPS),
+                NumericInterval(
+                    "inconsistent",
+                    lower=_LINEARITY_EPS,
+                    include_lower=False,
+                ),
+            ),
+            units="||b - A x||_2 / max(||b||_2, eps)",
+        ),
+    )
+
+
+def _solve_relation_regions() -> tuple[DerivedParameterRegion, ...]:
+    return (
+        DerivedParameterRegion(
+            "linear_system",
+            (
+                (
+                    ComparisonPredicate("map_linearity_defect", "<=", _LINEARITY_EPS),
+                    AffineComparisonPredicate({"dim_x": 1.0, "dim_y": -1.0}, "==", 0.0),
+                    MembershipPredicate("residual_target_available", frozenset({True})),
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"residual_below_tolerance"}),
+                    ),
+                ),
+            ),
+        ),
+        DerivedParameterRegion(
+            "least_squares",
+            (
+                (
+                    ComparisonPredicate("map_linearity_defect", "<=", _LINEARITY_EPS),
+                    MembershipPredicate(
+                        "objective_relation", frozenset({"least_squares"})
+                    ),
+                    MembershipPredicate("residual_target_available", frozenset({True})),
+                ),
+            ),
+        ),
+        DerivedParameterRegion(
+            "nonlinear_root",
+            (
+                (
+                    ComparisonPredicate("map_linearity_defect", ">", _LINEARITY_EPS),
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"residual_below_tolerance"}),
+                    ),
+                ),
+                (
+                    EvidencePredicate(
+                        "map_linearity_defect", frozenset({"unavailable"})
+                    ),
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"residual_below_tolerance"}),
+                    ),
+                ),
+                (
+                    MembershipPredicate("target_is_zero", frozenset({True})),
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"residual_below_tolerance"}),
+                    ),
+                ),
+            ),
+        ),
+        DerivedParameterRegion(
+            "eigenproblem",
+            (
+                (
+                    ComparisonPredicate("auxiliary_scalar_count", ">=", 1),
+                    ComparisonPredicate("normalization_constraint_count", ">=", 1),
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"eigenpair_residual"}),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def solve_relation_parameter_schema() -> ParameterSpaceSchema:
+    """Return the primitive solve-relation parameter-space schema."""
+    return ParameterSpaceSchema(
+        name="solve_relation",
+        axes=_solve_relation_axes(),
+        derived_regions=_solve_relation_regions(),
+        invalid_cells=(
+            InvalidCellRule(
+                "eigenpair_requires_normalization",
+                (
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"eigenpair_residual"}),
+                    ),
+                    ComparisonPredicate("normalization_constraint_count", "==", 0),
+                ),
+                "eigenpair residuals require a normalization constraint",
+            ),
+            InvalidCellRule(
+                "eigenpair_requires_auxiliary_scalar",
+                (
+                    MembershipPredicate(
+                        "acceptance_relation",
+                        frozenset({"eigenpair_residual"}),
+                    ),
+                    ComparisonPredicate("auxiliary_scalar_count", "==", 0),
+                ),
+                "eigenpair residuals require a spectral auxiliary scalar",
+            ),
+        ),
+    )
+
+
+def linear_solver_parameter_schema() -> ParameterSpaceSchema:
+    """Return the solve-relation schema extended with linear-operator axes."""
+    return ParameterSpaceSchema(
+        name="linear_solver",
+        axes=_solve_relation_axes() + _linear_operator_axes(),
+        derived_regions=_solve_relation_regions()
+        + (
+            DerivedParameterRegion(
+                "square",
+                (
+                    (
+                        AffineComparisonPredicate(
+                            {"dim_x": 1.0, "dim_y": -1.0}, "==", 0.0
+                        ),
+                    ),
+                ),
+            ),
+            DerivedParameterRegion(
+                "overdetermined",
+                (
+                    (
+                        AffineComparisonPredicate(
+                            {"dim_y": 1.0, "dim_x": -1.0}, ">", 0.0
+                        ),
+                    ),
+                ),
+            ),
+            DerivedParameterRegion(
+                "full_rank",
+                ((ComparisonPredicate("singular_value_lower_bound", ">", 0.0),),),
+            ),
+            DerivedParameterRegion(
+                "rank_deficient",
+                ((ComparisonPredicate("nullity_estimate", ">", 0),),),
+            ),
+            DerivedParameterRegion(
+                "symmetric_positive_definite",
+                (
+                    (
+                        AffineComparisonPredicate(
+                            {"dim_x": 1.0, "dim_y": -1.0}, "==", 0.0
+                        ),
+                        ComparisonPredicate("symmetry_defect", "<=", _LINEARITY_EPS),
+                        ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+                    ),
+                ),
+            ),
+            DerivedParameterRegion(
+                "matrix_free",
+                (
+                    (
+                        MembershipPredicate(
+                            "linear_operator_matrix_available", frozenset({False})
+                        ),
+                        MembershipPredicate(
+                            "operator_application_available", frozenset({True})
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        invalid_cells=(
+            InvalidCellRule(
+                "coercivity_requires_square_map",
+                (
+                    AffineComparisonPredicate({"dim_x": 1.0, "dim_y": -1.0}, "!=", 0.0),
+                    ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+                ),
+                "positive coercivity is meaningful only for square maps",
+            ),
+            InvalidCellRule(
+                "symmetry_requires_square_map",
+                (
+                    AffineComparisonPredicate({"dim_x": 1.0, "dim_y": -1.0}, "!=", 0.0),
+                    ComparisonPredicate("symmetry_defect", "<=", _LINEARITY_EPS),
+                ),
+                "matrix symmetry is meaningful only for square maps",
+            ),
+        ),
+    )
+
+
+def decomposition_parameter_schema() -> ParameterSpaceSchema:
+    """Return the dense-matrix decomposition parameter-space schema."""
+    return ParameterSpaceSchema(
+        name="decomposition",
+        axes=(
+            _positive_axis("matrix_rows", units="rows"),
+            _positive_axis("matrix_columns", units="columns"),
+            _positive_axis(
+                "factorization_work_budget_fmas", units="fused multiply-adds"
+            ),
+            _positive_axis("factorization_memory_budget_bytes", units="bytes"),
+        )
+        + _linear_operator_axes(),
+        derived_regions=(
+            DerivedParameterRegion(
+                "square",
+                (
+                    (
+                        AffineComparisonPredicate(
+                            {"matrix_rows": 1.0, "matrix_columns": -1.0},
+                            "==",
+                            0.0,
+                        ),
+                    ),
+                ),
+            ),
+            DerivedParameterRegion(
+                "full_rank",
+                ((ComparisonPredicate("singular_value_lower_bound", ">", 0.0),),),
+            ),
+            DerivedParameterRegion(
+                "rank_deficient",
+                ((ComparisonPredicate("nullity_estimate", ">", 0),),),
+            ),
+        ),
+        invalid_cells=(
+            InvalidCellRule(
+                "coercivity_requires_square_matrix",
+                (
+                    AffineComparisonPredicate(
+                        {"matrix_rows": 1.0, "matrix_columns": -1.0}, "!=", 0.0
+                    ),
+                    ComparisonPredicate("coercivity_lower_bound", ">", 0.0),
+                ),
+                "positive coercivity is meaningful only for square matrices",
+            ),
+        ),
+    )
 
 
 __all__ = [
@@ -463,8 +965,12 @@ __all__ = [
     "AlgorithmStructureContract",
     "ComparisonPredicate",
     "CoveragePatch",
+    "DerivedParameterRegion",
     "DescriptorCoordinate",
+    "decomposition_parameter_schema",
+    "EvidencePredicate",
     "InvalidCellRule",
+    "linear_solver_parameter_schema",
     "MembershipPredicate",
     "NumericInterval",
     "ParameterAxis",
@@ -472,4 +978,5 @@ __all__ = [
     "ParameterDescriptor",
     "ParameterPredicate",
     "ParameterSpaceSchema",
+    "solve_relation_parameter_schema",
 ]
