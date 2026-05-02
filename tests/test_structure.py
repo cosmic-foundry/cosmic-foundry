@@ -26,7 +26,6 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
-import itertools
 import pkgutil
 import sys
 import types
@@ -50,11 +49,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
-    ScalarValue,
-    StructuredPredicate,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
+    predicate_sets_are_disjoint,
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
@@ -1382,6 +1380,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         return "algorithm_capabilities/linear_solver_coverage_patches"
 
     def check(self, _calibration: None) -> None:
+        self._assert_no_local_disjointness_algebra()
         schema = linear_solver_parameter_schema()
         patches = linear_solver_coverage_patches()
         self._assert_no_declared_coverage_literals(patches)
@@ -1432,168 +1431,47 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         cls,
         owned_patches: tuple[CoveragePatch, ...],
     ) -> None:
-        pair_size = int(cls._two())
-        for left, right in itertools.combinations(owned_patches, pair_size):
-            assert cls._predicate_sets_are_disjoint(
-                left.predicates,
-                right.predicates,
-            ), (
-                "owned linear-solver coverage patches must be pairwise disjoint "
-                f"without selector priority: {left.name}, {right.name}"
-            )
+        cls._assert_coverage_disjointness_algebra()
+        for pair_index, left in enumerate(owned_patches):
+            for right in owned_patches[pair_index + int(cls._one()) :]:
+                assert predicate_sets_are_disjoint(
+                    left.predicates,
+                    right.predicates,
+                ), (
+                    "owned linear-solver coverage patches must be pairwise disjoint "
+                    f"without selector priority: {left.name}, {right.name}"
+                )
 
     @classmethod
-    def _predicate_sets_are_disjoint(
-        cls,
-        left: tuple[StructuredPredicate, ...],
-        right: tuple[StructuredPredicate, ...],
-    ) -> bool:
-        fields = frozenset().union(
-            *(predicate.referenced_fields for predicate in left + right)
+    def _assert_coverage_disjointness_algebra(cls) -> None:
+        assert predicate_sets_are_disjoint(
+            (MembershipPredicate("algebraic_kind", frozenset({"left"})),),
+            (MembershipPredicate("algebraic_kind", frozenset({"right"})),),
         )
-        return any(
-            cls._field_predicates_are_disjoint(
-                field,
-                tuple(
-                    predicate
-                    for predicate in left
-                    if field in predicate.referenced_fields
-                ),
-                tuple(
-                    predicate
-                    for predicate in right
-                    if field in predicate.referenced_fields
-                ),
-            )
-            for field in fields
+        assert predicate_sets_are_disjoint(
+            (ComparisonPredicate("algebraic_bound", ">", cls._zero()),),
+            (ComparisonPredicate("algebraic_bound", "<=", cls._zero()),),
+        )
+        assert not predicate_sets_are_disjoint(
+            (ComparisonPredicate("algebraic_overlap", "<=", cls._two()),),
+            (ComparisonPredicate("algebraic_overlap", ">", cls._one()),),
         )
 
     @classmethod
-    def _field_predicates_are_disjoint(
-        cls,
-        field: str,
-        left: tuple[StructuredPredicate, ...],
-        right: tuple[StructuredPredicate, ...],
-    ) -> bool:
-        predicates = left + right
-        memberships = tuple(
-            predicate
-            for predicate in predicates
-            if isinstance(predicate, MembershipPredicate)
-        )
-        evidences = tuple(
-            predicate
-            for predicate in predicates
-            if isinstance(predicate, EvidencePredicate)
-        )
-        comparisons = tuple(
-            predicate
-            for predicate in predicates
-            if isinstance(predicate, ComparisonPredicate)
-        )
-        if len(memberships) > cls._one():
-            values = frozenset.intersection(
-                *(predicate.values for predicate in memberships)
-            )
-            if not values:
-                return True
-        if len(evidences) > cls._one():
-            evidence = frozenset.intersection(
-                *(predicate.evidence for predicate in evidences)
-            )
-            if not evidence:
-                return True
-        if memberships and comparisons:
-            values = frozenset.intersection(
-                *(predicate.values for predicate in memberships)
-            )
-            if not any(
-                cls._value_satisfies_comparisons(field, value, comparisons)
-                for value in values
-            ):
-                return True
-        return cls._comparisons_are_disjoint(field, comparisons)
-
-    @classmethod
-    def _comparisons_are_disjoint(
-        cls,
-        field: str,
-        comparisons: tuple[ComparisonPredicate, ...],
-    ) -> bool:
-        equal_values = {
-            predicate.value for predicate in comparisons if predicate.operator == "=="
+    def _assert_no_local_disjointness_algebra(cls) -> None:
+        forbidden = {
+            "_comparisons_are_disjoint",
+            "_field_predicates_are_disjoint",
+            "_predicate_sets_are_disjoint",
+            "_strongest_lower_bound",
+            "_strongest_upper_bound",
+            "_value_satisfies_comparisons",
         }
-        if len(equal_values) > cls._one():
-            return True
-        if equal_values:
-            value = next(iter(equal_values))
-            return not cls._value_satisfies_comparisons(field, value, comparisons)
-        lower_bound = cls._strongest_lower_bound(comparisons)
-        upper_bound = cls._strongest_upper_bound(comparisons)
-        if lower_bound is None or upper_bound is None:
-            return False
-        lower_value, lower_inclusive = lower_bound
-        upper_value, upper_inclusive = upper_bound
-        if not isinstance(lower_value, bool | str) and not isinstance(
-            upper_value, bool | str
-        ):
-            if lower_value > upper_value:
-                return True
-            if lower_value == upper_value and not (lower_inclusive and upper_inclusive):
-                return True
-        return False
-
-    @staticmethod
-    def _value_satisfies_comparisons(
-        field: str,
-        value: Any,
-        comparisons: tuple[ComparisonPredicate, ...],
-    ) -> bool:
-        descriptor = ParameterDescriptor(
-            "witness",
-            {field: DescriptorCoordinate(value)},
-        )
-        return all(predicate.evaluate(descriptor) for predicate in comparisons)
-
-    @staticmethod
-    def _strongest_lower_bound(
-        comparisons: tuple[ComparisonPredicate, ...],
-    ) -> tuple[ScalarValue, bool] | None:
-        lower: tuple[ScalarValue, bool] | None = None
-        for predicate in comparisons:
-            if predicate.operator not in {">", ">="}:
-                continue
-            candidate = (predicate.value, predicate.operator == ">=")
-            candidate_value, candidate_inclusive = candidate
-            if lower is None:
-                lower = candidate
-                continue
-            lower_value, lower_inclusive = lower
-            if candidate_value > lower_value:  # type: ignore[operator]
-                lower = candidate
-            elif candidate_value == lower_value:
-                lower = (candidate_value, candidate_inclusive and lower_inclusive)
-        return lower
-
-    @staticmethod
-    def _strongest_upper_bound(
-        comparisons: tuple[ComparisonPredicate, ...],
-    ) -> tuple[ScalarValue, bool] | None:
-        upper: tuple[ScalarValue, bool] | None = None
-        for predicate in comparisons:
-            if predicate.operator not in {"<", "<="}:
-                continue
-            candidate = (predicate.value, predicate.operator == "<=")
-            candidate_value, candidate_inclusive = candidate
-            if upper is None:
-                upper = candidate
-                continue
-            upper_value, upper_inclusive = upper
-            if candidate_value < upper_value:  # type: ignore[operator]
-                upper = candidate
-            elif candidate_value == upper_value:
-                upper = (candidate_value, candidate_inclusive and upper_inclusive)
-        return upper
+        tree = ast.parse(inspect.getsource(cls))
+        local_helpers = {
+            node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+        }
+        assert not forbidden & local_helpers
 
     @classmethod
     def _assert_no_declared_coverage_literals(
