@@ -804,7 +804,11 @@ classes induced by that derived schema.  Plot titles, filenames, captions,
 ranges, point labels, and coordinate labels are rendering consequences.
 Projection axes are schema field objects.  Axis roles such as shown, fixed, and
 marginalized are derived from the plot plane plus descriptor evidence; they are
-not maintained as parallel annotations on evidence points.
+not maintained as parallel annotations on evidence points.  Axis visualization
+uses the schema-owned partition first: finite bins render as categorical cells,
+threshold intervals remain visible as partitions, and positive numeric intervals
+may use log scale.  Renderers must not choose plot ranges from sampled
+descriptor values when the schema already declares the relevant partition.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
