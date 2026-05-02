@@ -812,8 +812,9 @@ The sprint is complete when the following are true:
   in the parameter space plus the guarantees it provides inside that region.
   The region may be a conjunction of bins, numeric intervals, and feasibility
   inequalities over schema axes.  The implementation owner is the class identity
-  attached to the region; display names are derived only when rendering a human
-  projection.  Implementation-local coverage
+  attached to the region, so the autodiscovered registry is a tuple of owned
+  regions rather than wrapper records around regions.  Display names are derived
+  only when rendering a human projection.  Implementation-local coverage
   declarations must not carry an independent tag contract such as
   `requires`/`provides`; any human-facing label is either inferred from code
   structure or derived as a schema alias over descriptor predicates.

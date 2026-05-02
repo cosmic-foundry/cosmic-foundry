@@ -1,10 +1,8 @@
 """Linear solver classes: ABCs and concrete algorithms."""
 
 from cosmic_foundry.computation.solvers.capabilities import (
-    LINEAR_SOLVER_COVERAGES,
-    LinearSolverCoverage,
+    LINEAR_SOLVER_COVERAGE_REGIONS,
     linear_solver_coverage_regions,
-    linear_solver_coverages,
     select_linear_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
@@ -37,10 +35,8 @@ __all__ = [
     "IterativeSolver",
     "KrylovSolver",
     "StationaryIterationSolver",
-    "LINEAR_SOLVER_COVERAGES",
-    "LinearSolverCoverage",
+    "LINEAR_SOLVER_COVERAGE_REGIONS",
     "LinearOperator",
-    "linear_solver_coverages",
     "linear_solver_coverage_regions",
     "LinearSolver",
     "select_linear_solver_for_descriptor",
