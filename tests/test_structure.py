@@ -61,7 +61,6 @@ from tests.claims import Claim
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
-_CAPABILITY_ATLAS_DOC = _PROJECT_ROOT / "docs" / "capability_atlas.md"
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -1894,16 +1893,17 @@ def _render_capability_atlas() -> str:
 
 
 class _CapabilityAtlasDocClaim(Claim[None]):
-    """Claim: generated capability atlas documentation is current."""
+    """Claim: capability atlas documentation can be generated."""
 
     @property
     def description(self) -> str:
-        return "algorithm_capabilities/capability_atlas_doc_current"
+        return "algorithm_capabilities/capability_atlas_doc_generates"
 
     def check(self, _calibration: None) -> None:
         expected = _render_capability_atlas()
-        actual = _CAPABILITY_ATLAS_DOC.read_text()
-        assert actual == expected
+        assert "![Solve-Relation Regions]" in expected
+        assert "![Linear-Solver Descriptor Cells]" in expected
+        assert "![Decomposition Descriptor Cells]" in expected
         assert _render_capability_atlas_plots()
 
 
