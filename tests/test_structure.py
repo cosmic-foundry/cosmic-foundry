@@ -31,7 +31,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NewType, get_args, get_origin, get_type_hints
+from typing import Any, NewType, TypeAlias, get_args, get_origin, get_type_hints
 
 import pytest
 
@@ -39,6 +39,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     CoverageRegion,
+    DecompositionField,
     DerivedParameterRegion,
     DescriptorCoordinate,
     DescriptorField,
@@ -73,6 +74,7 @@ from tests.claims import Claim
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
 _AtlasText = NewType("_AtlasText", str)
+_AtlasDescriptorField: TypeAlias = LinearSolverField | DecompositionField
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -1363,13 +1365,13 @@ class _SolveRelationSchemaClaim(Claim[None]):
     ) -> ParameterDescriptor:
         return ParameterDescriptor(
             {
-                "matrix_rows": DescriptorCoordinate(matrix_rows),
-                "matrix_columns": DescriptorCoordinate(matrix_columns),
-                "factorization_work_budget_fmas": DescriptorCoordinate(
-                    factorization_work_budget_fmas
+                DecompositionField.MATRIX_ROWS: DescriptorCoordinate(matrix_rows),
+                DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(matrix_columns),
+                DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: (
+                    DescriptorCoordinate(factorization_work_budget_fmas)
                 ),
-                "factorization_memory_budget_bytes": DescriptorCoordinate(
-                    factorization_memory_budget_bytes
+                DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
+                    DescriptorCoordinate(factorization_memory_budget_bytes)
                 ),
                 LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: (
                     DescriptorCoordinate(linear_operator_matrix_available)
@@ -2361,9 +2363,9 @@ class _AtlasProjection:
     schema: ParameterSpaceSchema
     descriptor: ParameterDescriptor
     title: _AtlasText
-    shown_axes: tuple[_AtlasText, ...]
-    fixed_axes: tuple[_AtlasText, ...]
-    marginalized_axes: tuple[_AtlasText, ...]
+    shown_axes: tuple[_AtlasDescriptorField, ...]
+    fixed_axes: tuple[_AtlasDescriptorField, ...]
+    marginalized_axes: tuple[_AtlasDescriptorField, ...]
     regions: tuple[CoverageRegion, ...] = ()
 
 
@@ -2418,14 +2420,7 @@ class _AtlasRegionShape:
 class _AtlasPlotSpec:
     """One generated SVG projection of descriptor cells."""
 
-    filename: _AtlasText
-    title: _AtlasText
     projections: tuple[_AtlasProjection, ...]
-    x_axis: _AtlasText
-    y_axis: _AtlasText
-    x_range: tuple[float, float]
-    y_range: tuple[float, float]
-    caption: _AtlasText
 
     @property
     def schema(self) -> ParameterSpaceSchema:
@@ -2434,8 +2429,48 @@ class _AtlasPlotSpec:
         assert all(projection.schema is schema for projection in self.projections)
         return schema
 
+    @property
+    def x_axis(self) -> _AtlasDescriptorField:
+        """First coordinate axis of the schema projection plane."""
+        return _atlas_axis_field(self.schema.axes[0])
+
+    @property
+    def y_axis(self) -> _AtlasDescriptorField:
+        """Second coordinate axis of the schema projection plane."""
+        return _atlas_axis_field(self.schema.axes[1])
+
+    @property
+    def x_range(self) -> tuple[float, float]:
+        """Range derived from projected descriptor coordinates."""
+        return _atlas_axis_range(self.projections, self.x_axis)
+
+    @property
+    def y_range(self) -> tuple[float, float]:
+        """Range derived from projected descriptor coordinates."""
+        return _atlas_axis_range(self.projections, self.y_axis)
+
+    @property
+    def filename(self) -> _AtlasText:
+        """Human filename for the generated plot."""
+        return _AtlasText(f"{self.schema.name}.svg")
+
+    @property
+    def title(self) -> _AtlasText:
+        """Human title for the generated plot."""
+        return _AtlasText(f"{self.schema.name.replace('_', '-').title()} Regions")
+
+    @property
+    def caption(self) -> _AtlasText:
+        """Human caption for the generated plot."""
+        return _AtlasText(
+            f"{self.title} over {_field_label(self.x_axis)} and "
+            f"{_field_label(self.y_axis)}."
+        )
+
 
 def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
+    field = LinearSolverField
+    decomposition_field = DecompositionField
     solve_schema = solve_relation_parameter_schema()
     linear_schema = linear_solver_parameter_schema()
     decomposition_schema = decomposition_parameter_schema()
@@ -2447,17 +2482,22 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             _SolveRelationSchemaClaim._solve_descriptor(),
             _AtlasText("Solve relation: square linear system"),
             (
-                "map_linearity_defect",
-                "dim_x",
-                "dim_y",
-                "acceptance_relation",
+                field.MAP_LINEARITY_DEFECT,
+                field.DIM_X,
+                field.DIM_Y,
+                field.ACCEPTANCE_RELATION,
             ),
             (
-                "residual_target_available",
-                "objective_relation",
-                "target_is_zero",
+                field.RESIDUAL_TARGET_AVAILABLE,
+                field.OBJECTIVE_RELATION,
+                field.TARGET_IS_ZERO,
             ),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
         ),
         _AtlasProjection(
             solve_schema,
@@ -2468,13 +2508,18 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Solve relation: least-squares relation"),
             (
-                "map_linearity_defect",
-                "dim_x",
-                "dim_y",
-                "objective_relation",
+                field.MAP_LINEARITY_DEFECT,
+                field.DIM_X,
+                field.DIM_Y,
+                field.OBJECTIVE_RELATION,
             ),
-            ("residual_target_available", "acceptance_relation"),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.RESIDUAL_TARGET_AVAILABLE, field.ACCEPTANCE_RELATION),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
         ),
         _AtlasProjection(
             solve_schema,
@@ -2485,12 +2530,17 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Solve relation: public nonlinear-solver gap"),
             (
-                "map_linearity_defect",
-                "residual_target_available",
-                "acceptance_relation",
+                field.MAP_LINEARITY_DEFECT,
+                field.RESIDUAL_TARGET_AVAILABLE,
+                field.ACCEPTANCE_RELATION,
             ),
-            ("target_is_zero", "derivative_oracle_kind"),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.TARGET_IS_ZERO, field.DERIVATIVE_ORACLE_KIND),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
         ),
         _AtlasProjection(
             solve_schema,
@@ -2502,12 +2552,17 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Solve relation: eigenproblem region"),
             (
-                "auxiliary_scalar_count",
-                "normalization_constraint_count",
-                "acceptance_relation",
+                field.AUXILIARY_SCALAR_COUNT,
+                field.NORMALIZATION_CONSTRAINT_COUNT,
+                field.ACCEPTANCE_RELATION,
             ),
-            ("objective_relation", "dim_x", "dim_y"),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.OBJECTIVE_RELATION, field.DIM_X, field.DIM_Y),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
         ),
         _AtlasProjection(
             solve_schema,
@@ -2516,30 +2571,40 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Invalid solve relation: eigenpair without spectral data"),
             (
-                "auxiliary_scalar_count",
-                "normalization_constraint_count",
-                "acceptance_relation",
+                field.AUXILIARY_SCALAR_COUNT,
+                field.NORMALIZATION_CONSTRAINT_COUNT,
+                field.ACCEPTANCE_RELATION,
             ),
-            ("objective_relation",),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.OBJECTIVE_RELATION,),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
         ),
         _AtlasProjection(
             linear_schema,
             _SolveRelationSchemaClaim._linear_descriptor(),
             _AtlasText("Linear solver: SPD full-rank dense descriptor"),
             (
-                "dim_x",
-                "dim_y",
-                "symmetry_defect",
-                "coercivity_lower_bound",
-                "condition_estimate",
+                field.DIM_X,
+                field.DIM_Y,
+                field.SYMMETRY_DEFECT,
+                field.COERCIVITY_LOWER_BOUND,
+                field.CONDITION_ESTIMATE,
             ),
             (
-                "singular_value_lower_bound",
-                "operator_application_available",
-                "linear_operator_matrix_available",
+                field.SINGULAR_VALUE_LOWER_BOUND,
+                field.OPERATOR_APPLICATION_AVAILABLE,
+                field.LINEAR_OPERATOR_MATRIX_AVAILABLE,
             ),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
             solver_regions,
         ),
         _AtlasProjection(
@@ -2551,13 +2616,18 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Linear solver: rank-deficient descriptor"),
             (
-                "singular_value_lower_bound",
-                "rank_estimate",
-                "nullity_estimate",
-                "rhs_consistency_defect",
+                field.SINGULAR_VALUE_LOWER_BOUND,
+                field.RANK_ESTIMATE,
+                field.NULLITY_ESTIMATE,
+                field.RHS_CONSISTENCY_DEFECT,
             ),
-            ("dim_x", "dim_y", "objective_relation"),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.DIM_X, field.DIM_Y, field.OBJECTIVE_RELATION),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
             solver_regions,
         ),
         _AtlasProjection(
@@ -2568,12 +2638,17 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Linear solver: matrix-free descriptor"),
             (
-                "linear_operator_matrix_available",
-                "operator_application_available",
-                "matvec_cost_fmas",
+                field.LINEAR_OPERATOR_MATRIX_AVAILABLE,
+                field.OPERATOR_APPLICATION_AVAILABLE,
+                field.MATVEC_COST_FMAS,
             ),
-            ("dim_x", "dim_y", "map_linearity_defect"),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.DIM_X, field.DIM_Y, field.MAP_LINEARITY_DEFECT),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
             solver_regions,
         ),
         _AtlasProjection(
@@ -2581,13 +2656,18 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             _SolveRelationSchemaClaim._linear_descriptor(dim_y=5),
             _AtlasText("Invalid linear solver: nonsquare SPD descriptor"),
             (
-                "dim_x",
-                "dim_y",
-                "symmetry_defect",
-                "coercivity_lower_bound",
+                field.DIM_X,
+                field.DIM_Y,
+                field.SYMMETRY_DEFECT,
+                field.COERCIVITY_LOWER_BOUND,
             ),
-            ("map_linearity_defect",),
-            ("backend_kind", "device_kind", "work_budget_fmas", "memory_budget_bytes"),
+            (field.MAP_LINEARITY_DEFECT,),
+            (
+                field.BACKEND_KIND,
+                field.DEVICE_KIND,
+                field.WORK_BUDGET_FMAS,
+                field.MEMORY_BUDGET_BYTES,
+            ),
             solver_regions,
         ),
         _AtlasProjection(
@@ -2595,13 +2675,16 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             _SolveRelationSchemaClaim._decomposition_descriptor(),
             _AtlasText("Decomposition: square full-rank dense descriptor"),
             (
-                "matrix_rows",
-                "matrix_columns",
-                "singular_value_lower_bound",
-                "condition_estimate",
+                decomposition_field.MATRIX_ROWS,
+                decomposition_field.MATRIX_COLUMNS,
+                field.SINGULAR_VALUE_LOWER_BOUND,
+                field.CONDITION_ESTIMATE,
             ),
-            ("factorization_work_budget_fmas", "factorization_memory_budget_bytes"),
-            ("linear_operator_memory_bytes", "assembly_cost_fmas"),
+            (
+                decomposition_field.FACTORIZATION_WORK_BUDGET_FMAS,
+                decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES,
+            ),
+            (field.LINEAR_OPERATOR_MEMORY_BYTES, field.ASSEMBLY_COST_FMAS),
         ),
         _AtlasProjection(
             decomposition_schema,
@@ -2610,12 +2693,15 @@ def _capability_atlas_projections() -> tuple[_AtlasProjection, ...]:
             ),
             _AtlasText("Invalid decomposition: nonsquare coercive descriptor"),
             (
-                "matrix_rows",
-                "matrix_columns",
-                "coercivity_lower_bound",
+                decomposition_field.MATRIX_ROWS,
+                decomposition_field.MATRIX_COLUMNS,
+                field.COERCIVITY_LOWER_BOUND,
             ),
-            ("factorization_work_budget_fmas", "factorization_memory_budget_bytes"),
-            ("linear_operator_memory_bytes", "assembly_cost_fmas"),
+            (
+                decomposition_field.FACTORIZATION_WORK_BUDGET_FMAS,
+                decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES,
+            ),
+            (field.LINEAR_OPERATOR_MEMORY_BYTES, field.ASSEMBLY_COST_FMAS),
         ),
     )
 
@@ -2655,74 +2741,31 @@ def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
 
 
 def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
-    (
-        solve_linear,
-        solve_least_squares,
-        solve_nonlinear_gap,
-        solve_eigenproblem,
-        solve_invalid_eigenpair,
-        linear_spd,
-        linear_rank_deficient,
-        linear_matrix_free,
-        linear_invalid_nonsquare,
-        decomposition_square,
-        decomposition_invalid_nonsquare,
-    ) = _capability_atlas_projections()
-    return (
-        _AtlasPlotSpec(
-            _AtlasText("solve_relation.svg"),
-            _AtlasText("Solve-Relation Regions"),
-            (
-                solve_linear,
-                solve_least_squares,
-                solve_nonlinear_gap,
-                solve_eigenproblem,
-                solve_invalid_eigenpair,
-            ),
-            _AtlasText("dim_x"),
-            _AtlasText("dim_y"),
-            (1.0, 6.0),
-            (1.0, 6.0),
-            _AtlasText(
-                "Solve-relation projection over unknown and residual dimensions."
-            ),
-        ),
-        _AtlasPlotSpec(
-            _AtlasText("linear_solver.svg"),
-            _AtlasText("Linear-Solver Regions"),
-            (
-                linear_spd,
-                linear_rank_deficient,
-                linear_matrix_free,
-                linear_invalid_nonsquare,
-            ),
-            _AtlasText("dim_x"),
-            _AtlasText("dim_y"),
-            (1.0, 6.0),
-            (1.0, 6.0),
-            _AtlasText(
-                "Linear-solver projection over unknown and residual dimensions."
-            ),
-        ),
-        _AtlasPlotSpec(
-            _AtlasText("decomposition.svg"),
-            _AtlasText("Decomposition Regions"),
-            (
-                decomposition_square,
-                decomposition_invalid_nonsquare,
-            ),
-            _AtlasText("matrix_rows"),
-            _AtlasText("matrix_columns"),
-            (1.0, 6.0),
-            (1.0, 6.0),
-            _AtlasText(
-                "Decomposition projection over matrix row and column dimensions."
-            ),
-        ),
+    groups: dict[int, list[_AtlasProjection]] = {}
+    for projection in _capability_atlas_projections():
+        groups.setdefault(id(projection.schema), []).append(projection)
+    return tuple(_AtlasPlotSpec(tuple(group)) for group in groups.values())
+
+
+def _atlas_axis_range(
+    projections: tuple[_AtlasProjection, ...],
+    field: _AtlasDescriptorField,
+) -> tuple[float, float]:
+    values = tuple(
+        float(projection.descriptor.coordinate(field).value)
+        for projection in projections
+        if projection.descriptor.coordinate(field).known
     )
+    assert values
+    return (max(1.0, float(int(min(values))) - 2.0), float(int(max(values))) + 1.0)
 
 
-def _descriptor_value(descriptor: ParameterDescriptor, field: str) -> str:
+def _atlas_axis_field(axis: ParameterAxis) -> _AtlasDescriptorField:
+    assert isinstance(axis.field, LinearSolverField | DecompositionField)
+    return axis.field
+
+
+def _descriptor_value(descriptor: ParameterDescriptor, field: DescriptorField) -> str:
     coordinate = descriptor.coordinate(field)
     value = "unknown" if coordinate.value is None else str(coordinate.value)
     if coordinate.evidence != "exact":
@@ -2819,15 +2862,15 @@ def _coverage_region_name(region: CoverageRegion) -> str:
 
 
 def _predicate_affine_projection(
-    predicate: Any, x_axis: str, y_axis: str
-) -> tuple[dict[str, float], str, float] | None:
+    predicate: Any, x_axis: _AtlasDescriptorField, y_axis: _AtlasDescriptorField
+) -> tuple[dict[_AtlasDescriptorField, float], str, float] | None:
     if isinstance(predicate, AffineComparisonPredicate):
         visible = {
-            _field_label(field): coefficient
+            field: coefficient
             for field, coefficient in predicate.terms.items()
-            if _field_label(field) in {x_axis, y_axis}
+            if field in {x_axis, y_axis}
         }
-        hidden = {_field_label(field) for field in predicate.terms} - {x_axis, y_axis}
+        hidden = set(predicate.terms) - {x_axis, y_axis}
         if visible and not hidden:
             return (
                 {
@@ -2838,11 +2881,11 @@ def _predicate_affine_projection(
                 predicate.value - predicate.offset,
             )
         return None
-    if isinstance(predicate, ComparisonPredicate) and _field_label(predicate.field) in {
+    if isinstance(predicate, ComparisonPredicate) and predicate.field in {
         x_axis,
         y_axis,
     }:
-        field = _field_label(predicate.field)
+        field = predicate.field
         return (
             {
                 x_axis: 1.0 if field == x_axis else 0.0,
@@ -2856,9 +2899,9 @@ def _predicate_affine_projection(
 
 def _affine_value(
     point: tuple[float, float],
-    terms: dict[str, float],
-    x_axis: str,
-    y_axis: str,
+    terms: dict[_AtlasDescriptorField, float],
+    x_axis: _AtlasDescriptorField,
+    y_axis: _AtlasDescriptorField,
     value: float,
 ) -> float:
     x, y = point
@@ -2867,11 +2910,11 @@ def _affine_value(
 
 def _clip_polygon_to_half_plane(
     polygon: tuple[tuple[float, float], ...],
-    terms: dict[str, float],
+    terms: dict[_AtlasDescriptorField, float],
     operator: str,
     value: float,
-    x_axis: str,
-    y_axis: str,
+    x_axis: _AtlasDescriptorField,
+    y_axis: _AtlasDescriptorField,
 ) -> tuple[tuple[float, float], ...]:
     def inside(point: tuple[float, float]) -> bool:
         signed = _affine_value(point, terms, x_axis, y_axis, value)
@@ -2910,10 +2953,10 @@ def _clip_polygon_to_half_plane(
 
 
 def _affine_equality_line(
-    terms: dict[str, float],
+    terms: dict[_AtlasDescriptorField, float],
     value: float,
-    x_axis: str,
-    y_axis: str,
+    x_axis: _AtlasDescriptorField,
+    y_axis: _AtlasDescriptorField,
     x_range: tuple[float, float],
     y_range: tuple[float, float],
 ) -> tuple[tuple[float, float], ...]:
@@ -2945,8 +2988,8 @@ def _affine_equality_line(
 def _project_alternative_geometry(
     predicates: tuple[Any, ...],
     *,
-    x_axis: str,
-    y_axis: str,
+    x_axis: _AtlasDescriptorField,
+    y_axis: _AtlasDescriptorField,
     x_range: tuple[float, float],
     y_range: tuple[float, float],
 ) -> tuple[tuple[str, tuple[tuple[float, float], ...]], ...]:
@@ -3074,6 +3117,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_atlas_models_do_not_store_raw_text()
+        self._assert_projection_axes_are_descriptor_fields()
         self._assert_plot_specs_select_projection_objects()
         for spec in _capability_atlas_plot_specs():
             schema = spec.schema
@@ -3117,16 +3161,48 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             for annotation in annotations.values()
         )
         assert not any(
+            cls._annotation_contains_type(annotation, _AtlasText)
+            for annotation in annotations.values()
+        )
+        assert not any(
             cls._annotation_is_text_collection(annotation)
             for annotation in annotations.values()
         )
-        for spec in _capability_atlas_plot_specs():
+        specs = _capability_atlas_plot_specs()
+        plotted = tuple(projection for spec in specs for projection in spec.projections)
+        assert plotted == _capability_atlas_projections()
+        for spec in specs:
             assert spec.projections
             schema = spec.projections[0].schema
             assert all(projection.schema is schema for projection in spec.projections)
+        for left in plotted:
+            for right in plotted:
+                assert (left.schema is right.schema) == (
+                    any(
+                        left in spec.projections and right in spec.projections
+                        for spec in specs
+                    )
+                )
 
     @classmethod
-    def _annotation_contains_type(cls, annotation: object, expected_type: type) -> bool:
+    def _assert_projection_axes_are_descriptor_fields(cls) -> None:
+        annotations = get_type_hints(_AtlasProjection)
+        assert not any(
+            cls._annotation_is_text_collection(annotation)
+            for annotation in annotations.values()
+        )
+        for projection in _capability_atlas_projections():
+            declared_axes = (
+                projection.shown_axes
+                + projection.fixed_axes
+                + projection.marginalized_axes
+            )
+            assert set(declared_axes) <= projection.schema.descriptor_fields
+
+    @classmethod
+    def _annotation_contains_type(
+        cls, annotation: object, expected_type: object
+    ) -> bool:
         if annotation is expected_type:
             return True
         return any(

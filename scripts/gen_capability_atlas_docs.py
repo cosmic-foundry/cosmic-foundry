@@ -389,6 +389,8 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
     selected = spec.projections
     schema = spec.schema
     region_shapes = atlas._projected_region_shapes(spec)
+    x_axis_label = atlas._field_label(spec.x_axis)
+    y_axis_label = atlas._field_label(spec.y_axis)
     x_min, x_max = spec.x_range
     y_min, y_max = spec.y_range
     width, height = 1280, 820
@@ -407,13 +409,13 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" '
         f'stroke="#475467" stroke-width="1.4"/>',
         _svg_text(
-            left + plot_w / 2, height - 24, spec.x_axis, size=13, anchor="middle"
+            left + plot_w / 2, height - 24, x_axis_label, size=13, anchor="middle"
         ),
         (
             f'<text x="22" y="{top + plot_h / 2:.1f}" font-size="13" '
             'font-family="Inter, Arial, sans-serif" fill="#101828" '
             f'text-anchor="middle" transform="rotate(-90 22 {top + plot_h / 2:.1f})">'
-            f"{html.escape(spec.y_axis)}</text>"
+            f"{html.escape(y_axis_label)}</text>"
         ),
     ]
     for tick in range(5):
@@ -584,14 +586,16 @@ def render_capability_atlas() -> str:
                 field
                 for projection in spec.projections
                 for field in projection.fixed_axes
-            }
+            },
+            key=atlas._field_label,
         )
         marginalized = sorted(
             {
                 field
                 for projection in spec.projections
                 for field in projection.marginalized_axes
-            }
+            },
+            key=atlas._field_label,
         )
         lines.extend(
             [
@@ -599,10 +603,13 @@ def render_capability_atlas() -> str:
                 "",
                 _render_interactive_plot(spec),
                 "",
-                f"Shown axes: `{spec.x_axis}` and `{spec.y_axis}`.",
-                "Fixed axes: " + ", ".join(f"`{field}`" for field in fixed) + ".",
+                f"Shown axes: `{atlas._field_label(spec.x_axis)}` and "
+                f"`{atlas._field_label(spec.y_axis)}`.",
+                "Fixed axes: "
+                + ", ".join(f"`{atlas._field_label(field)}`" for field in fixed)
+                + ".",
                 "Marginalized axes: "
-                + ", ".join(f"`{field}`" for field in marginalized)
+                + ", ".join(f"`{atlas._field_label(field)}`" for field in marginalized)
                 + ".",
                 "",
             ]

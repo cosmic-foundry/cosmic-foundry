@@ -795,9 +795,11 @@ are allowed only as views over that model.  They must not become independent
 sources of truth.
 Atlas projection text follows the same rule: titles, captions, filenames, and
 axis labels may render an object, but they must not identify, select, or join
-objects.  A generated plot carries the projection objects it explains, derives
-its schema from those objects, and lets structural tests reject any return to
-presentation strings as semantic keys.
+objects.  Generated plots are discovered by the equivalence relation induced by
+schema identity over projection objects; plot titles, filenames, captions,
+ranges, and coordinate labels are rendering consequences.  Projection axes are
+schema field objects, and structural tests reject any return to presentation
+strings as semantic keys.
 
 The sprint is complete when the following are true:
 

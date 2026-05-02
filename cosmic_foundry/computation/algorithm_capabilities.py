@@ -151,11 +151,22 @@ class LinearSolverField(Enum):
     WORK_BUDGET_FMAS = "work_budget_fmas"
 
 
-DescriptorField: TypeAlias = str | LinearSolverField
+class DecompositionField(Enum):
+    """Schema-owned descriptor fields for decomposition coverage."""
+
+    FACTORIZATION_MEMORY_BUDGET_BYTES = "factorization_memory_budget_bytes"
+    FACTORIZATION_WORK_BUDGET_FMAS = "factorization_work_budget_fmas"
+    MATRIX_COLUMNS = "matrix_columns"
+    MATRIX_ROWS = "matrix_rows"
+
+
+DescriptorField: TypeAlias = str | LinearSolverField | DecompositionField
 
 
 def _field_label(field: DescriptorField) -> str:
-    return field.value if isinstance(field, LinearSolverField) else field
+    if isinstance(field, LinearSolverField | DecompositionField):
+        return str(field.value)
+    return field
 
 
 @dataclass(frozen=True)
@@ -1285,15 +1296,19 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
 def decomposition_parameter_schema() -> ParameterSpaceSchema:
     """Return the dense-matrix decomposition parameter-space schema."""
     field = LinearSolverField
+    decomposition_field = DecompositionField
     return ParameterSpaceSchema(
         name="decomposition",
         axes=(
-            _positive_axis("matrix_rows", units="rows"),
-            _positive_axis("matrix_columns", units="columns"),
+            _positive_axis(decomposition_field.MATRIX_ROWS, units="rows"),
+            _positive_axis(decomposition_field.MATRIX_COLUMNS, units="columns"),
             _positive_axis(
-                "factorization_work_budget_fmas", units="fused multiply-adds"
+                decomposition_field.FACTORIZATION_WORK_BUDGET_FMAS,
+                units="fused multiply-adds",
             ),
-            _positive_axis("factorization_memory_budget_bytes", units="bytes"),
+            _positive_axis(
+                decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES, units="bytes"
+            ),
         )
         + _linear_operator_axes(),
         derived_regions=(
@@ -1302,7 +1317,10 @@ def decomposition_parameter_schema() -> ParameterSpaceSchema:
                 (
                     (
                         AffineComparisonPredicate(
-                            {"matrix_rows": 1.0, "matrix_columns": -1.0},
+                            {
+                                decomposition_field.MATRIX_ROWS: 1.0,
+                                decomposition_field.MATRIX_COLUMNS: -1.0,
+                            },
                             "==",
                             0.0,
                         ),
@@ -1323,7 +1341,12 @@ def decomposition_parameter_schema() -> ParameterSpaceSchema:
                 "coercivity_requires_square_matrix",
                 (
                     AffineComparisonPredicate(
-                        {"matrix_rows": 1.0, "matrix_columns": -1.0}, "!=", 0.0
+                        {
+                            decomposition_field.MATRIX_ROWS: 1.0,
+                            decomposition_field.MATRIX_COLUMNS: -1.0,
+                        },
+                        "!=",
+                        0.0,
                     ),
                     ComparisonPredicate(field.COERCIVITY_LOWER_BOUND, ">", 0.0),
                 ),
@@ -1527,6 +1550,7 @@ __all__ = [
     "ComparisonPredicate",
     "coverage_regions_are_disjoint",
     "CoverageRegion",
+    "DecompositionField",
     "DerivedParameterRegion",
     "DescriptorCoordinate",
     "decomposition_parameter_schema",
