@@ -2374,59 +2374,7 @@ class _AtlasGap:
     required_capability: _AtlasText
 
 
-@dataclass(frozen=True)
-class _AtlasPlotSpec:
-    """One generated SVG projection of descriptor cells."""
-
-    descriptors: tuple[ParameterDescriptor, ...]
-
-    @property
-    def schema(self) -> ParameterSpaceSchema:
-        """Common schema for the descriptors shown by this plot."""
-        schema = _atlas_schema_for_descriptor(self.descriptors[0])
-        assert all(
-            _atlas_schema_for_descriptor(descriptor) == schema
-            for descriptor in self.descriptors
-        )
-        return schema
-
-    @property
-    def x_axis(self) -> _AtlasDescriptorField:
-        """First coordinate axis of the schema projection plane."""
-        return _atlas_axis_field(self.schema.axes[0])
-
-    @property
-    def y_axis(self) -> _AtlasDescriptorField:
-        """Second coordinate axis of the schema projection plane."""
-        return _atlas_axis_field(self.schema.axes[1])
-
-    @property
-    def x_range(self) -> tuple[float, float]:
-        """Range derived from projected descriptor coordinates."""
-        return _atlas_axis_range(self.descriptors, self.x_axis)
-
-    @property
-    def y_range(self) -> tuple[float, float]:
-        """Range derived from projected descriptor coordinates."""
-        return _atlas_axis_range(self.descriptors, self.y_axis)
-
-    @property
-    def filename(self) -> _AtlasText:
-        """Human filename for the generated plot."""
-        return _AtlasText(f"{self.schema.name}.svg")
-
-    @property
-    def title(self) -> _AtlasText:
-        """Human title for the generated plot."""
-        return _AtlasText(f"{self.schema.name.replace('_', '-').title()} Regions")
-
-    @property
-    def caption(self) -> _AtlasText:
-        """Human caption for the generated plot."""
-        return _AtlasText(
-            f"{self.title} over {_field_label(self.x_axis)} and "
-            f"{_field_label(self.y_axis)}."
-        )
+_AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -2552,12 +2500,60 @@ def _capability_atlas_gaps() -> tuple[_AtlasGap, ...]:
     )
 
 
-def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
+def _capability_atlas_descriptor_groups() -> tuple[_AtlasDescriptorGroup, ...]:
     groups: dict[frozenset[DescriptorField], list[ParameterDescriptor]] = {}
     for descriptor in _capability_atlas_descriptors():
         schema = _atlas_schema_for_descriptor(descriptor)
         groups.setdefault(schema.descriptor_fields, []).append(descriptor)
-    return tuple(_AtlasPlotSpec(tuple(group)) for group in groups.values())
+    return tuple(tuple(group) for group in groups.values())
+
+
+def _atlas_group_schema(group: _AtlasDescriptorGroup) -> ParameterSpaceSchema:
+    """Common schema for the descriptors shown by one atlas plot."""
+    schema = _atlas_schema_for_descriptor(group[0])
+    assert all(
+        _atlas_schema_for_descriptor(descriptor) == schema for descriptor in group
+    )
+    return schema
+
+
+def _atlas_group_x_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
+    """First coordinate axis of the schema projection plane."""
+    return _atlas_axis_field(_atlas_group_schema(group).axes[0])
+
+
+def _atlas_group_y_axis(group: _AtlasDescriptorGroup) -> _AtlasDescriptorField:
+    """Second coordinate axis of the schema projection plane."""
+    return _atlas_axis_field(_atlas_group_schema(group).axes[1])
+
+
+def _atlas_group_x_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
+    """Range derived from projected descriptor coordinates."""
+    return _atlas_axis_range(group, _atlas_group_x_axis(group))
+
+
+def _atlas_group_y_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
+    """Range derived from projected descriptor coordinates."""
+    return _atlas_axis_range(group, _atlas_group_y_axis(group))
+
+
+def _atlas_group_filename(group: _AtlasDescriptorGroup) -> _AtlasText:
+    """Human filename for the generated plot."""
+    return _AtlasText(f"{_atlas_group_schema(group).name}.svg")
+
+
+def _atlas_group_title(group: _AtlasDescriptorGroup) -> _AtlasText:
+    """Human title for the generated plot."""
+    schema = _atlas_group_schema(group)
+    return _AtlasText(f"{schema.name.replace('_', '-').title()} Regions")
+
+
+def _atlas_group_caption(group: _AtlasDescriptorGroup) -> _AtlasText:
+    """Human caption for the generated plot."""
+    return _AtlasText(
+        f"{_atlas_group_title(group)} over {_field_label(_atlas_group_x_axis(group))} "
+        f"and {_field_label(_atlas_group_y_axis(group))}."
+    )
 
 
 def _atlas_axis_range(
@@ -2578,26 +2574,32 @@ def _atlas_axis_field(axis: ParameterAxis) -> _AtlasDescriptorField:
     return axis.field
 
 
-def _atlas_fixed_axes(spec: _AtlasPlotSpec) -> tuple[_AtlasDescriptorField, ...]:
+def _atlas_fixed_axes(
+    group: _AtlasDescriptorGroup,
+) -> tuple[_AtlasDescriptorField, ...]:
     """Return non-plotted schema axes fixed to one known value across the plot."""
     return tuple(
         field
-        for field in _atlas_hidden_axes(spec)
-        if _axis_has_one_known_value(spec.descriptors, field)
+        for field in _atlas_hidden_axes(group)
+        if _axis_has_one_known_value(group, field)
     )
 
 
-def _atlas_marginalized_axes(spec: _AtlasPlotSpec) -> tuple[_AtlasDescriptorField, ...]:
+def _atlas_marginalized_axes(
+    group: _AtlasDescriptorGroup,
+) -> tuple[_AtlasDescriptorField, ...]:
     """Return non-plotted schema axes not fixed by the descriptor evidence."""
-    fixed = set(_atlas_fixed_axes(spec))
-    return tuple(field for field in _atlas_hidden_axes(spec) if field not in fixed)
+    fixed = set(_atlas_fixed_axes(group))
+    return tuple(field for field in _atlas_hidden_axes(group) if field not in fixed)
 
 
-def _atlas_hidden_axes(spec: _AtlasPlotSpec) -> tuple[_AtlasDescriptorField, ...]:
-    shown = {spec.x_axis, spec.y_axis}
+def _atlas_hidden_axes(
+    group: _AtlasDescriptorGroup,
+) -> tuple[_AtlasDescriptorField, ...]:
+    shown = {_atlas_group_x_axis(group), _atlas_group_y_axis(group)}
     return tuple(
         field
-        for axis in spec.schema.axes
+        for axis in _atlas_group_schema(group).axes
         if (field := _atlas_axis_field(axis)) not in shown
     )
 
@@ -2892,8 +2894,10 @@ _AtlasProjectedRegion: TypeAlias = tuple[
 ]
 
 
-def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasProjectedRegion, ...]:
-    schema = spec.schema
+def _projected_region_shapes(
+    group: _AtlasDescriptorGroup,
+) -> tuple[_AtlasProjectedRegion, ...]:
+    schema = _atlas_group_schema(group)
     regions = _atlas_regions_for_schema(schema)
     shapes: list[_AtlasProjectedRegion] = []
     for source in _schema_atlas_regions(schema, regions):
@@ -2901,16 +2905,16 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasProjectedRegio
         for predicates in alternatives:
             geometry = _project_alternative_geometry(
                 predicates,
-                x_axis=spec.x_axis,
-                y_axis=spec.y_axis,
-                x_range=spec.x_range,
-                y_range=spec.y_range,
+                x_axis=_atlas_group_x_axis(group),
+                y_axis=_atlas_group_y_axis(group),
+                x_range=_atlas_group_x_range(group),
+                y_range=_atlas_group_y_range(group),
             )
             if not geometry:
+                axes = (_atlas_group_x_axis(group), _atlas_group_y_axis(group))
                 raise AssertionError(
                     f"atlas region {_atlas_source_label(source)!r} has no "
-                    "visible projection "
-                    f"onto {spec.x_axis!r}/{spec.y_axis!r}"
+                    f"visible projection onto {axes!r}"
                 )
             for points in geometry:
                 shapes.append((source, predicates, points))
@@ -2918,15 +2922,15 @@ def _projected_region_shapes(spec: _AtlasPlotSpec) -> tuple[_AtlasProjectedRegio
 
 
 def _capability_atlas_carrier_classes() -> frozenset[type]:
-    return frozenset({_AtlasPlotSpec, _AtlasGap})
+    return frozenset({_AtlasGap})
 
 
 def _capability_atlas_semantic_carrier_classes() -> frozenset[type]:
-    return frozenset({_AtlasPlotSpec})
+    return frozenset()
 
 
 def _capability_atlas_carriers() -> tuple[object, ...]:
-    return (*_capability_atlas_plot_specs(), *_capability_atlas_gaps())
+    return _capability_atlas_gaps()
 
 
 def _atlas_source_label(
@@ -2965,16 +2969,16 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
         self._assert_coverage_regions_are_schema_discovered()
-        self._assert_plot_specs_select_descriptors()
-        for spec in _capability_atlas_plot_specs():
-            schema = spec.schema
+        self._assert_descriptor_groups_are_schema_equivalence_classes()
+        for group in _capability_atlas_descriptor_groups():
+            schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
             discovered = _schema_atlas_regions(schema, regions)
             assert {id(source) for source in discovered} == {
                 id(source)
                 for source in schema.derived_regions + schema.invalid_cells + regions
             }
-            shapes = _projected_region_shapes(spec)
+            shapes = _projected_region_shapes(group)
             assert shapes
             for source, _predicates, points in shapes:
                 assert _atlas_source_label(source)
@@ -3044,58 +3048,34 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             assert derived_properties
 
     @classmethod
-    def _assert_plot_specs_select_descriptors(cls) -> None:
-        annotations = get_type_hints(_AtlasPlotSpec)
-        assert any(
-            cls._annotation_contains_type(annotation, ParameterDescriptor)
-            for annotation in annotations.values()
-        )
-        assert not any(
-            cls._annotation_contains_type(annotation, _AtlasText)
-            for annotation in annotations.values()
-        )
-        assert not any(
-            cls._annotation_is_text_collection(annotation)
-            for annotation in annotations.values()
-        )
-        specs = _capability_atlas_plot_specs()
-        plotted = tuple(descriptor for spec in specs for descriptor in spec.descriptors)
+    def _assert_descriptor_groups_are_schema_equivalence_classes(cls) -> None:
+        groups = _capability_atlas_descriptor_groups()
+        plotted = tuple(descriptor for group in groups for descriptor in group)
         assert plotted == _capability_atlas_descriptors()
-        for spec in specs:
-            assert spec.descriptors
-            schema = _atlas_schema_for_descriptor(spec.descriptors[0])
+        for group in groups:
+            assert group
+            schema = _atlas_schema_for_descriptor(group[0])
             assert all(
                 _atlas_schema_for_descriptor(descriptor) == schema
-                for descriptor in spec.descriptors
+                for descriptor in group
             )
         for left in plotted:
             for right in plotted:
                 assert (
                     _atlas_schema_for_descriptor(left)
                     == _atlas_schema_for_descriptor(right)
-                ) == (
-                    any(
-                        left in spec.descriptors and right in spec.descriptors
-                        for spec in specs
-                    )
-                )
+                ) == (any(left in group and right in group for group in groups))
 
     @classmethod
     def _assert_evidence_schema_is_derived(cls) -> None:
-        annotations = get_type_hints(_AtlasPlotSpec)
-        assert not any(
-            cls._annotation_contains_type(annotation, ParameterSpaceSchema)
-            for annotation in annotations.values()
-        )
         for descriptor in _capability_atlas_descriptors():
             _atlas_schema_for_descriptor(descriptor)
 
     @classmethod
     def _assert_evidence_is_descriptors(cls) -> None:
-        annotations = get_type_hints(_AtlasPlotSpec)
-        assert any(
-            cls._annotation_contains_type(annotation, ParameterDescriptor)
-            for annotation in annotations.values()
+        assert all(
+            isinstance(descriptor, ParameterDescriptor)
+            for descriptor in _capability_atlas_descriptors()
         )
 
     @classmethod
@@ -3109,25 +3089,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     @classmethod
     def _assert_projection_axis_roles_are_derived(cls) -> None:
-        annotations = get_type_hints(_AtlasPlotSpec)
-        assert not any(
-            cls._annotation_contains_type(annotation, _AtlasText)
-            for annotation in annotations.values()
-        )
-        assert not any(
-            cls._annotation_is_text_collection(annotation)
-            for annotation in annotations.values()
-        )
-        assert not any(
-            cls._annotation_contains_type(annotation, _AtlasDescriptorField)
-            for annotation in annotations.values()
-        )
-        for spec in _capability_atlas_plot_specs():
-            shown = {spec.x_axis, spec.y_axis}
-            fixed = set(_atlas_fixed_axes(spec))
-            marginalized = set(_atlas_marginalized_axes(spec))
+        for group in _capability_atlas_descriptor_groups():
+            shown = {_atlas_group_x_axis(group), _atlas_group_y_axis(group)}
+            fixed = set(_atlas_fixed_axes(group))
+            marginalized = set(_atlas_marginalized_axes(group))
             assert shown | fixed | marginalized == {
-                _atlas_axis_field(axis) for axis in spec.schema.axes
+                _atlas_axis_field(axis) for axis in _atlas_group_schema(group).axes
             }
             assert not (shown & fixed)
             assert not (shown & marginalized)

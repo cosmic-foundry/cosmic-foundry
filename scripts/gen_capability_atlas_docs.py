@@ -382,24 +382,28 @@ def _render_region_card(
     )
 
 
-def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
-    selected = spec.descriptors
-    schema = spec.schema
-    region_shapes = atlas._projected_region_shapes(spec)
-    x_axis_label = atlas._field_label(spec.x_axis)
-    y_axis_label = atlas._field_label(spec.y_axis)
-    x_min, x_max = spec.x_range
-    y_min, y_max = spec.y_range
+def _render_interactive_plot(group: atlas._AtlasDescriptorGroup) -> str:
+    selected = group
+    schema = atlas._atlas_group_schema(group)
+    region_shapes = atlas._projected_region_shapes(group)
+    x_axis = atlas._atlas_group_x_axis(group)
+    y_axis = atlas._atlas_group_y_axis(group)
+    x_axis_label = atlas._field_label(x_axis)
+    y_axis_label = atlas._field_label(y_axis)
+    x_min, x_max = atlas._atlas_group_x_range(group)
+    y_min, y_max = atlas._atlas_group_y_range(group)
+    title = atlas._atlas_group_title(group)
+    caption = atlas._atlas_group_caption(group)
     width, height = 1280, 820
     left, right, top, bottom = 76, 36, 42, 70
     plot_w, plot_h = width - left - right, height - top - bottom
-    atlas_id = _dom_id("atlas", spec.filename)
+    atlas_id = _dom_id("atlas", atlas._atlas_group_filename(group))
 
     svg_parts = [
         f'<svg viewBox="0 0 {width} {height}" role="img" '
         f'aria-labelledby="{atlas_id}-title {atlas_id}-desc">',
-        f'<title id="{atlas_id}-title">{html.escape(spec.title)}</title>',
-        f'<desc id="{atlas_id}-desc">{html.escape(spec.caption)}</desc>',
+        f'<title id="{atlas_id}-title">{html.escape(title)}</title>',
+        f'<desc id="{atlas_id}-desc">{html.escape(caption)}</desc>',
         '<rect width="100%" height="100%" fill="#ffffff"/>',
         f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" '
         f'y2="{top + plot_h}" stroke="#475467" stroke-width="1.4"/>',
@@ -484,8 +488,8 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
         regions = atlas._atlas_regions_for_schema(schema)
         status = schema.cell_status(descriptor, regions)
         stroke, _fill = _status_style(status)
-        x_value = float(descriptor.coordinate(spec.x_axis).value)
-        y_value = float(descriptor.coordinate(spec.y_axis).value)
+        x_value = float(descriptor.coordinate(x_axis).value)
+        y_value = float(descriptor.coordinate(y_axis).value)
         x, y = _svg_plot_point(
             x_value,
             y_value,
@@ -536,8 +540,8 @@ def _render_interactive_plot(spec: atlas._AtlasPlotSpec) -> str:
                 f'data-cf-atlas="{_html_attr(atlas_id)}">'
             ),
             '<div class="cf-atlas-interactive-header">',
-            f"<strong>{html.escape(spec.title)}</strong>",
-            f"<div>{html.escape(spec.caption)}</div>",
+            f"<strong>{html.escape(title)}</strong>",
+            f"<div>{html.escape(caption)}</div>",
             "</div>",
             '<div class="cf-atlas-interactive-body">',
             '<div class="cf-atlas-diagram">',
@@ -579,17 +583,19 @@ def render_capability_atlas() -> str:
         "## Projection Plots",
         "",
     ]
-    for spec in atlas._capability_atlas_plot_specs():
-        fixed = atlas._atlas_fixed_axes(spec)
-        marginalized = atlas._atlas_marginalized_axes(spec)
+    for group in atlas._capability_atlas_descriptor_groups():
+        fixed = atlas._atlas_fixed_axes(group)
+        marginalized = atlas._atlas_marginalized_axes(group)
+        x_axis = atlas._atlas_group_x_axis(group)
+        y_axis = atlas._atlas_group_y_axis(group)
         lines.extend(
             [
-                f"### {spec.title}",
+                f"### {atlas._atlas_group_title(group)}",
                 "",
-                _render_interactive_plot(spec),
+                _render_interactive_plot(group),
                 "",
-                f"Shown axes: `{atlas._field_label(spec.x_axis)}` and "
-                f"`{atlas._field_label(spec.y_axis)}`.",
+                f"Shown axes: `{atlas._field_label(x_axis)}` and "
+                f"`{atlas._field_label(y_axis)}`.",
                 "Fixed axes: "
                 + ", ".join(f"`{atlas._field_label(field)}`" for field in fixed)
                 + ".",

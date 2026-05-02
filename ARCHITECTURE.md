@@ -799,21 +799,21 @@ objects.  Atlas evidence is descriptor evidence: a descriptor is located in the
 unique minimal schema whose field set admits and validates its coordinate map,
 without wrapping it in a parallel evidence object.  Ownership regions are
 assigned to schemas by validating the region against the schema, not by
-attaching them to evidence points.  Generated plots are discovered by the
-equivalence relation induced by that derived schema.  Plot titles, filenames,
-captions, ranges, point labels, and coordinate labels are rendering
-consequences.  Projection axes are schema field objects.  Axis roles such as
-shown, fixed, and marginalized are derived from the plot plane plus descriptor
-evidence; they are not maintained as parallel annotations on evidence points.
+attaching them to evidence points.  Generated plots are descriptor equivalence
+classes induced by that derived schema.  Plot titles, filenames, captions,
+ranges, point labels, and coordinate labels are rendering consequences.
+Projection axes are schema field objects.  Axis roles such as shown, fixed, and
+marginalized are derived from the plot plane plus descriptor evidence; they are
+not maintained as parallel annotations on evidence points.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
 primitive choices, and alternative ordinals are rendering consequences.
 Atlas carrier types are admitted by premise rather than inferred from rendered
-objects.  Structural tests reject any return to presentation strings,
-render-category enums, scalar bookkeeping fields, wrapper evidence objects,
-stored schema identities, stored ownership-region lists, generated-artifact
-carrier types, or hand-declared axis roles as semantic keys.
+objects; plot groupings are not carriers.  Structural tests reject any return to
+presentation strings, render-category enums, scalar bookkeeping fields, wrapper
+evidence objects, stored schema identities, stored ownership-region lists,
+generated-artifact carrier types, or hand-declared axis roles as semantic keys.
 
 The sprint is complete when the following are true:
 
