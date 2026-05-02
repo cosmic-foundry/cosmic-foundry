@@ -1334,6 +1334,17 @@ class _AtlasEvidence:
 
 
 @dataclass(frozen=True)
+class _AtlasRegionShape:
+    """Projected region geometry rendered before descriptor evidence points."""
+
+    name: str
+    status: str
+    geometry: str
+    points: tuple[tuple[float, float], ...]
+    condition: str
+
+
+@dataclass(frozen=True)
 class _AtlasPlotSpec:
     """One generated SVG projection of descriptor cells."""
 
@@ -1342,6 +1353,9 @@ class _AtlasPlotSpec:
     schema: str
     x_axis: str
     y_axis: str
+    x_range: tuple[float, float]
+    y_range: tuple[float, float]
+    regions: tuple[_AtlasRegionShape, ...]
     cells: tuple[str, ...]
     caption: str
 
@@ -1565,6 +1579,45 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
             "solve_relation",
             "dim_x",
             "dim_y",
+            (1.0, 6.0),
+            (1.0, 6.0),
+            (
+                _AtlasRegionShape(
+                    "linear_system",
+                    "uncovered",
+                    "line",
+                    ((1.0, 1.0), (6.0, 6.0)),
+                    "linear map; target available; residual acceptance",
+                ),
+                _AtlasRegionShape(
+                    "least_squares",
+                    "uncovered",
+                    "polygon",
+                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
+                    "linear map; least_squares objective; target available",
+                ),
+                _AtlasRegionShape(
+                    "nonlinear_root",
+                    "uncovered",
+                    "rectangle",
+                    ((1.0, 1.0), (6.0, 6.0)),
+                    "nonlinear or unknown linearity; residual acceptance",
+                ),
+                _AtlasRegionShape(
+                    "eigenproblem",
+                    "uncovered",
+                    "rectangle",
+                    ((1.25, 1.25), (5.75, 5.75)),
+                    "spectral scalar and normalization; eigenpair residual",
+                ),
+                _AtlasRegionShape(
+                    "invalid_eigenpair_without_spectral_data",
+                    "invalid",
+                    "rectangle",
+                    ((1.5, 1.5), (5.5, 5.5)),
+                    "eigenpair residual missing spectral data",
+                ),
+            ),
             (
                 "Solve relation: square linear system",
                 "Solve relation: least-squares relation",
@@ -1576,10 +1629,42 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
         ),
         _AtlasPlotSpec(
             "linear_solver.svg",
-            "Linear-Solver Descriptor Cells",
+            "Linear-Solver Regions",
             "linear_solver",
             "dim_x",
             "dim_y",
+            (1.0, 6.0),
+            (1.0, 6.0),
+            (
+                _AtlasRegionShape(
+                    "linear_system",
+                    "uncovered",
+                    "line",
+                    ((1.0, 1.0), (6.0, 6.0)),
+                    "linear map; target available; residual acceptance",
+                ),
+                _AtlasRegionShape(
+                    "symmetric_positive_definite",
+                    "uncovered",
+                    "line",
+                    ((1.0, 1.0), (6.0, 6.0)),
+                    "square; symmetric; positive coercivity",
+                ),
+                _AtlasRegionShape(
+                    "overdetermined",
+                    "uncovered",
+                    "polygon",
+                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
+                    "dim_y > dim_x",
+                ),
+                _AtlasRegionShape(
+                    "invalid_nonsquare_spd",
+                    "invalid",
+                    "polygon",
+                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
+                    "symmetry/coercivity asserted while nonsquare",
+                ),
+            ),
             (
                 "Linear solver: SPD full-rank dense descriptor",
                 "Linear solver: rank-deficient descriptor",
@@ -1590,10 +1675,28 @@ def _capability_atlas_plot_specs() -> tuple[_AtlasPlotSpec, ...]:
         ),
         _AtlasPlotSpec(
             "decomposition.svg",
-            "Decomposition Descriptor Cells",
+            "Decomposition Regions",
             "decomposition",
             "matrix_rows",
             "matrix_columns",
+            (1.0, 6.0),
+            (1.0, 6.0),
+            (
+                _AtlasRegionShape(
+                    "square",
+                    "uncovered",
+                    "line",
+                    ((1.0, 1.0), (6.0, 6.0)),
+                    "matrix_rows == matrix_columns",
+                ),
+                _AtlasRegionShape(
+                    "invalid_nonsquare_coercive",
+                    "invalid",
+                    "polygon",
+                    ((1.0, 1.0), (1.0, 6.0), (6.0, 6.0)),
+                    "coercivity_lower_bound > 0 while matrix_rows != matrix_columns",
+                ),
+            ),
             (
                 "Decomposition: square full-rank dense descriptor",
                 "Invalid decomposition: nonsquare coercive descriptor",
@@ -1631,11 +1734,20 @@ def _status_style(status: str) -> tuple[str, str]:
     return "#475467", "#f2f4f7"
 
 
-def _plot_coordinate(value: str, *, axis_min: float, axis_max: float) -> float:
-    numeric = float(value)
+def _region_opacity(status: str) -> str:
+    if status == "invalid":
+        return "0.20"
+    if status == "owned":
+        return "0.24"
+    if status == "rejected":
+        return "0.22"
+    return "0.18"
+
+
+def _plot_coordinate(value: float, *, axis_min: float, axis_max: float) -> float:
     if axis_max == axis_min:
         return 0.5
-    return (numeric - axis_min) / (axis_max - axis_min)
+    return (value - axis_min) / (axis_max - axis_min)
 
 
 def _svg_text(
@@ -1655,6 +1767,128 @@ def _svg_text(
     )
 
 
+def _svg_plot_point(
+    x_value: float,
+    y_value: float,
+    *,
+    left: float,
+    top: float,
+    plot_w: float,
+    plot_h: float,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+) -> tuple[float, float]:
+    return (
+        left + _plot_coordinate(x_value, axis_min=x_min, axis_max=x_max) * plot_w,
+        top
+        + plot_h
+        - _plot_coordinate(y_value, axis_min=y_min, axis_max=y_max) * plot_h,
+    )
+
+
+def _render_region_shape(
+    region: _AtlasRegionShape,
+    *,
+    left: float,
+    top: float,
+    plot_w: float,
+    plot_h: float,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+) -> str:
+    stroke, fill = _status_style(region.status)
+    opacity = _region_opacity(region.status)
+    if region.geometry == "line":
+        (x0, y0), (x1, y1) = region.points
+        px0, py0 = _svg_plot_point(
+            x0,
+            y0,
+            left=left,
+            top=top,
+            plot_w=plot_w,
+            plot_h=plot_h,
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
+        )
+        px1, py1 = _svg_plot_point(
+            x1,
+            y1,
+            left=left,
+            top=top,
+            plot_w=plot_w,
+            plot_h=plot_h,
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
+        )
+        return (
+            f'<line x1="{px0:.1f}" y1="{py0:.1f}" x2="{px1:.1f}" y2="{py1:.1f}" '
+            f'stroke="{stroke}" stroke-width="7" stroke-linecap="round" '
+            'stroke-opacity="0.72"/>'
+        )
+    if region.geometry == "polygon":
+        points = [
+            _svg_plot_point(
+                x,
+                y,
+                left=left,
+                top=top,
+                plot_w=plot_w,
+                plot_h=plot_h,
+                x_min=x_min,
+                x_max=x_max,
+                y_min=y_min,
+                y_max=y_max,
+            )
+            for x, y in region.points
+        ]
+        svg_points = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+        return (
+            f'<polygon points="{svg_points}" fill="{fill}" fill-opacity="{opacity}" '
+            f'stroke="{stroke}" stroke-width="2" stroke-opacity="0.55"/>'
+        )
+    if region.geometry == "rectangle":
+        (x0, y0), (x1, y1) = region.points
+        px0, py0 = _svg_plot_point(
+            min(x0, x1),
+            max(y0, y1),
+            left=left,
+            top=top,
+            plot_w=plot_w,
+            plot_h=plot_h,
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
+        )
+        px1, py1 = _svg_plot_point(
+            max(x0, x1),
+            min(y0, y1),
+            left=left,
+            top=top,
+            plot_w=plot_w,
+            plot_h=plot_h,
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
+        )
+        return (
+            f'<rect x="{px0:.1f}" y="{py0:.1f}" width="{px1 - px0:.1f}" '
+            f'height="{py1 - py0:.1f}" fill="{fill}" fill-opacity="{opacity}" '
+            f'stroke="{stroke}" stroke-width="2" stroke-dasharray="8 5" '
+            'stroke-opacity="0.62"/>'
+        )
+    raise AssertionError(f"unsupported atlas region geometry {region.geometry!r}")
+
+
 def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
     projections = {
         projection.title: projection
@@ -1662,29 +1896,13 @@ def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
         if projection.schema.name == spec.schema
     }
     selected = [projections[cell] for cell in spec.cells]
-    x_values = [
-        float(projection.descriptor.coordinate(spec.x_axis).value)
-        for projection in selected
-        if projection.descriptor.coordinate(spec.x_axis).value is not None
-    ]
-    y_values = [
-        float(projection.descriptor.coordinate(spec.y_axis).value)
-        for projection in selected
-        if projection.descriptor.coordinate(spec.y_axis).value is not None
-    ]
-    x_min, x_max = min(x_values), max(x_values)
-    y_min, y_max = min(y_values), max(y_values)
-    x_pad = max(1.0, (x_max - x_min) * 0.2)
-    y_pad = max(1.0, (y_max - y_min) * 0.2)
-    x_min -= x_pad
-    x_max += x_pad
-    y_min -= y_pad
-    y_max += y_pad
+    x_min, x_max = spec.x_range
+    y_min, y_max = spec.y_range
 
-    width = 980
-    height = 560
+    width = 1180
+    height = 820
     left = 94
-    right = 330
+    right = 440
     top = 72
     bottom = 88
     plot_w = width - left - right
@@ -1735,40 +1953,95 @@ def _render_capability_atlas_plot(spec: _AtlasPlotSpec) -> str:
             ]
         )
 
+    for region in spec.regions:
+        parts.append(
+            _render_region_shape(
+                region,
+                left=left,
+                top=top,
+                plot_w=plot_w,
+                plot_h=plot_h,
+                x_min=x_min,
+                x_max=x_max,
+                y_min=y_min,
+                y_max=y_max,
+            )
+        )
+
     legend_y = 98
     for status in ("uncovered", "invalid", "owned", "rejected"):
         stroke, fill = _status_style(status)
         parts.extend(
             [
-                f'<circle cx="{width - 250}" cy="{legend_y}" r="7" '
-                f'fill="{fill}" stroke="{stroke}" stroke-width="2"/>',
-                _svg_text(width - 234, legend_y + 4, status, size=12),
+                f'<rect x="{width - 257}" y="{legend_y - 8}" width="14" '
+                f'height="14" fill="{fill}" fill-opacity="{_region_opacity(status)}" '
+                f'stroke="{stroke}" stroke-width="2"/>',
+                _svg_text(width - 234, legend_y + 3, f"{status} region", size=12),
             ]
         )
         legend_y += 24
 
-    label_y = 225
+    label_y = 206
+    parts.append(
+        _svg_text(width - 292, label_y, "Projected regions", size=13, weight="700")
+    )
+    label_y += 24
+    for index, region in enumerate(spec.regions, start=1):
+        stroke, fill = _status_style(region.status)
+        opacity = _region_opacity(region.status)
+        parts.extend(
+            [
+                f'<rect x="{width - 292}" y="{label_y - 11}" width="12" '
+                f'height="12" fill="{fill}" fill-opacity="{opacity}" '
+                f'stroke="{stroke}" stroke-width="1.5"/>',
+                _svg_text(width - 274, label_y, f"{index}. {region.name}", size=12),
+                _svg_text(width - 274, label_y + 15, region.condition, size=10),
+            ]
+        )
+        label_y += 42
+
+    label_y += 8
+    parts.append(
+        _svg_text(
+            width - 292, label_y, "Test descriptor overlays", size=13, weight="700"
+        )
+    )
+    label_y += 24
+    seen_points: dict[tuple[float, float], int] = {}
     for index, projection in enumerate(selected, start=1):
         status = projection.schema.cell_status(
             projection.descriptor, projection.patches
         )
         stroke, fill = _status_style(status)
-        x_raw = str(projection.descriptor.coordinate(spec.x_axis).value)
-        y_raw = str(projection.descriptor.coordinate(spec.y_axis).value)
-        x = left + _plot_coordinate(x_raw, axis_min=x_min, axis_max=x_max) * plot_w
-        y = (
-            top
-            + plot_h
-            - _plot_coordinate(y_raw, axis_min=y_min, axis_max=y_max) * plot_h
+        x_value = float(projection.descriptor.coordinate(spec.x_axis).value)
+        y_value = float(projection.descriptor.coordinate(spec.y_axis).value)
+        x, y = _svg_plot_point(
+            x_value,
+            y_value,
+            left=left,
+            top=top,
+            plot_w=plot_w,
+            plot_h=plot_h,
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
         )
+        duplicate_key = (x_value, y_value)
+        duplicate_index = seen_points.get(duplicate_key, 0)
+        seen_points[duplicate_key] = duplicate_index + 1
+        offsets = ((0.0, 0.0), (16.0, 0.0), (-16.0, 0.0), (0.0, -16.0), (0.0, 16.0))
+        dx, dy = offsets[duplicate_index % len(offsets)]
+        x += dx
+        y += dy
         regions = _matched_regions(projection.schema, projection.descriptor)
         parts.extend(
             [
-                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="13" fill="{fill}" '
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="#ffffff" '
                 f'stroke="{stroke}" stroke-width="2.4"/>',
-                _svg_text(x, y + 5, str(index), size=12, anchor="middle", weight="700"),
+                _svg_text(x, y + 4, str(index), size=10, anchor="middle", weight="700"),
                 _svg_text(
-                    width - 292, label_y, f"{index}. {projection.title}", size=12
+                    width - 292, label_y, f"{index}. {projection.title}", size=11
                 ),
                 _svg_text(width - 274, label_y + 17, f"status: {status}", size=11),
                 _svg_text(width - 274, label_y + 32, f"regions: {regions}", size=11),
@@ -1796,7 +2069,9 @@ def _render_capability_atlas() -> str:
         "This page is a projection of the parameter-space schemas used by the",
         "structural test registry.  Each plot names the axes shown directly, the",
         "coordinates fixed outside the projection, and the higher-dimensional axes",
-        "that are only summarized.  Ownership is intentionally sparse at this",
+        "that are only summarized.  Region geometry is drawn first; concrete",
+        "descriptor fixtures from `tests/test_structure.py` are overlaid as",
+        "numbered evidence points.  Ownership is intentionally sparse at this",
         "stage: solver and decomposition implementations have not yet been",
         "converted from string-set capability tags to coverage patches.",
         "",
@@ -1902,8 +2177,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         expected = _render_capability_atlas()
         assert "![Solve-Relation Regions]" in expected
-        assert "![Linear-Solver Descriptor Cells]" in expected
-        assert "![Decomposition Descriptor Cells]" in expected
+        assert "![Linear-Solver Regions]" in expected
+        assert "![Decomposition Regions]" in expected
         assert _render_capability_atlas_plots()
 
 

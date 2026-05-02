@@ -1016,12 +1016,19 @@ Recommended PR sequence:
    direct descriptor fixtures in `tests/test_structure.py`.  Keep estimation
    conservative and deterministic; do not use performance timing as a source of
    truth for ownership.
-2. Convert linear solver capabilities to coverage patches and update
+2. Add an interactive atlas projection mode.  The generated documentation should
+   retain static fallbacks, but the primary view should let a developer hover
+   over a region or evidence marker and see that region's predicate overlay on
+   the base diagram: highlighted visible-axis geometry, fixed hidden-axis
+   predicates, marginalized axes, ownership status, and which sampled test
+   descriptors lie inside it.  Conditional projections such as nonlinear-root or
+   eigenproblem overlays must make clear which unshown axes activate the region.
+3. Convert linear solver capabilities to coverage patches and update
    selector tests for SPD, diagonally dominant, rank-deficient, nonsymmetric,
    matrix-free, over-budget, and unknown-descriptor cases.
-3. Convert decomposition capabilities to coverage patches, including
+4. Convert decomposition capabilities to coverage patches, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-4. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+5. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---
