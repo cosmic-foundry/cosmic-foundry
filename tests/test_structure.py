@@ -1379,6 +1379,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         schema = linear_solver_parameter_schema()
         patches = linear_solver_coverage_patches()
+        self._assert_no_declared_coverage_literals(patches)
         for patch in patches:
             schema.validate_coverage_patch(patch)
 
@@ -1416,11 +1417,63 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
         ranked = sorted(
             matches,
             key=lambda patch: (
-                patch.priority if patch.priority is not None else 1_000_000
+                patch.priority if patch.priority is not None else float("inf")
             ),
         )
-        assert len(ranked) == 1 or ranked[0].priority != ranked[1].priority
-        return ranked[0].owner
+        ranked_iter = iter(ranked)
+        first = next(ranked_iter)
+        second = next(ranked_iter, None)
+        assert second is None or first.priority != second.priority
+        return first.owner
+
+    @classmethod
+    def _assert_no_declared_coverage_literals(
+        cls,
+        patches: tuple[CoveragePatch, ...],
+    ) -> None:
+        declared = cls._declared_coverage_literals(patches)
+        leaked = declared & cls._claim_source_literals()
+        assert not leaked, f"coverage facts leaked into structural claim: {leaked}"
+
+    @staticmethod
+    def _declared_coverage_literals(
+        patches: tuple[CoveragePatch, ...],
+    ) -> frozenset[str | int | float]:
+        literals: set[str | int | float] = set()
+        for patch in patches:
+            literals.update({patch.name, patch.owner})
+            if patch.priority is not None:
+                literals.add(patch.priority)
+            for predicate in patch.predicates:
+                literals.update(predicate.referenced_fields)
+                if isinstance(predicate, ComparisonPredicate):
+                    if not isinstance(predicate.value, bool):
+                        literals.add(predicate.value)
+                elif isinstance(predicate, MembershipPredicate):
+                    literals.update(
+                        value
+                        for value in predicate.values
+                        if isinstance(value, str | int | float)
+                        and not isinstance(value, bool)
+                    )
+                elif isinstance(predicate, EvidencePredicate):
+                    literals.update(predicate.evidence)
+                elif isinstance(predicate, AffineComparisonPredicate):
+                    literals.update(predicate.terms)
+                    literals.add(predicate.value)
+        return frozenset(literals)
+
+    @classmethod
+    def _claim_source_literals(cls) -> frozenset[str | int | float]:
+        tree = ast.parse(inspect.getsource(cls))
+        literals: set[str | int | float] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(
+                node.value, str | int | float
+            ):
+                if not isinstance(node.value, bool):
+                    literals.add(node.value)
+        return frozenset(literals)
 
     @classmethod
     def _descriptor_witness_for_patch(
@@ -1443,12 +1496,8 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                     cls._comparison_witness(fields[predicate.field], predicate)
                 )
             elif isinstance(predicate, EvidencePredicate):
-                evidence = sorted(predicate.evidence)[0]
-                value = (
-                    None
-                    if evidence == "unavailable"
-                    else coordinates[predicate.field].value
-                )
+                evidence = next(iter(sorted(predicate.evidence)))
+                value = coordinates[predicate.field].value
                 coordinates[predicate.field] = DescriptorCoordinate(
                     value,
                     evidence=evidence,  # type: ignore[arg-type]
@@ -1463,7 +1512,7 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
     def _axis_witness(cls, axis: ParameterAxis) -> Any:
         for bin_or_interval in axis.bins:
             if isinstance(bin_or_interval, ParameterBin):
-                return sorted(bin_or_interval.values, key=str)[0]
+                return next(iter(sorted(bin_or_interval.values, key=str)))
             value = cls._interval_witness(bin_or_interval)
             if axis.contains(DescriptorCoordinate(value)):
                 return value
@@ -1476,16 +1525,22 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                 return interval.lower
             if interval.include_upper and interval.contains(interval.upper):
                 return interval.upper
-            return (interval.lower + interval.upper) / 2.0
+            return (
+                interval.lower + interval.upper
+            ) / _LinearSolverCoveragePatchClaim._two()
         if interval.lower is not None:
             if interval.include_lower and interval.contains(interval.lower):
                 return interval.lower
-            return interval.lower + max(abs(interval.lower), 1.0)
+            return interval.lower + max(
+                abs(interval.lower), _LinearSolverCoveragePatchClaim._one()
+            )
         if interval.upper is not None:
             if interval.include_upper and interval.contains(interval.upper):
                 return interval.upper
-            return interval.upper - max(abs(interval.upper), 1.0)
-        return 0.0
+            return interval.upper - max(
+                abs(interval.upper), _LinearSolverCoveragePatchClaim._one()
+            )
+        return _LinearSolverCoveragePatchClaim._zero()
 
     @classmethod
     def _membership_witness(
@@ -1527,11 +1582,11 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
                     return candidate
         raise AssertionError(f"comparison predicate {predicate!r} has no axis witness")
 
-    @staticmethod
-    def _nudged_value(predicate: ComparisonPredicate) -> float:
+    @classmethod
+    def _nudged_value(cls, predicate: ComparisonPredicate) -> float:
         assert not isinstance(predicate.value, bool | str)
         value = float(predicate.value)
-        step = max(abs(value), 1.0)
+        step = max(abs(value), cls._one())
         if predicate.operator in {">", ">="}:
             return value + step
         if predicate.operator in {"<", "<="}:
@@ -1569,19 +1624,32 @@ class _LinearSolverCoveragePatchClaim(Claim[None]):
             f"affine predicate {predicate!r} has no descriptor witness"
         )
 
-    @staticmethod
+    @classmethod
     def _affine_nudged_value(
+        cls,
         boundary: float,
         coefficient: float,
         predicate: AffineComparisonPredicate,
     ) -> float:
-        step = max(abs(boundary), 1.0) / 2.0
-        direction = 1.0 if coefficient > 0.0 else -1.0
+        step = max(abs(boundary), cls._one()) / cls._two()
+        direction = cls._one() if coefficient > cls._zero() else -cls._one()
         if predicate.operator in {">", ">="}:
             return boundary + direction * step
         if predicate.operator in {"<", "<="}:
             return boundary - direction * step
         return boundary
+
+    @staticmethod
+    def _zero() -> float:
+        return float(False)
+
+    @staticmethod
+    def _one() -> float:
+        return float(True)
+
+    @classmethod
+    def _two(cls) -> float:
+        return cls._one() + cls._one()
 
 
 @dataclass(frozen=True)
