@@ -772,7 +772,7 @@ space.  For example, `symmetric_positive_definite` is acceptable only if it is a
 alias for a region defined by bounded `symmetry_defect` and
 `coercivity_lower_bound` axes.  The validation home for these architecture
 claims remains `tests/test_structure.py`: the claim registry should hold the
-parameter-space schemas, coverage patches, derived aliases, invalid-cell rules,
+parameter-space schemas, coverage regions, derived aliases, invalid-cell rules,
 and gap annotations that feed both tests and documentation.  Numerical test
 modules should own the descriptor estimators and problem fixtures needed to
 check the mathematics.
@@ -781,7 +781,7 @@ The same schema should generate capability coverage documentation.  A developer
 should be able to open one generated page and see the gridded parameter space
 with owned, invalid, and uncovered regions.  The primary artifact is literal
 region coverage over schema coordinates: intervals, categorical bins,
-invalid subregions, gaps, and ownership patches.  Discrete descriptor points from
+invalid subregions, gaps, and ownership regions.  Discrete descriptor points from
 tests are overlaid on top of those regions as evidence markers; they are not the
 coverage model itself.  Explicit missing regions are useful after a gap is
 noticed; the region grid is what exposes gaps that nobody has named yet.
@@ -808,7 +808,7 @@ The sprint is complete when the following are true:
   (`conditioning = unknown_condition`).  Unknown descriptor values are explicit:
   selection must either reject the request, choose a capability that can certify
   the value internally, or require an explicit fallback policy.
-- **Capabilities are coverage patches.**  A capability declares a bounded region
+- **Capabilities are coverage regions.**  A capability declares a bounded region
   in the parameter space plus the guarantees it provides inside that region.
   The region may be a conjunction of bins, numeric intervals, and feasibility
   inequalities over schema axes.  The implementation name is metadata attached
@@ -818,8 +818,8 @@ The sprint is complete when the following are true:
   structure or derived as a schema alias over descriptor predicates.
 - **Selection is a point query.**  Runtime dispatch becomes a query of the
   parameter-space atlas: locate the descriptor cell, find the unique coverage
-  patch containing it, and reject if no owned patch contains it.  Coverage
-  patches form a partition of their claimed space; if two implementations appear
+  region containing it, and reject if no owned region contains it.  Coverage
+  regions form a partition of their claimed space; if two implementations appear
   to own the same descriptor, the predicates must be sharpened or one claim must
   be deleted.  This keeps dispatch, generated documentation, and structure tests
   as different views of the same object.
@@ -904,8 +904,8 @@ The sprint is complete when the following are true:
   caller, or unavailable.  Selection may trust exact and certified bounds;
   caller assumptions are allowed only when the request explicitly permits them,
   and tests must cover that policy.
-- **Solver coverage patches.**  Linear solver implementations own coverage
-  patches over the schema.  Examples: `DenseCGSolver` covers descriptors whose
+- **Solver coverage regions.**  Linear solver implementations own coverage
+  regions over the schema.  Examples: `DenseCGSolver` covers descriptors whose
   residual map is certified linear, `dim_x == dim_y`, symmetry defect is below
   tolerance, coercivity lower bound is positive, condition estimate and
   iteration cost fit budget, and only a matrix-free matvec is available.
@@ -915,8 +915,8 @@ The sprint is complete when the following are true:
   memory/work budget.  `DenseSVDSolver` covers rank-deficient or minimum-norm
   dense regions.  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps
   only under restart, memory, and predicted-work bounds.
-- **Decomposition coverage patches.**  Decomposition capabilities are coverage
-  patches over the dense-matrix subspace.  LU covers full-rank square dense
+- **Decomposition coverage regions.**  Decomposition capabilities are coverage
+  regions over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,
   least-squares, or minimum-norm dense regions within factorization budget.
 - **Feasibility inequalities are contracts too.**  Capabilities declare a conservative
@@ -927,7 +927,7 @@ The sprint is complete when the following are true:
   between two owners of the same descriptor.
 - **Coverage atlas generation.**  `tests/test_structure.py` is the source of
   truth for coverage documentation.  Parameter-space schemas and capability
-  coverage patches are declared as structural claims or claim inputs there, and
+  coverage regions are declared as structural claims or claim inputs there, and
   a generator renders the documentation page from that same data.  The page
   projects literal coverage regions onto readable axis-pair plots: owned
   regions, invalid regions, and uncovered-but-valid regions.  Sampled
@@ -936,7 +936,7 @@ The sprint is complete when the following are true:
   which numerical claim file owns the evidence and whether it is representative,
   boundary, regression, convergence, correctness, or performance sampling.  It
   must include the predicate bounds, the certificate sources accepted by the
-  selector, and feasibility inequalities.  Coverage patches are not resolved by
+  selector, and feasibility inequalities.  Coverage regions are not resolved by
   selector priority; same-descriptor claims must be removed by sharper
   predicates or by deleting at least one claim.  Uncovered regions remain
   visible even before anyone has written a missing-capability note for them.
@@ -978,7 +978,7 @@ The sprint is complete when the following are true:
   axis grid is what gives us a chance to find unknown gaps.
 - **Coverage is tested at the schema level.**  Structural tests validate the
   schema before any algorithm selection: every axis has bins or intervals; every
-  descriptor field referenced by an axis exists; every coverage patch references
+  descriptor field referenced by an axis exists; every coverage region references
   declared axes; every invalid region has a reason; every generated
   documentation region comes from the schema; and the rendered coverage document
   is byte-for-byte current with the claim registry.  Then tests sample
@@ -1018,7 +1018,7 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Convert decomposition capabilities to coverage patches, including
+1. Convert decomposition capabilities to coverage regions, including
    rank threshold, minimum-norm semantics, dense memory budget, and work budget.
 2. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
