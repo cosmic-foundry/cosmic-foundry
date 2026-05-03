@@ -788,14 +788,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Finalize final-solve linear solver ownership boundaries: every retained final
-   owner must have a schema-predicate region distinct from every other retained
-   owner; stationary iterations stay out of final-solve ownership until
-   contraction and iteration-budget premises exist in the schema.
-2. Decide whether least-squares solving gets a dedicated interface or remains a
-   decomposition primitive exposed through `SVDFactorization`.
-3. Map one time-integrator solve relation using the same descriptor, coverage,
-   and verification pattern used for linear solvers.
+1. Map one time-integrator solve relation using the same descriptor, coverage,
+   and verification pattern used for linear and least-squares solvers.
+2. After the first time-integrator mapping, decide whether common solver
+   relation primitives should be factored out or kept as per-domain schemas.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -826,9 +822,10 @@ preserves source-signature distinctions.  Source signatures preserve actual
 semantic source identity: invalid-rule predicates, coverage owner plus
 predicates, and uncovered schema-cell coordinates.  They are not collapsed to schema
 declaration order, presentation names, or rendered status text.
-Current `LinearSolver.solve(op, b)` ownership is square residual solving:
-rectangular least-squares ownership is not claimed through that interface even
-though `SVDFactorization` proves the Moore-Penrose least-squares primitive.
+Current `LinearSolver.solve(op, b)` ownership is square residual solving.
+Rectangular least-squares ownership is exposed through
+`LeastSquaresSolver.solve(A, b)` and backed by `SVDFactorization`; it is not
+claimed through square final-solve coverage.
 Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not

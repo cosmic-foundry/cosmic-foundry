@@ -279,6 +279,27 @@ def _discover_concrete_factorizations(
     return result
 
 
+def _discover_concrete_least_squares_solvers(
+    modules: list[tuple[str, types.ModuleType]],
+) -> list[type]:
+    least_squares_solver = _resolve_dotted(
+        "cosmic_foundry.computation.solvers.LeastSquaresSolver"
+    )
+    seen: set[type] = set()
+    result: list[type] = []
+    for _, mod in modules:
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (
+                obj not in seen
+                and issubclass(obj, least_squares_solver)
+                and not getattr(obj, "__abstractmethods__", None)
+                and obj is not least_squares_solver
+            ):
+                seen.add(obj)
+                result.append(obj)
+    return result
+
+
 def _all_local_classes() -> list[tuple[str, str, type]]:
     import cosmic_foundry
 
@@ -1486,6 +1507,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         schema = linear_solver_parameter_schema()
         assert set(LinearSolverField) == schema.descriptor_fields
         regions = linear_solver_coverage_regions()
+        self._assert_final_solve_coverage_owners_are_linear_solvers(regions)
         self._assert_stationary_iterations_do_not_own_final_solve_regions(regions)
         self._assert_no_declared_coverage_literals(regions)
         for region in regions:
@@ -1522,6 +1544,23 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for descriptor in (least_squares, overdetermined_least_squares):
             schema.validate_descriptor(descriptor)
             assert schema.cell_status(descriptor, regions) == "uncovered"
+
+    @staticmethod
+    def _assert_final_solve_coverage_owners_are_linear_solvers(
+        regions: tuple[CoverageRegion, ...],
+    ) -> None:
+        linear_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.LinearSolver"
+        )
+        least_squares_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.LeastSquaresSolver"
+        )
+        for region in regions:
+            assert issubclass(region.owner, linear_solver)
+            assert not issubclass(region.owner, least_squares_solver)
+        for solver in _LEAST_SQUARES_SOLVERS:
+            assert not issubclass(solver, linear_solver)
+            assert not hasattr(solver, "linear_solver_coverage")
 
     @staticmethod
     def _assert_stationary_iterations_do_not_own_final_solve_regions(
@@ -3431,6 +3470,7 @@ _HIERARCHY_PAIRS = _discover_hierarchy_pairs(_ABCS)
 _ITERATIVE_SOLVERS = _discover_concrete_iterative_solvers(_MODULES)
 _MATRIX_FREE_ITERATIVE_SOLVERS = _discover_matrix_free_iterative_solvers(_MODULES)
 _FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
+_LEAST_SQUARES_SOLVERS = _discover_concrete_least_squares_solvers(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
 _TimeIntegrationRequest = _resolve_dotted(
@@ -3720,6 +3760,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "DirectSolver",
                 "IterativeSolver",
                 "KrylovSolver",
+                "LeastSquaresSolver",
                 "LinearOperator",
                 "LinearSolver",
                 "StationaryIterationSolver",
@@ -3731,6 +3772,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "DenseSVDSolver",
             }
         ),
+        "least_squares_solver": frozenset({"DenseSVDLeastSquaresSolver"}),
         "iterative_solver": frozenset(
             {
                 "DenseCGSolver",
@@ -3747,10 +3789,12 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseGaussSeidelSolver": "dense_gauss_seidel_solver",
         "DenseJacobiSolver": "dense_jacobi_solver",
         "DenseLUSolver": "dense_lu_solver",
+        "DenseSVDLeastSquaresSolver": "least_squares_solver",
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
         "IterativeSolver": "iterative_solver",
         "KrylovSolver": "iterative_solver",
+        "LeastSquaresSolver": "least_squares_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
         "StationaryIterationSolver": "iterative_solver",
@@ -3761,6 +3805,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseGaussSeidelSolver": ("Dense", "Solver"),
         "DenseJacobiSolver": ("Dense", "Solver"),
         "DenseLUSolver": ("Dense", "Solver"),
+        "DenseSVDLeastSquaresSolver": ("Dense", "Solver"),
         "DenseSVDSolver": ("Dense", "Solver"),
     },
 )
