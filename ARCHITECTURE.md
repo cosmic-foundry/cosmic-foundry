@@ -793,12 +793,11 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: use a long-time harmonic oscillator calculation
-   to decide whether there should be an invariant-preserving ownership region
-   independent of the Hamiltonian partition coordinate, or whether generic
-   composition remains the right owner for composed symplectic flows. Any atlas
-   or selection change should follow from that calculation's descriptor
-   coordinates, not from a category list.
+2. Candidate next calculation: use a non-symplectic two-component oscillator
+   composition to establish an uncovered or differently owned invariant cell,
+   so invariant preservation is tested by positive and negative component-flow
+   evidence rather than by labels. Any atlas or selection change should follow
+   from that calculation's descriptor coordinates, not from a category list.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

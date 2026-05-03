@@ -868,6 +868,26 @@ class _OscillatorInvariantComparisonClaim(Claim[Any]):
         assert hamiltonian_descriptor.coordinate(
             MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
         ).value
+        assert (
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"one_step"}),
+                    order=4,
+                    descriptor=composition_descriptor,
+                )
+            ).implementation
+            == "CompositionIntegrator"
+        )
+        assert (
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"one_step"}),
+                    order=4,
+                    descriptor=hamiltonian_descriptor,
+                )
+            ).implementation
+            == "SymplecticCompositionIntegrator"
+        )
 
         initial_energy = _oscillator_energy(initial)
         composition_peak = 0.0
