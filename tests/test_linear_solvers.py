@@ -26,6 +26,9 @@ from cosmic_foundry.computation.solvers.dense_jacobi_solver import DenseJacobiSo
 from cosmic_foundry.computation.solvers.dense_lu_solver import DenseLUSolver
 from cosmic_foundry.computation.solvers.dense_svd_solver import DenseSVDSolver
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
+from cosmic_foundry.computation.solvers.least_squares_solver import (
+    DenseSVDLeastSquaresSolver,
+)
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
@@ -248,36 +251,67 @@ class _SVDLeastSquaresClaim(Claim[ExecutionPlan]):
         return "SVDFactorization/rectangular_least_squares"
 
     def check(self, execution_plan: ExecutionPlan) -> None:
-        a = Tensor(
-            (
-                (1.0, 0.0),
-                (0.0, 1.0),
-                (1.0, 1.0),
-            ),
-            backend=_NP_BACKEND,
+        _assert_rectangular_least_squares_solution(
+            self.description,
+            "SVDFactorization",
+            execution_plan,
+            lambda a, b: SVDFactorization().factorize(a).solve(b),
         )
-        b = Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND)
-        x = SVDFactorization().factorize(a).solve(b)
-        expected = (4.0 / 3.0, 7.0 / 3.0)
-        error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(2)))
-        residual = a @ x - b
-        normal_residual = _transpose_matvec(a, residual)
-        normal_error = math.sqrt(sum(float(normal_residual[i]) ** 2 for i in range(2)))
-        tolerance = 1.0e-10
-        assert error < tolerance and normal_error < tolerance, BatchedFailure(
-            claim=self.description,
-            device_kind=execution_plan.device_kind,
-            batch_size=1,
-            batch_index=0,
-            method="SVDFactorization",
-            order=0,
-            problem="least_squares",
-            parameters={"rows": 3, "columns": 2},
-            actual=max(error, normal_error),
-            expected=0.0,
-            error=max(error, normal_error),
-            tolerance=tolerance,
-        ).format()
+
+
+class _DenseSVDLeastSquaresSolverClaim(Claim[ExecutionPlan]):
+    """Claim: dense SVD least-squares solver owns the rectangular interface."""
+
+    @property
+    def description(self) -> str:
+        return "DenseSVDLeastSquaresSolver/rectangular_least_squares"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        solver = DenseSVDLeastSquaresSolver()
+        _assert_rectangular_least_squares_solution(
+            self.description,
+            type(solver).__name__,
+            execution_plan,
+            solver.solve,
+        )
+
+
+def _assert_rectangular_least_squares_solution(
+    claim: str,
+    method: str,
+    execution_plan: ExecutionPlan,
+    solve: Any,
+) -> None:
+    a = Tensor(
+        (
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (1.0, 1.0),
+        ),
+        backend=_NP_BACKEND,
+    )
+    b = Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND)
+    x = solve(a, b)
+    expected = (4.0 / 3.0, 7.0 / 3.0)
+    error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(2)))
+    residual = a @ x - b
+    normal_residual = _transpose_matvec(a, residual)
+    normal_error = math.sqrt(sum(float(normal_residual[i]) ** 2 for i in range(2)))
+    tolerance = 1.0e-10
+    assert error < tolerance and normal_error < tolerance, BatchedFailure(
+        claim=claim,
+        device_kind=execution_plan.device_kind,
+        batch_size=1,
+        batch_index=0,
+        method=method,
+        order=0,
+        problem="least_squares",
+        parameters={"rows": 3, "columns": 2},
+        actual=max(error, normal_error),
+        expected=0.0,
+        error=max(error, normal_error),
+        tolerance=tolerance,
+    ).format()
 
 
 def _transpose_matvec(matrix: Tensor, vector: Tensor) -> Tensor:
@@ -469,6 +503,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 
 _CORRECTNESS_CLAIMS: list[Claim[ExecutionPlan]] = []
 _CORRECTNESS_CLAIMS.append(_SVDLeastSquaresClaim())
+_CORRECTNESS_CLAIMS.append(_DenseSVDLeastSquaresSolverClaim())
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)

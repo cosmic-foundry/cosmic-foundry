@@ -33,8 +33,10 @@ from cosmic_foundry.computation.decompositions import (  # noqa: E402
 from cosmic_foundry.computation.solvers import (  # noqa: E402
     DenseJacobiSolver,
     DenseLUSolver,
+    DenseSVDLeastSquaresSolver,
     DirectSolver,
     IterativeSolver,
+    LeastSquaresSolver,
     LinearSolver,
 )
 from cosmic_foundry.computation.tensor import (  # noqa: E402
@@ -88,9 +90,11 @@ __all__ = [
     "DecomposedTensor",
     "DenseJacobiSolver",
     "DenseLUSolver",
+    "DenseSVDLeastSquaresSolver",
     "DirectSolver",
     "Factorization",
     "IterativeSolver",
+    "LeastSquaresSolver",
     "fit_log_log",
     "JaxBackend",
     "LUDecomposedTensor",

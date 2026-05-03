@@ -19,6 +19,10 @@ from cosmic_foundry.computation.solvers.iterative_solver import (
     KrylovSolver,
     StationaryIterationSolver,
 )
+from cosmic_foundry.computation.solvers.least_squares_solver import (
+    DenseSVDLeastSquaresSolver,
+    LeastSquaresSolver,
+)
 from cosmic_foundry.computation.solvers.linear_solver import (
     LinearOperator,
     LinearSolver,
@@ -30,10 +34,12 @@ __all__ = [
     "DenseGaussSeidelSolver",
     "DenseJacobiSolver",
     "DenseLUSolver",
+    "DenseSVDLeastSquaresSolver",
     "DenseSVDSolver",
     "DirectSolver",
     "IterativeSolver",
     "KrylovSolver",
+    "LeastSquaresSolver",
     "StationaryIterationSolver",
     "LINEAR_SOLVER_COVERAGE_REGIONS",
     "LinearOperator",
