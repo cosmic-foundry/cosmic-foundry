@@ -793,12 +793,13 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: add a structural guard that selector tests derive
-   expected implementations from descriptor ownership regions, not parallel
-   owner maps or hard-coded implementation comparisons. The grounding calculation
-   should remain the descriptor-backed step-selection cases. Do not add mesh,
-   flux-form, locality, or CFL axes until a real mesh object is the
-   implementation premise being tested.
+2. Candidate next calculation: factor the repeated test-local selector-owner
+   derivation helpers into one small test support object, so reaction-network,
+   semi-discrete conservation, and algorithm-selection claims all express the
+   same premise in one place. The grounding calculations should remain the
+   descriptor-backed step-selection, reaction-chain, and semi-discrete
+   conservation cases. Do not add mesh, flux-form, locality, or CFL axes until
+   a real mesh object is the implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
