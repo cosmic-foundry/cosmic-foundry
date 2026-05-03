@@ -78,6 +78,9 @@ from cosmic_foundry.computation.time_integrators.reaction_network import (
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
 )
+from cosmic_foundry.computation.time_integrators.solve_relation import (
+    time_integrator_step_solve_relation_descriptor,
+)
 from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHS,
     CompositeRHSProtocol,
@@ -124,6 +127,7 @@ __all__ = [
     "RungeKuttaIntegrator",
     "select_time_integrator",
     "TimeIntegrator",
+    "time_integrator_step_solve_relation_descriptor",
     "IntegrationDriver",
     "TimeIntegrationCapability",
     "time_integration_capabilities",

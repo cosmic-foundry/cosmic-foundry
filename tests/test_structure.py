@@ -300,6 +300,27 @@ def _discover_concrete_least_squares_solvers(
     return result
 
 
+def _discover_concrete_time_integrators(
+    modules: list[tuple[str, types.ModuleType]],
+) -> list[type]:
+    time_integrator = _resolve_dotted(
+        "cosmic_foundry.computation.time_integrators.TimeIntegrator"
+    )
+    seen: set[type] = set()
+    result: list[type] = []
+    for _, mod in modules:
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (
+                obj not in seen
+                and issubclass(obj, time_integrator)
+                and not getattr(obj, "__abstractmethods__", None)
+                and obj is not time_integrator
+            ):
+                seen.add(obj)
+                result.append(obj)
+    return result
+
+
 def _all_local_classes() -> list[tuple[str, str, type]]:
     import cosmic_foundry
 
@@ -1106,15 +1127,18 @@ class _SolveRelationSchemaClaim(Claim[None]):
             acceptance_relation="eigenpair_residual",
             objective_relation="spectral_residual",
         )
+        explicit_time_step = self._explicit_time_step_descriptor()
 
         for descriptor in (
             linear_system,
             least_squares,
             nonlinear_root,
             eigenproblem,
+            explicit_time_step,
         ):
             solve_schema.validate_descriptor(descriptor)
         assert solve_regions["linear_system"].contains(linear_system)
+        assert solve_regions["linear_system"].contains(explicit_time_step)
         assert solve_regions["least_squares"].contains(least_squares)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root)
         assert solve_regions["eigenproblem"].contains(eigenproblem)
@@ -1297,6 +1321,17 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 ),
             }
         )
+
+    @staticmethod
+    def _explicit_time_step_descriptor() -> ParameterDescriptor:
+        runge_kutta = _resolve_dotted(
+            "cosmic_foundry.computation.time_integrators.RungeKuttaIntegrator"
+        )
+        state_cls = _resolve_dotted(
+            "cosmic_foundry.computation.time_integrators.ODEState"
+        )
+        state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
+        return runge_kutta(1).step_solve_relation_descriptor(state, 0.125)
 
     @classmethod
     def _linear_descriptor(
@@ -1486,6 +1521,71 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
         )
         schema.validate_descriptor(inconsistent.parameter_descriptor)
         assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
+
+
+class _TimeIntegratorSolveRelationClaim(Claim[None]):
+    """Claim: time-step solve relations are inferred from stage equations."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/time_integrator_solve_relation"
+
+    def check(self, _calibration: None) -> None:
+        schema = solve_relation_parameter_schema()
+        state_cls = _resolve_dotted(
+            "cosmic_foundry.computation.time_integrators.ODEState"
+        )
+        state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
+        explicit_owners = []
+        for integrator in self._single_order_integrators():
+            if self._stage_matrix_is_strictly_lower(getattr(integrator, "A_sym", ())):
+                descriptor = integrator.step_solve_relation_descriptor(state, 0.25)
+                schema.validate_descriptor(descriptor)
+                assert self._regions(schema)["linear_system"].contains(descriptor)
+                assert descriptor.coordinate(LinearSolverField.DIM_X).value == 2
+                assert descriptor.coordinate(LinearSolverField.DIM_Y).value == 2
+                assert (
+                    descriptor.coordinate(LinearSolverField.MAP_LINEARITY_DEFECT).value
+                    == 0.0
+                )
+                explicit_owners.append(type(integrator))
+            else:
+                with pytest.raises(ValueError):
+                    integrator.step_solve_relation_descriptor(state, 0.25)
+        assert explicit_owners
+
+    @staticmethod
+    def _single_order_integrators() -> tuple[Any, ...]:
+        instances = []
+        for cls in _TIME_INTEGRATORS:
+            parameters = tuple(inspect.signature(cls).parameters.values())
+            required = tuple(
+                parameter
+                for parameter in parameters
+                if parameter.default is inspect.Parameter.empty
+            )
+            if len(required) != 1:
+                continue
+            try:
+                instances.append(cls(1))
+            except (TypeError, ValueError):
+                continue
+        return tuple(instances)
+
+    @staticmethod
+    def _stage_matrix_is_strictly_lower(matrix: Any) -> bool:
+        return bool(matrix) and all(
+            entry == 0
+            for row_index, row in enumerate(matrix)
+            for column_index, entry in enumerate(row)
+            if column_index >= row_index
+        )
+
+    @staticmethod
+    def _regions(
+        schema: ParameterSpaceSchema,
+    ) -> dict[str, DerivedParameterRegion]:
+        return {region.name: region for region in schema.derived_regions}
 
 
 class _LinearSolverCoverageRegionClaim(Claim[None]):
@@ -2519,6 +2619,7 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
         _SolveRelationSchemaClaim._solve_descriptor(
             acceptance_relation="eigenpair_residual",
         ),
+        _SolveRelationSchemaClaim._explicit_time_step_descriptor(),
         _SolveRelationSchemaClaim._linear_descriptor(),
         _SolveRelationSchemaClaim._linear_descriptor(
             singular_value_lower_bound=0.0,
@@ -3471,6 +3572,7 @@ _ITERATIVE_SOLVERS = _discover_concrete_iterative_solvers(_MODULES)
 _MATRIX_FREE_ITERATIVE_SOLVERS = _discover_matrix_free_iterative_solvers(_MODULES)
 _FACTORIZATIONS = _discover_concrete_factorizations(_MODULES)
 _LEAST_SQUARES_SOLVERS = _discover_concrete_least_squares_solvers(_MODULES)
+_TIME_INTEGRATORS = _discover_concrete_time_integrators(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
 _TimeIntegrationRequest = _resolve_dotted(
@@ -3493,6 +3595,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "TimeIntegrationRegistry",
                 "TimeIntegrationRequest",
                 "select_time_integrator",
+                "time_integrator_step_solve_relation_descriptor",
                 "time_integration_capabilities",
             }
         ),
@@ -4222,6 +4325,7 @@ _CLAIMS: list[Claim[None]] = [
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
+    _TimeIntegratorSolveRelationClaim(),
     _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),
