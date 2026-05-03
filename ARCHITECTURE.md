@@ -790,10 +790,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Delete time-integration compatibility scaffolding that now only relays
-   descriptor predicates: collapse `TimeIntegrationRequest` away from the shared
-   string-structure request type, or delete the remaining structure fields from
-   time-integration calls that can be expressed as descriptor evidence.
+1. Decide whether the remaining non-map structure requirements in
+   time-integration selection (`state_domain`, `time_integrator`, `controller`)
+   are construction evidence, descriptor coordinates, or redundant conclusions
+   that should be deleted.
 2. Return to the solver/time-integrator schema unification for method-family
    selection: identify whether method-family coverage should be rendered from
    the same solve-relation atlas or from the map-structure descriptor projection

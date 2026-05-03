@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
+from cosmic_foundry.computation.algorithm_capabilities import AlgorithmRequest
 from cosmic_foundry.computation.time_integrators.capabilities import (
     TimeIntegrationCapability,
-    TimeIntegrationRequest,
     composite_map_descriptor,
     derivative_oracle_descriptor,
     hamiltonian_map_descriptor,
@@ -77,21 +77,21 @@ def _require(branch: _T | None, name: str, order: int) -> _T:
     return branch
 
 
-def _rhs_request(rhs: RHSProtocol, order: int) -> TimeIntegrationRequest:
+def _rhs_request(rhs: RHSProtocol, order: int) -> AlgorithmRequest:
     if isinstance(rhs, SemilinearRHSProtocol):
-        return TimeIntegrationRequest(
+        return AlgorithmRequest(
             requested_properties=frozenset({"one_step", "exponential", "runge_kutta"}),
             order=order,
             descriptor=semilinear_map_descriptor(),
         )
     if isinstance(rhs, HamiltonianRHSProtocol):
-        return TimeIntegrationRequest(
+        return AlgorithmRequest(
             requested_properties=frozenset({"one_step", "symplectic", "composition"}),
             order=order,
             descriptor=hamiltonian_map_descriptor(),
         )
     if isinstance(rhs, CompositeRHSProtocol):
-        return TimeIntegrationRequest(
+        return AlgorithmRequest(
             requested_properties=frozenset(
                 {"one_step", "operator_splitting", "composition"}
             ),
@@ -99,24 +99,24 @@ def _rhs_request(rhs: RHSProtocol, order: int) -> TimeIntegrationRequest:
             descriptor=composite_map_descriptor(len(rhs.components)),
         )
     if isinstance(rhs, SplitRHSProtocol):
-        return TimeIntegrationRequest(
+        return AlgorithmRequest(
             requested_properties=frozenset({"one_step", "imex", "runge_kutta"}),
             order=order,
             descriptor=split_map_descriptor(),
         )
     if isinstance(rhs, ReactionNetworkRHS):
-        return TimeIntegrationRequest(
+        return AlgorithmRequest(
             requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
             order=order,
             descriptor=derivative_oracle_descriptor(),
         )
     if isinstance(rhs, WithJacobianRHSProtocol):
-        return TimeIntegrationRequest(
+        return AlgorithmRequest(
             requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
             order=order,
             descriptor=derivative_oracle_descriptor(),
         )
-    return TimeIntegrationRequest(
+    return AlgorithmRequest(
         requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
         order=order,
         descriptor=rhs_evaluation_descriptor(),
