@@ -497,8 +497,11 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         assert auto.select(rhs).implementation == "ImplicitRungeKuttaIntegrator"
 
         reaction_descriptor = rhs.reaction_network_descriptor()
+        map_descriptor = rhs.map_structure_descriptor()
         reaction_schema = reaction_network_parameter_schema()
+        map_schema = map_structure_parameter_schema()
         reaction_schema.validate_descriptor(reaction_descriptor)
+        map_schema.validate_descriptor(map_descriptor)
         reaction_regions = {
             region.name: region for region in reaction_schema.derived_regions
         }
@@ -523,6 +526,25 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
             == 1
         )
+        assert (
+            map_descriptor.coordinate(
+                MapStructureField.CONSERVED_LINEAR_FORM_COUNT
+            ).value
+            == reaction_descriptor.coordinate(
+                ReactionNetworkField.CONSERVATION_LAW_COUNT
+            ).value
+        )
+        assert (
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"one_step"}),
+                    order=4,
+                    descriptor=map_descriptor,
+                )
+            ).implementation
+            == "RungeKuttaIntegrator"
+        )
+        _assert_owned_step_map_cell(map_descriptor, _ti.RungeKuttaIntegrator)
         assert (
             reaction_descriptor.coordinate(
                 ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT

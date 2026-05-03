@@ -29,6 +29,7 @@ import pkgutil
 import sys
 import types
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, NewType, TypeAlias
 
@@ -1136,6 +1137,15 @@ class _SolveRelationSchemaClaim(Claim[None]):
         map_structure_schema = map_structure_parameter_schema()
 
         self._assert_solve_relation_fields_are_domain_neutral()
+        self._assert_descriptor_axes_have_primitive_owners(
+            (
+                solve_schema,
+                linear_schema,
+                decomposition_schema,
+                reaction_network_schema,
+                map_structure_schema,
+            )
+        )
         assert solve_schema.descriptor_fields == set(SolveRelationField)
         assert {axis.field for axis in linear_schema.axes} == set(
             SolveRelationField
@@ -1342,6 +1352,22 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 | set(DecompositionField)
             )
         } & {field.value for field in ReactionNetworkField}
+
+    @staticmethod
+    def _assert_descriptor_axes_have_primitive_owners(
+        schemas: tuple[ParameterSpaceSchema, ...],
+    ) -> None:
+        field_enums = (
+            SolveRelationField,
+            LinearSolverField,
+            DecompositionField,
+            ReactionNetworkField,
+            MapStructureField,
+        )
+        fields = [field for enum_type in field_enums for field in enum_type]
+        assert len({field.value for field in fields}) == len(fields)
+        for schema in schemas:
+            assert all(isinstance(axis.field, Enum) for axis in schema.axes)
 
     @staticmethod
     def _assert_region_uses_primitive_axes(
