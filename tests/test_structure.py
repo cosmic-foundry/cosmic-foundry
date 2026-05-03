@@ -2802,8 +2802,8 @@ _LEAST_SQUARES_SOLVERS = _discover_concrete_least_squares_solvers(_MODULES)
 _TIME_INTEGRATORS = _discover_concrete_time_integrators(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
-_TimeIntegrationRequest = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.TimeIntegrationRequest"
+_AlgorithmRequest = _resolve_dotted(
+    "cosmic_foundry.computation.algorithm_capabilities.AlgorithmRequest"
 )
 _derivative_oracle_descriptor = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.capabilities."
@@ -2843,7 +2843,6 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "AlgorithmStructureContract",
                 "TimeIntegrationCapability",
                 "TimeIntegrationRegistry",
-                "TimeIntegrationRequest",
                 "select_time_integrator",
                 "time_integrator_step_linear_operator_descriptor",
                 "time_integrator_step_solve_relation_descriptor",
@@ -2954,7 +2953,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     request_selector="cosmic_foundry.computation.time_integrators.select_time_integrator",
     request_expectations=(
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
                 order=4,
                 descriptor=_rhs_evaluation_descriptor(),
@@ -2962,7 +2961,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "RungeKuttaIntegrator",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"one_step", "implicit"}),
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
@@ -2970,7 +2969,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "ImplicitRungeKuttaIntegrator",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"one_step", "imex"}),
                 order=3,
                 descriptor=_split_map_descriptor(),
@@ -2978,7 +2977,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "AdditiveRungeKuttaIntegrator",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"one_step", "exponential"}),
                 order=4,
                 descriptor=_semilinear_map_descriptor(),
@@ -2986,7 +2985,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "LawsonRungeKuttaIntegrator",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset(
                     {"one_step", "symplectic", "composition"}
                 ),
@@ -2996,7 +2995,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "SymplecticCompositionIntegrator",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset(
                     {"one_step", "operator_splitting", "composition"}
                 ),
@@ -3006,7 +3005,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "CompositionIntegrator",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 available_structure=frozenset({"state_domain"}),
                 requested_properties=frozenset(
                     {
@@ -3024,7 +3023,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "AdaptiveNordsieckController",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 available_structure=frozenset({"time_integrator", "controller"}),
                 requested_properties=frozenset({"advance", "adaptive_timestep"}),
                 order=3,
@@ -3033,7 +3032,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "IntegrationDriver",
         ),
         _CapabilityRequestExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"advance", "constraint_lifecycle"}),
                 order=2,
                 descriptor=_SolveRelationSchemaClaim._reaction_network_descriptor(),
@@ -3043,7 +3042,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     ),
     rejected_requests=(
         _CapabilityRejectionExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset(
                     {"one_step", "symplectic", "composition"}
                 ),
@@ -3052,7 +3051,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             )
         ),
         _CapabilityRejectionExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset(
                     {"one_step", "operator_splitting", "composition"}
                 ),
@@ -3061,19 +3060,19 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             )
         ),
         _CapabilityRejectionExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"advance", "constraint_lifecycle"}),
                 order=2,
             )
         ),
         _CapabilityRejectionExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 requested_properties=frozenset({"one_step", "implicit"}),
                 order=2,
             )
         ),
         _CapabilityRejectionExpectation(
-            _TimeIntegrationRequest(
+            _AlgorithmRequest(
                 available_structure=frozenset({"state_domain"}),
                 requested_properties=frozenset({"advance", "nordsieck"}),
                 order=2,
@@ -3118,7 +3117,6 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         "SymplecticCompositionIntegrator": "symplectic",
         "TimeIntegrationCapability": "algorithm_capabilities",
         "TimeIntegrationRegistry": "algorithm_capabilities",
-        "TimeIntegrationRequest": "algorithm_capabilities",
         "UnitTransferTransitionSystemProtocol": "reaction_network",
     },
     required_name_fragments={

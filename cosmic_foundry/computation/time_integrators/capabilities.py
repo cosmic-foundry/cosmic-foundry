@@ -52,7 +52,6 @@ from cosmic_foundry.computation.time_integrators.symplectic import (
 
 TimeIntegrationCapability = AlgorithmCapability
 TimeIntegrationRegistry = AlgorithmRegistry
-TimeIntegrationRequest = AlgorithmRequest
 
 
 def _contract(
@@ -352,7 +351,7 @@ def time_integration_capabilities() -> tuple[TimeIntegrationCapability, ...]:
 
 
 def select_time_integrator(
-    request: TimeIntegrationRequest,
+    request: AlgorithmRequest,
 ) -> TimeIntegrationCapability:
     """Select a time-integration implementation declaration by capability."""
     return TIME_INTEGRATION_REGISTRY.select(request)
@@ -370,6 +369,5 @@ __all__ = [
     "TimeIntegrationCapability",
     "time_integration_capabilities",
     "TimeIntegrationRegistry",
-    "TimeIntegrationRequest",
     "TIME_INTEGRATION_REGISTRY",
 ]

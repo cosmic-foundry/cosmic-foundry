@@ -17,7 +17,6 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     AlgorithmStructureContract,
     TimeIntegrationCapability,
     TimeIntegrationRegistry,
-    TimeIntegrationRequest,
     select_time_integrator,
     time_integration_capabilities,
 )
@@ -142,7 +141,6 @@ __all__ = [
     "TimeIntegrationCapability",
     "time_integration_capabilities",
     "TimeIntegrationRegistry",
-    "TimeIntegrationRequest",
     "elementary_weight",
     "gamma",
     "order",
