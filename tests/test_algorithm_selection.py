@@ -109,19 +109,6 @@ def _damped_oscillator_composite_rhs() -> _ti.CompositeRHS:
     )
 
 
-def _auto_selection_rhs_by_owner() -> dict[type, object]:
-    return {
-        _ti.RungeKuttaIntegrator: _ti.BlackBoxRHS(
-            lambda t, u: Tensor([-float(u[0]), float(u[0])], backend=u.backend)
-        ),
-        _ti.ImplicitRungeKuttaIntegrator: cases.scalar_decay_jacobian_rhs(),
-        _ti.AdditiveRungeKuttaIntegrator: cases.split_decay_rhs(),
-        _ti.LawsonRungeKuttaIntegrator: cases.semilinear_forcing_rhs(),
-        _ti.CompositionIntegrator: cases.oscillator_composite_rhs(),
-        _ti.SymplecticCompositionIntegrator: cases.harmonic_hamiltonian_rhs(),
-    }
-
-
 @dataclass(frozen=True)
 class _StepSelectionCase:
     name: str
@@ -134,6 +121,7 @@ class _StepSelectionCase:
     tolerance: float
     regions: tuple[CoverageRegion, ...]
     schema: Any
+    auto_selectable: bool = True
     postcheck: Callable[[_StepSelectionCase, _ti.ODEState], None] = (
         lambda case, state: None
     )
@@ -223,6 +211,7 @@ def _rhs_history_selection_case() -> _StepSelectionCase:
         tolerance=1.0e-8,
         regions=time_integration_step_map_regions(),
         schema=map_structure_parameter_schema(),
+        auto_selectable=False,
     )
 
 
@@ -243,6 +232,7 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
         tolerance=1.0e-8,
         regions=time_integration_step_map_regions(),
         schema=map_structure_parameter_schema(),
+        auto_selectable=False,
     )
 
 
@@ -602,9 +592,13 @@ class _AutoIntegratorSelectionClaim(Claim[Any]):
         return "correctness/auto_integrator_selects_capability_branches"
 
     def check(self, _calibration: Any) -> None:
-        auto = _ti.AutoIntegrator(4)
-        for owner, rhs in _auto_selection_rhs_by_owner().items():
-            assert auto.select(rhs).implementation == owner.__name__
+        for case in _step_selection_cases():
+            if not case.auto_selectable:
+                continue
+            auto = _ti.AutoIntegrator(case.order)
+            assert auto.select(case.rhs).implementation == case.owner.__name__
+            state = auto.step(case.rhs, case.state, 1.0e-2)
+            assert cases.err(state.u, case.exact, state.t) < case.tolerance
 
         with pytest.raises(ValueError, match="no algorithm"):
             _ti.AutoIntegrator(3).select(cases.harmonic_hamiltonian_rhs())
