@@ -788,13 +788,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Project affine implicit stage residuals into linear-operator descriptors,
-   including block operator cost and decomposition evidence, so linear solver
-   selection follows from the same composed solve-relation point.
-2. Decide whether repeated finite reaction-chain premises should be promoted
+1. Decide whether repeated finite reaction-chain premises should be promoted
    from test-local stoichiometric projections into a minimal conserved
    finite-state transformation object, without creating a public network API
    before a second grounded claim demands it.
+2. Replace the LU coverage partition's diagonal-dominance complement with
+   actual factorization feasibility evidence, so dense nonsymmetric full-rank
+   affine stage operators are not left uncovered for presentation reasons.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -839,6 +839,11 @@ Stage matrices with on-diagonal or upper-triangular coupling compose with RHS
 evidence: an affine RHS produces an affine stage residual over the stage
 unknowns, while an RHS without affine evidence remains a nonlinear-root solve
 relation with Jacobian-callback evidence.
+Affine implicit stage residuals also project into the shared linear-operator
+descriptor schema: the block matrix is assembled from the Butcher matrix and
+RHS linear operators, the right-hand side is derived from the affine offset,
+and the resulting descriptor carries the same rank, conditioning, cost, and
+consistency coordinates used by linear-solver selection.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
