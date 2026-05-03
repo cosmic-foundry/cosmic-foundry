@@ -28,6 +28,7 @@ from cosmic_foundry.computation.backends import (
     NumpyBackend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
 from tests.claims import (
     BatchedFailure,
     Claim,
@@ -950,16 +951,19 @@ class _ReactionChainPremise:
     def initial_state(self) -> Tensor:
         return Tensor([1.0] + [0.0] * len(self.transition_rates), backend=_TIME_BACKEND)
 
+    def transition_system(self) -> FiniteStateTransitionSystem:
+        return FiniteStateTransitionSystem.chain(len(self.species_mass_number))
+
     def conserved_linear_form(self) -> Tensor:
-        return Tensor([1.0] * len(self.species_mass_number), backend=_TIME_BACKEND)
+        return Tensor(
+            self.transition_system().conserved_total_form(),
+            backend=_TIME_BACKEND,
+        )
 
     def stoichiometry_matrix(self) -> Tensor:
-        n_species = len(self.species_mass_number)
-        rows = [[0.0 for _ in self.transition_rates] for _ in range(n_species)]
-        for transition, _rate in enumerate(self.transition_rates):
-            rows[transition][transition] = -1.0
-            rows[transition + 1][transition] = 1.0
-        return Tensor(rows, backend=_TIME_BACKEND)
+        return Tensor(
+            self.transition_system().stoichiometry_matrix(), backend=_TIME_BACKEND
+        )
 
     def build_rhs(self) -> _ti.ReactionNetworkRHS:
         rates = self.transition_rates
@@ -1152,10 +1156,10 @@ RateFn = Callable[[float], list[tuple[int, int, float]]]
 def _linear_network_rhs(rate_fn: RateFn, n: int) -> _ti.ReactionNetworkRHS:
     """Build a mass-conserving linear reaction network RHS from edge rates."""
     edges0 = rate_fn(0.0)
-    stoich = [[0.0 for _ in edges0] for _ in range(n)]
-    for j, (src, dst, _rate) in enumerate(edges0):
-        stoich[src][j] = -1.0
-        stoich[dst][j] = 1.0
+    transition_system = FiniteStateTransitionSystem(
+        n,
+        tuple((src, dst) for src, dst, _rate in edges0),
+    )
 
     def forward_rate(t: float, u: Tensor) -> Tensor:
         return Tensor(
@@ -1174,7 +1178,7 @@ def _linear_network_rhs(rate_fn: RateFn, n: int) -> _ti.ReactionNetworkRHS:
         return Tensor(mat, backend=u.backend)
 
     return _ti.ReactionNetworkRHS(
-        Tensor(stoich, backend=_TIME_BACKEND),
+        Tensor(transition_system.stoichiometry_matrix(), backend=_TIME_BACKEND),
         forward_rate,
         reverse_rate,
         Tensor([1.0] + [0.0] * (n - 1), backend=_TIME_BACKEND),

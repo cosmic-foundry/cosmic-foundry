@@ -38,6 +38,9 @@ from cosmic_foundry.theory.discrete.divergence_form_discretization import (
 )
 from cosmic_foundry.theory.discrete.edge_field import EdgeField
 from cosmic_foundry.theory.discrete.face_field import FaceField
+from cosmic_foundry.theory.discrete.finite_state_transition_system import (
+    FiniteStateTransitionSystem,
+)
 from cosmic_foundry.theory.discrete.mesh import Mesh
 from cosmic_foundry.theory.discrete.numerical_flux import NumericalFlux
 from cosmic_foundry.theory.discrete.point_field import PointField
@@ -63,6 +66,7 @@ __all__ = [
     "DivergenceFormDiscretization",
     "EdgeField",
     "FaceField",
+    "FiniteStateTransitionSystem",
     "InhomogeneousDirichletGhostCells",
     "Mesh",
     "NeumannGhostCells",
