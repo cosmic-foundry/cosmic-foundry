@@ -742,13 +742,14 @@ class ParameterSpaceSchema:
 
     name: str
     axes: tuple[ParameterAxis, ...]
+    auxiliary_fields: frozenset[DescriptorField] = frozenset()
     derived_regions: tuple[DerivedParameterRegion, ...] = ()
     invalid_cells: tuple[InvalidCellRule, ...] = ()
 
     @property
     def descriptor_fields(self) -> frozenset[DescriptorField]:
         """Descriptor fields declared by this schema."""
-        return frozenset(axis.field for axis in self.axes)
+        return frozenset(axis.field for axis in self.axes) | self.auxiliary_fields
 
     def validate_schema(self) -> None:
         """Raise if the schema declaration is internally inconsistent."""
@@ -759,6 +760,15 @@ class ParameterSpaceSchema:
         )
         if duplicates:
             raise ValueError(f"duplicate descriptor fields: {duplicates}")
+        axis_fields = frozenset(fields)
+        duplicate_auxiliary = sorted(
+            axis_fields & self.auxiliary_fields,
+            key=_field_label,
+        )
+        if duplicate_auxiliary:
+            raise ValueError(
+                "auxiliary descriptor fields duplicate axes: " f"{duplicate_auxiliary}"
+            )
         empty_axes = [axis.label for axis in self.axes if not axis.bins]
         if empty_axes:
             raise ValueError(f"axes without bins or intervals: {empty_axes}")
@@ -1217,12 +1227,13 @@ def solve_relation_parameter_schema() -> ParameterSpaceSchema:
 
 
 def linear_solver_parameter_schema() -> ParameterSpaceSchema:
-    """Return the solve-relation schema extended with linear-operator axes."""
+    """Return the solve-relation schema extended with operator/decomposition axes."""
     field = LinearSolverField
     solve_field = SolveRelationField
     return ParameterSpaceSchema(
         name="linear_solver",
         axes=_solve_relation_axes() + _linear_operator_axes(),
+        auxiliary_fields=frozenset(DecompositionField),
         derived_regions=_solve_relation_regions()
         + (
             DerivedParameterRegion(
@@ -1316,76 +1327,82 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
 
 def decomposition_parameter_schema() -> ParameterSpaceSchema:
     """Return the dense-matrix decomposition parameter-space schema."""
-    decomposition_field = DecompositionField
     return ParameterSpaceSchema(
         name="decomposition",
-        axes=(
-            _positive_axis(decomposition_field.MATRIX_ROWS, units="rows"),
-            _positive_axis(decomposition_field.MATRIX_COLUMNS, units="columns"),
-            _positive_axis(
-                decomposition_field.FACTORIZATION_WORK_BUDGET_FMAS,
-                units="fused multiply-adds",
-            ),
-            _positive_axis(
-                decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES, units="bytes"
-            ),
-            _axis(
-                decomposition_field.SINGULAR_VALUE_LOWER_BOUND,
-                (
-                    NumericInterval("zero_or_uncertified", upper=0.0),
-                    NumericInterval("positive", lower=0.0, include_lower=False),
-                ),
-            ),
-            _axis(
-                decomposition_field.CONDITION_ESTIMATE,
-                (
-                    NumericInterval("well_conditioned", lower=1.0, upper=1.0e8),
-                    NumericInterval(
-                        "ill_conditioned", lower=1.0e8, include_lower=False
-                    ),
-                ),
-            ),
-            _nonnegative_axis(decomposition_field.MATRIX_RANK_ESTIMATE),
-            _nonnegative_axis(decomposition_field.MATRIX_NULLITY_ESTIMATE),
+        axes=_decomposition_axes(),
+        derived_regions=_decomposition_regions(),
+    )
+
+
+def _decomposition_axes() -> tuple[ParameterAxis, ...]:
+    decomposition_field = DecompositionField
+    return (
+        _positive_axis(decomposition_field.MATRIX_ROWS, units="rows"),
+        _positive_axis(decomposition_field.MATRIX_COLUMNS, units="columns"),
+        _positive_axis(
+            decomposition_field.FACTORIZATION_WORK_BUDGET_FMAS,
+            units="fused multiply-adds",
         ),
-        derived_regions=(
-            DerivedParameterRegion(
-                "square",
-                (
-                    (
-                        AffineComparisonPredicate(
-                            {
-                                decomposition_field.MATRIX_ROWS: 1.0,
-                                decomposition_field.MATRIX_COLUMNS: -1.0,
-                            },
-                            "==",
-                            0.0,
-                        ),
-                    ),
-                ),
+        _positive_axis(
+            decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES, units="bytes"
+        ),
+        _axis(
+            decomposition_field.SINGULAR_VALUE_LOWER_BOUND,
+            (
+                NumericInterval("zero_or_uncertified", upper=0.0),
+                NumericInterval("positive", lower=0.0, include_lower=False),
             ),
-            DerivedParameterRegion(
-                "full_rank",
-                (
-                    (
-                        ComparisonPredicate(
-                            decomposition_field.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0
-                        ),
-                    ),
-                ),
+        ),
+        _axis(
+            decomposition_field.CONDITION_ESTIMATE,
+            (
+                NumericInterval("well_conditioned", lower=1.0, upper=1.0e8),
+                NumericInterval("ill_conditioned", lower=1.0e8, include_lower=False),
             ),
-            DerivedParameterRegion(
-                "rank_deficient",
+        ),
+        _nonnegative_axis(decomposition_field.MATRIX_RANK_ESTIMATE),
+        _nonnegative_axis(decomposition_field.MATRIX_NULLITY_ESTIMATE),
+    )
+
+
+def _decomposition_regions() -> tuple[DerivedParameterRegion, ...]:
+    decomposition_field = DecompositionField
+    return (
+        DerivedParameterRegion(
+            "square",
+            (
                 (
-                    (
-                        ComparisonPredicate(
-                            decomposition_field.MATRIX_NULLITY_ESTIMATE, ">", 0
-                        ),
+                    AffineComparisonPredicate(
+                        {
+                            decomposition_field.MATRIX_ROWS: 1.0,
+                            decomposition_field.MATRIX_COLUMNS: -1.0,
+                        },
+                        "==",
+                        0.0,
                     ),
                 ),
             ),
         ),
-        invalid_cells=(),
+        DerivedParameterRegion(
+            "full_rank",
+            (
+                (
+                    ComparisonPredicate(
+                        decomposition_field.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0
+                    ),
+                ),
+            ),
+        ),
+        DerivedParameterRegion(
+            "rank_deficient",
+            (
+                (
+                    ComparisonPredicate(
+                        decomposition_field.MATRIX_NULLITY_ESTIMATE, ">", 0
+                    ),
+                ),
+            ),
+        ),
     )
 
 
@@ -1606,6 +1623,26 @@ def linear_operator_descriptor_from_assembled_operator(
             ),
             LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
                 rhs_consistency_defect
+            ),
+            DecompositionField.MATRIX_ROWS: DescriptorCoordinate(n),
+            DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(n),
+            DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
+                work_budget_fmas
+            ),
+            DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
+                DescriptorCoordinate(memory_budget_bytes)
+            ),
+            DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
+                singular_value_lower_bound, evidence="lower_bound"
+            ),
+            DecompositionField.CONDITION_ESTIMATE: DescriptorCoordinate(
+                condition_estimate, evidence="estimate"
+            ),
+            DecompositionField.MATRIX_RANK_ESTIMATE: DescriptorCoordinate(
+                rank_estimate, evidence="estimate"
+            ),
+            DecompositionField.MATRIX_NULLITY_ESTIMATE: DescriptorCoordinate(
+                nullity_estimate, evidence="estimate"
             ),
         }
     )

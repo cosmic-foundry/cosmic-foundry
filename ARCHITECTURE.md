@@ -788,13 +788,11 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Decide whether `ReactionNetworkRHS` should accept a finite transition system
-   directly, or whether that would prematurely turn a theory premise into a
-   public network API before the next grounded physics claim.
-2. Decide whether direct-solver selection should consume a composed descriptor
-   that contains both solve-relation and decomposition projections, instead of
-   mapping decomposition feasibility back into linear-solver coordinates inside
-   the coverage aggregator.
+1. Add the next grounded reaction-network claim that exercises the
+   `FiniteStateTransitionSystem` premise through `ReactionNetworkRHS`.
+2. Use that claim to decide whether finite transition systems should remain
+   theory premises projected into computation, or become the public construction
+   surface for reaction-network RHS objects.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -855,8 +853,11 @@ Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 plus linear-operator coordinates.
 Decomposition primitives expose structure through class-owned solve
 certificates.  Direct dense solver wrappers name their decomposition type; the
-coverage aggregator derives the solver predicates from that decomposition
-certificate instead of maintaining a parallel coverage claim on the wrapper.
+coverage aggregator composes the decomposition certificate directly into the
+solver descriptor rather than translating decomposition coordinates into
+linear-operator coordinates.  Decomposition fields are auxiliary coordinates of
+the linear-solver schema: they participate in selection predicates and
+descriptor validation without multiplying the enumerated atlas axis product.
 Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not

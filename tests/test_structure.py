@@ -1076,8 +1076,12 @@ class _SolveRelationSchemaClaim(Claim[None]):
 
         self._assert_solve_relation_fields_are_domain_neutral()
         assert solve_schema.descriptor_fields == set(SolveRelationField)
-        assert linear_schema.descriptor_fields == set(SolveRelationField) | set(
-            LinearSolverField
+        assert {axis.field for axis in linear_schema.axes} == set(
+            SolveRelationField
+        ) | set(LinearSolverField)
+        assert linear_schema.auxiliary_fields == set(DecompositionField)
+        assert linear_schema.descriptor_fields == (
+            set(SolveRelationField) | set(LinearSolverField) | set(DecompositionField)
         )
         for schema in (solve_schema, linear_schema, decomposition_schema):
             schema.validate_schema()
@@ -1692,6 +1696,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
 
     def check(self, _calibration: None) -> None:
         self._assert_no_local_disjointness_algebra()
+        self._assert_no_descriptor_field_translation_tables()
         self._assert_no_legacy_coverage_region_names()
         self._assert_coverage_region_identity_is_owner_class()
         self._assert_no_coverage_region_priority_model()
@@ -1701,7 +1706,8 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         self._assert_no_linear_solver_field_text_identity()
         schema = linear_solver_parameter_schema()
         assert (
-            set(SolveRelationField) | set(LinearSolverField) == schema.descriptor_fields
+            set(SolveRelationField) | set(LinearSolverField) | set(DecompositionField)
+            == schema.descriptor_fields
         )
         regions = linear_solver_coverage_regions()
         self._assert_final_solve_coverage_owners_are_linear_solvers(regions)
@@ -1778,30 +1784,10 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             assert "linear_solve_certificate" not in decomposition_type.__dict__
             certificate = decomposition_type.factorization_feasibility_certificate
             assert certificate
-            decomposition_fields = {
-                DecompositionField.CONDITION_ESTIMATE: (
-                    LinearSolverField.CONDITION_ESTIMATE
-                ),
-                DecompositionField.MATRIX_NULLITY_ESTIMATE: (
-                    LinearSolverField.NULLITY_ESTIMATE
-                ),
-                DecompositionField.MATRIX_RANK_ESTIMATE: (
-                    LinearSolverField.RANK_ESTIMATE
-                ),
-                DecompositionField.SINGULAR_VALUE_LOWER_BOUND: (
-                    LinearSolverField.SINGULAR_VALUE_LOWER_BOUND
-                ),
-            }
             for predicate in certificate:
                 assert predicate.referenced_fields <= set(DecompositionField)
                 assert isinstance(predicate, ComparisonPredicate)
-                mapped = ComparisonPredicate(
-                    decomposition_fields[predicate.field],
-                    predicate.operator,
-                    predicate.value,
-                    predicate.accepted_evidence,
-                )
-                assert mapped in region.predicates
+                assert predicate in region.predicates
 
     @staticmethod
     def _assert_stationary_iterations_do_not_own_final_solve_regions(
@@ -1894,6 +1880,42 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
         }
         assert not forbidden & local_helpers
+
+    @staticmethod
+    def _assert_no_descriptor_field_translation_tables() -> None:
+        module_name = "cosmic_foundry.computation.solvers.capabilities"
+        module = importlib.import_module(module_name)
+        source = _PACKAGE_ROOT / "computation" / "solvers" / "capabilities.py"
+        tree = ast.parse(source.read_text())
+        descriptor_field_types = (
+            SolveRelationField,
+            LinearSolverField,
+            DecompositionField,
+        )
+        translations = []
+        for node in tree.body:
+            if not isinstance(node, ast.Assign | ast.AnnAssign):
+                continue
+            if not isinstance(node.value, ast.Dict):
+                continue
+            evaluated = eval(
+                compile(ast.Expression(node.value), str(source), "eval"),
+                module.__dict__,
+            )
+            if (
+                isinstance(evaluated, dict)
+                and evaluated
+                and all(
+                    isinstance(key, descriptor_field_types)
+                    and isinstance(value, descriptor_field_types)
+                    for key, value in evaluated.items()
+                )
+            ):
+                translations.append(ast.unparse(node.value))
+        assert not translations, (
+            "solver coverage must compose descriptor projections instead of "
+            f"translating descriptor fields through dict literals: {translations}"
+        )
 
     @staticmethod
     def _assert_no_legacy_coverage_region_names() -> None:
@@ -2192,10 +2214,11 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         schema: ParameterSpaceSchema,
         region: CoverageRegion,
     ) -> ParameterDescriptor:
-        fields = {axis.field: axis for axis in schema.axes}
+        fields = cls._descriptor_axes(schema)
         coordinates = {
             field: DescriptorCoordinate(cls._axis_witness(axis))
             for field, axis in fields.items()
+            if field in {schema_axis.field for schema_axis in schema.axes}
         }
         for predicate in region.predicates:
             if isinstance(predicate, MembershipPredicate):
@@ -2218,6 +2241,22 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         descriptor = ParameterDescriptor(coordinates)
         assert region.contains(descriptor)
         return descriptor
+
+    @staticmethod
+    def _descriptor_axes(
+        schema: ParameterSpaceSchema,
+    ) -> dict[DescriptorField, ParameterAxis]:
+        auxiliary_schemas = (
+            solve_relation_parameter_schema(),
+            linear_solver_parameter_schema(),
+            decomposition_parameter_schema(),
+        )
+        axes = {axis.field: axis for axis in schema.axes}
+        for auxiliary_schema in auxiliary_schemas:
+            for axis in auxiliary_schema.axes:
+                if axis.field in schema.descriptor_fields:
+                    axes.setdefault(axis.field, axis)
+        return axes
 
     @classmethod
     def _axis_witness(cls, axis: ParameterAxis) -> Any:
