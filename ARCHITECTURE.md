@@ -788,9 +788,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Express time-integrator stage equations, Newton solves, and decomposition
-   certificates as composed transformation evidence in the shared solve-relation
-   schema, deleting any projection-specific fields that stop being primitive.
+1. Project affine implicit stage residuals into linear-operator descriptors,
+   including block operator cost and decomposition evidence, so linear solver
+   selection follows from the same composed solve-relation point.
 2. Decide whether repeated finite reaction-chain premises should be promoted
    from test-local stoichiometric projections into a minimal conserved
    finite-state transformation object, without creating a public network API
@@ -830,18 +830,15 @@ Rectangular least-squares ownership is exposed through
 `LeastSquaresSolver.solve(A, b)` and backed by `SVDFactorization`; it is not
 claimed through square final-solve coverage.
 Explicit Runge-Kutta time steps expose their primitive solve relation through
-`TimeIntegrator.step_solve_relation_descriptor(state, dt)`: the descriptor is
-admitted only when the stage matrix is strictly lower triangular, making the
-next-state residual `R(x) = x - Phi_h(t_n, u_n) = 0` affine in the unknown
-next state.
-Implicit Runge-Kutta stage equations use the same descriptor entry point:
-stage matrices with on-diagonal or upper-triangular coupling map to nonlinear
-root solve relations over the stage unknowns, with Jacobian-callback evidence
-derived from the method's stage-equation premise.
-The synthetic reaction-chain grounding claim shows the next gap precisely: a
-finite stoichiometric chain can provide an affine RHS and an exact Jacobian,
-while the implicit stage descriptor still reports unavailable linearity evidence
-because stage-equation evidence is not yet composed from RHS evidence.
+`TimeIntegrator.step_solve_relation_descriptor(rhs, state, dt)`: the descriptor
+is admitted only when the stage matrix is strictly lower triangular, making the
+next-state residual `R(x) = x - Phi_h(t_n, u_n) = 0` affine in the unknown next
+state.
+Implicit Runge-Kutta stage equations use the same descriptor entry point.
+Stage matrices with on-diagonal or upper-triangular coupling compose with RHS
+evidence: an affine RHS produces an affine stage residual over the stage
+unknowns, while an RHS without affine evidence remains a nonlinear-root solve
+relation with Jacobian-callback evidence.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

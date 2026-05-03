@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     DescriptorCoordinate,
@@ -13,8 +13,18 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.tensor import Tensor
 
 
+@runtime_checkable
+class AffineRHSProtocol(Protocol):
+    """ODE RHS that exposes the exact linear operator of an affine map."""
+
+    def linear_operator(self, t: float, u: Tensor) -> Tensor:
+        """Return the matrix A in ``f(t, u) = A u + b``."""
+        ...
+
+
 def time_integrator_step_solve_relation_descriptor(
     integrator: Any,
+    rhs: Any,
     state: Any,
     dt: float,
     *,
@@ -28,9 +38,10 @@ def time_integrator_step_solve_relation_descriptor(
 
     Strictly explicit stage matrices induce an affine next-state residual
     ``R(x) = x - Phi_h(t_n, u_n)``.  Stage matrices with on-diagonal or
-    upper-triangular entries induce implicit stage equations; without a
-    symbolic linearity certificate for the RHS, those stage equations are
-    nonlinear-root solve relations with Jacobian-callback evidence.
+    upper-triangular entries induce implicit stage equations.  When the RHS
+    exposes an exact affine operator, those stage equations compose to an
+    affine residual; otherwise the descriptor records unknown linearity with
+    Jacobian-callback evidence.
     """
     if dt <= 0.0:
         raise ValueError("time-step solve relations require dt > 0")
@@ -56,13 +67,14 @@ def time_integrator_step_solve_relation_descriptor(
         )
     if not _stage_matrix_has_implicit_coupling(stage_matrix):
         raise ValueError("time-step solve relation has no stage-equation premise")
+    affine_rhs = isinstance(rhs, AffineRHSProtocol)
     return _descriptor(
         state.u,
         variable_count=state.u.shape[0] * len(stage_matrix),
-        map_linearity_defect=None,
-        map_linearity_evidence="unavailable",
-        matrix_representation_available=False,
-        derivative_oracle_kind="jacobian_callback",
+        map_linearity_defect=0.0 if affine_rhs else None,
+        map_linearity_evidence="exact" if affine_rhs else "unavailable",
+        matrix_representation_available=affine_rhs,
+        derivative_oracle_kind="matrix" if affine_rhs else "jacobian_callback",
         requested_residual_tolerance=requested_residual_tolerance,
         requested_solution_tolerance=requested_solution_tolerance,
         work_budget_fmas=work_budget_fmas,
@@ -149,4 +161,4 @@ def _backend_kind(tensor: Tensor) -> str:
     return "unknown"
 
 
-__all__ = ["time_integrator_step_solve_relation_descriptor"]
+__all__ = ["AffineRHSProtocol", "time_integrator_step_solve_relation_descriptor"]

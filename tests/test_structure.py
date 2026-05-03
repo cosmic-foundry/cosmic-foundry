@@ -154,6 +154,20 @@ class _MatrixLinearOperator:
         )
 
 
+class _AffineTestRHS:
+    """Tiny affine RHS used by solve-relation descriptor structure claims."""
+
+    def __call__(self, t: float, u: Tensor) -> Tensor:
+        return self.linear_operator(t, u) @ u
+
+    def linear_operator(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[0.0, 1.0], [-1.0, 0.0]], backend=u.backend)
+
+
+def _unknown_test_rhs(_t: float, u: Tensor) -> Tensor:
+    return u
+
+
 class _DeclaredLinearOperator:
     """LinearOperator returning declared Tensors; used by _MaterializationGateClaim.
 
@@ -1341,7 +1355,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
             "cosmic_foundry.computation.time_integrators.ODEState"
         )
         state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
-        return runge_kutta(1).step_solve_relation_descriptor(state, 0.125)
+        return runge_kutta(1).step_solve_relation_descriptor(
+            _unknown_test_rhs, state, 0.125
+        )
 
     @staticmethod
     def _implicit_stage_descriptor() -> ParameterDescriptor:
@@ -1352,7 +1368,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
             "cosmic_foundry.computation.time_integrators.ODEState"
         )
         state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
-        return implicit_runge_kutta(1).step_solve_relation_descriptor(state, 0.125)
+        return implicit_runge_kutta(1).step_solve_relation_descriptor(
+            _unknown_test_rhs, state, 0.125
+        )
 
     @classmethod
     def _linear_descriptor(
@@ -1563,7 +1581,9 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
             stage_matrix = getattr(integrator, "A_sym", ())
             if not stage_matrix:
                 continue
-            descriptor = integrator.step_solve_relation_descriptor(state, 0.25)
+            descriptor = integrator.step_solve_relation_descriptor(
+                _unknown_test_rhs, state, 0.25
+            )
             schema.validate_descriptor(descriptor)
             if self._stage_matrix_is_strictly_lower(stage_matrix):
                 assert self._regions(schema)["linear_system"].contains(descriptor)
@@ -1595,6 +1615,28 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                     == "jacobian_callback"
                 )
                 implicit_owners.append(type(integrator))
+                affine_descriptor = integrator.step_solve_relation_descriptor(
+                    _AffineTestRHS(), state, 0.25
+                )
+                schema.validate_descriptor(affine_descriptor)
+                assert self._regions(schema)["linear_system"].contains(
+                    affine_descriptor
+                )
+                assert affine_descriptor.coordinate(SolveRelationField.DIM_X).value == (
+                    2 * len(stage_matrix)
+                )
+                assert (
+                    affine_descriptor.coordinate(
+                        SolveRelationField.MAP_LINEARITY_DEFECT
+                    ).value
+                    == 0.0
+                )
+                assert (
+                    affine_descriptor.coordinate(
+                        SolveRelationField.DERIVATIVE_ORACLE_KIND
+                    ).value
+                    == "matrix"
+                )
         assert explicit_owners
         assert implicit_owners
 
@@ -3711,6 +3753,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         "rhs": frozenset(
             {
+                "AffineRHSProtocol",
                 "BlackBoxRHS",
                 "CompositeRHS",
                 "CompositeRHSProtocol",

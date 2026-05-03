@@ -371,16 +371,18 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         state = _ti.ODEState(0.0, chain.initial_state())
         integrator = _ti.ImplicitRungeKuttaIntegrator(2)
 
-        descriptor = integrator.step_solve_relation_descriptor(state, 2.0e-3)
+        descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
         schema = solve_relation_parameter_schema()
         schema.validate_descriptor(descriptor)
         regions = {region.name: region for region in schema.derived_regions}
 
-        assert regions["nonlinear_root"].contains(descriptor)
+        assert regions["linear_system"].contains(descriptor)
         assert descriptor.coordinate(SolveRelationField.DIM_X).value == (
             state.u.shape[0] * len(integrator.A_sym)
         )
-        assert not descriptor.coordinate(SolveRelationField.MAP_LINEARITY_DEFECT).known
+        assert (
+            descriptor.coordinate(SolveRelationField.MAP_LINEARITY_DEFECT).value == 0.0
+        )
 
         invariant = chain.conserved_linear_form()
         assert _linear_form_annihilates_stoichiometry(
@@ -900,6 +902,17 @@ class _PerformanceClaim(Claim[ExecutionPlan]):
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
 
 
+class _LinearReactionNetworkRHS(_ti.ReactionNetworkRHS):
+    """Test-local reaction network whose RHS is exactly affine."""
+
+    def __init__(self, *args: Any, linear_operator: Callable[[float, Tensor], Tensor]):
+        super().__init__(*args, jac=linear_operator)
+        self._linear_operator = linear_operator
+
+    def linear_operator(self, t: float, u: Tensor) -> Tensor:
+        return self._linear_operator(t, u)
+
+
 @dataclass(frozen=True)
 class _ReactionChainPremise:
     """Test-local nuclear-chain premise projected to a stoichiometric ODE."""
@@ -943,19 +956,19 @@ class _ReactionChainPremise:
         def reverse_rate(t: float, u: Tensor) -> Tensor:
             return Tensor([0.0 for _ in rates], backend=u.backend)
 
-        def jac(t: float, u: Tensor) -> Tensor:
+        def linear_operator(t: float, u: Tensor) -> Tensor:
             rows = [[0.0 for _ in range(n_species)] for _ in range(n_species)]
             for transition, rate in enumerate(rates):
                 rows[transition][transition] -= rate
                 rows[transition + 1][transition] += rate
             return Tensor(rows, backend=u.backend)
 
-        return _ti.ReactionNetworkRHS(
+        return _LinearReactionNetworkRHS(
             stoichiometry,
             forward_rate,
             reverse_rate,
             self.initial_state(),
-            jac=jac,
+            linear_operator=linear_operator,
         )
 
 

@@ -79,6 +79,7 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.solve_relation import (
+    AffineRHSProtocol,
     time_integrator_step_solve_relation_descriptor,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
@@ -104,6 +105,7 @@ from cosmic_foundry.computation.time_integrators.variable_order import (
 
 __all__ = [
     "AlgorithmStructureContract",
+    "AffineRHSProtocol",
     "Tree",
     "AutoIntegrator",
     "BlackBoxRHS",
