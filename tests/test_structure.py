@@ -51,6 +51,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    ReactionNetworkField,
     SolveRelationField,
     coverage_regions_are_disjoint,
     decomposition_descriptor_from_linear_operator_descriptor,
@@ -58,6 +59,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
     predicate_sets_are_disjoint,
+    reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
@@ -79,7 +81,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = (
-    SolveRelationField | LinearSolverField | DecompositionField
+    SolveRelationField | LinearSolverField | DecompositionField | ReactionNetworkField
 )
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
@@ -1073,6 +1075,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         solve_schema = solve_relation_parameter_schema()
         linear_schema = linear_solver_parameter_schema()
         decomposition_schema = decomposition_parameter_schema()
+        reaction_network_schema = reaction_network_parameter_schema()
 
         self._assert_solve_relation_fields_are_domain_neutral()
         assert solve_schema.descriptor_fields == set(SolveRelationField)
@@ -1083,7 +1086,13 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert linear_schema.descriptor_fields == (
             set(SolveRelationField) | set(LinearSolverField) | set(DecompositionField)
         )
-        for schema in (solve_schema, linear_schema, decomposition_schema):
+        assert reaction_network_schema.descriptor_fields == set(ReactionNetworkField)
+        for schema in (
+            solve_schema,
+            linear_schema,
+            decomposition_schema,
+            reaction_network_schema,
+        ):
             schema.validate_schema()
             assert "problem_kind" not in schema.descriptor_fields
 
@@ -1208,6 +1217,21 @@ class _SolveRelationSchemaClaim(Claim[None]):
         decomposition_schema.validate_descriptor(rectangular_decomp)
         assert decomposition_schema.cell_status(rectangular_decomp, ()) == "uncovered"
 
+        reaction_regions = self._regions(reaction_network_schema)
+        reaction_descriptor = self._reaction_network_descriptor()
+        reaction_network_schema.validate_descriptor(reaction_descriptor)
+        assert reaction_regions["conserved_network"].contains(reaction_descriptor)
+        assert reaction_regions["fully_constrained_equilibrium"].contains(
+            reaction_descriptor
+        )
+        assert (
+            reaction_network_schema.cell_status(
+                self._reaction_network_descriptor(stoichiometry_rank=5),
+                (),
+            )
+            == "invalid"
+        )
+
         with pytest.raises(ValueError):
             ParameterSpaceSchema(
                 name="bad_region",
@@ -1236,6 +1260,14 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert not {
             field.value for field in set(SolveRelationField) | set(LinearSolverField)
         } & {field.value for field in DecompositionField}
+        assert not {
+            field.value
+            for field in (
+                set(SolveRelationField)
+                | set(LinearSolverField)
+                | set(DecompositionField)
+            )
+        } & {field.value for field in ReactionNetworkField}
 
     @staticmethod
     def _assert_region_uses_primitive_axes(
@@ -1443,6 +1475,30 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 ),
                 DecompositionField.MATRIX_NULLITY_ESTIMATE: DescriptorCoordinate(
                     nullity_estimate
+                ),
+            }
+        )
+
+    @staticmethod
+    def _reaction_network_descriptor(
+        *,
+        species_count: int = 4,
+        reaction_count: int = 3,
+        stoichiometry_rank: int = 3,
+        conservation_law_count: int = 1,
+        equilibrium_constraint_count: int = 3,
+    ) -> ParameterDescriptor:
+        field = ReactionNetworkField
+        return ParameterDescriptor(
+            {
+                field.SPECIES_COUNT: DescriptorCoordinate(species_count),
+                field.REACTION_COUNT: DescriptorCoordinate(reaction_count),
+                field.STOICHIOMETRY_RANK: DescriptorCoordinate(stoichiometry_rank),
+                field.CONSERVATION_LAW_COUNT: DescriptorCoordinate(
+                    conservation_law_count
+                ),
+                field.EQUILIBRIUM_CONSTRAINT_COUNT: DescriptorCoordinate(
+                    equilibrium_constraint_count
                 ),
             }
         )

@@ -790,13 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Use the public finite-unit-transfer projection to decide which
-   reaction-network descriptor coordinates are premises of the RHS and which are
-   integrator or selector evidence.
-2. Return to the solver/time-integrator schema unification: identify the
+1. Return to the solver/time-integrator schema unification: identify the
    smallest descriptor coordinates needed for time integrators to participate in
    the shared solve-relation atlas without adding a parallel "time integrator"
    coverage vocabulary.
+2. Replace `TimeIntegrationRequest` string structures such as
+   `reaction_network_rhs` and `conservation_constraints` with predicates over
+   RHS, solve-relation, and reaction-network descriptors.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -856,6 +856,12 @@ and a stoichiometry matrix.  The grounded projection evidence includes both a
 chain and a branched finite transition system, and repeated test fixtures route
 through the same projection instead of maintaining duplicate reaction-network
 builders.
+Reaction-network RHS premises now have their own descriptor schema:
+species count, reaction count, stoichiometry rank, conservation-law count, and
+independent equilibrium-constraint count are intrinsic to the RHS.  State-domain
+checks, time-step solve relations, and integrator/controller selection remain
+separate downstream evidence.  The schema enforces rank/nullity consistency and
+is included in atlas generation as a discovered parameter space.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

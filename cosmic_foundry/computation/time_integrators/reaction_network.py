@@ -7,6 +7,11 @@ from typing import Protocol
 
 import numpy as np
 
+from cosmic_foundry.computation.algorithm_capabilities import (
+    DescriptorCoordinate,
+    ParameterDescriptor,
+    ReactionNetworkField,
+)
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, einsum
 from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
@@ -305,6 +310,24 @@ class ReactionNetworkRHS:
     def stoichiometry_matrix(self) -> Tensor:
         """S, shape (n_species, n_reactions)."""
         return self._S
+
+    def reaction_network_descriptor(self) -> ParameterDescriptor:
+        """Return descriptor coordinates intrinsic to this stoichiometric RHS."""
+        n_species, n_reactions = self._S.shape
+        field = ReactionNetworkField
+        return ParameterDescriptor(
+            {
+                field.SPECIES_COUNT: DescriptorCoordinate(n_species),
+                field.REACTION_COUNT: DescriptorCoordinate(n_reactions),
+                field.STOICHIOMETRY_RANK: DescriptorCoordinate(
+                    n_species - self.n_conserved
+                ),
+                field.CONSERVATION_LAW_COUNT: DescriptorCoordinate(self.n_conserved),
+                field.EQUILIBRIUM_CONSTRAINT_COUNT: DescriptorCoordinate(
+                    self.constraint_basis.shape[0]
+                ),
+            }
+        )
 
     @property
     def state_domain(self) -> NonnegativeStateDomain:
