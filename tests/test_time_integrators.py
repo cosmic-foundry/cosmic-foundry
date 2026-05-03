@@ -36,6 +36,7 @@ from cosmic_foundry.computation.backends import (
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.capabilities import (
     composite_map_descriptor,
+    composite_map_descriptor_from_rhs,
     derivative_oracle_descriptor,
     hamiltonian_map_descriptor,
     nordsieck_history_descriptor,
@@ -222,10 +223,12 @@ def _harmonic_hamiltonian_rhs() -> _ti.HamiltonianRHS:
 def _oscillator_composite_rhs() -> _ti.CompositeRHS:
     return _ti.CompositeRHS(
         [
-            _ti.BlackBoxRHS(
+            _ti.SymplecticFlowRHS(
                 lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend)
             ),
-            _ti.BlackBoxRHS(lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend)),
+            _ti.SymplecticFlowRHS(
+                lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend)
+            ),
         ]
     )
 
@@ -789,7 +792,7 @@ class _HamiltonianStepMapSelectionClaim(Claim[Any]):
 
 
 class _CompositionStepMapSelectionClaim(Claim[Any]):
-    """Grounded claim for composition ownership as component-count evidence."""
+    """Grounded claim for composition ownership as component-flow evidence."""
 
     @property
     def description(self) -> str:
@@ -803,7 +806,7 @@ class _CompositionStepMapSelectionClaim(Claim[Any]):
         )
         state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
         dt = 1.0e-2
-        descriptor = composite_map_descriptor(len(rhs.components))
+        descriptor = composite_map_descriptor_from_rhs(rhs)
 
         selected = _ti.select_time_integrator(
             AlgorithmRequest(
@@ -820,7 +823,11 @@ class _CompositionStepMapSelectionClaim(Claim[Any]):
         assert not descriptor.coordinate(
             MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE
         ).value
-        assert not descriptor.coordinate(
+        assert descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
+        generic_descriptor = composite_map_descriptor(len(rhs.components))
+        assert not generic_descriptor.coordinate(
             MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
         ).value
         with pytest.raises(ValueError):
@@ -852,12 +859,10 @@ class _OscillatorInvariantComparisonClaim(Claim[Any]):
         hamiltonian_integrator = _ti.SymplecticCompositionIntegrator(4)
         composition_rhs = _oscillator_composite_rhs()
         hamiltonian_rhs = _harmonic_hamiltonian_rhs()
-        composition_descriptor = composite_map_descriptor(
-            len(composition_rhs.components)
-        )
+        composition_descriptor = composite_map_descriptor_from_rhs(composition_rhs)
         hamiltonian_descriptor = hamiltonian_map_descriptor()
 
-        assert not composition_descriptor.coordinate(
+        assert composition_descriptor.coordinate(
             MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
         ).value
         assert hamiltonian_descriptor.coordinate(

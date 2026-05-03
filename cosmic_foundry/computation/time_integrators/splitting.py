@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 from cosmic_foundry.computation.time_integrators.integrator import (
+    BlackBoxRHS,
     ODEState,
     RHSProtocol,
     TimeIntegrator,
@@ -38,6 +39,24 @@ class CompositeRHS:
     @property
     def components(self) -> Sequence[RHSProtocol]:
         return self._components
+
+
+@runtime_checkable
+class SymplecticFlowProtocol(RHSProtocol, Protocol):
+    """RHS whose exact component flow preserves the symplectic form."""
+
+    @property
+    def preserves_symplectic_form(self) -> bool:
+        """Whether the component flow preserves the canonical symplectic form."""
+        ...
+
+
+class SymplecticFlowRHS(BlackBoxRHS):
+    """Black-box RHS with explicit symplectic-flow evidence."""
+
+    @property
+    def preserves_symplectic_form(self) -> bool:
+        return True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -190,4 +209,6 @@ __all__ = [
     "CompositeRHS",
     "CompositeRHSProtocol",
     "CompositionIntegrator",
+    "SymplecticFlowProtocol",
+    "SymplecticFlowRHS",
 ]

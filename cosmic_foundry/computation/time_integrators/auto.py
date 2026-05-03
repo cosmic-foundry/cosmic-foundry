@@ -8,7 +8,7 @@ from typing import Any, TypeVar, cast
 from cosmic_foundry.computation.algorithm_capabilities import AlgorithmRequest
 from cosmic_foundry.computation.time_integrators.capabilities import (
     TimeIntegrationCapability,
-    composite_map_descriptor,
+    composite_map_descriptor_from_rhs,
     derivative_oracle_descriptor,
     hamiltonian_map_descriptor,
     rhs_evaluation_descriptor,
@@ -94,7 +94,7 @@ def _rhs_request(rhs: RHSProtocol, order: int) -> AlgorithmRequest:
         return AlgorithmRequest(
             requested_properties=frozenset({"one_step"}),
             order=order,
-            descriptor=composite_map_descriptor(len(rhs.components)),
+            descriptor=composite_map_descriptor_from_rhs(rhs),
         )
     if isinstance(rhs, SplitRHSProtocol):
         return AlgorithmRequest(

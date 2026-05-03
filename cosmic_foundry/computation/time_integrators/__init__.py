@@ -89,6 +89,8 @@ from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHS,
     CompositeRHSProtocol,
     CompositionIntegrator,
+    SymplecticFlowProtocol,
+    SymplecticFlowRHS,
 )
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
@@ -153,6 +155,8 @@ __all__ = [
     "CompositeRHS",
     "CompositeRHSProtocol",
     "CompositionIntegrator",
+    "SymplecticFlowProtocol",
+    "SymplecticFlowRHS",
     "HamiltonianRHS",
     "HamiltonianRHSProtocol",
     "SymplecticCompositionIntegrator",
