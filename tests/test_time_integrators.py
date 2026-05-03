@@ -21,6 +21,7 @@ import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRequest,
     LinearSolverField,
+    MapStructureField,
     ParameterDescriptor,
     ReactionNetworkField,
     SolveRelationField,
@@ -34,6 +35,7 @@ from cosmic_foundry.computation.backends import (
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.capabilities import (
+    composite_map_descriptor,
     derivative_oracle_descriptor,
     hamiltonian_map_descriptor,
     nordsieck_history_descriptor,
@@ -213,6 +215,17 @@ def _harmonic_hamiltonian_rhs() -> _ti.HamiltonianRHS:
     )
 
 
+def _oscillator_composite_rhs() -> _ti.CompositeRHS:
+    return _ti.CompositeRHS(
+        [
+            _ti.BlackBoxRHS(
+                lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend)
+            ),
+            _ti.BlackBoxRHS(lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend)),
+        ]
+    )
+
+
 # ── problem registry ──────────────────────────────────────────────────────────
 # Each problem supplies ONE canonical RHS; AutoIntegrator dispatches by its type.
 # (id, u0, n_species, exact_fn, mass_conserved, rhs)
@@ -228,12 +241,6 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
     def f3(t, u):  # type: ignore[misc]
         x0, x1 = float(u[0]), float(u[1])
         return Tensor([-x0, x0 - 2.0 * x1, 2.0 * x1], backend=u.backend)
-
-    def fA(t, u):  # type: ignore[misc]
-        return Tensor([-float(u[1]), 0.0], backend=u.backend)
-
-    def fB(t, u):  # type: ignore[misc]
-        return Tensor([0.0, float(u[0])], backend=u.backend)
 
     return [
         ("base2", tensor([1.0, 0.0]), 2, _exact2, True, _ti.BlackBoxRHS(f2)),
@@ -275,7 +282,7 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
             2,
             _exact_osc,
             False,
-            _ti.CompositeRHS([_ti.BlackBoxRHS(fA), _ti.BlackBoxRHS(fB)]),
+            _oscillator_composite_rhs(),
         ),
         (
             "ham2",
@@ -775,6 +782,47 @@ class _HamiltonianStepMapSelectionClaim(Claim[Any]):
 
         state = integrator.step(rhs, state, dt)
         assert _err(state.u, _exact_ham, state.t) < 1.0e-10
+
+
+class _CompositionStepMapSelectionClaim(Claim[Any]):
+    """Grounded claim for composition ownership as component-count evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/composition_step_map_selection"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _oscillator_composite_rhs()
+        integrator = _ti.CompositionIntegrator(
+            [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+            order=4,
+        )
+        state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
+        dt = 1.0e-2
+        descriptor = composite_map_descriptor(len(rhs.components))
+
+        selected = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=descriptor,
+            )
+        )
+        assert selected.implementation == "CompositionIntegrator"
+        _assert_owned_step_map_cell(descriptor, _ti.CompositionIntegrator)
+        assert (
+            descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value == 2
+        )
+        assert not descriptor.coordinate(
+            MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE
+        ).value
+        with pytest.raises(ValueError):
+            integrator.step_solve_relation_descriptor(rhs, state, dt)
+        with pytest.raises(ValueError):
+            integrator.step_linear_operator_descriptor(rhs, state, dt)
+
+        state = integrator.step(rhs, state, dt)
+        assert _err(state.u, _exact_osc, state.t) < 1.0e-8
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1800,6 +1848,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _SplitStepMapSelectionClaim(),
     _SemilinearStepMapSelectionClaim(),
     _HamiltonianStepMapSelectionClaim(),
+    _CompositionStepMapSelectionClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
