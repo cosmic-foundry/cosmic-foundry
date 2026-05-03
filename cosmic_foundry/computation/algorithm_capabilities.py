@@ -169,13 +169,33 @@ class DecompositionField(Enum):
     SINGULAR_VALUE_LOWER_BOUND = "decomposition_singular_value_lower_bound"
 
 
+class ReactionNetworkField(Enum):
+    """Schema-owned descriptor fields for stoichiometric reaction networks."""
+
+    CONSERVATION_LAW_COUNT = "conservation_law_count"
+    EQUILIBRIUM_CONSTRAINT_COUNT = "equilibrium_constraint_count"
+    REACTION_COUNT = "reaction_count"
+    SPECIES_COUNT = "species_count"
+    STOICHIOMETRY_RANK = "stoichiometry_rank"
+
+
 DescriptorField: TypeAlias = (
-    str | SolveRelationField | LinearSolverField | DecompositionField
+    str
+    | SolveRelationField
+    | LinearSolverField
+    | DecompositionField
+    | ReactionNetworkField
 )
 
 
 def _field_label(field: DescriptorField) -> str:
-    if isinstance(field, SolveRelationField | LinearSolverField | DecompositionField):
+    if isinstance(
+        field,
+        SolveRelationField
+        | LinearSolverField
+        | DecompositionField
+        | ReactionNetworkField,
+    ):
         return str(field.value)
     return field
 
@@ -1334,6 +1354,106 @@ def decomposition_parameter_schema() -> ParameterSpaceSchema:
     )
 
 
+def reaction_network_parameter_schema() -> ParameterSpaceSchema:
+    """Return the stoichiometric reaction-network parameter-space schema."""
+    field = ReactionNetworkField
+    return ParameterSpaceSchema(
+        name="reaction_network",
+        axes=(
+            _positive_axis(field.SPECIES_COUNT, units="species"),
+            _nonnegative_axis(field.REACTION_COUNT, units="reaction pairs"),
+            _nonnegative_axis(field.STOICHIOMETRY_RANK, units="matrix rank"),
+            _nonnegative_axis(
+                field.CONSERVATION_LAW_COUNT, units="independent linear forms"
+            ),
+            _nonnegative_axis(
+                field.EQUILIBRIUM_CONSTRAINT_COUNT,
+                units="independent equilibrium conditions",
+            ),
+        ),
+        derived_regions=(
+            DerivedParameterRegion(
+                "conserved_network",
+                ((ComparisonPredicate(field.CONSERVATION_LAW_COUNT, ">", 0),),),
+            ),
+            DerivedParameterRegion(
+                "fully_constrained_equilibrium",
+                (
+                    (
+                        AffineComparisonPredicate(
+                            {
+                                field.EQUILIBRIUM_CONSTRAINT_COUNT: 1.0,
+                                field.STOICHIOMETRY_RANK: -1.0,
+                            },
+                            "==",
+                            0.0,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        invalid_cells=(
+            InvalidCellRule(
+                "rank_exceeds_species_count",
+                (
+                    AffineComparisonPredicate(
+                        {
+                            field.STOICHIOMETRY_RANK: 1.0,
+                            field.SPECIES_COUNT: -1.0,
+                        },
+                        ">",
+                        0.0,
+                    ),
+                ),
+                "stoichiometry rank cannot exceed species count",
+            ),
+            InvalidCellRule(
+                "rank_exceeds_reaction_count",
+                (
+                    AffineComparisonPredicate(
+                        {
+                            field.STOICHIOMETRY_RANK: 1.0,
+                            field.REACTION_COUNT: -1.0,
+                        },
+                        ">",
+                        0.0,
+                    ),
+                ),
+                "stoichiometry rank cannot exceed reaction count",
+            ),
+            InvalidCellRule(
+                "rank_plus_conservation_must_equal_species_count",
+                (
+                    AffineComparisonPredicate(
+                        {
+                            field.STOICHIOMETRY_RANK: 1.0,
+                            field.CONSERVATION_LAW_COUNT: 1.0,
+                            field.SPECIES_COUNT: -1.0,
+                        },
+                        "!=",
+                        0.0,
+                    ),
+                ),
+                "left-nullity plus rank must equal the number of species",
+            ),
+            InvalidCellRule(
+                "equilibrium_constraints_exceed_stoichiometry_rank",
+                (
+                    AffineComparisonPredicate(
+                        {
+                            field.EQUILIBRIUM_CONSTRAINT_COUNT: 1.0,
+                            field.STOICHIOMETRY_RANK: -1.0,
+                        },
+                        ">",
+                        0.0,
+                    ),
+                ),
+                "independent equilibrium constraints cannot exceed stoichiometry rank",
+            ),
+        ),
+    )
+
+
 def _decomposition_axes() -> tuple[ParameterAxis, ...]:
     decomposition_field = DecompositionField
     return (
@@ -1679,6 +1799,8 @@ __all__ = [
     "ParameterPredicate",
     "ParameterSpaceSchema",
     "predicate_sets_are_disjoint",
+    "ReactionNetworkField",
+    "reaction_network_parameter_schema",
     "SmallLinearOperator",
     "solve_relation_parameter_schema",
     "SolveRelationField",

@@ -27,11 +27,13 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    ReactionNetworkField,
     SolveRelationField,
     StructuredPredicate,
     decomposition_parameter_schema,
     linear_solver_parameter_schema,
     predicate_sets_are_disjoint,
+    reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.solvers.capabilities import (
@@ -45,7 +47,7 @@ _SolveRelationSchemaClaim = structure._SolveRelationSchemaClaim
 
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = (
-    SolveRelationField | LinearSolverField | DecompositionField
+    SolveRelationField | LinearSolverField | DecompositionField | ReactionNetworkField
 )
 _AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
 
@@ -156,6 +158,7 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
         _SolveRelationSchemaClaim._decomposition_descriptor(
             matrix_columns=5,
         ),
+        _SolveRelationSchemaClaim._reaction_network_descriptor(),
     )
 
 
@@ -164,6 +167,7 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
         solve_relation_parameter_schema(),
         linear_solver_parameter_schema(),
         decomposition_parameter_schema(),
+        reaction_network_parameter_schema(),
     )
 
 
@@ -501,7 +505,11 @@ def _atlas_axis_coordinate(
 
 def _atlas_axis_field(axis: ParameterAxis) -> _AtlasDescriptorField:
     assert isinstance(
-        axis.field, SolveRelationField | LinearSolverField | DecompositionField
+        axis.field,
+        SolveRelationField
+        | LinearSolverField
+        | DecompositionField
+        | ReactionNetworkField,
     )
     return axis.field
 
@@ -556,7 +564,13 @@ def _descriptor_value(descriptor: ParameterDescriptor, field: DescriptorField) -
 
 
 def _field_label(field: Any) -> str:
-    if isinstance(field, SolveRelationField | LinearSolverField | DecompositionField):
+    if isinstance(
+        field,
+        SolveRelationField
+        | LinearSolverField
+        | DecompositionField
+        | ReactionNetworkField,
+    ):
         return str(field.value)
     return str(field)
 

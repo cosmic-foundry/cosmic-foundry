@@ -20,8 +20,10 @@ import pytest
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     LinearSolverField,
+    ReactionNetworkField,
     SolveRelationField,
     linear_solver_parameter_schema,
+    reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends import (
@@ -374,6 +376,34 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         state = _ti.ODEState(0.0, chain.initial_state())
         integrator = _ti.ImplicitRungeKuttaIntegrator(2)
 
+        reaction_descriptor = rhs.reaction_network_descriptor()
+        reaction_schema = reaction_network_parameter_schema()
+        reaction_schema.validate_descriptor(reaction_descriptor)
+        reaction_regions = {
+            region.name: region for region in reaction_schema.derived_regions
+        }
+        assert reaction_regions["conserved_network"].contains(reaction_descriptor)
+        assert (
+            reaction_descriptor.coordinate(ReactionNetworkField.SPECIES_COUNT).value
+            == 3
+        )
+        assert (
+            reaction_descriptor.coordinate(ReactionNetworkField.REACTION_COUNT).value
+            == 2
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.STOICHIOMETRY_RANK
+            ).value
+            == 2
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.CONSERVATION_LAW_COUNT
+            ).value
+            == 1
+        )
+
         descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
         schema = solve_relation_parameter_schema()
         schema.validate_descriptor(descriptor)
@@ -447,6 +477,14 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         )
 
         transition_system = premise.transition_system()
+        reaction_descriptor = rhs.reaction_network_descriptor()
+        reaction_network_parameter_schema().validate_descriptor(reaction_descriptor)
+        assert reaction_descriptor.coordinate(
+            ReactionNetworkField.SPECIES_COUNT
+        ).value == (transition_system.state_count)
+        assert reaction_descriptor.coordinate(
+            ReactionNetworkField.REACTION_COUNT
+        ).value == (transition_system.transition_count)
         assert transition_system.stoichiometry_matrix() == tuple(
             tuple(
                 int(float(rhs.stoichiometry_matrix[i, j]))
