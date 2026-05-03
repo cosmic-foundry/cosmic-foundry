@@ -788,12 +788,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Decide whether dense factorization feasibility has enough independent
-   occurrences to deserve a decomposition-level schema instead of reusing
-   linear-solver coordinates as its certificate surface.
-2. Decide whether `ReactionNetworkRHS` should accept a finite transition system
+1. Decide whether `ReactionNetworkRHS` should accept a finite transition system
    directly, or whether that would prematurely turn a theory premise into a
    public network API before the next grounded physics claim.
+2. Decide whether direct-solver selection should consume a composed descriptor
+   that contains both solve-relation and decomposition projections, instead of
+   mapping decomposition feasibility back into linear-solver coordinates inside
+   the coverage aggregator.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -1010,6 +1011,10 @@ The sprint is complete when the following are true:
   regions over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,
   least-squares, or minimum-norm dense regions within factorization budget.
+  Dense matrix rank, nullity, singular lower bounds, and condition estimates
+  are decomposition coordinates.  Linear-operator descriptors may project into
+  decomposition descriptors, but decomposition certificates do not cite
+  linear-solver field objects directly.
 - **Feasibility inequalities are contracts too.**  Capabilities declare a conservative
   symbolic feasibility model in terms of descriptor fields.  The first version
   can use coarse asymptotic coefficients such as dense `O(n^3)` factorization,

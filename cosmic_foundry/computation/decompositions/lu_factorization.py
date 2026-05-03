@@ -7,9 +7,8 @@ from typing import Any
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.algorithm_capabilities import (
     CONDITION_LIMIT,
-    LINEARITY_TOLERANCE,
     ComparisonPredicate,
-    LinearSolverField,
+    DecompositionField,
 )
 from cosmic_foundry.computation.decompositions.decomposition import DecomposedTensor
 from cosmic_foundry.computation.decompositions.factorization import Factorization
@@ -182,15 +181,10 @@ class LUFactorization(Factorization):
     with JAX tracing (no Python bool over traced values).
     """
 
-    linear_solve_certificate = (
-        ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
+    factorization_feasibility_certificate = (
+        ComparisonPredicate(DecompositionField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
         ComparisonPredicate(
-            LinearSolverField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
-        ),
-        ComparisonPredicate(
-            LinearSolverField.RHS_CONSISTENCY_DEFECT,
-            "<=",
-            LINEARITY_TOLERANCE,
+            DecompositionField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
         ),
     )
 

@@ -47,7 +47,9 @@ class Decomposition(ABC):
         decompose — decompose A and return a DecomposedTensor
     """
 
-    linear_solve_certificate: ClassVar[tuple[StructuredPredicate, ...]] = ()
+    factorization_feasibility_certificate: ClassVar[
+        tuple[StructuredPredicate, ...]
+    ] = ()
 
     @abstractmethod
     def decompose(self, a: Tensor) -> DecomposedTensor:

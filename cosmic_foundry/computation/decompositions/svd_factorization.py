@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from cosmic_foundry.computation.algorithm_capabilities import (
-    LINEARITY_TOLERANCE,
     ComparisonPredicate,
-    LinearSolverField,
+    DecompositionField,
 )
 from cosmic_foundry.computation.decompositions.decomposition import DecomposedTensor
 from cosmic_foundry.computation.decompositions.factorization import Factorization
@@ -123,14 +122,9 @@ class SVDFactorization(Factorization):
         pseudoinverse.  Default 1e-10.
     """
 
-    linear_solve_certificate = (
-        ComparisonPredicate(LinearSolverField.NULLITY_ESTIMATE, ">", 0),
-        ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, "<=", 0.0),
-        ComparisonPredicate(
-            LinearSolverField.RHS_CONSISTENCY_DEFECT,
-            "<=",
-            LINEARITY_TOLERANCE,
-        ),
+    factorization_feasibility_certificate = (
+        ComparisonPredicate(DecompositionField.MATRIX_NULLITY_ESTIMATE, ">", 0),
+        ComparisonPredicate(DecompositionField.SINGULAR_VALUE_LOWER_BOUND, "<=", 0.0),
     )
 
     def __init__(self, rcond: float = 1e-10) -> None:
