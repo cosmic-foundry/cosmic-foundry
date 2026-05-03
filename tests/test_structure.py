@@ -1603,6 +1603,36 @@ class _SolveRelationSchemaClaim(Claim[None]):
             }
         )
 
+    @staticmethod
+    def _constraint_aware_descriptor(
+        *,
+        species_count: int = 4,
+        reaction_count: int = 3,
+        stoichiometry_rank: int = 3,
+        conserved_linear_form_count: int = 1,
+        equilibrium_constraint_count: int = 3,
+    ) -> ParameterDescriptor:
+        reaction_field = ReactionNetworkField
+        map_field = MapStructureField
+        return ParameterDescriptor(
+            {
+                reaction_field.SPECIES_COUNT: DescriptorCoordinate(species_count),
+                reaction_field.REACTION_COUNT: DescriptorCoordinate(reaction_count),
+                reaction_field.STOICHIOMETRY_RANK: DescriptorCoordinate(
+                    stoichiometry_rank
+                ),
+                reaction_field.EQUILIBRIUM_CONSTRAINT_COUNT: DescriptorCoordinate(
+                    equilibrium_constraint_count
+                ),
+                map_field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
+                map_field.RHS_HISTORY_AVAILABLE: DescriptorCoordinate(False),
+                map_field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(False),
+                map_field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(
+                    conserved_linear_form_count
+                ),
+            }
+        )
+
 
 class _LinearOperatorDescriptorClaim(Claim[None]):
     """Claim: small assembled operators produce schema-valid descriptors."""
@@ -3145,7 +3175,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=2,
-                descriptor=_SolveRelationSchemaClaim._reaction_network_descriptor(),
+                descriptor=_SolveRelationSchemaClaim._constraint_aware_descriptor(),
             ),
             "ConstraintAwareController",
         ),

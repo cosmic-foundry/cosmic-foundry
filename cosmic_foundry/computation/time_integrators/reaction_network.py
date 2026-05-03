@@ -344,6 +344,13 @@ class ReactionNetworkRHS:
             }
         )
 
+    def constraint_aware_descriptor(self) -> ParameterDescriptor:
+        """Return evidence needed by constraint-aware advance selection."""
+        return ParameterDescriptor(
+            self.reaction_network_descriptor().coordinates
+            | self.map_structure_descriptor().coordinates
+        )
+
     @property
     def state_domain(self) -> NonnegativeStateDomain:
         """Valid state domain for reaction-network species abundances."""

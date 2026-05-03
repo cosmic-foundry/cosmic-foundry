@@ -259,6 +259,19 @@ def _rhs_evaluation_region(owner: type) -> CoverageRegion:
     )
 
 
+def _unconstrained_rhs_evaluation_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
+            MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
+            MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})),
+            MembershipPredicate(field.CONSERVED_LINEAR_FORM_COUNT, frozenset({0})),
+        ),
+    )
+
+
 def _rhs_history_region(owner: type) -> CoverageRegion:
     field = MapStructureField
     return CoverageRegion(
@@ -447,7 +460,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        coverage_regions=(_rhs_evaluation_region(IntegrationDriver),),
+        coverage_regions=(_unconstrained_rhs_evaluation_region(IntegrationDriver),),
     ),
     TimeIntegrationCapability(
         "constraint_aware_controller",
@@ -463,7 +476,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
                 ConstraintAwareController,
                 (
                     ComparisonPredicate(
-                        ReactionNetworkField.CONSERVATION_LAW_COUNT, ">", 0
+                        MapStructureField.CONSERVED_LINEAR_FORM_COUNT, ">", 0
                     ),
                     ComparisonPredicate(
                         ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT, ">", 0
