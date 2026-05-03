@@ -373,12 +373,10 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         return "correctness/reaction_chain_projection_invariants"
 
     def check(self, _calibration: Any) -> None:
-        chain = _FiniteTransitionNetworkPremise.chain(
-            (56, 56, 56),
-            transition_rates=(80.0, 12.0),
-        )
-        rhs = chain.build_rhs()
-        state = _ti.ODEState(0.0, chain.initial_state())
+        system = FiniteStateTransitionSystem.chain(3)
+        u0 = _finite_transition_initial_state(system)
+        rhs = _unit_transfer_rhs(system, (80.0, 12.0))
+        state = _ti.ODEState(0.0, u0)
         integrator = _ti.ImplicitRungeKuttaIntegrator(2)
         auto = _ti.AutoIntegrator(2)
 
@@ -456,7 +454,7 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             state.u.shape[0] * len(integrator.A_sym)
         )
 
-        invariant = chain.conserved_linear_form()
+        invariant = _finite_transition_conserved_form(system)
         assert _linear_form_annihilates_stoichiometry(
             invariant, rhs.stoichiometry_matrix
         )
@@ -484,7 +482,7 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ),
         )
         controlled_state = controller.advance(
-            chain.initial_state(),
+            u0,
             0.0,
             2.0e-2,
         )
@@ -500,13 +498,12 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         return "correctness/branched_finite_transition_projection_invariants"
 
     def check(self, _calibration: Any) -> None:
-        premise = _FiniteTransitionNetworkPremise(
-            species_mass_number=(56, 56, 56, 56),
-            transitions=((0, 1), (0, 2), (2, 3)),
-            transition_rates=(25.0, 5.0, 7.0),
+        transition_system = FiniteStateTransitionSystem(
+            4,
+            ((0, 1), (0, 2), (2, 3)),
         )
-        rhs = premise.build_rhs()
-        state = _ti.ODEState(0.0, premise.initial_state())
+        rhs = _unit_transfer_rhs(transition_system, (25.0, 5.0, 7.0))
+        state = _ti.ODEState(0.0, _finite_transition_initial_state(transition_system))
         controller = _ti.IntegrationDriver(
             _ti.RungeKuttaIntegrator(4),
             controller=_ti.PIController(
@@ -517,7 +514,6 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
             ),
         )
 
-        transition_system = premise.transition_system()
         reaction_descriptor = rhs.reaction_network_descriptor()
         reaction_network_parameter_schema().validate_descriptor(reaction_descriptor)
         assert reaction_descriptor.coordinate(
@@ -533,7 +529,7 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
             )
             for i in range(transition_system.state_count)
         )
-        invariant = premise.conserved_linear_form()
+        invariant = _finite_transition_conserved_form(transition_system)
         assert _linear_form_annihilates_stoichiometry(
             invariant,
             rhs.stoichiometry_matrix,
@@ -1093,70 +1089,27 @@ class _PerformanceClaim(Claim[ExecutionPlan]):
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
 
 
-@dataclass(frozen=True)
-class _FiniteTransitionNetworkPremise:
-    """Test-local finite unit-transfer premise projected to a stoichiometric ODE."""
+def _finite_transition_initial_state(
+    system: FiniteStateTransitionSystem,
+) -> Tensor:
+    return Tensor([1.0] + [0.0] * (system.state_count - 1), backend=_TIME_BACKEND)
 
-    species_mass_number: tuple[int, ...]
-    transitions: tuple[tuple[int, int], ...]
-    transition_rates: tuple[float, ...]
 
-    def __post_init__(self) -> None:
-        if len(self.transitions) != len(self.transition_rates):
-            raise ValueError("each transition must have one rate")
-        if len(set(self.species_mass_number)) != 1:
-            raise ValueError("this finite transition premise preserves one mass number")
-        if any(rate <= 0.0 for rate in self.transition_rates):
-            raise ValueError("reaction-network transition rates must be positive")
-        self.transition_system()
+def _finite_transition_conserved_form(
+    system: FiniteStateTransitionSystem,
+) -> Tensor:
+    return Tensor(system.conserved_total_form(), backend=_TIME_BACKEND)
 
-    @classmethod
-    def chain(
-        cls,
-        species_mass_number: tuple[int, ...],
-        transition_rates: tuple[float, ...],
-    ) -> _FiniteTransitionNetworkPremise:
-        return cls(
-            species_mass_number,
-            FiniteStateTransitionSystem.chain(len(species_mass_number)).transitions,
-            transition_rates,
-        )
 
-    def initial_state(self) -> Tensor:
-        return Tensor(
-            [1.0] + [0.0] * (len(self.species_mass_number) - 1),
-            backend=_TIME_BACKEND,
-        )
-
-    def transition_system(self) -> FiniteStateTransitionSystem:
-        return FiniteStateTransitionSystem(
-            len(self.species_mass_number),
-            self.transitions,
-        )
-
-    def conserved_linear_form(self) -> Tensor:
-        return Tensor(
-            self.transition_system().conserved_total_form(),
-            backend=_TIME_BACKEND,
-        )
-
-    def stoichiometry_matrix(self) -> Tensor:
-        return Tensor(
-            self.transition_system().stoichiometry_matrix(), backend=_TIME_BACKEND
-        )
-
-    def build_rhs(self) -> _ti.ReactionNetworkRHS:
-        return self.build_time_dependent_rhs(self.transition_rates)
-
-    def build_time_dependent_rhs(
-        self,
-        rate_fn: _ti.UnitTransferRates,
-    ) -> _ti.ReactionNetworkRHS:
-        return _ti.ReactionNetworkRHS.from_unit_transfer_system(
-            self.transition_system(),
-            rate_fn,
-            self.initial_state(),
-        )
+def _unit_transfer_rhs(
+    system: FiniteStateTransitionSystem,
+    rates: _ti.UnitTransferRates,
+) -> _ti.ReactionNetworkRHS:
+    return _ti.ReactionNetworkRHS.from_unit_transfer_system(
+        system,
+        rates,
+        _finite_transition_initial_state(system),
+    )
 
 
 def _linear_form_annihilates_stoichiometry(
@@ -1320,14 +1273,13 @@ RateFn = Callable[[float], list[tuple[int, int, float]]]
 def _linear_network_rhs(rate_fn: RateFn, n: int) -> _ti.ReactionNetworkRHS:
     """Build a mass-conserving linear reaction network RHS from edge rates."""
     edges0 = rate_fn(0.0)
-    premise = _FiniteTransitionNetworkPremise(
-        species_mass_number=(1,) * n,
-        transitions=tuple((src, dst) for src, dst, _rate in edges0),
-        transition_rates=tuple(rate for _src, _dst, rate in edges0),
+    system = FiniteStateTransitionSystem(
+        n,
+        tuple((src, dst) for src, dst, _rate in edges0),
     )
 
-    return premise.build_time_dependent_rhs(
-        lambda t: tuple(rate for _src, _dst, rate in rate_fn(t))
+    return _unit_transfer_rhs(
+        system, lambda t: tuple(rate for _src, _dst, rate in rate_fn(t))
     )
 
 

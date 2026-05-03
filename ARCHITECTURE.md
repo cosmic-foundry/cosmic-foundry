@@ -790,14 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Review whether the reaction-chain grounding exposes any computational shadow
-   of the finite-state transition theory beyond the existing
-   `FiniteStateTransitionSystem` projection; promote only a missing premise,
-   not reaction-network application vocabulary.
-2. Use the same full-loop standard on the next atlas cleanup: if
+1. Use the same full-loop standard on the next atlas cleanup: if
    time-integration method-family labels become rendered consequences rather
    than request properties, ground the projection in a concrete calculation
    whose descriptor lands in the rendered atlas cell.
+2. Pick the next PR by naming its target calculation first, then work backward
+   to the smallest schema or implementation change needed; do not plan an
+   architecture-only PR.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
