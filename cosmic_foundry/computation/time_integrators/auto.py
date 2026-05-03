@@ -8,8 +8,12 @@ from typing import Any, TypeVar, cast
 from cosmic_foundry.computation.time_integrators.capabilities import (
     TimeIntegrationCapability,
     TimeIntegrationRequest,
+    composite_map_descriptor,
     derivative_oracle_descriptor,
+    hamiltonian_map_descriptor,
     select_time_integrator,
+    semilinear_map_descriptor,
+    split_map_descriptor,
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     build_constraint_gradients,
@@ -75,29 +79,29 @@ def _require(branch: _T | None, name: str, order: int) -> _T:
 def _rhs_request(rhs: RHSProtocol, order: int) -> TimeIntegrationRequest:
     if isinstance(rhs, SemilinearRHSProtocol):
         return TimeIntegrationRequest(
-            available_structure=frozenset({"semilinear_rhs"}),
             requested_properties=frozenset({"one_step", "exponential", "runge_kutta"}),
             order=order,
+            descriptor=semilinear_map_descriptor(),
         )
     if isinstance(rhs, HamiltonianRHSProtocol):
         return TimeIntegrationRequest(
-            available_structure=frozenset({"hamiltonian_rhs"}),
             requested_properties=frozenset({"one_step", "symplectic", "composition"}),
             order=order,
+            descriptor=hamiltonian_map_descriptor(),
         )
     if isinstance(rhs, CompositeRHSProtocol):
         return TimeIntegrationRequest(
-            available_structure=frozenset({"composite_rhs"}),
             requested_properties=frozenset(
                 {"one_step", "operator_splitting", "composition"}
             ),
             order=order,
+            descriptor=composite_map_descriptor(len(rhs.components)),
         )
     if isinstance(rhs, SplitRHSProtocol):
         return TimeIntegrationRequest(
-            available_structure=frozenset({"split_rhs"}),
             requested_properties=frozenset({"one_step", "imex", "runge_kutta"}),
             order=order,
+            descriptor=split_map_descriptor(),
         )
     if isinstance(rhs, ReactionNetworkRHS):
         return TimeIntegrationRequest(

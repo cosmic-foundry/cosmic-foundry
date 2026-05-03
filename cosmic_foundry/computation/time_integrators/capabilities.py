@@ -10,6 +10,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ComparisonPredicate,
     CoverageRegion,
     DescriptorCoordinate,
+    MapStructureField,
     MembershipPredicate,
     ParameterDescriptor,
     ReactionNetworkField,
@@ -21,8 +22,20 @@ from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
 )
+from cosmic_foundry.computation.time_integrators.exponential import (
+    LawsonRungeKuttaIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.imex import (
+    AdditiveRungeKuttaIntegrator,
+)
 from cosmic_foundry.computation.time_integrators.implicit import (
     ImplicitRungeKuttaIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.splitting import (
+    CompositionIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.symplectic import (
+    SymplecticCompositionIntegrator,
 )
 
 TimeIntegrationCapability = AlgorithmCapability
@@ -49,6 +62,49 @@ def derivative_oracle_descriptor() -> ParameterDescriptor:
     )
 
 
+def semilinear_map_descriptor() -> ParameterDescriptor:
+    """Return map evidence for ``f(t, u) = L u + N(t, u)``."""
+    field = MapStructureField
+    return ParameterDescriptor(
+        {
+            field.EXACT_LINEAR_OPERATOR_AVAILABLE: DescriptorCoordinate(True),
+            field.NONLINEAR_RESIDUAL_AVAILABLE: DescriptorCoordinate(True),
+        }
+    )
+
+
+def split_map_descriptor() -> ParameterDescriptor:
+    """Return map evidence for an explicit/implicit additive split."""
+    field = MapStructureField
+    return ParameterDescriptor(
+        {
+            field.EXPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(True),
+            field.IMPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(True),
+            field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+                "jacobian_callback"
+            ),
+        }
+    )
+
+
+def hamiltonian_map_descriptor() -> ParameterDescriptor:
+    """Return map evidence for a separable Hamiltonian partition."""
+    return ParameterDescriptor(
+        {MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(True)}
+    )
+
+
+def composite_map_descriptor(component_count: int) -> ParameterDescriptor:
+    """Return map evidence for an operator-splitting component decomposition."""
+    return ParameterDescriptor(
+        {
+            MapStructureField.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(
+                component_count
+            )
+        }
+    )
+
+
 def _derivative_oracle_region(owner: type) -> CoverageRegion:
     return CoverageRegion(
         owner,
@@ -58,6 +114,52 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
                 frozenset({"jacobian_callback", "matrix"}),
             ),
         ),
+    )
+
+
+def _semilinear_map_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(
+                field.EXACT_LINEAR_OPERATOR_AVAILABLE, frozenset({True})
+            ),
+            MembershipPredicate(field.NONLINEAR_RESIDUAL_AVAILABLE, frozenset({True})),
+        ),
+    )
+
+
+def _split_map_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(field.EXPLICIT_COMPONENT_AVAILABLE, frozenset({True})),
+            MembershipPredicate(field.IMPLICIT_COMPONENT_AVAILABLE, frozenset({True})),
+            MembershipPredicate(
+                field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND,
+                frozenset({"jacobian_callback", "matrix"}),
+            ),
+        ),
+    )
+
+
+def _hamiltonian_map_region(owner: type) -> CoverageRegion:
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(
+                MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE, frozenset({True})
+            ),
+        ),
+    )
+
+
+def _composite_map_region(owner: type) -> CoverageRegion:
+    return CoverageRegion(
+        owner,
+        (ComparisonPredicate(MapStructureField.ADDITIVE_COMPONENT_COUNT, ">=", 2),),
     )
 
 
@@ -91,46 +193,50 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "AdditiveRungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=("split_rhs",),
+            requires=(),
             provides=("one_step", "imex", "runge_kutta"),
         ),
         1,
         4,
+        coverage_regions=(_split_map_region(AdditiveRungeKuttaIntegrator),),
     ),
     TimeIntegrationCapability(
         "lawson_runge_kutta",
         "LawsonRungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=("semilinear_rhs",),
+            requires=(),
             provides=("one_step", "exponential", "runge_kutta"),
         ),
         1,
         6,
+        coverage_regions=(_semilinear_map_region(LawsonRungeKuttaIntegrator),),
     ),
     TimeIntegrationCapability(
         "symplectic_composition",
         "SymplecticCompositionIntegrator",
         "method_family",
         _contract(
-            requires=("hamiltonian_rhs",),
+            requires=(),
             provides=("one_step", "symplectic", "composition"),
         ),
         1,
         6,
         supported_orders=frozenset({1, 2, 4, 6}),
+        coverage_regions=(_hamiltonian_map_region(SymplecticCompositionIntegrator),),
     ),
     TimeIntegrationCapability(
         "operator_composition",
         "CompositionIntegrator",
         "method_family",
         _contract(
-            requires=("composite_rhs",),
+            requires=(),
             provides=("one_step", "operator_splitting", "composition"),
         ),
         1,
         6,
         supported_orders=frozenset({1, 2, 4, 6}),
+        coverage_regions=(_composite_map_region(CompositionIntegrator),),
     ),
     TimeIntegrationCapability(
         "explicit_multistep",
@@ -230,7 +336,11 @@ def select_time_integrator(
 __all__ = [
     "AlgorithmStructureContract",
     "derivative_oracle_descriptor",
+    "composite_map_descriptor",
+    "hamiltonian_map_descriptor",
     "select_time_integrator",
+    "semilinear_map_descriptor",
+    "split_map_descriptor",
     "TimeIntegrationCapability",
     "time_integration_capabilities",
     "TimeIntegrationRegistry",
