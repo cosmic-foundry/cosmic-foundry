@@ -228,6 +228,17 @@ a descriptor coordinate, structural invariant, generated atlas region,
 numerical claim, discovered structural test, or deletion of a misleading
 abstraction.
 
+After each real-ish problem, map the new premise back to `theory/` and ask
+whether the parameter schema or computation code has started to encode a
+theory object implicitly. One grounded occurrence stays test-local. Two
+independent occurrences trigger a theory review. Three occurrences mean the
+codebase is probably maintaining a computational shadow of theory: either
+promote the minimal object into `theory/` or delete the duplicated
+representation. The promotion target is the premise, not the application
+projection; for example, a conserved finite-state transformation may be the
+theory object, while a reaction network remains only one computational view of
+it.
+
 ### Design principles
 
 When changing computation capabilities, apply these constraints in order:
