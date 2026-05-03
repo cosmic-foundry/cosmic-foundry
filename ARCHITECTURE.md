@@ -793,11 +793,12 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: add a one-dimensional scalar conservation or
-   linear-advection calculation that forces the atlas to represent flux form,
-   locality, and timestep stability premises. The goal is not a hydrodynamics
-   subsystem; it is to learn which descriptor coordinates are forced by a real
-   conservation-law calculation before iterating on time integrators further.
+2. Candidate next calculation: compare the periodic advection conserved-linear-
+   form evidence with reaction-network conservation evidence, then decide
+   whether conservation should be one map-level premise projected into
+   reaction-network views or remain a reaction-network-owned coordinate. Do not
+   add mesh, flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

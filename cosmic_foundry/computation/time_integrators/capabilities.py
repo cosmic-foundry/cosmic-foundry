@@ -82,6 +82,7 @@ def _map_structure_coordinates(
         field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(False),
         field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(float("inf")),
         field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
+        field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(0),
         field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(0),
     }
     if overrides is not None:
@@ -106,6 +107,23 @@ def rhs_evaluation_descriptor() -> ParameterDescriptor:
     return ParameterDescriptor(
         _map_structure_coordinates(
             {field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True)}
+        )
+    )
+
+
+def conserved_rhs_evaluation_descriptor(
+    conserved_linear_form_count: int,
+) -> ParameterDescriptor:
+    """Return map evidence for direct RHS evaluation with linear invariants."""
+    field = MapStructureField
+    return ParameterDescriptor(
+        _map_structure_coordinates(
+            {
+                field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
+                field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(
+                    conserved_linear_form_count
+                ),
+            }
         )
     )
 
@@ -499,6 +517,7 @@ def select_time_integrator(
 __all__ = [
     "AlgorithmStructureContract",
     "derivative_oracle_descriptor",
+    "conserved_rhs_evaluation_descriptor",
     "composite_map_descriptor_from_rhs",
     "composite_map_descriptor",
     "hamiltonian_map_descriptor",
