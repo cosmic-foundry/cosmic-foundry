@@ -18,8 +18,10 @@ class DenseSVDSolver(DirectSolver):
 
     Decomposes A = U Σ Vᵀ and solves via u† = V Σ⁻¹ Uᵀ b, zeroing singular
     values σᵢ < rcond · σ₀.  For full-rank square systems this recovers the
-    exact solution; for rank-deficient or overdetermined systems it returns
-    the minimum-norm least-squares solution.
+    exact solution; for rank-deficient square systems it returns the
+    minimum-norm least-squares solution.  Rectangular least-squares problems
+    are supported by SVDFactorization directly, not by this LinearSolver
+    wrapper: DirectSolver assembles a square operator from the length of b.
 
     In plain terms: SVD rotates the problem into a coordinate system where A
     acts as a diagonal scaling.  The solve divides by each singular value, then
@@ -30,6 +32,7 @@ class DenseSVDSolver(DirectSolver):
     a smaller constant.  Use DenseSVDSolver when A may be rank-deficient (e.g.
     periodic advection), when a minimum-norm solution is required, or when the
     condition number or null-space structure is needed alongside the solution.
+    Use SVDFactorization directly for rectangular least-squares systems.
 
     Parameters
     ----------
