@@ -37,6 +37,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
     nordsieck_history_descriptor,
     rhs_history_descriptor,
+    split_map_descriptor,
     time_integration_step_map_regions,
     time_integration_step_solve_regions,
 )
@@ -187,6 +188,14 @@ def _scalar_decay_jacobian_rhs() -> _ti.JacobianRHS:
     )
 
 
+def _split_decay_rhs() -> _ti.SplitRHS:
+    return _ti.SplitRHS(
+        lambda t, u: Tensor([-0.2 * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([-0.8 * float(u[0])], backend=u.backend),
+        lambda t, u: Tensor([[-0.8]], backend=u.backend),
+    )
+
+
 # ── problem registry ──────────────────────────────────────────────────────────
 # Each problem supplies ONE canonical RHS; AutoIntegrator dispatches by its type.
 # (id, u0, n_species, exact_fn, mass_conserved, rhs)
@@ -208,15 +217,6 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
 
     def fB(t, u):  # type: ignore[misc]
         return Tensor([0.0, float(u[0])], backend=u.backend)
-
-    def split_explicit(t, u):  # type: ignore[misc]
-        return Tensor([-0.2 * float(u[0])], backend=u.backend)
-
-    def split_implicit(t, u):  # type: ignore[misc]
-        return Tensor([-0.8 * float(u[0])], backend=u.backend)
-
-    def split_jacobian(t, u):  # type: ignore[misc]
-        return Tensor([[-0.8]], backend=u.backend)
 
     def semilinear_forcing(t, u):  # type: ignore[misc]
         return Tensor([math.sin(t)], backend=u.backend)
@@ -245,7 +245,7 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
             1,
             _exact_scalar_decay,
             False,
-            _ti.SplitRHS(split_explicit, split_implicit, split_jacobian),
+            _split_decay_rhs(),
         ),
         (
             "semilinear1",
@@ -658,6 +658,38 @@ class _ImplicitStageSolveSelectionClaim(Claim[Any]):
         ) == derivative_oracle_descriptor().coordinate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND
         )
+
+        state = integrator.step(rhs, state, dt)
+        assert _err(state.u, _exact_scalar_decay, state.t) < 1.0e-7
+
+
+class _SplitStepMapSelectionClaim(Claim[Any]):
+    """Grounded claim for split-step ownership as map composition evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/split_step_map_selection"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _split_decay_rhs()
+        integrator = _ti.AdditiveRungeKuttaIntegrator(2)
+        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        dt = 1.0e-2
+
+        selected = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=2,
+                descriptor=split_map_descriptor(),
+            )
+        )
+        assert selected.implementation == "AdditiveRungeKuttaIntegrator"
+        _assert_owned_step_map_cell(
+            split_map_descriptor(),
+            _ti.AdditiveRungeKuttaIntegrator,
+        )
+        with pytest.raises(ValueError):
+            integrator.step_solve_relation_descriptor(rhs, state, dt)
 
         state = integrator.step(rhs, state, dt)
         assert _err(state.u, _exact_scalar_decay, state.t) < 1.0e-7
@@ -1683,6 +1715,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _BranchedFiniteTransitionNetworkClaim(),
     _HistoryStateSelectionClaim(),
     _ImplicitStageSolveSelectionClaim(),
+    _SplitStepMapSelectionClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
