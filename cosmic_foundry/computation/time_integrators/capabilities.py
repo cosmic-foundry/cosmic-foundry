@@ -45,7 +45,9 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
+    CompositeRHSProtocol,
     CompositionIntegrator,
+    SymplecticFlowProtocol,
 )
 from cosmic_foundry.computation.time_integrators.symplectic import (
     SymplecticCompositionIntegrator,
@@ -175,13 +177,36 @@ def hamiltonian_map_descriptor() -> ParameterDescriptor:
     )
 
 
-def composite_map_descriptor(component_count: int) -> ParameterDescriptor:
+def composite_map_descriptor(
+    component_count: int,
+    *,
+    symplectic_form_invariant_available: bool = False,
+) -> ParameterDescriptor:
     """Return map evidence for an operator-splitting component decomposition."""
     field = MapStructureField
     return ParameterDescriptor(
         _map_structure_coordinates(
-            {field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(component_count)}
+            {
+                field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(component_count),
+                field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(
+                    symplectic_form_invariant_available
+                ),
+            }
         )
+    )
+
+
+def composite_map_descriptor_from_rhs(
+    rhs: CompositeRHSProtocol,
+) -> ParameterDescriptor:
+    """Return composition evidence derived from component-flow structure."""
+    return composite_map_descriptor(
+        len(rhs.components),
+        symplectic_form_invariant_available=all(
+            isinstance(component, SymplecticFlowProtocol)
+            and component.preserves_symplectic_form
+            for component in rhs.components
+        ),
     )
 
 
@@ -467,6 +492,7 @@ def select_time_integrator(
 __all__ = [
     "AlgorithmStructureContract",
     "derivative_oracle_descriptor",
+    "composite_map_descriptor_from_rhs",
     "composite_map_descriptor",
     "hamiltonian_map_descriptor",
     "nordsieck_history_descriptor",
