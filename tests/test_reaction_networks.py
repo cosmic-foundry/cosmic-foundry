@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -318,10 +319,182 @@ class _TransientReactionEquilibriumClaim(Claim[Any]):
         assert rhs.state_domain.check(state.u).accepted
 
 
+@dataclass
+class _EquilibriumNetworkSpec:
+    name: str
+    topo: str
+    n: int
+    rates: list[float]
+    expected_walltime_s: float = 1.0
+
+    @property
+    def p(self) -> int:
+        return self.n - 1
+
+    def t_end(self) -> float:
+        k = min(self.rates)
+        return 4.0 * self.p**2 / k if self.topo == "chain" else 8.0 / k
+
+    def dt0(self) -> float:
+        return min(0.05, 0.1 / max(self.rates))
+
+    def u0(self) -> Tensor:
+        return Tensor([1.0] + [0.0] * self.p, backend=_TIME_BACKEND)
+
+    def build_rhs(self) -> _ti.ReactionNetworkRHS:
+        n, p, rates, topo = self.n, self.p, list(self.rates), self.topo
+        rows = [[0.0] * p for _ in range(n)]
+        for j in range(p):
+            rows[j if topo == "chain" else 0][j] = -1.0
+            rows[j + 1][j] = 1.0
+        stoichiometry = Tensor(rows, backend=_TIME_BACKEND)
+
+        def forward_rates(t: float, u: Tensor) -> Tensor:
+            idx = lambda j: j if topo == "chain" else 0  # noqa: E731
+            return Tensor(
+                [rates[j] * float(u[idx(j)]) for j in range(p)],
+                backend=u.backend,
+            )
+
+        def reverse_rates(t: float, u: Tensor) -> Tensor:
+            return Tensor(
+                [rates[j] * float(u[j + 1]) for j in range(p)],
+                backend=u.backend,
+            )
+
+        return _ti.ReactionNetworkRHS(
+            stoichiometry,
+            forward_rates,
+            reverse_rates,
+            self.u0(),
+        )
+
+
+def _chain_specs(
+    nr: range,
+    k: float = 1.0,
+    *,
+    expected_walltime_s: float = 1.0,
+) -> list[_EquilibriumNetworkSpec]:
+    return [
+        _EquilibriumNetworkSpec(
+            f"chain-n{n}-k{k:.0f}",
+            "chain",
+            n,
+            [k] * (n - 1),
+            expected_walltime_s,
+        )
+        for n in nr
+    ]
+
+
+def _spoke_specs(
+    nr: range,
+    ks: list[int],
+    *,
+    expected_walltime_s: float = 1.0,
+) -> list[_EquilibriumNetworkSpec]:
+    specs = []
+    for n in nr:
+        p, fast_reactions = n - 1, (n - 1) // 2
+        for k in ks:
+            specs.append(
+                _EquilibriumNetworkSpec(
+                    f"spoke-n{n}-k{k:.0f}",
+                    "spoke",
+                    n,
+                    [float(k)] * fast_reactions + [1.0] * (p - fast_reactions),
+                    expected_walltime_s,
+                )
+            )
+    return specs
+
+
+def _adaptive_nordsieck_controller() -> _ti.AdaptiveNordsieckController:
+    return _ti.AdaptiveNordsieckController(
+        order_selector=_ti.OrderSelector(
+            q_min=2,
+            q_max=6,
+            atol=2e-5,
+            rtol=2e-5,
+            factor_min=0.2,
+            factor_max=1.15,
+        ),
+        stiffness_switcher=_ti.StiffnessSwitcher(
+            stiff_threshold=1.0,
+            nonstiff_threshold=0.35,
+        ),
+        q_initial=2,
+        initial_family="adams",
+        max_rejections=80,
+    )
+
+
+class _EquilibriumNetworkTargetClaim(Claim[Any]):
+    """Grounded claim for convergence to a network statistical equilibrium."""
+
+    def __init__(self, spec: _EquilibriumNetworkSpec) -> None:
+        self._spec = spec
+
+    @property
+    def description(self) -> str:
+        return f"correctness/nse/{self._spec.name}"
+
+    @property
+    def expected_walltime_s(self) -> float:
+        return self._spec.expected_walltime_s
+
+    def check(self, _calibration: Any) -> None:
+        self.skip_if_over_walltime_budget()
+        rhs = self._spec.build_rhs()
+        if self._spec.topo == "chain":
+            controller = _adaptive_nordsieck_controller()
+            state = controller.advance(
+                rhs,
+                self._spec.u0(),
+                0.0,
+                self._spec.t_end(),
+                self._spec.dt0(),
+            )
+        else:
+            controller = _ti.ConstraintAwareController(
+                rhs=rhs,
+                integrator=_ti.ImplicitRungeKuttaIntegrator(2),
+                inner=_ti.PIController(
+                    alpha=0.35,
+                    beta=0.2,
+                    tol=1e-5,
+                    dt0=self._spec.dt0(),
+                    factor_max=1.15,
+                ),
+                eps_activate=0.01,
+                eps_deactivate=0.1,
+            )
+            state = controller.advance(
+                self._spec.u0(),
+                0.0,
+                self._spec.t_end(),
+                stop_at_nse=True,
+            )
+
+        expected = 1.0 / self._spec.n
+        for i in range(self._spec.n):
+            assert abs(float(state.u[i]) - expected) < 1e-6
+        assert abs(sum(float(state.u[i]) for i in range(self._spec.n)) - 1.0) < 1e-10
+
+
+_CI_EQUILIBRIUM_SPECS = _chain_specs(range(3, 5)) + _spoke_specs(range(3, 7), [1, 10])
+_OFF_EQUILIBRIUM_SPECS = _chain_specs(
+    range(5, 12), expected_walltime_s=5.0
+) + _spoke_specs(range(7, 22), [1, 10, 100], expected_walltime_s=5.0)
+
+
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _ReactionChainIntegrationClaim(),
     _BranchedFiniteTransitionNetworkClaim(),
     _TransientReactionEquilibriumClaim(),
+    *[_EquilibriumNetworkTargetClaim(spec) for spec in _CI_EQUILIBRIUM_SPECS],
+    *[_EquilibriumNetworkTargetClaim(spec) for spec in _OFF_EQUILIBRIUM_SPECS],
 )
 
 
