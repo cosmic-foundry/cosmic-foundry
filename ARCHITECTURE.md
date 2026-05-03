@@ -793,13 +793,11 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: use positive and negative component-flow
-   oscillator evidence to decide whether the composition ownership region
-   should be sharpened by `SYMPLECTIC_FORM_INVARIANT_AVAILABLE`, or whether
-   invariant preservation should remain evidence overlaid on the broader
-   component-count ownership region. Any atlas or selection change should
-   follow from that calculation's descriptor coordinates, not from a category
-   list.
+2. Candidate next calculation: introduce a two-component oscillator-like flow
+   whose components are not symplectic maps, then decide whether the schema
+   needs a quantitative symplectic-defect coordinate instead of only a boolean
+   invariant-evidence coordinate. Any atlas or selection change should follow
+   from descriptor coordinates, not from a category list.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
