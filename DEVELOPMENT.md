@@ -51,6 +51,7 @@ discipline.
 Before opening or pushing to a PR:
 
 - [ ] Read `DEVELOPMENT.md` (this file) and `ARCHITECTURE.md` to understand the rules and decisions that govern the PR
+- [ ] Align the built-in task plan with `ARCHITECTURE.md ## Current work`
 - [ ] Run `pre-commit run --all-files` locally and fix any failures
 - [ ] Read `## Current work` in `ARCHITECTURE.md` to understand the current planned work
 - [ ] Determine if this PR completes any of the planned items
@@ -157,11 +158,14 @@ comparisons, materializing Python values only at the final assertion boundary.
 ## Roadmap position
 
 **At the start of every session**, read `## Current work` in `ARCHITECTURE.md`.
-It is the immediate implementation queue. The rest of `ARCHITECTURE.md` covers
-the long-horizon capability sequence (epochs, milestones, verification
-standard) — items there are not yet specified well enough to implement
-without further design discussion. When an item becomes fully specified
-and unblocked, move it into `## Current work`.
+It is the durable implementation queue. During agent-led work, keep it aligned
+with the built-in task plan: the task plan is local execution state, and
+`Current work` is the short-horizon record that survives the session.
+
+The rest of `ARCHITECTURE.md` covers long-horizon capability direction. Treat
+those sections as design context, not an implementation queue. Move an item
+into `## Current work` only when it has become concrete enough for the next PR
+or two.
 
 Every PR should state whether it advances the simulation track, the
 V&V track, or both. Cross-track dependencies must be explicit in the
@@ -177,16 +181,100 @@ purpose. The rule is: if the item is done when the PR merges, it is
 gone from `ARCHITECTURE.md` when the PR merges.
 
 **Before merging a completing PR, horizon-scan the next well-defined
-items in `## Current work`** and ask two questions for each:
+items in `## Current work`** and ask three questions for each:
 1. Does it have enough detail to be implementable without further design discussion?
 2. Is anything in the current change inconsistent with it?
+3. Does it still encode premises, or has it become an object-level conclusion?
 
 If the answer to (1) is no, flesh out the missing details in `ARCHITECTURE.md`
 in the same PR (moving the item from later in the file if it lives there).
-Do not update `ARCHITECTURE.md` speculatively — it records live decisions
-only and is updated by the PR that implements the change. If the answer
-to (2) is yes, resolve the inconsistency before merging. The goal is that
-the next item is always fully specified before the current one lands.
+If the answer to (2) is yes, resolve the inconsistency before merging. If the
+answer to (3) is no, rewrite or delete the item. Do not update
+`ARCHITECTURE.md` speculatively: it records live decisions and the next one to
+three tasks, not a backlog.
+
+---
+
+## Development loop
+
+Develop mathematical infrastructure by alternating abstraction, grounded use,
+and correction. The loop is not "add capability, add test, add docs." It is
+"identify the premise, encode it once, make the consequences discovered, then
+delete anything that was only recording the consequence by hand."
+
+The preferred loop is:
+
+1. **Generalize before implementing.** Ask what a more ambitious programmer
+   would demand, then recursively generalize the proposal until another
+   generalization would make the requirement less precise, less testable, or
+   harder for a human to read.
+2. **Encode the premise.** Improve schemas, ownership models, descriptor
+   construction, or capability projections by representing the mathematical
+   fact from which the desired behavior follows.
+3. **Make discovery do the work.** New implementations, claims, and atlas
+   regions should become subject to the relevant requirements by inheritance,
+   structure, schema registration, or implemented methods; editing a list by
+   hand is a temporary smell unless the list is itself the mathematical object.
+4. **Exercise it on a real-ish problem.** Add or improve a small scientifically
+   meaningful workload such as a synthetic reaction network, transient
+   diffusion/advection-diffusion problem, implicit step, conservation
+   projection, or similar case that stresses the abstraction.
+5. **Correct the model by deleting.** Delete names, fields, categories,
+   coverage claims, object-level test cases, docs, or examples that the
+   workload shows are fake, redundant, stale, or insufficiently precise.
+
+Every real-ish problem should leave behind at least one durable formal result:
+a descriptor coordinate, structural invariant, generated atlas region,
+numerical claim, discovered structural test, or deletion of a misleading
+abstraction.
+
+### Design principles
+
+When changing computation capabilities, apply these constraints in order:
+
+1. **Encode premises, not conclusions.** Do not encode labels such as
+   `explicit`, `SPD`, `least_squares`, or `nonlinear` as independent truths
+   when they can be derived from equations, inheritance, operators, residuals,
+   constraints, or available oracles.
+2. **Prefer symbolic or numeric requirements over string literals.** Strings
+   are acceptable as rendering labels, external protocol values, or
+   human-facing text. They should not identify mathematical requirements when
+   an enum, type, predicate, dimension, tolerance, or structural relation can
+   do it.
+3. **Formalize requirements as executable claims.** A requirement belongs in
+   code only when a test can check it mechanically. Prefer one discovered claim
+   over several named examples.
+4. **Make tests automatically discovered.** Tests should discover
+   implementations, schemas, claims, and ownership regions from the code they
+   govern. Adding a new implementation should usually make it subject to
+   relevant structural tests without editing a list by hand.
+5. **Use AST tests for meta-level antipatterns.** Structural tests should ban
+   the general shape of the invalid program, not a named symbol, field, file,
+   or embarrassing historical instance. If the test needs string matching to
+   find the bad thing, generalize the premise again.
+6. **Delete before adding.** If two abstractions overlap, first ask what
+   precise scenario distinguishes them. If the distinction cannot be expressed
+   mathematically or operationally, delete or merge one of them.
+7. **Keep the human projection subordinate.** Human-facing categories, atlas
+   titles, filenames, captions, and package names are projections of the
+   mathematical model. They must not become parallel sources of truth.
+8. **Keep the code readable.** Mathematical precision is not permission to hide
+   intent. Prefer small enums, predicates, dataclasses, and helper functions
+   whose names expose the underlying relation.
+
+### Planning discipline
+
+The built-in task plan and `ARCHITECTURE.md ## Current work` must stay aligned
+during active development.
+
+- Keep `Current work` to the next one to three concrete tasks.
+- Update the local task plan when the active step changes; update
+  `Current work` in the same PR when the short-term horizon changes.
+- When a PR completes a current-work item, remove that item in the same PR.
+- Add only the next visible task or two; do not over-plan beyond what the latest
+  implementation has made clear.
+- If a real-ish problem exposes a schema defect, update `Current work` toward
+  the correction rather than continuing the previous abstraction path blindly.
 
 ---
 
@@ -197,8 +285,6 @@ code PR for the next epoch. Update `ARCHITECTURE.md` (close the epoch row in
 the table, update `## Current work`, record any open questions resolved) and
 `DEVELOPMENT.md` (any process rules that proved unworkable). No code changes;
 any code issue discovered becomes a separate PR.
-
----
 
 ---
 
@@ -236,9 +322,8 @@ the right response is to extend the framework so the check applies to the
 whole class of objects, not just the instance in front of you.
 
 **Convergence order verification.** Every concrete `DiscreteOperator`
-subclass (e.g. `DiffusiveFlux`) that claims a convergence order must have
-instances added to `_INSTANCES` in `tests/test_convergence_order.py`. The
-structure:
+subclass (e.g. `DiffusiveFlux`) that claims a convergence order must be
+covered by the convergence harness. The structure:
 
 - The class declares `order: int` (inherited from `DiscreteOperator`) and
   `min_order: ClassVar[int]` + `order_step: ClassVar[int]` at the class
@@ -252,9 +337,10 @@ structure:
   `h^p` leading term, where `p = instance.order`.  One test function covers
   all convergent classes.  No additional `test_*` functions are written for
   convergence.
-- When adding a new concrete `DiscreteOperator` subclass, add its instances
-  to `_INSTANCES` in `tests/test_convergence_order.py`.  That is the only
-  required change.
+- Legacy inventories such as `_INSTANCES` are bookkeeping, not an architectural
+  pattern to copy. When touching them, prefer moving the harness toward
+  structural discovery; if a manual inventory remains, keep it local and make
+  the tested premise explicit.
 
 Infrastructure capabilities (mesh topology, I/O, field placement) are
 out of scope for lane classification.
@@ -372,14 +458,15 @@ abstraction, helper, and prose paragraph is a permanent cognitive tax.
 When in doubt, delete rather than retain; the simpler the codebase, the
 lower the maintenance burden and the harder it is for bugs to hide.
 
-Test lines are cheap. They run automatically, catch regressions silently,
-and do not accumulate into mental models that contributors must internalize.
-A test that fails is immediately actionable; a test that passes is
-invisible. Write tests liberally and source code parsimoniously.
+Test lines are cheaper than source lines, but they are not free. A good test
+encodes a premise once and discovers every object governed by that premise. A
+weak test enumerates conclusions, names past mistakes, or hard-codes examples
+that future contributors must maintain by hand.
 
 In practice: before adding a helper, ask whether the call site is already
 readable without it. Before adding a docstring sentence, ask whether a
-good name already says it. Before skipping a test case, write it anyway.
+good name already says it. Before adding a test case, ask whether the harness
+can discover the whole class of cases instead.
 
 ---
 

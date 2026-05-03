@@ -1136,6 +1136,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
             objective_relation="spectral_residual",
         )
         explicit_time_step = self._explicit_time_step_descriptor()
+        implicit_stage_solve = self._implicit_stage_descriptor()
 
         for descriptor in (
             linear_system,
@@ -1143,12 +1144,14 @@ class _SolveRelationSchemaClaim(Claim[None]):
             nonlinear_root,
             eigenproblem,
             explicit_time_step,
+            implicit_stage_solve,
         ):
             solve_schema.validate_descriptor(descriptor)
         assert solve_regions["linear_system"].contains(linear_system)
         assert solve_regions["linear_system"].contains(explicit_time_step)
         assert solve_regions["least_squares"].contains(least_squares)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root)
+        assert solve_regions["nonlinear_root"].contains(implicit_stage_solve)
         assert solve_regions["eigenproblem"].contains(eigenproblem)
 
         invalid_eigenproblem = self._solve_descriptor(
@@ -1339,6 +1342,17 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
         state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
         return runge_kutta(1).step_solve_relation_descriptor(state, 0.125)
+
+    @staticmethod
+    def _implicit_stage_descriptor() -> ParameterDescriptor:
+        implicit_runge_kutta = _resolve_dotted(
+            "cosmic_foundry.computation.time_integrators.ImplicitRungeKuttaIntegrator"
+        )
+        state_cls = _resolve_dotted(
+            "cosmic_foundry.computation.time_integrators.ODEState"
+        )
+        state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
+        return implicit_runge_kutta(1).step_solve_relation_descriptor(state, 0.125)
 
     @classmethod
     def _linear_descriptor(
@@ -1544,10 +1558,14 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
         )
         state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
         explicit_owners = []
+        implicit_owners = []
         for integrator in self._single_order_integrators():
-            if self._stage_matrix_is_strictly_lower(getattr(integrator, "A_sym", ())):
-                descriptor = integrator.step_solve_relation_descriptor(state, 0.25)
-                schema.validate_descriptor(descriptor)
+            stage_matrix = getattr(integrator, "A_sym", ())
+            if not stage_matrix:
+                continue
+            descriptor = integrator.step_solve_relation_descriptor(state, 0.25)
+            schema.validate_descriptor(descriptor)
+            if self._stage_matrix_is_strictly_lower(stage_matrix):
                 assert self._regions(schema)["linear_system"].contains(descriptor)
                 assert descriptor.coordinate(SolveRelationField.DIM_X).value == 2
                 assert descriptor.coordinate(SolveRelationField.DIM_Y).value == 2
@@ -1556,10 +1574,29 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                     == 0.0
                 )
                 explicit_owners.append(type(integrator))
-            else:
-                with pytest.raises(ValueError):
-                    integrator.step_solve_relation_descriptor(state, 0.25)
+            elif self._stage_matrix_has_implicit_coupling(stage_matrix):
+                assert self._regions(schema)["nonlinear_root"].contains(descriptor)
+                assert descriptor.coordinate(SolveRelationField.DIM_X).value == (
+                    2 * len(stage_matrix)
+                )
+                assert descriptor.coordinate(SolveRelationField.DIM_Y).value == (
+                    2 * len(stage_matrix)
+                )
+                assert (
+                    descriptor.coordinate(
+                        SolveRelationField.MAP_LINEARITY_DEFECT
+                    ).evidence
+                    == "unavailable"
+                )
+                assert (
+                    descriptor.coordinate(
+                        SolveRelationField.DERIVATIVE_ORACLE_KIND
+                    ).value
+                    == "jacobian_callback"
+                )
+                implicit_owners.append(type(integrator))
         assert explicit_owners
+        assert implicit_owners
 
     @staticmethod
     def _single_order_integrators() -> tuple[Any, ...]:
@@ -1583,6 +1620,15 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
     def _stage_matrix_is_strictly_lower(matrix: Any) -> bool:
         return bool(matrix) and all(
             entry == 0
+            for row_index, row in enumerate(matrix)
+            for column_index, entry in enumerate(row)
+            if column_index >= row_index
+        )
+
+    @staticmethod
+    def _stage_matrix_has_implicit_coupling(matrix: Any) -> bool:
+        return bool(matrix) and any(
+            entry != 0
             for row_index, row in enumerate(matrix)
             for column_index, entry in enumerate(row)
             if column_index >= row_index
@@ -2633,6 +2679,7 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             acceptance_relation="eigenpair_residual",
         ),
         _SolveRelationSchemaClaim._explicit_time_step_descriptor(),
+        _SolveRelationSchemaClaim._implicit_stage_descriptor(),
         _SolveRelationSchemaClaim._linear_descriptor(),
         _SolveRelationSchemaClaim._linear_descriptor(
             singular_value_lower_bound=0.0,
