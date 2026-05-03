@@ -5,20 +5,19 @@ claim requires only appending to _CLAIMS; the single parametric test covers
 all entries.
 
 Claim types:
-  _AbcInstantiationClaim    — ABCs cannot be directly instantiated
-  _HierarchyClaim           — cosmic_foundry subclass relations are correct
-  _ModuleAllClaim           — every public class in a module appears in __all__
+  _AbcInstantiationClaim    — discovered ABCs cannot be directly instantiated
+  _HierarchyClaim           — discovered cosmic_foundry subclass relations are correct
+  _ModuleAllClaim           — discovered public classes appear in __all__
   _IterativeSolverJitClaim  — iterative solver runs on a small assembled LinearOperator
   _MaterializationGateClaim — converged() raises MaterializationError on .get()
   _FactorizationJitClaim    — Factorization.factorize/solve run on declared Tensors
   _GenericBasesClaim        — no subclass leaves a generic base's TypeVars unbound
   _ManifoldIsolationClaim   — Manifold and IndexedSet hierarchies are disjoint
-  _ImportBoundaryClaim      — theory/ and geometry/ import only approved packages
+  _ImportBoundaryClaim      — pure packages import only approved packages
   _ArchitectureOwnershipClaim — package exports and capability ownership are explicit
   _LinearSolverCoverageLocalityClaim — owned solver coverage lives in
                                       implementation classes
-  _TestAxisConventionClaim  — module tests use correctness/convergence/performance
-  _NoTopLevelDefaultBackendMutationClaim — tests do not mutate Tensor backend at import
+  _TestFileStructureClaim   — test modules use claim-dispatch structure
 """
 
 from __future__ import annotations
@@ -390,49 +389,58 @@ def _third_party_imports(path: Path) -> list[str]:
 
 
 class _AbcInstantiationClaim(Claim[None]):
-    def __init__(self, cls: type) -> None:
-        self._cls = cls
-
     @property
     def description(self) -> str:
-        return f"abc_not_instantiable/{self._cls.__qualname__}"
+        return "abc_not_instantiable/discovered"
 
     def check(self, _calibration: None) -> None:
-        with pytest.raises(TypeError):
-            self._cls()
+        instantiable = []
+        for cls in _ABCS:
+            try:
+                cls()
+            except TypeError:
+                continue
+            instantiable.append(f"{cls.__module__}.{cls.__qualname__}")
+        assert not instantiable, "ABCs were directly instantiable: " + ", ".join(
+            sorted(instantiable)
+        )
 
 
 class _HierarchyClaim(Claim[None]):
-    def __init__(self, child: type, parent: type) -> None:
-        self._child = child
-        self._parent = parent
-
     @property
     def description(self) -> str:
-        return f"hierarchy/{self._child.__qualname__}->{self._parent.__qualname__}"
+        return "hierarchy/discovered"
 
     def check(self, _calibration: None) -> None:
-        assert issubclass(self._child, self._parent)
+        violations = [
+            f"{child.__module__}.{child.__qualname__} !< "
+            f"{parent.__module__}.{parent.__qualname__}"
+            for child, parent in _HIERARCHY_PAIRS
+            if not issubclass(child, parent)
+        ]
+        assert not violations, "hierarchy violations: " + "; ".join(violations)
 
 
 class _ModuleAllClaim(Claim[None]):
-    def __init__(self, mod_path: str, mod: types.ModuleType) -> None:
-        self._mod_path = mod_path
-        self._mod = mod
-
     @property
     def description(self) -> str:
-        return f"module_all/{self._mod_path}"
+        return "module_all/discovered"
 
     def check(self, _calibration: None) -> None:
-        exported = set(getattr(self._mod, "__all__", []))
-        defined = {
-            name
-            for name, obj in inspect.getmembers(self._mod, inspect.isclass)
-            if obj.__module__ == self._mod_path and not name.startswith("_")
-        }
-        missing = defined - exported
-        assert not missing, f"defined but not in __all__: {missing}"
+        violations = []
+        for mod_path, mod in _MODULES:
+            exported = set(getattr(mod, "__all__", []))
+            defined = {
+                name
+                for name, obj in inspect.getmembers(mod, inspect.isclass)
+                if obj.__module__ == mod_path and not name.startswith("_")
+            }
+            missing = defined - exported
+            if missing:
+                violations.append(f"{mod_path}: {sorted(missing)}")
+        assert (
+            not violations
+        ), "defined public classes missing from __all__: " + "; ".join(violations)
 
 
 class _IterativeSolverJitClaim(Claim[None]):
@@ -525,21 +533,22 @@ class _ManifoldIsolationClaim(Claim[None]):
 
 
 class _ImportBoundaryClaim(Claim[None]):
-    """Claim: a theory/ or geometry/ source file imports no numerical packages."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
+    """Claim: theory/ and geometry/ source files import no numerical packages."""
 
     @property
     def description(self) -> str:
-        return f"import_boundary/{self._path.relative_to(_PACKAGE_ROOT.parent)}"
+        return "import_boundary/pure_packages"
 
     def check(self, _calibration: None) -> None:
-        violations = _third_party_imports(self._path)
+        violations = [
+            f"{path.relative_to(_PACKAGE_ROOT.parent)}: {', '.join(imports)}"
+            for pkg_dir in _PURE_PACKAGES
+            for path in sorted(pkg_dir.rglob("*.py"))
+            if (imports := _third_party_imports(path))
+        ]
         if violations:
-            rel = self._path.relative_to(_PACKAGE_ROOT.parent)
             raise AssertionError(
-                f"{rel} imports non-symbolic packages: {', '.join(violations)}"
+                "pure packages import non-symbolic packages: " + "; ".join(violations)
             )
 
 
@@ -691,148 +700,106 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         )
 
 
-class _ParametrizeEnforcementClaim(Claim[None]):
-    """Claim: every top-level test_* function carries @pytest.mark.parametrize."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-
-    @property
-    def description(self) -> str:
-        return f"test_pattern/parametrize/{self._path.name}"
-
-    def check(self, _calibration: None) -> None:
-        tree = ast.parse(self._path.read_text())
-        violations = []
-        for node in tree.body:
-            if not (
-                isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
-            ):
-                continue
-            has_parametrize = any(
-                isinstance(d, ast.Call)
-                and isinstance(d.func, ast.Attribute)
-                and d.func.attr == "parametrize"
-                for d in node.decorator_list
-            )
-            if not has_parametrize:
-                violations.append(node.name)
-        if violations:
-            raise AssertionError(
-                f"{self._path.name}: test functions missing @pytest.mark.parametrize: "
-                + ", ".join(violations)
-            )
-
-
-class _BodyDispatchClaim(Claim[None]):
-    """Claim: every top-level test_* body is a single claim.check(...) dispatch."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-
-    @property
-    def description(self) -> str:
-        return f"test_pattern/body_dispatch/{self._path.name}"
-
-    def check(self, _calibration: None) -> None:
-        tree = ast.parse(self._path.read_text())
-        violations = []
-        for node in tree.body:
-            if not (
-                isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
-            ):
-                continue
-            body = node.body
-            if len(body) != 1:
-                violations.append(f"{node.name}: {len(body)} statements in body")
-                continue
-            stmt = body[0]
-            if not isinstance(stmt, ast.Expr):
-                violations.append(f"{node.name}: body is not an expression statement")
-                continue
-            call = stmt.value
-            if not (
-                isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Attribute)
-                and call.func.attr == "check"
-            ):
-                violations.append(f"{node.name}: body does not call .check()")
-                continue
-            if len(call.args) != 1 or call.keywords:
-                violations.append(
-                    f"{node.name}: .check() does not receive exactly one calibration"
-                )
-        if violations:
-            raise AssertionError(
-                f"{self._path.name}: test functions with non-dispatch bodies: "
-                + "; ".join(violations)
-            )
-
-
-class _TestAxisConventionClaim(Claim[None]):
-    """Claim: module test functions are named by verification axis."""
+class _TestFileStructureClaim(Claim[None]):
+    """Claim: top-level test functions are claim-dispatch verification axes."""
 
     _ALLOWED_AXES = {"test_correctness", "test_convergence", "test_performance"}
     _EXEMPT_FILES = {"test_structure.py"}
 
-    def __init__(self, path: Path) -> None:
-        self._path = path
-
     @property
     def description(self) -> str:
-        return f"test_pattern/module_axes/{self._path.name}"
+        return "test_pattern/claim_dispatch_modules"
 
     def check(self, _calibration: None) -> None:
-        if self._path.name in self._EXEMPT_FILES:
-            return
-        tree = ast.parse(self._path.read_text())
-        violations = [
-            node.name
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef)
-            and node.name.startswith("test_")
-            and node.name not in self._ALLOWED_AXES
-        ]
+        self._assert_no_top_level_default_backend_mutation()
+        violations = []
+        for path in _TEST_FILES:
+            tree = ast.parse(path.read_text())
+            for node in tree.body:
+                if not (
+                    isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+                ):
+                    continue
+                violations.extend(self._test_function_violations(path, node))
         if violations:
-            allowed = ", ".join(sorted(self._ALLOWED_AXES))
             raise AssertionError(
-                f"{self._path.name}: test functions outside module-owned axes "
-                f"({allowed}): {', '.join(violations)}"
+                "test module structure violations: " + "; ".join(violations)
             )
 
-
-class _NoTopLevelDefaultBackendMutationClaim(Claim[None]):
-    """Claim: test modules do not mutate Tensor's default backend at import time."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-
-    @property
-    def description(self) -> str:
-        return f"test_pattern/no_top_level_backend_mutation/{self._path.name}"
-
-    def check(self, _calibration: None) -> None:
-        tree = ast.parse(self._path.read_text())
+    @classmethod
+    def _test_function_violations(
+        cls,
+        path: Path,
+        node: ast.FunctionDef,
+    ) -> list[str]:
         violations = []
-        for node in tree.body:
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                continue
-            for child in ast.walk(node):
-                if not isinstance(child, ast.Call):
-                    continue
-                func = child.func
-                if isinstance(func, ast.Name) and func.id == "set_default_backend":
-                    violations.append(child.lineno)
-                elif (
-                    isinstance(func, ast.Attribute)
-                    and func.attr == "set_default_backend"
+        if not cls._has_parametrize(node):
+            violations.append(f"{path.name}.{node.name}: missing @parametrize")
+        violations.extend(cls._dispatch_violations(path, node))
+        if path.name not in cls._EXEMPT_FILES and node.name not in cls._ALLOWED_AXES:
+            allowed = ", ".join(sorted(cls._ALLOWED_AXES))
+            violations.append(
+                f"{path.name}.{node.name}: outside module-owned axes ({allowed})"
+            )
+        return violations
+
+    @staticmethod
+    def _has_parametrize(node: ast.FunctionDef) -> bool:
+        return any(
+            isinstance(d, ast.Call)
+            and isinstance(d.func, ast.Attribute)
+            and d.func.attr == "parametrize"
+            for d in node.decorator_list
+        )
+
+    @staticmethod
+    def _dispatch_violations(path: Path, node: ast.FunctionDef) -> list[str]:
+        body = node.body
+        if len(body) != 1:
+            return [f"{path.name}.{node.name}: {len(body)} statements in body"]
+        stmt = body[0]
+        if not isinstance(stmt, ast.Expr):
+            return [f"{path.name}.{node.name}: body is not an expression statement"]
+        call = stmt.value
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "check"
+        ):
+            return [f"{path.name}.{node.name}: body does not call .check()"]
+        if len(call.args) != 1 or call.keywords:
+            return [
+                f"{path.name}.{node.name}: .check() does not receive exactly "
+                "one calibration"
+            ]
+        return []
+
+    @staticmethod
+    def _assert_no_top_level_default_backend_mutation() -> None:
+        violations = []
+        for path in _TEST_FILES:
+            tree = ast.parse(path.read_text())
+            for node in tree.body:
+                if isinstance(
+                    node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
                 ):
-                    violations.append(child.lineno)
+                    continue
+                for child in ast.walk(node):
+                    if not isinstance(child, ast.Call):
+                        continue
+                    func = child.func
+                    if isinstance(func, ast.Name) and func.id == "set_default_backend":
+                        violations.append(f"{path.name}:{child.lineno}")
+                    elif (
+                        isinstance(func, ast.Attribute)
+                        and func.attr == "set_default_backend"
+                    ):
+                        violations.append(f"{path.name}:{child.lineno}")
         if violations:
-            lines = ", ".join(str(line) for line in violations)
             raise AssertionError(
-                f"{self._path.name}: top-level set_default_backend() call(s) "
-                f"at line(s) {lines}; pass explicit backends or use a fixture"
+                "top-level set_default_backend() calls: "
+                + ", ".join(violations)
+                + "; pass explicit backends or use a fixture"
             )
 
 
@@ -3467,23 +3434,16 @@ _GEOMETRY_OWNERSHIP = _ArchitectureOwnershipSpec(
 )
 
 _CLAIMS: list[Claim[None]] = [
-    *[_AbcInstantiationClaim(cls) for cls in _ABCS],
-    *[_HierarchyClaim(child, parent) for child, parent in _HIERARCHY_PAIRS],
-    *[_ModuleAllClaim(mod_path, mod) for mod_path, mod in _MODULES],
+    _AbcInstantiationClaim(),
+    _HierarchyClaim(),
+    _ModuleAllClaim(),
     *[_IterativeSolverJitClaim(cls) for cls in _MATRIX_FREE_ITERATIVE_SOLVERS],
     *[_MaterializationGateClaim(cls) for cls in _MATRIX_FREE_ITERATIVE_SOLVERS],
     *[_FactorizationJitClaim(cls) for cls in _FACTORIZATIONS],
     _GenericBasesClaim(),
     _ManifoldIsolationClaim(),
-    *[
-        _ImportBoundaryClaim(path)
-        for pkg_dir in _PURE_PACKAGES
-        for path in sorted(pkg_dir.rglob("*.py"))
-    ],
-    *[_ParametrizeEnforcementClaim(p) for p in _TEST_FILES],
-    *[_BodyDispatchClaim(p) for p in _TEST_FILES],
-    *[_TestAxisConventionClaim(p) for p in _TEST_FILES],
-    *[_NoTopLevelDefaultBackendMutationClaim(p) for p in _TEST_FILES],
+    _ImportBoundaryClaim(),
+    _TestFileStructureClaim(),
     _ArchitectureOwnershipClaim(_TIME_INTEGRATOR_OWNERSHIP),
     _ArchitectureOwnershipClaim(_LINEAR_SOLVER_OWNERSHIP),
     _ArchitectureOwnershipClaim(_DECOMPOSITION_OWNERSHIP),
