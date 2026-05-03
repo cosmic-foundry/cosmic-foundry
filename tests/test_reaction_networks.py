@@ -24,6 +24,8 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
+    derivative_oracle_descriptor,
+    time_integration_capabilities,
     time_integration_step_map_regions,
 )
 from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
@@ -32,18 +34,42 @@ from tests.claims import Claim
 _TIME_BACKEND = NumpyBackend()
 
 
+def _owned_step_map_owner(descriptor: ParameterDescriptor) -> type:
+    regions = time_integration_step_map_regions()
+    owners = tuple(region.owner for region in regions if region.contains(descriptor))
+    assert len(owners) == 1
+    return owners[0]
+
+
 def _assert_owned_step_map_cell(
     descriptor: ParameterDescriptor,
-    owner: type,
 ) -> None:
     schema = map_structure_parameter_schema()
     regions = time_integration_step_map_regions()
 
     schema.validate_descriptor(descriptor)
     assert schema.cell_status(descriptor, regions) == "owned"
-    assert tuple(region.owner for region in regions if region.contains(descriptor)) == (
-        owner,
+    assert _owned_step_map_owner(descriptor)
+
+
+def _owned_time_integration_owner(
+    descriptor: ParameterDescriptor,
+    *,
+    requested_properties: frozenset[str],
+    order: int,
+) -> type:
+    request = AlgorithmRequest(
+        requested_properties=requested_properties,
+        order=order,
+        descriptor=descriptor,
     )
+    owners = tuple(
+        capability.coverage_regions[0].owner
+        for capability in time_integration_capabilities()
+        if capability.supports(request)
+    )
+    assert len(owners) == 1
+    return owners[0]
 
 
 def _finite_transition_initial_state(
@@ -91,7 +117,15 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         integrator = _ti.ImplicitRungeKuttaIntegrator(2)
         auto = _ti.AutoIntegrator(2)
 
-        assert auto.select(rhs).implementation == "ImplicitRungeKuttaIntegrator"
+        step_descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
+        assert (
+            auto.select(rhs).implementation
+            == _owned_time_integration_owner(
+                derivative_oracle_descriptor(),
+                requested_properties=frozenset({"one_step"}),
+                order=2,
+            ).__name__
+        )
 
         reaction_descriptor = rhs.reaction_network_descriptor()
         map_descriptor = rhs.map_structure_descriptor()
@@ -139,9 +173,9 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
                     descriptor=map_descriptor,
                 )
             ).implementation
-            == "RungeKuttaIntegrator"
+            == _owned_step_map_owner(map_descriptor).__name__
         )
-        _assert_owned_step_map_cell(map_descriptor, _ti.RungeKuttaIntegrator)
+        _assert_owned_step_map_cell(map_descriptor)
         assert (
             reaction_descriptor.coordinate(
                 ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
@@ -156,9 +190,16 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
                 descriptor=constraint_descriptor,
             )
         )
-        assert constraint_owner.implementation == "ConstraintAwareController"
+        assert (
+            constraint_owner.implementation
+            == _owned_time_integration_owner(
+                constraint_descriptor,
+                requested_properties=frozenset({"advance"}),
+                order=2,
+            ).__name__
+        )
 
-        descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
+        descriptor = step_descriptor
         schema = solve_relation_parameter_schema()
         schema.validate_descriptor(descriptor)
         regions = {region.name: region for region in schema.derived_regions}

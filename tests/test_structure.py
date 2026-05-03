@@ -903,6 +903,53 @@ class _AutoDiscoveryImportClaim(Claim[None]):
             )
 
 
+class _SelectorExpectationDerivationClaim(Claim[None]):
+    """Claim: selector tests derive expected owners from descriptor regions."""
+
+    @property
+    def description(self) -> str:
+        return "test_pattern/selector_expectation_derivation"
+
+    def check(self, _calibration: None) -> None:
+        violations = []
+        for path in _TEST_FILES:
+            if path.name == "test_structure.py":
+                continue
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Compare):
+                    continue
+                expressions = (node.left, *node.comparators)
+                implementation_exprs = [
+                    expr for expr in expressions if self._is_implementation_attr(expr)
+                ]
+                if not implementation_exprs:
+                    continue
+                if not any(self._is_derived_owner_name(expr) for expr in expressions):
+                    violations.append(f"{path.name}:{node.lineno}")
+        assert not violations, (
+            "selector implementation expectations must be derived from descriptor "
+            "case ownership regions: " + ", ".join(violations)
+        )
+
+    @staticmethod
+    def _is_implementation_attr(node: ast.expr) -> bool:
+        return isinstance(node, ast.Attribute) and node.attr == "implementation"
+
+    @staticmethod
+    def _is_derived_owner_name(node: ast.expr) -> bool:
+        return (
+            isinstance(node, ast.Attribute)
+            and node.attr == "__name__"
+            and (
+                isinstance(node.value, ast.Call)
+                or (
+                    isinstance(node.value, ast.Attribute) and node.value.attr == "owner"
+                )
+            )
+        )
+
+
 class _ParameterSpaceSchemaClaim(Claim[None]):
     """Claim: parameter-space coverage primitives fail closed structurally."""
 
@@ -3736,6 +3783,7 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
     _AlgorithmSelectionAmbiguityClaim(),
     _AutoDiscoveryImportClaim(),
+    _SelectorExpectationDerivationClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
