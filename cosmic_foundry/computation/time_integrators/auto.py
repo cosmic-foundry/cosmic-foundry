@@ -100,9 +100,7 @@ def _rhs_request(rhs: RHSProtocol, order: int) -> TimeIntegrationRequest:
         )
     if isinstance(rhs, ReactionNetworkRHS):
         return TimeIntegrationRequest(
-            available_structure=frozenset(
-                {"reaction_network_rhs", "jacobian_rhs", "conservation_constraints"}
-            ),
+            available_structure=frozenset({"jacobian_rhs"}),
             requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
             order=order,
         )

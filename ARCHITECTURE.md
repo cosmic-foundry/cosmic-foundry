@@ -790,13 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Return to the solver/time-integrator schema unification: identify the
-   smallest descriptor coordinates needed for time integrators to participate in
-   the shared solve-relation atlas without adding a parallel "time integrator"
-   coverage vocabulary.
-2. Replace `TimeIntegrationRequest` string structures such as
-   `reaction_network_rhs` and `conservation_constraints` with predicates over
-   RHS, solve-relation, and reaction-network descriptors.
+1. Collapse Jacobian-specific RHS selection into map evidence: replace
+   `jacobian_rhs` request structure with derivative-oracle descriptor
+   predicates wherever time-integrator selection only needs access to `Df`.
+2. Return to the solver/time-integrator schema unification for method-family
+   selection: identify the smallest descriptor coordinates needed for
+   time-integrator method families to participate in the shared solve-relation
+   atlas without adding a parallel "time integrator" coverage vocabulary.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -862,6 +862,11 @@ independent equilibrium-constraint count are intrinsic to the RHS.  State-domain
 checks, time-step solve relations, and integrator/controller selection remain
 separate downstream evidence.  The schema enforces rank/nullity consistency and
 is included in atlas generation as a discovered parameter space.
+The constraint-aware controller no longer selects from reaction-network string
+structure.  Its capability is selected by predicates over the reaction-network
+descriptor: conserved networks with independent equilibrium constraints support
+constraint lifecycle management.  This is the first time-integrator selection
+path that consumes descriptor evidence directly rather than a named RHS label.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

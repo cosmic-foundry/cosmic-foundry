@@ -3003,11 +3003,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset(
-                    {"reaction_network_rhs", "conservation_constraints"}
-                ),
                 requested_properties=frozenset({"advance", "constraint_lifecycle"}),
                 order=2,
+                descriptor=_SolveRelationSchemaClaim._reaction_network_descriptor(),
             ),
             "ConstraintAwareController",
         ),
@@ -3029,6 +3027,12 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                     {"one_step", "operator_splitting", "composition"}
                 ),
                 order=3,
+            )
+        ),
+        _CapabilityRejectionExpectation(
+            _TimeIntegrationRequest(
+                requested_properties=frozenset({"advance", "constraint_lifecycle"}),
+                order=2,
             )
         ),
     ),

@@ -7,6 +7,12 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRegistry,
     AlgorithmRequest,
     AlgorithmStructureContract,
+    ComparisonPredicate,
+    CoverageRegion,
+    ReactionNetworkField,
+)
+from cosmic_foundry.computation.time_integrators.constraint_aware import (
+    ConstraintAwareController,
 )
 
 TimeIntegrationCapability = AlgorithmCapability
@@ -149,11 +155,24 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "ConstraintAwareController",
         "controller",
         _contract(
-            requires=("reaction_network_rhs", "conservation_constraints"),
+            requires=(),
             provides=("advance", "constraint_lifecycle", "domain_aware_acceptance"),
         ),
         1,
         6,
+        coverage_regions=(
+            CoverageRegion(
+                ConstraintAwareController,
+                (
+                    ComparisonPredicate(
+                        ReactionNetworkField.CONSERVATION_LAW_COUNT, ">", 0
+                    ),
+                    ComparisonPredicate(
+                        ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT, ">", 0
+                    ),
+                ),
+            ),
+        ),
     ),
 )
 
