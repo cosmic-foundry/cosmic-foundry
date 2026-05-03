@@ -46,6 +46,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     rhs_evaluation_descriptor,
     rhs_history_descriptor,
     time_integration_step_map_regions,
+    time_integration_step_solve_regions,
 )
 from tests import test_structure as structure
 from tests.claims import Claim
@@ -190,6 +191,8 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
 def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
     regions: dict[type, CoverageRegion] = {}
     for region in linear_solver_coverage_regions():
+        regions[region.owner] = region
+    for region in time_integration_step_solve_regions():
         regions[region.owner] = region
     for region in time_integration_step_map_regions():
         regions[region.owner] = region

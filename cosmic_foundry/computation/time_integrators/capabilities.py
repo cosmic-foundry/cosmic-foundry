@@ -86,7 +86,7 @@ def _map_structure_coordinates(
 
 
 def derivative_oracle_descriptor() -> ParameterDescriptor:
-    """Return map evidence for an available Jacobian callback."""
+    """Return solve-relation evidence for an available Jacobian callback."""
     return ParameterDescriptor(
         {
             SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
@@ -187,7 +187,7 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
         (
             MembershipPredicate(
                 SolveRelationField.DERIVATIVE_ORACLE_KIND,
-                frozenset({"jacobian_callback", "matrix"}),
+                frozenset({"jacobian_callback"}),
             ),
         ),
     )
@@ -437,6 +437,18 @@ def time_integration_step_map_regions() -> tuple[CoverageRegion, ...]:
     )
 
 
+def time_integration_step_solve_regions() -> tuple[CoverageRegion, ...]:
+    """Return solve-relation regions induced by implementations' step solves."""
+    solve_fields = frozenset(SolveRelationField)
+    return tuple(
+        region
+        for capability in _CAPABILITIES
+        for region in capability.coverage_regions
+        if region.referenced_fields <= solve_fields
+        if callable(getattr(region.owner, "step_solve_relation_descriptor", None))
+    )
+
+
 def select_time_integrator(
     request: AlgorithmRequest,
 ) -> TimeIntegrationCapability:
@@ -458,6 +470,7 @@ __all__ = [
     "TimeIntegrationCapability",
     "time_integration_capabilities",
     "time_integration_step_map_regions",
+    "time_integration_step_solve_regions",
     "TimeIntegrationRegistry",
     "TIME_INTEGRATION_REGISTRY",
 ]
