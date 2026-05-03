@@ -793,13 +793,12 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: fold the remaining oscillator descriptor-evidence
-   claims in `test_algorithm_selection.py` into the same descriptor-case model
-   when the distinction can be expressed as descriptor coordinates and a real
-   step calculation. Keep separate claims only when they assert a mathematical
-   invariant not implied by selector ownership. Do not add mesh, flux-form,
-   locality, or CFL axes until a real mesh object is the implementation premise
-   being tested.
+2. Candidate next calculation: add a structural guard that selector tests derive
+   expected implementations from descriptor ownership regions, not parallel
+   owner maps or hard-coded implementation comparisons. The grounding calculation
+   should remain the descriptor-backed step-selection cases. Do not add mesh,
+   flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
