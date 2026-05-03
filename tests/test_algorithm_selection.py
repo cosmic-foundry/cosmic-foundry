@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -10,6 +12,7 @@ import pytest
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRequest,
+    CoverageRegion,
     MapStructureField,
     ParameterDescriptor,
     SolveRelationField,
@@ -23,6 +26,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
     hamiltonian_map_descriptor,
     nordsieck_history_descriptor,
+    rhs_evaluation_descriptor,
     rhs_history_descriptor,
     semilinear_map_descriptor,
     split_map_descriptor,
@@ -36,32 +40,24 @@ _TIME_BACKEND = cases.TIME_BACKEND
 _DAMPED_OSCILLATOR_GAMMA = 0.2
 
 
-def _assert_owned_step_map_cell(
+def _owned_region_owner(
     descriptor: ParameterDescriptor,
-    owner: type,
-) -> None:
-    schema = map_structure_parameter_schema()
-    regions = time_integration_step_map_regions()
+    regions: tuple[CoverageRegion, ...],
+) -> type:
+    owners = tuple(region.owner for region in regions if region.contains(descriptor))
+    assert len(owners) == 1
+    return owners[0]
 
+
+def _assert_owned_cell(
+    descriptor: ParameterDescriptor,
+    *,
+    regions: tuple[CoverageRegion, ...],
+    schema: Any,
+) -> None:
     schema.validate_descriptor(descriptor)
     assert schema.cell_status(descriptor, regions) == "owned"
-    assert tuple(region.owner for region in regions if region.contains(descriptor)) == (
-        owner,
-    )
-
-
-def _assert_owned_step_solve_cell(
-    descriptor: ParameterDescriptor,
-    owner: type,
-) -> None:
-    schema = solve_relation_parameter_schema()
-    regions = time_integration_step_solve_regions()
-
-    schema.validate_descriptor(descriptor)
-    assert schema.cell_status(descriptor, regions) == "owned"
-    assert tuple(region.owner for region in regions if region.contains(descriptor)) == (
-        owner,
-    )
+    assert _owned_region_owner(descriptor, regions)
 
 
 def _exact_damped_osc(t: float) -> tuple[float, ...]:
@@ -126,242 +122,274 @@ def _auto_selection_rhs_by_owner() -> dict[type, object]:
     }
 
 
-class _HistoryStateSelectionClaim(Claim[Any]):
-    """Grounded claim for history-dependent method ownership."""
+@dataclass(frozen=True)
+class _StepSelectionCase:
+    name: str
+    descriptor: ParameterDescriptor
+    order: int
+    state: _ti.ODEState
+    rhs: object
+    integrator: object
+    exact: Callable[[float], tuple[float, ...]]
+    tolerance: float
+    regions: tuple[CoverageRegion, ...]
+    schema: Any
+    postcheck: Callable[[_StepSelectionCase, _ti.ODEState], None] = (
+        lambda case, state: None
+    )
 
     @property
-    def description(self) -> str:
-        return "correctness/history_state_selection"
+    def owner(self) -> type:
+        return _owned_region_owner(self.descriptor, self.regions)
 
-    def check(self, _calibration: Any) -> None:
-        rhs = cases.scalar_decay_jacobian_rhs()
-        u0 = Tensor([1.0], backend=_TIME_BACKEND)
-        dt = 1.0e-2
-
-        ab = _ti.ExplicitMultistepIntegrator.for_order(4)
-        state = _ti.ODEState(0.0, u0)
-        for _ in range(3):
-            state = ab.step(rhs, state, dt)
-        assert isinstance(state.history, tuple)
-        assert len(state.history) == 3
-        selected_ab = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=4,
-                descriptor=rhs_history_descriptor(),
-            )
-        )
-        assert selected_ab.implementation == _ti.ExplicitMultistepIntegrator.__name__
-        _assert_owned_step_map_cell(
-            rhs_history_descriptor(),
-            _ti.ExplicitMultistepIntegrator,
-        )
-        state = ab.step(rhs, state, dt)
-        assert cases.err(state.u, cases.exact_scalar_decay, state.t) < 1.0e-8
-
-        nordsieck = _ti.MultistepIntegrator("adams", 4)
-        nordsieck_state = nordsieck.init_state(rhs, 0.0, u0, dt)
-        assert isinstance(nordsieck_state.history, _ti.NordsieckHistory)
-        assert nordsieck_state.history.q == 4
-        selected_nordsieck = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=4,
-                descriptor=nordsieck_history_descriptor(),
-            )
-        )
-        assert selected_nordsieck.implementation == _ti.MultistepIntegrator.__name__
-        _assert_owned_step_map_cell(
-            nordsieck_history_descriptor(),
-            _ti.MultistepIntegrator,
-        )
-        nordsieck_state = nordsieck.step(rhs, nordsieck_state, dt)
-        assert (
-            cases.err(nordsieck_state.u, cases.exact_scalar_decay, nordsieck_state.t)
-            < 1.0e-8
-        )
+    def step(self, dt: float) -> _ti.ODEState:
+        return self.integrator.step(self.rhs, self.state, dt)  # type: ignore[attr-defined]
 
 
-class _ImplicitStageSolveSelectionClaim(Claim[Any]):
-    """Grounded claim for derivative-oracle ownership as a step solve."""
+def _map_selection_case(
+    name: str,
+    descriptor: ParameterDescriptor,
+    order: int,
+    rhs: object,
+    integrator: object,
+    u0: Tensor,
+    exact: Callable[[float], tuple[float, ...]],
+    tolerance: float,
+    postcheck: Callable[[_StepSelectionCase, _ti.ODEState], None] = (
+        lambda case, state: None
+    ),
+) -> _StepSelectionCase:
+    return _StepSelectionCase(
+        name=name,
+        descriptor=descriptor,
+        order=order,
+        state=_ti.ODEState(0.0, u0),
+        rhs=rhs,
+        integrator=integrator,
+        exact=exact,
+        tolerance=tolerance,
+        regions=time_integration_step_map_regions(),
+        schema=map_structure_parameter_schema(),
+        postcheck=postcheck,
+    )
 
-    @property
-    def description(self) -> str:
-        return "correctness/implicit_stage_solve_selection"
 
-    def check(self, _calibration: Any) -> None:
-        rhs = cases.scalar_decay_jacobian_rhs()
-        integrator = _ti.ImplicitRungeKuttaIntegrator(2)
-        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
-        dt = 1.0e-2
+def _solve_selection_case() -> _StepSelectionCase:
+    rhs = cases.scalar_decay_jacobian_rhs()
+    integrator = _ti.ImplicitRungeKuttaIntegrator(2)
+    state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+    dt = 1.0e-2
+    descriptor = integrator.step_solve_relation_descriptor(rhs, state, dt)
 
-        selected = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=2,
-                descriptor=derivative_oracle_descriptor(),
-            )
-        )
-        assert selected.implementation == _ti.ImplicitRungeKuttaIntegrator.__name__
-
-        descriptor = integrator.step_solve_relation_descriptor(rhs, state, dt)
-        _assert_owned_step_solve_cell(descriptor, _ti.ImplicitRungeKuttaIntegrator)
-        assert descriptor.coordinate(
+    def postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> None:
+        assert case.descriptor.coordinate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND
         ) == derivative_oracle_descriptor().coordinate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND
         )
 
+    return _StepSelectionCase(
+        name="implicit_stage_solve",
+        descriptor=descriptor,
+        order=2,
+        state=state,
+        rhs=rhs,
+        integrator=integrator,
+        exact=cases.exact_scalar_decay,
+        tolerance=1.0e-7,
+        regions=time_integration_step_solve_regions(),
+        schema=solve_relation_parameter_schema(),
+        postcheck=postcheck,
+    )
+
+
+def _rhs_history_selection_case() -> _StepSelectionCase:
+    rhs = cases.scalar_decay_jacobian_rhs()
+    dt = 1.0e-2
+    integrator = _ti.ExplicitMultistepIntegrator.for_order(4)
+    state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+    for _ in range(3):
         state = integrator.step(rhs, state, dt)
-        assert cases.err(state.u, cases.exact_scalar_decay, state.t) < 1.0e-7
+    assert isinstance(state.history, tuple)
+    assert len(state.history) == 3
+    return _StepSelectionCase(
+        name="rhs_history",
+        descriptor=rhs_history_descriptor(),
+        order=4,
+        state=state,
+        rhs=rhs,
+        integrator=integrator,
+        exact=cases.exact_scalar_decay,
+        tolerance=1.0e-8,
+        regions=time_integration_step_map_regions(),
+        schema=map_structure_parameter_schema(),
+    )
 
 
-class _SplitStepMapSelectionClaim(Claim[Any]):
-    """Grounded claim for split-step ownership as map composition evidence."""
+def _nordsieck_history_selection_case() -> _StepSelectionCase:
+    rhs = cases.scalar_decay_jacobian_rhs()
+    integrator = _ti.MultistepIntegrator("adams", 4)
+    state = integrator.init_state(rhs, 0.0, Tensor([1.0], backend=_TIME_BACKEND), 1e-2)
+    assert isinstance(state.history, _ti.NordsieckHistory)
+    assert state.history.q == 4
+    return _StepSelectionCase(
+        name="nordsieck_history",
+        descriptor=nordsieck_history_descriptor(),
+        order=4,
+        state=state,
+        rhs=rhs,
+        integrator=integrator,
+        exact=cases.exact_scalar_decay,
+        tolerance=1.0e-8,
+        regions=time_integration_step_map_regions(),
+        schema=map_structure_parameter_schema(),
+    )
 
-    @property
-    def description(self) -> str:
-        return "correctness/split_step_map_selection"
 
-    def check(self, _calibration: Any) -> None:
-        rhs = cases.split_decay_rhs()
-        integrator = _ti.AdditiveRungeKuttaIntegrator(2)
-        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
-        dt = 1.0e-2
+def _assert_no_step_solve_or_linear_operator(
+    case: _StepSelectionCase,
+    state: _ti.ODEState,
+) -> None:
+    for method in (
+        "step_solve_relation_descriptor",
+        "step_linear_operator_descriptor",
+    ):
+        candidate = getattr(case.integrator, method, None)
+        if callable(candidate):
+            with pytest.raises(ValueError):
+                candidate(case.rhs, state, 1.0e-2)
 
-        selected = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=2,
-                descriptor=split_map_descriptor(),
-            )
-        )
-        assert selected.implementation == _ti.AdditiveRungeKuttaIntegrator.__name__
-        _assert_owned_step_map_cell(
+
+def _composition_postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> None:
+    assert (
+        case.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value
+        == 2
+    )
+    assert not case.descriptor.coordinate(
+        MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE
+    ).value
+    assert case.descriptor.coordinate(
+        MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+    ).value
+    generic_descriptor = composite_map_descriptor(len(case.rhs.components))  # type: ignore[attr-defined]
+    assert not generic_descriptor.coordinate(
+        MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+    ).value
+    _assert_no_step_solve_or_linear_operator(case, state)
+
+
+def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
+    return (
+        _map_selection_case(
+            "rhs_evaluation",
+            rhs_evaluation_descriptor(),
+            4,
+            _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend)),
+            _ti.RungeKuttaIntegrator(4),
+            Tensor([1.0], backend=_TIME_BACKEND),
+            cases.exact_scalar_decay,
+            1.0e-10,
+        ),
+        _rhs_history_selection_case(),
+        _nordsieck_history_selection_case(),
+        _solve_selection_case(),
+        _map_selection_case(
+            "split_map",
             split_map_descriptor(),
-            _ti.AdditiveRungeKuttaIntegrator,
-        )
-        with pytest.raises(ValueError):
-            integrator.step_solve_relation_descriptor(rhs, state, dt)
-
-        state = integrator.step(rhs, state, dt)
-        assert cases.err(state.u, cases.exact_scalar_decay, state.t) < 1.0e-7
-
-
-class _SemilinearStepMapSelectionClaim(Claim[Any]):
-    """Grounded claim for semilinear ownership as map composition evidence."""
-
-    @property
-    def description(self) -> str:
-        return "correctness/semilinear_step_map_selection"
-
-    def check(self, _calibration: Any) -> None:
-        rhs = cases.semilinear_forcing_rhs()
-        integrator = _ti.LawsonRungeKuttaIntegrator(4)
-        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
-        dt = 1.0e-2
-
-        selected = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=4,
-                descriptor=semilinear_map_descriptor(),
-            )
-        )
-        assert selected.implementation == _ti.LawsonRungeKuttaIntegrator.__name__
-        _assert_owned_step_map_cell(
+            2,
+            cases.split_decay_rhs(),
+            _ti.AdditiveRungeKuttaIntegrator(2),
+            Tensor([1.0], backend=_TIME_BACKEND),
+            cases.exact_scalar_decay,
+            1.0e-7,
+            lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
+        ),
+        _map_selection_case(
+            "semilinear_map",
             semilinear_map_descriptor(),
-            _ti.LawsonRungeKuttaIntegrator,
-        )
-        assert not callable(getattr(integrator, "step_solve_relation_descriptor", None))
-        assert not callable(
-            getattr(integrator, "step_linear_operator_descriptor", None)
-        )
-
-        state = integrator.step(rhs, state, dt)
-        assert cases.err(state.u, cases.exact_semilinear, state.t) < 1.0e-10
-
-
-class _HamiltonianStepMapSelectionClaim(Claim[Any]):
-    """Grounded claim for Hamiltonian ownership as map partition evidence."""
-
-    @property
-    def description(self) -> str:
-        return "correctness/hamiltonian_step_map_selection"
-
-    def check(self, _calibration: Any) -> None:
-        rhs = cases.harmonic_hamiltonian_rhs()
-        integrator = _ti.SymplecticCompositionIntegrator(4)
-        state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
-        dt = 1.0e-2
-
-        selected = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=4,
-                descriptor=hamiltonian_map_descriptor(),
-            )
-        )
-        assert selected.implementation == _ti.SymplecticCompositionIntegrator.__name__
-        _assert_owned_step_map_cell(
+            4,
+            cases.semilinear_forcing_rhs(),
+            _ti.LawsonRungeKuttaIntegrator(4),
+            Tensor([1.0], backend=_TIME_BACKEND),
+            cases.exact_semilinear,
+            1.0e-10,
+            lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
+        ),
+        _map_selection_case(
+            "hamiltonian_map",
             hamiltonian_map_descriptor(),
-            _ti.SymplecticCompositionIntegrator,
-        )
-        with pytest.raises(ValueError):
-            integrator.step_solve_relation_descriptor(rhs, state, dt)
-        with pytest.raises(ValueError):
-            integrator.step_linear_operator_descriptor(rhs, state, dt)
+            4,
+            cases.harmonic_hamiltonian_rhs(),
+            _ti.SymplecticCompositionIntegrator(4),
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            cases.exact_ham,
+            1.0e-10,
+            lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
+        ),
+        _map_selection_case(
+            "composition_map",
+            composite_map_descriptor_from_rhs(cases.oscillator_composite_rhs()),
+            4,
+            cases.oscillator_composite_rhs(),
+            _ti.CompositionIntegrator(
+                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+                order=4,
+            ),
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            cases.exact_osc,
+            1.0e-8,
+            _composition_postcheck,
+        ),
+    )
 
-        state = integrator.step(rhs, state, dt)
-        assert cases.err(state.u, cases.exact_ham, state.t) < 1.0e-10
 
+class _StepSelectionClaim(Claim[Any]):
+    """Grounded claim for descriptor-region ownership and selector agreement."""
 
-class _CompositionStepMapSelectionClaim(Claim[Any]):
-    """Grounded claim for composition ownership as component-flow evidence."""
+    def __init__(self, case: _StepSelectionCase) -> None:
+        self._case = case
 
     @property
     def description(self) -> str:
-        return "correctness/composition_step_map_selection"
+        return f"correctness/step_selection/{self._case.name}"
 
     def check(self, _calibration: Any) -> None:
-        rhs = cases.oscillator_composite_rhs()
-        integrator = _ti.CompositionIntegrator(
-            [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
-            order=4,
+        case = self._case
+        _assert_owned_cell(
+            case.descriptor,
+            regions=case.regions,
+            schema=case.schema,
         )
-        state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
-        dt = 1.0e-2
-        descriptor = composite_map_descriptor_from_rhs(rhs)
-
         selected = _ti.select_time_integrator(
             AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
-                order=4,
-                descriptor=descriptor,
+                order=case.order,
+                descriptor=case.descriptor,
             )
         )
-        assert selected.implementation == _ti.CompositionIntegrator.__name__
-        _assert_owned_step_map_cell(descriptor, _ti.CompositionIntegrator)
-        assert (
-            descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value == 2
-        )
-        assert not descriptor.coordinate(
-            MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE
-        ).value
-        assert descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        generic_descriptor = composite_map_descriptor(len(rhs.components))
-        assert not generic_descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        with pytest.raises(ValueError):
-            integrator.step_solve_relation_descriptor(rhs, state, dt)
-        with pytest.raises(ValueError):
-            integrator.step_linear_operator_descriptor(rhs, state, dt)
+        assert selected.implementation == case.owner.__name__
+        state = case.step(1.0e-2)
+        assert cases.err(state.u, case.exact, state.t) < case.tolerance
+        case.postcheck(case, state)
 
-        state = integrator.step(rhs, state, dt)
-        assert cases.err(state.u, cases.exact_osc, state.t) < 1.0e-8
+
+class _StepSelectionRegionCoverageClaim(Claim[Any]):
+    """Claim that selection calculations cover every step ownership region."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/step_selection_region_coverage"
+
+    def check(self, _calibration: Any) -> None:
+        cases_by_region = _step_selection_cases()
+        for region in (
+            *time_integration_step_map_regions(),
+            *time_integration_step_solve_regions(),
+        ):
+            assert any(
+                region.owner is case.owner and region.contains(case.descriptor)
+                for case in cases_by_region
+            ), region.owner.__name__
 
 
 class _OscillatorInvariantComparisonClaim(Claim[Any]):
@@ -484,6 +512,7 @@ class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
             ).value
         )
         for descriptor in (certified_descriptor, uncertified_descriptor):
+            owner = _owned_region_owner(descriptor, time_integration_step_map_regions())
             assert (
                 _ti.select_time_integrator(
                     AlgorithmRequest(
@@ -492,9 +521,13 @@ class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
                         descriptor=descriptor,
                     )
                 ).implementation
-                == _ti.CompositionIntegrator.__name__
+                == owner.__name__
             )
-            _assert_owned_step_map_cell(descriptor, _ti.CompositionIntegrator)
+            _assert_owned_cell(
+                descriptor,
+                regions=time_integration_step_map_regions(),
+                schema=map_structure_parameter_schema(),
+            )
 
         for _ in range(steps):
             certified = integrator.step(certified_rhs, certified, dt)
@@ -543,9 +576,15 @@ class _DampedOscillatorSymplecticDefectClaim(Claim[Any]):
                     descriptor=descriptor,
                 )
             ).implementation
-            == _ti.CompositionIntegrator.__name__
+            == _owned_region_owner(
+                descriptor, time_integration_step_map_regions()
+            ).__name__
         )
-        _assert_owned_step_map_cell(descriptor, _ti.CompositionIntegrator)
+        _assert_owned_cell(
+            descriptor,
+            regions=time_integration_step_map_regions(),
+            schema=map_structure_parameter_schema(),
+        )
 
         initial_energy = _oscillator_energy(state.u)
         for _ in range(steps):
@@ -573,12 +612,8 @@ class _AutoIntegratorSelectionClaim(Claim[Any]):
 
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
-    _HistoryStateSelectionClaim(),
-    _ImplicitStageSolveSelectionClaim(),
-    _SplitStepMapSelectionClaim(),
-    _SemilinearStepMapSelectionClaim(),
-    _HamiltonianStepMapSelectionClaim(),
-    _CompositionStepMapSelectionClaim(),
+    _StepSelectionRegionCoverageClaim(),
+    *[_StepSelectionClaim(case) for case in _step_selection_cases()],
     _OscillatorInvariantComparisonClaim(),
     _OscillatorNegativeInvariantEvidenceClaim(),
     _DampedOscillatorSymplecticDefectClaim(),
