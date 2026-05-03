@@ -31,7 +31,6 @@ _CAPABILITIES: tuple[DecompositionCapability, ...] = (
             requires=("dense_matrix", "square_matrix", "full_rank"),
             provides=("decompose", "factorize", "direct_solve", "pivoting", "exact"),
         ),
-        priority=10,
     ),
     DecompositionCapability(
         "svd_factorization",
