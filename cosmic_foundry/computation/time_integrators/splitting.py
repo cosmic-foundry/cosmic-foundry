@@ -46,21 +46,26 @@ class ComponentFlowProtocol(RHSProtocol, Protocol):
     """RHS with evidence about its exact component flow."""
 
     @property
-    def preserves_symplectic_form(self) -> bool:
-        """Whether the component flow preserves the canonical symplectic form."""
+    def symplectic_form_defect_upper_bound(self) -> float:
+        """Upper bound on the component flow's canonical two-form defect."""
         ...
 
 
 class ComponentFlowRHS(BlackBoxRHS):
     """Black-box RHS with explicit component-flow evidence."""
 
-    def __init__(self, f: object, *, preserves_symplectic_form: bool) -> None:
+    def __init__(
+        self,
+        f: object,
+        *,
+        symplectic_form_defect_upper_bound: float,
+    ) -> None:
         super().__init__(f)
-        self._preserves_symplectic_form = preserves_symplectic_form
+        self._symplectic_form_defect_upper_bound = symplectic_form_defect_upper_bound
 
     @property
-    def preserves_symplectic_form(self) -> bool:
-        return self._preserves_symplectic_form
+    def symplectic_form_defect_upper_bound(self) -> float:
+        return self._symplectic_form_defect_upper_bound
 
 
 @dataclasses.dataclass(frozen=True)

@@ -193,6 +193,7 @@ class MapStructureField(Enum):
     NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
     RHS_HISTORY_AVAILABLE = "rhs_history_available"
     RHS_EVALUATION_AVAILABLE = "rhs_evaluation_available"
+    SYMPLECTIC_FORM_DEFECT_UPPER_BOUND = "symplectic_form_defect_upper_bound"
     SYMPLECTIC_FORM_INVARIANT_AVAILABLE = "symplectic_form_invariant_available"
 
 
@@ -1497,6 +1498,10 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
             ),
             _bool_axis(field.HAMILTONIAN_PARTITION_AVAILABLE),
             _bool_axis(field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE),
+            _nonnegative_axis(
+                field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND,
+                units="canonical two-form defect upper bound",
+            ),
             _nonnegative_axis(field.ADDITIVE_COMPONENT_COUNT, units="components"),
         ),
         derived_regions=(
