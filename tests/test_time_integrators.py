@@ -926,31 +926,66 @@ class _OscillatorInvariantComparisonClaim(Claim[Any]):
 
 
 class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
-    """Grounded claim that negative component evidence keeps invariant unset."""
+    """Grounded claim that invariant evidence is not composition ownership."""
 
     @property
     def description(self) -> str:
-        return "correctness/oscillator_negative_invariant_evidence"
+        return "correctness/oscillator_invariant_evidence_overlay"
 
     def check(self, _calibration: Any) -> None:
-        rhs = _uncertified_oscillator_composite_rhs()
-        descriptor = composite_map_descriptor_from_rhs(rhs)
+        certified_rhs = _oscillator_composite_rhs()
+        uncertified_rhs = _uncertified_oscillator_composite_rhs()
+        certified_descriptor = composite_map_descriptor_from_rhs(certified_rhs)
+        uncertified_descriptor = composite_map_descriptor_from_rhs(uncertified_rhs)
+        integrator = _ti.CompositionIntegrator(
+            [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+            order=4,
+        )
+        certified = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
+        uncertified = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
+        dt = 5.0e-2
+        steps = 200
 
         assert (
-            descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value == 2
+            certified_descriptor.coordinate(
+                MapStructureField.ADDITIVE_COMPONENT_COUNT
+            ).value
+            == 2
         )
-        assert not descriptor.coordinate(
+        assert (
+            uncertified_descriptor.coordinate(
+                MapStructureField.ADDITIVE_COMPONENT_COUNT
+            ).value
+            == 2
+        )
+        assert certified_descriptor.coordinate(
             MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
         ).value
+        assert not uncertified_descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
+        for descriptor in (certified_descriptor, uncertified_descriptor):
+            assert (
+                _ti.select_time_integrator(
+                    AlgorithmRequest(
+                        requested_properties=frozenset({"one_step"}),
+                        order=4,
+                        descriptor=descriptor,
+                    )
+                ).implementation
+                == "CompositionIntegrator"
+            )
+            _assert_owned_step_map_cell(descriptor, _ti.CompositionIntegrator)
+
+        for _ in range(steps):
+            certified = integrator.step(certified_rhs, certified, dt)
+            uncertified = integrator.step(uncertified_rhs, uncertified, dt)
+
+        assert _err(certified.u, _exact_osc, certified.t) < 1.0e-5
+        assert _err(uncertified.u, _exact_osc, uncertified.t) < 1.0e-5
         assert (
-            _ti.select_time_integrator(
-                AlgorithmRequest(
-                    requested_properties=frozenset({"one_step"}),
-                    order=4,
-                    descriptor=descriptor,
-                )
-            ).implementation
-            == "CompositionIntegrator"
+            max(abs(float(certified.u[i]) - float(uncertified.u[i])) for i in range(2))
+            < 1.0e-14
         )
 
 
