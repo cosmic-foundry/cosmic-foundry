@@ -793,10 +793,10 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: use a concrete semilinear Lawson step to decide
-   whether an exact linear operator plus nonlinear residual is a primitive
-   map-structure coordinate or should be decomposed into solve-relation and
-   operator descriptors. Any atlas or selection change should follow from that
+2. Candidate next calculation: use a concrete Hamiltonian oscillator step to
+   decide whether separable Hamiltonian ownership is a primitive map-structure
+   coordinate or should be expressed through a theory-level symplectic
+   structure descriptor. Any atlas or selection change should follow from that
    calculation's descriptor coordinates, not from a category list.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
