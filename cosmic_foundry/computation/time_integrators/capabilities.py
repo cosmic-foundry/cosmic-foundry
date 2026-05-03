@@ -78,6 +78,7 @@ def _map_structure_coordinates(
             "unavailable"
         ),
         field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(False),
+        field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
         field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(0),
     }
     if overrides is not None:
@@ -166,7 +167,10 @@ def hamiltonian_map_descriptor() -> ParameterDescriptor:
     field = MapStructureField
     return ParameterDescriptor(
         _map_structure_coordinates(
-            {field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(True)}
+            {
+                field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(True),
+                field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(True),
+            }
         )
     )
 
@@ -259,6 +263,10 @@ def _hamiltonian_map_region(owner: type) -> CoverageRegion:
         (
             MembershipPredicate(
                 MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE, frozenset({True})
+            ),
+            MembershipPredicate(
+                MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE,
+                frozenset({True}),
             ),
         ),
     )

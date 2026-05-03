@@ -793,12 +793,11 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: compare the harmonic oscillator under
-   composition and Hamiltonian stepping over multiple periods, then decide
-   whether the map-structure schema needs a durable invariant coordinate
-   rather than only structural availability coordinates. Any atlas or selection
-   change should follow from that calculation's descriptor coordinates, not
-   from a category list.
+2. Candidate next calculation: derive symplectic-form invariant evidence for
+   a composed harmonic oscillator from the component flows themselves, rather
+   than leaving composition descriptors with only a component count. Any atlas
+   or selection change should follow from that calculation's descriptor
+   coordinates, not from a category list.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
