@@ -239,6 +239,16 @@ projection; for example, a conserved finite-state transformation may be the
 theory object, while a reaction network remains only one computational view of
 it.
 
+Apply the same discipline to tests. Test lines are cheaper than source lines,
+not free. Periodically review claim registries for repeated examples,
+object-level regressions, and fixtures that now encode the same premise. One
+grounded test can remain as evidence. Two similar tests should prompt a search
+for the discovered invariant that covers both. Three similar tests require
+consolidation: replace them with one parameterized or auto-discovered claim, or
+delete the weaker cases. A growing test count is acceptable only when it grows
+the set of formal premises being checked, not when it grows an inventory of
+examples.
+
 ### Design principles
 
 When changing computation capabilities, apply these constraints in order:
