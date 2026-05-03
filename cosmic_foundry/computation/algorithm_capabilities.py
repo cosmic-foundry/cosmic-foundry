@@ -159,10 +159,14 @@ class LinearSolverField(Enum):
 class DecompositionField(Enum):
     """Schema-owned descriptor fields for decomposition coverage."""
 
+    CONDITION_ESTIMATE = "decomposition_condition_estimate"
     FACTORIZATION_MEMORY_BUDGET_BYTES = "factorization_memory_budget_bytes"
     FACTORIZATION_WORK_BUDGET_FMAS = "factorization_work_budget_fmas"
     MATRIX_COLUMNS = "matrix_columns"
+    MATRIX_NULLITY_ESTIMATE = "matrix_nullity_estimate"
+    MATRIX_RANK_ESTIMATE = "matrix_rank_estimate"
     MATRIX_ROWS = "matrix_rows"
+    SINGULAR_VALUE_LOWER_BOUND = "decomposition_singular_value_lower_bound"
 
 
 DescriptorField: TypeAlias = (
@@ -1312,7 +1316,6 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
 
 def decomposition_parameter_schema() -> ParameterSpaceSchema:
     """Return the dense-matrix decomposition parameter-space schema."""
-    field = LinearSolverField
     decomposition_field = DecompositionField
     return ParameterSpaceSchema(
         name="decomposition",
@@ -1326,8 +1329,25 @@ def decomposition_parameter_schema() -> ParameterSpaceSchema:
             _positive_axis(
                 decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES, units="bytes"
             ),
-        )
-        + _linear_operator_axes(),
+            _axis(
+                decomposition_field.SINGULAR_VALUE_LOWER_BOUND,
+                (
+                    NumericInterval("zero_or_uncertified", upper=0.0),
+                    NumericInterval("positive", lower=0.0, include_lower=False),
+                ),
+            ),
+            _axis(
+                decomposition_field.CONDITION_ESTIMATE,
+                (
+                    NumericInterval("well_conditioned", lower=1.0, upper=1.0e8),
+                    NumericInterval(
+                        "ill_conditioned", lower=1.0e8, include_lower=False
+                    ),
+                ),
+            ),
+            _nonnegative_axis(decomposition_field.MATRIX_RANK_ESTIMATE),
+            _nonnegative_axis(decomposition_field.MATRIX_NULLITY_ESTIMATE),
+        ),
         derived_regions=(
             DerivedParameterRegion(
                 "square",
@@ -1346,30 +1366,64 @@ def decomposition_parameter_schema() -> ParameterSpaceSchema:
             ),
             DerivedParameterRegion(
                 "full_rank",
-                ((ComparisonPredicate(field.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),),),
+                (
+                    (
+                        ComparisonPredicate(
+                            decomposition_field.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0
+                        ),
+                    ),
+                ),
             ),
             DerivedParameterRegion(
                 "rank_deficient",
-                ((ComparisonPredicate(field.NULLITY_ESTIMATE, ">", 0),),),
-            ),
-        ),
-        invalid_cells=(
-            InvalidCellRule(
-                "coercivity_requires_square_matrix",
                 (
-                    AffineComparisonPredicate(
-                        {
-                            decomposition_field.MATRIX_ROWS: 1.0,
-                            decomposition_field.MATRIX_COLUMNS: -1.0,
-                        },
-                        "!=",
-                        0.0,
+                    (
+                        ComparisonPredicate(
+                            decomposition_field.MATRIX_NULLITY_ESTIMATE, ">", 0
+                        ),
                     ),
-                    ComparisonPredicate(field.COERCIVITY_LOWER_BOUND, ">", 0.0),
                 ),
-                "positive coercivity is meaningful only for square matrices",
             ),
         ),
+        invalid_cells=(),
+    )
+
+
+def decomposition_descriptor_from_linear_operator_descriptor(
+    descriptor: LinearOperatorDescriptor,
+    *,
+    factorization_work_budget_fmas: float = 1.0e9,
+    factorization_memory_budget_bytes: float = 1.0e9,
+) -> ParameterDescriptor:
+    """Project a linear-operator descriptor onto dense decomposition coordinates."""
+    source = descriptor.parameter_descriptor
+    return ParameterDescriptor(
+        {
+            DecompositionField.MATRIX_ROWS: DescriptorCoordinate(
+                len(descriptor.matrix)
+            ),
+            DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(
+                len(descriptor.matrix[0]) if descriptor.matrix else 0
+            ),
+            DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
+                factorization_work_budget_fmas
+            ),
+            DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: DescriptorCoordinate(
+                factorization_memory_budget_bytes
+            ),
+            DecompositionField.SINGULAR_VALUE_LOWER_BOUND: source.coordinate(
+                LinearSolverField.SINGULAR_VALUE_LOWER_BOUND
+            ),
+            DecompositionField.CONDITION_ESTIMATE: source.coordinate(
+                LinearSolverField.CONDITION_ESTIMATE
+            ),
+            DecompositionField.MATRIX_RANK_ESTIMATE: source.coordinate(
+                LinearSolverField.RANK_ESTIMATE
+            ),
+            DecompositionField.MATRIX_NULLITY_ESTIMATE: source.coordinate(
+                LinearSolverField.NULLITY_ESTIMATE
+            ),
+        }
     )
 
 
@@ -1571,6 +1625,7 @@ __all__ = [
     "DecompositionField",
     "DerivedParameterRegion",
     "DescriptorCoordinate",
+    "decomposition_descriptor_from_linear_operator_descriptor",
     "decomposition_parameter_schema",
     "EvidencePredicate",
     "InvalidCellRule",

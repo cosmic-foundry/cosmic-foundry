@@ -56,6 +56,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     SolveRelationField,
     StructuredPredicate,
     coverage_regions_are_disjoint,
+    decomposition_descriptor_from_linear_operator_descriptor,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
@@ -1234,13 +1235,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert decomposition_regions["square"].contains(decomp_descriptor)
         assert decomposition_regions["full_rank"].contains(decomp_descriptor)
         assert decomposition_regions["rank_deficient"].contains(rank_deficient_decomp)
-        assert (
-            decomposition_schema.cell_status(
-                self._decomposition_descriptor(matrix_columns=5),
-                (),
-            )
-            == "invalid"
-        )
+        rectangular_decomp = self._decomposition_descriptor(matrix_columns=5)
+        decomposition_schema.validate_descriptor(rectangular_decomp)
+        assert decomposition_schema.cell_status(rectangular_decomp, ()) == "uncovered"
 
         with pytest.raises(ValueError):
             ParameterSpaceSchema(
@@ -1267,6 +1264,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert not {field.value for field in SolveRelationField} & {
             field.value for field in LinearSolverField
         }
+        assert not {
+            field.value for field in set(SolveRelationField) | set(LinearSolverField)
+        } & {field.value for field in DecompositionField}
 
     @staticmethod
     def _assert_region_uses_primitive_axes(
@@ -1448,20 +1448,10 @@ class _SolveRelationSchemaClaim(Claim[None]):
         matrix_columns: int = 4,
         factorization_work_budget_fmas: float = 1.0e9,
         factorization_memory_budget_bytes: float = 1.0e9,
-        assembly_cost_fmas: float = 64.0,
-        matvec_cost_fmas: float = 32.0,
-        linear_operator_memory_bytes: float = 512.0,
-        symmetry_defect: float = 0.0,
-        skew_symmetry_defect: float = 1.0,
-        diagonal_nonzero_margin: float = 1.0,
-        diagonal_dominance_margin: float = 1.0,
-        coercivity_lower_bound: float = 1.0,
         singular_value_lower_bound: float = 1.0,
         condition_estimate: float = 10.0,
         rank_estimate: int = 4,
         nullity_estimate: int = 0,
-        rhs_consistency_defect: float = 0.0,
-        linear_operator_matrix_available: bool = True,
     ) -> ParameterDescriptor:
         return ParameterDescriptor(
             {
@@ -1473,45 +1463,17 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
                     DescriptorCoordinate(factorization_memory_budget_bytes)
                 ),
-                LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: (
-                    DescriptorCoordinate(linear_operator_matrix_available)
-                ),
-                LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(
-                    assembly_cost_fmas
-                ),
-                LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(
-                    matvec_cost_fmas
-                ),
-                LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: DescriptorCoordinate(
-                    linear_operator_memory_bytes
-                ),
-                LinearSolverField.SYMMETRY_DEFECT: DescriptorCoordinate(
-                    symmetry_defect
-                ),
-                LinearSolverField.SKEW_SYMMETRY_DEFECT: DescriptorCoordinate(
-                    skew_symmetry_defect
-                ),
-                LinearSolverField.DIAGONAL_NONZERO_MARGIN: DescriptorCoordinate(
-                    diagonal_nonzero_margin
-                ),
-                LinearSolverField.DIAGONAL_DOMINANCE_MARGIN: DescriptorCoordinate(
-                    diagonal_dominance_margin
-                ),
-                LinearSolverField.COERCIVITY_LOWER_BOUND: DescriptorCoordinate(
-                    coercivity_lower_bound
-                ),
-                LinearSolverField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
+                DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
                     singular_value_lower_bound
                 ),
-                LinearSolverField.CONDITION_ESTIMATE: DescriptorCoordinate(
+                DecompositionField.CONDITION_ESTIMATE: DescriptorCoordinate(
                     condition_estimate
                 ),
-                LinearSolverField.RANK_ESTIMATE: DescriptorCoordinate(rank_estimate),
-                LinearSolverField.NULLITY_ESTIMATE: DescriptorCoordinate(
-                    nullity_estimate
+                DecompositionField.MATRIX_RANK_ESTIMATE: DescriptorCoordinate(
+                    rank_estimate
                 ),
-                LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
-                    rhs_consistency_defect
+                DecompositionField.MATRIX_NULLITY_ESTIMATE: DescriptorCoordinate(
+                    nullity_estimate
                 ),
             }
         )
@@ -1542,6 +1504,18 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
         assert spd.coordinate("coercivity_lower_bound").evidence == "lower_bound"
         assert spd.coordinate("rank_estimate").value == 2
         assert spd.coordinate("rhs_consistency_defect").value == 0.0
+        spd_decomposition = decomposition_descriptor_from_linear_operator_descriptor(
+            spd
+        )
+        decomposition_schema = decomposition_parameter_schema()
+        decomposition_regions = _SolveRelationSchemaClaim._regions(decomposition_schema)
+        decomposition_schema.validate_descriptor(spd_decomposition)
+        assert decomposition_regions["square"].contains(spd_decomposition)
+        assert decomposition_regions["full_rank"].contains(spd_decomposition)
+        assert (
+            spd_decomposition.coordinate(DecompositionField.MATRIX_RANK_ESTIMATE).value
+            == spd.coordinate(LinearSolverField.RANK_ESTIMATE).value
+        )
 
         rank_deficient = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((1.0, 1.0), (1.0, 1.0))),
@@ -1836,17 +1810,33 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             assert "linear_solver_coverage" not in region.owner.__dict__
             decomposition_type = region.owner.decomposition_type
             assert decomposition_type is not None
-            certificate = decomposition_type.linear_solve_certificate
+            assert "linear_solve_certificate" not in decomposition_type.__dict__
+            certificate = decomposition_type.factorization_feasibility_certificate
             assert certificate
-            feasible_fields = {
-                LinearSolverField.CONDITION_ESTIMATE,
-                LinearSolverField.NULLITY_ESTIMATE,
-                LinearSolverField.RHS_CONSISTENCY_DEFECT,
-                LinearSolverField.SINGULAR_VALUE_LOWER_BOUND,
+            decomposition_fields = {
+                DecompositionField.CONDITION_ESTIMATE: (
+                    LinearSolverField.CONDITION_ESTIMATE
+                ),
+                DecompositionField.MATRIX_NULLITY_ESTIMATE: (
+                    LinearSolverField.NULLITY_ESTIMATE
+                ),
+                DecompositionField.MATRIX_RANK_ESTIMATE: (
+                    LinearSolverField.RANK_ESTIMATE
+                ),
+                DecompositionField.SINGULAR_VALUE_LOWER_BOUND: (
+                    LinearSolverField.SINGULAR_VALUE_LOWER_BOUND
+                ),
             }
             for predicate in certificate:
-                assert predicate in region.predicates
-                assert predicate.referenced_fields <= feasible_fields
+                assert predicate.referenced_fields <= set(DecompositionField)
+                assert isinstance(predicate, ComparisonPredicate)
+                mapped = ComparisonPredicate(
+                    decomposition_fields[predicate.field],
+                    predicate.operator,
+                    predicate.value,
+                    predicate.accepted_evidence,
+                )
+                assert mapped in region.predicates
 
     @staticmethod
     def _assert_stationary_iterations_do_not_own_final_solve_regions(
@@ -3261,7 +3251,11 @@ def _schema_atlas_regions(
     regions: tuple[CoverageRegion, ...] = (),
 ) -> tuple[_AtlasRegionSource, ...]:
     """Return every schema region that should appear in atlas projections."""
-    return (*schema.invalid_cells, *regions)
+    return (
+        *schema.invalid_cells,
+        *regions,
+        *_capability_atlas_uncovered_cells(schema, regions),
+    )
 
 
 def _capability_atlas_uncovered_cells(
@@ -3531,9 +3525,10 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
             discovered = _schema_atlas_regions(schema, regions)
+            uncovered = _capability_atlas_uncovered_cells(schema, regions)
             assert {_atlas_source_key(source) for source in discovered} == {
                 _atlas_source_key(source)
-                for source in (*schema.invalid_cells, *regions)
+                for source in (*schema.invalid_cells, *regions, *uncovered)
             }
             shapes = _projected_region_shapes(group)
             assert shapes
