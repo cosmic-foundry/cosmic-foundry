@@ -53,6 +53,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterBin,
     ParameterDescriptor,
     ParameterSpaceSchema,
+    SolveRelationField,
     StructuredPredicate,
     coverage_regions_are_disjoint,
     decomposition_parameter_schema,
@@ -79,7 +80,9 @@ from tests.claims import Claim
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PACKAGE_ROOT = _PROJECT_ROOT / "cosmic_foundry"
 _AtlasText = NewType("_AtlasText", str)
-_AtlasDescriptorField: TypeAlias = LinearSolverField | DecompositionField
+_AtlasDescriptorField: TypeAlias = (
+    SolveRelationField | LinearSolverField | DecompositionField
+)
 _PACKAGES = [
     "cosmic_foundry.theory.foundation",
     "cosmic_foundry.theory.continuous",
@@ -1091,6 +1094,11 @@ class _SolveRelationSchemaClaim(Claim[None]):
         linear_schema = linear_solver_parameter_schema()
         decomposition_schema = decomposition_parameter_schema()
 
+        self._assert_solve_relation_fields_are_domain_neutral()
+        assert solve_schema.descriptor_fields == set(SolveRelationField)
+        assert linear_schema.descriptor_fields == set(SolveRelationField) | set(
+            LinearSolverField
+        )
         for schema in (solve_schema, linear_schema, decomposition_schema):
             schema.validate_schema()
             assert "problem_kind" not in schema.descriptor_fields
@@ -1238,6 +1246,12 @@ class _SolveRelationSchemaClaim(Claim[None]):
         return {region.name: region for region in schema.derived_regions}
 
     @staticmethod
+    def _assert_solve_relation_fields_are_domain_neutral() -> None:
+        assert not {field.value for field in SolveRelationField} & {
+            field.value for field in LinearSolverField
+        }
+
+    @staticmethod
     def _assert_region_uses_primitive_axes(
         schema: ParameterSpaceSchema,
         region: DerivedParameterRegion,
@@ -1269,56 +1283,49 @@ class _SolveRelationSchemaClaim(Claim[None]):
         work_budget_fmas: float = 1.0e9,
         memory_budget_bytes: float = 1.0e9,
     ) -> ParameterDescriptor:
+        field = SolveRelationField
         return ParameterDescriptor(
             {
-                LinearSolverField.DIM_X: DescriptorCoordinate(dim_x),
-                LinearSolverField.DIM_Y: DescriptorCoordinate(dim_y),
-                LinearSolverField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(
+                field.DIM_X: DescriptorCoordinate(dim_x),
+                field.DIM_Y: DescriptorCoordinate(dim_y),
+                field.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(
                     auxiliary_scalar_count
                 ),
-                LinearSolverField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(
+                field.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(
                     equality_constraint_count
                 ),
-                LinearSolverField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(
+                field.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(
                     normalization_constraint_count
                 ),
-                LinearSolverField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
+                field.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
                     residual_target_available
                 ),
-                LinearSolverField.TARGET_IS_ZERO: DescriptorCoordinate(target_is_zero),
-                LinearSolverField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
+                field.TARGET_IS_ZERO: DescriptorCoordinate(target_is_zero),
+                field.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
                     map_linearity_defect,
                     evidence=map_linearity_evidence,  # type: ignore[arg-type]
                 ),
-                LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
+                field.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
                     matrix_representation_available
                 ),
-                LinearSolverField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
+                field.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
                     operator_application_available
                 ),
-                LinearSolverField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+                field.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
                     derivative_oracle_kind
                 ),
-                LinearSolverField.OBJECTIVE_RELATION: DescriptorCoordinate(
-                    objective_relation
-                ),
-                LinearSolverField.ACCEPTANCE_RELATION: DescriptorCoordinate(
-                    acceptance_relation
-                ),
-                LinearSolverField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
+                field.OBJECTIVE_RELATION: DescriptorCoordinate(objective_relation),
+                field.ACCEPTANCE_RELATION: DescriptorCoordinate(acceptance_relation),
+                field.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
                     requested_residual_tolerance
                 ),
-                LinearSolverField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
+                field.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
                     requested_solution_tolerance
                 ),
-                LinearSolverField.BACKEND_KIND: DescriptorCoordinate(backend_kind),
-                LinearSolverField.DEVICE_KIND: DescriptorCoordinate(device_kind),
-                LinearSolverField.WORK_BUDGET_FMAS: DescriptorCoordinate(
-                    work_budget_fmas
-                ),
-                LinearSolverField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
-                    memory_budget_bytes
-                ),
+                field.BACKEND_KIND: DescriptorCoordinate(backend_kind),
+                field.DEVICE_KIND: DescriptorCoordinate(device_kind),
+                field.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
+                field.MEMORY_BUDGET_BYTES: DescriptorCoordinate(memory_budget_bytes),
             }
         )
 
@@ -1542,10 +1549,10 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                 descriptor = integrator.step_solve_relation_descriptor(state, 0.25)
                 schema.validate_descriptor(descriptor)
                 assert self._regions(schema)["linear_system"].contains(descriptor)
-                assert descriptor.coordinate(LinearSolverField.DIM_X).value == 2
-                assert descriptor.coordinate(LinearSolverField.DIM_Y).value == 2
+                assert descriptor.coordinate(SolveRelationField.DIM_X).value == 2
+                assert descriptor.coordinate(SolveRelationField.DIM_Y).value == 2
                 assert (
-                    descriptor.coordinate(LinearSolverField.MAP_LINEARITY_DEFECT).value
+                    descriptor.coordinate(SolveRelationField.MAP_LINEARITY_DEFECT).value
                     == 0.0
                 )
                 explicit_owners.append(type(integrator))
@@ -1605,7 +1612,9 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         self._assert_no_solver_error_string_dispatch()
         self._assert_no_linear_solver_field_text_identity()
         schema = linear_solver_parameter_schema()
-        assert set(LinearSolverField) == schema.descriptor_fields
+        assert (
+            set(SolveRelationField) | set(LinearSolverField) == schema.descriptor_fields
+        )
         regions = linear_solver_coverage_regions()
         self._assert_final_solve_coverage_owners_are_linear_solvers(regions)
         self._assert_stationary_iterations_do_not_own_final_solve_regions(regions)
@@ -1944,7 +1953,11 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         tree = ast.parse(
             (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
         )
-        field_labels = {field.value for field in LinearSolverField}
+        field_labels = {
+            field.value
+            for enum_type in (SolveRelationField, LinearSolverField)
+            for field in enum_type
+        }
         identity_calls = {
             "AffineComparisonPredicate",
             "ComparisonPredicate",
@@ -2967,7 +2980,9 @@ def _atlas_axis_coordinate(
 
 
 def _atlas_axis_field(axis: ParameterAxis) -> _AtlasDescriptorField:
-    assert isinstance(axis.field, LinearSolverField | DecompositionField)
+    assert isinstance(
+        axis.field, SolveRelationField | LinearSolverField | DecompositionField
+    )
     return axis.field
 
 
@@ -3021,7 +3036,7 @@ def _descriptor_value(descriptor: ParameterDescriptor, field: DescriptorField) -
 
 
 def _field_label(field: Any) -> str:
-    if isinstance(field, LinearSolverField | DecompositionField):
+    if isinstance(field, SolveRelationField | LinearSolverField | DecompositionField):
         return str(field.value)
     return str(field)
 

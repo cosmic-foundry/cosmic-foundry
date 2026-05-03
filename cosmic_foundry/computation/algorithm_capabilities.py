@@ -113,42 +113,47 @@ ComparisonOperator: TypeAlias = Literal["<", "<=", "==", "!=", ">=", ">"]
 CellStatus: TypeAlias = Literal["invalid", "owned", "uncovered"]
 
 
-class LinearSolverField(Enum):
-    """Schema-owned descriptor fields for linear-solver coverage."""
+class SolveRelationField(Enum):
+    """Schema-owned descriptor fields for primitive solve relations."""
 
     ACCEPTANCE_RELATION = "acceptance_relation"
-    ASSEMBLY_COST_FMAS = "assembly_cost_fmas"
     AUXILIARY_SCALAR_COUNT = "auxiliary_scalar_count"
     BACKEND_KIND = "backend_kind"
-    COERCIVITY_LOWER_BOUND = "coercivity_lower_bound"
-    CONDITION_ESTIMATE = "condition_estimate"
     DERIVATIVE_ORACLE_KIND = "derivative_oracle_kind"
     DEVICE_KIND = "device_kind"
-    DIAGONAL_DOMINANCE_MARGIN = "diagonal_dominance_margin"
-    DIAGONAL_NONZERO_MARGIN = "diagonal_nonzero_margin"
     DIM_X = "dim_x"
     DIM_Y = "dim_y"
     EQUALITY_CONSTRAINT_COUNT = "equality_constraint_count"
-    LINEAR_OPERATOR_MATRIX_AVAILABLE = "linear_operator_matrix_available"
-    LINEAR_OPERATOR_MEMORY_BYTES = "linear_operator_memory_bytes"
     MAP_LINEARITY_DEFECT = "map_linearity_defect"
-    MATVEC_COST_FMAS = "matvec_cost_fmas"
     MATRIX_REPRESENTATION_AVAILABLE = "matrix_representation_available"
     MEMORY_BUDGET_BYTES = "memory_budget_bytes"
     NORMALIZATION_CONSTRAINT_COUNT = "normalization_constraint_count"
-    NULLITY_ESTIMATE = "nullity_estimate"
     OBJECTIVE_RELATION = "objective_relation"
     OPERATOR_APPLICATION_AVAILABLE = "operator_application_available"
-    RANK_ESTIMATE = "rank_estimate"
     REQUESTED_RESIDUAL_TOLERANCE = "requested_residual_tolerance"
     REQUESTED_SOLUTION_TOLERANCE = "requested_solution_tolerance"
     RESIDUAL_TARGET_AVAILABLE = "residual_target_available"
+    TARGET_IS_ZERO = "target_is_zero"
+    WORK_BUDGET_FMAS = "work_budget_fmas"
+
+
+class LinearSolverField(Enum):
+    """Schema-owned descriptor fields for linear-operator solve coverage."""
+
+    ASSEMBLY_COST_FMAS = "assembly_cost_fmas"
+    COERCIVITY_LOWER_BOUND = "coercivity_lower_bound"
+    CONDITION_ESTIMATE = "condition_estimate"
+    DIAGONAL_DOMINANCE_MARGIN = "diagonal_dominance_margin"
+    DIAGONAL_NONZERO_MARGIN = "diagonal_nonzero_margin"
+    LINEAR_OPERATOR_MATRIX_AVAILABLE = "linear_operator_matrix_available"
+    LINEAR_OPERATOR_MEMORY_BYTES = "linear_operator_memory_bytes"
+    MATVEC_COST_FMAS = "matvec_cost_fmas"
+    NULLITY_ESTIMATE = "nullity_estimate"
+    RANK_ESTIMATE = "rank_estimate"
     RHS_CONSISTENCY_DEFECT = "rhs_consistency_defect"
     SINGULAR_VALUE_LOWER_BOUND = "singular_value_lower_bound"
     SKEW_SYMMETRY_DEFECT = "skew_symmetry_defect"
     SYMMETRY_DEFECT = "symmetry_defect"
-    TARGET_IS_ZERO = "target_is_zero"
-    WORK_BUDGET_FMAS = "work_budget_fmas"
 
 
 class DecompositionField(Enum):
@@ -160,11 +165,13 @@ class DecompositionField(Enum):
     MATRIX_ROWS = "matrix_rows"
 
 
-DescriptorField: TypeAlias = str | LinearSolverField | DecompositionField
+DescriptorField: TypeAlias = (
+    str | SolveRelationField | LinearSolverField | DecompositionField
+)
 
 
 def _field_label(field: DescriptorField) -> str:
-    if isinstance(field, LinearSolverField | DecompositionField):
+    if isinstance(field, SolveRelationField | LinearSolverField | DecompositionField):
         return str(field.value)
     return field
 
@@ -924,7 +931,7 @@ def _defect_axis(field: DescriptorField) -> ParameterAxis:
 
 
 def _solve_relation_axes() -> tuple[ParameterAxis, ...]:
-    field = LinearSolverField
+    field = SolveRelationField
     return (
         _positive_axis(field.DIM_X, units="scalar unknowns"),
         _positive_axis(field.DIM_Y, units="scalar residual or target components"),
@@ -1081,7 +1088,7 @@ def _linear_operator_axes() -> tuple[ParameterAxis, ...]:
 
 
 def _solve_relation_regions() -> tuple[DerivedParameterRegion, ...]:
-    field = LinearSolverField
+    field = SolveRelationField
     return (
         DerivedParameterRegion(
             "linear_system",
@@ -1171,7 +1178,7 @@ def _solve_relation_regions() -> tuple[DerivedParameterRegion, ...]:
 
 def solve_relation_parameter_schema() -> ParameterSpaceSchema:
     """Return the primitive solve-relation parameter-space schema."""
-    field = LinearSolverField
+    field = SolveRelationField
     return ParameterSpaceSchema(
         name="solve_relation",
         axes=_solve_relation_axes(),
@@ -1206,6 +1213,7 @@ def solve_relation_parameter_schema() -> ParameterSpaceSchema:
 def linear_solver_parameter_schema() -> ParameterSpaceSchema:
     """Return the solve-relation schema extended with linear-operator axes."""
     field = LinearSolverField
+    solve_field = SolveRelationField
     return ParameterSpaceSchema(
         name="linear_solver",
         axes=_solve_relation_axes() + _linear_operator_axes(),
@@ -1216,7 +1224,9 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
                 (
                     (
                         AffineComparisonPredicate(
-                            {field.DIM_X: 1.0, field.DIM_Y: -1.0}, "==", 0.0
+                            {solve_field.DIM_X: 1.0, solve_field.DIM_Y: -1.0},
+                            "==",
+                            0.0,
                         ),
                     ),
                 ),
@@ -1226,7 +1236,9 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
                 (
                     (
                         AffineComparisonPredicate(
-                            {field.DIM_Y: 1.0, field.DIM_X: -1.0}, ">", 0.0
+                            {solve_field.DIM_Y: 1.0, solve_field.DIM_X: -1.0},
+                            ">",
+                            0.0,
                         ),
                     ),
                 ),
@@ -1244,7 +1256,9 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
                 (
                     (
                         AffineComparisonPredicate(
-                            {field.DIM_X: 1.0, field.DIM_Y: -1.0}, "==", 0.0
+                            {solve_field.DIM_X: 1.0, solve_field.DIM_Y: -1.0},
+                            "==",
+                            0.0,
                         ),
                         ComparisonPredicate(
                             field.SYMMETRY_DEFECT, "<=", _LINEARITY_EPS
@@ -1262,7 +1276,8 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
                             frozenset({False}),
                         ),
                         MembershipPredicate(
-                            field.OPERATOR_APPLICATION_AVAILABLE, frozenset({True})
+                            solve_field.OPERATOR_APPLICATION_AVAILABLE,
+                            frozenset({True}),
                         ),
                     ),
                 ),
@@ -1273,7 +1288,7 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
                 "coercivity_requires_square_map",
                 (
                     AffineComparisonPredicate(
-                        {field.DIM_X: 1.0, field.DIM_Y: -1.0}, "!=", 0.0
+                        {solve_field.DIM_X: 1.0, solve_field.DIM_Y: -1.0}, "!=", 0.0
                     ),
                     ComparisonPredicate(field.COERCIVITY_LOWER_BOUND, ">", 0.0),
                 ),
@@ -1283,7 +1298,7 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
                 "symmetry_requires_square_map",
                 (
                     AffineComparisonPredicate(
-                        {field.DIM_X: 1.0, field.DIM_Y: -1.0}, "!=", 0.0
+                        {solve_field.DIM_X: 1.0, solve_field.DIM_Y: -1.0}, "!=", 0.0
                     ),
                     ComparisonPredicate(field.SYMMETRY_DEFECT, "<=", _LINEARITY_EPS),
                 ),
@@ -1465,37 +1480,37 @@ def linear_operator_descriptor_from_assembled_operator(
 
     descriptor = ParameterDescriptor(
         {
-            LinearSolverField.DIM_X: DescriptorCoordinate(n),
-            LinearSolverField.DIM_Y: DescriptorCoordinate(n),
-            LinearSolverField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
-            LinearSolverField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-            LinearSolverField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-            LinearSolverField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(True),
-            LinearSolverField.TARGET_IS_ZERO: DescriptorCoordinate(False),
-            LinearSolverField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(0.0),
-            LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
+            SolveRelationField.DIM_X: DescriptorCoordinate(n),
+            SolveRelationField.DIM_Y: DescriptorCoordinate(n),
+            SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
+            SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+            SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+            SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(True),
+            SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(False),
+            SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(0.0),
+            SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
                 True
             ),
-            LinearSolverField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
+            SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
                 True
             ),
-            LinearSolverField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate("matrix"),
-            LinearSolverField.OBJECTIVE_RELATION: DescriptorCoordinate("none"),
-            LinearSolverField.ACCEPTANCE_RELATION: DescriptorCoordinate(
+            SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate("matrix"),
+            SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate("none"),
+            SolveRelationField.ACCEPTANCE_RELATION: DescriptorCoordinate(
                 "residual_below_tolerance"
             ),
-            LinearSolverField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
+            SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
                 requested_residual_tolerance
             ),
-            LinearSolverField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
+            SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
                 requested_solution_tolerance
             ),
-            LinearSolverField.BACKEND_KIND: DescriptorCoordinate(
+            SolveRelationField.BACKEND_KIND: DescriptorCoordinate(
                 _backend_kind(b.backend)
             ),
-            LinearSolverField.DEVICE_KIND: DescriptorCoordinate(device_kind),
-            LinearSolverField.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
-            LinearSolverField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
+            SolveRelationField.DEVICE_KIND: DescriptorCoordinate(device_kind),
+            SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
+            SolveRelationField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
                 memory_budget_bytes
             ),
             LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: DescriptorCoordinate(
@@ -1570,4 +1585,5 @@ __all__ = [
     "predicate_sets_are_disjoint",
     "SmallLinearOperator",
     "solve_relation_parameter_schema",
+    "SolveRelationField",
 ]
