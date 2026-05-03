@@ -80,6 +80,7 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
 )
 from cosmic_foundry.computation.time_integrators.solve_relation import (
     AffineRHSProtocol,
+    time_integrator_step_linear_operator_descriptor,
     time_integrator_step_solve_relation_descriptor,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
@@ -129,6 +130,7 @@ __all__ = [
     "RungeKuttaIntegrator",
     "select_time_integrator",
     "TimeIntegrator",
+    "time_integrator_step_linear_operator_descriptor",
     "time_integrator_step_solve_relation_descriptor",
     "IntegrationDriver",
     "TimeIntegrationCapability",

@@ -19,7 +19,9 @@ import pytest
 
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
+    LinearSolverField,
     SolveRelationField,
+    linear_solver_parameter_schema,
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends import (
@@ -382,6 +384,23 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         )
         assert (
             descriptor.coordinate(SolveRelationField.MAP_LINEARITY_DEFECT).value == 0.0
+        )
+        linear_descriptor = integrator.step_linear_operator_descriptor(
+            rhs, state, 2.0e-3
+        )
+        linear_schema = linear_solver_parameter_schema()
+        linear_schema.validate_descriptor(linear_descriptor.parameter_descriptor)
+        linear_regions = {
+            region.name: region for region in linear_schema.derived_regions
+        }
+        assert linear_regions["linear_system"].contains(
+            linear_descriptor.parameter_descriptor
+        )
+        assert linear_regions["full_rank"].contains(
+            linear_descriptor.parameter_descriptor
+        )
+        assert linear_descriptor.coordinate(LinearSolverField.RANK_ESTIMATE).value == (
+            state.u.shape[0] * len(integrator.A_sym)
         )
 
         invariant = chain.conserved_linear_form()

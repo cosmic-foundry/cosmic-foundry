@@ -161,7 +161,7 @@ class _AffineTestRHS:
         return self.linear_operator(t, u) @ u
 
     def linear_operator(self, _t: float, u: Tensor) -> Tensor:
-        return Tensor([[0.0, 1.0], [-1.0, 0.0]], backend=u.backend)
+        return Tensor([[0.0, 8.0], [0.0, 0.0]], backend=u.backend)
 
 
 def _unknown_test_rhs(_t: float, u: Tensor) -> Tensor:
@@ -1637,6 +1637,33 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                     ).value
                     == "matrix"
                 )
+                linear_descriptor = integrator.step_linear_operator_descriptor(
+                    _AffineTestRHS(), state, 0.25
+                )
+                linear_schema = linear_solver_parameter_schema()
+                linear_regions = self._regions(linear_schema)
+                linear_schema.validate_descriptor(
+                    linear_descriptor.parameter_descriptor
+                )
+                assert linear_regions["linear_system"].contains(
+                    linear_descriptor.parameter_descriptor
+                )
+                assert linear_regions["full_rank"].contains(
+                    linear_descriptor.parameter_descriptor
+                )
+                assert (
+                    linear_descriptor.coordinate(
+                        LinearSolverField.RHS_CONSISTENCY_DEFECT
+                    ).value
+                    == 0.0
+                )
+                selected = select_linear_solver_for_descriptor(
+                    linear_descriptor.parameter_descriptor
+                )
+                direct_solver = _resolve_dotted(
+                    "cosmic_foundry.computation.solvers.DirectSolver"
+                )
+                assert issubclass(selected, direct_solver)
         assert explicit_owners
         assert implicit_owners
 
@@ -3713,6 +3740,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "TimeIntegrationRegistry",
                 "TimeIntegrationRequest",
                 "select_time_integrator",
+                "time_integrator_step_linear_operator_descriptor",
                 "time_integrator_step_solve_relation_descriptor",
                 "time_integration_capabilities",
             }
