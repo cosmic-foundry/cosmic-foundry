@@ -96,7 +96,6 @@ class _StepSelectionCase:
     order: int
     state: _ti.ODEState
     rhs: object
-    integrator: object
     exact: Callable[[float], tuple[float, ...]]
     tolerance: float
     ownership: SelectionOwnership
@@ -109,8 +108,18 @@ class _StepSelectionCase:
     def owner(self) -> type:
         return self.ownership.owner
 
-    def step(self, dt: float) -> _ti.ODEState:
-        return self.integrator.step(self.rhs, self.state, dt)  # type: ignore[attr-defined]
+    def selected_integrator(self) -> object | None:
+        owner = self.owner
+        if issubclass(owner, _ti.ExplicitMultistepIntegrator):
+            return owner.for_order(self.order)
+        if issubclass(owner, _ti.MultistepIntegrator):
+            return None
+        if issubclass(owner, _ti.CompositionIntegrator):
+            return owner(
+                [_ti.RungeKuttaIntegrator(1) for _ in self.rhs.components],  # type: ignore[attr-defined]
+                order=self.order,
+            )
+        return owner(self.order)
 
 
 def _map_selection_case(
@@ -118,7 +127,6 @@ def _map_selection_case(
     descriptor: ParameterDescriptor,
     order: int,
     rhs: object,
-    integrator: object,
     u0: Tensor,
     exact: Callable[[float], tuple[float, ...]],
     tolerance: float,
@@ -132,7 +140,6 @@ def _map_selection_case(
         order=order,
         state=_ti.ODEState(0.0, u0),
         rhs=rhs,
-        integrator=integrator,
         exact=exact,
         tolerance=tolerance,
         ownership=SelectionOwnership(
@@ -146,10 +153,10 @@ def _map_selection_case(
 
 def _solve_selection_case() -> _StepSelectionCase:
     rhs = cases.scalar_decay_jacobian_rhs()
-    integrator = _ti.ImplicitRungeKuttaIntegrator(2)
+    descriptor_integrator = _ti.ImplicitRungeKuttaIntegrator(2)
     state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
     dt = 1.0e-2
-    descriptor = integrator.step_solve_relation_descriptor(rhs, state, dt)
+    descriptor = descriptor_integrator.step_solve_relation_descriptor(rhs, state, dt)
 
     def postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> None:
         assert case.descriptor.coordinate(
@@ -164,7 +171,6 @@ def _solve_selection_case() -> _StepSelectionCase:
         order=2,
         state=state,
         rhs=rhs,
-        integrator=integrator,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-7,
         ownership=SelectionOwnership(
@@ -191,7 +197,6 @@ def _rhs_history_selection_case() -> _StepSelectionCase:
         order=4,
         state=state,
         rhs=rhs,
-        integrator=integrator,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-8,
         ownership=SelectionOwnership(
@@ -215,7 +220,6 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
         order=4,
         state=state,
         rhs=rhs,
-        integrator=integrator,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-8,
         ownership=SelectionOwnership(
@@ -235,7 +239,7 @@ def _assert_no_step_solve_or_linear_operator(
         "step_solve_relation_descriptor",
         "step_linear_operator_descriptor",
     ):
-        candidate = getattr(case.integrator, method, None)
+        candidate = getattr(case.selected_integrator(), method, None)
         if callable(candidate):
             with pytest.raises(ValueError):
                 candidate(case.rhs, state, 1.0e-2)
@@ -300,7 +304,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             rhs_evaluation_descriptor(),
             4,
             _ti.BlackBoxRHS(lambda t, u: Tensor([-float(u[0])], backend=u.backend)),
-            _ti.RungeKuttaIntegrator(4),
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_scalar_decay,
             1.0e-10,
@@ -313,7 +316,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             split_map_descriptor(),
             2,
             cases.split_decay_rhs(),
-            _ti.AdditiveRungeKuttaIntegrator(2),
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_scalar_decay,
             1.0e-7,
@@ -324,7 +326,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             semilinear_map_descriptor(),
             4,
             cases.semilinear_forcing_rhs(),
-            _ti.LawsonRungeKuttaIntegrator(4),
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_semilinear,
             1.0e-10,
@@ -335,7 +336,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             hamiltonian_map_descriptor(),
             4,
             cases.harmonic_hamiltonian_rhs(),
-            _ti.SymplecticCompositionIntegrator(4),
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
             cases.exact_ham,
             1.0e-10,
@@ -346,10 +346,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             composite_map_descriptor_from_rhs(cases.oscillator_composite_rhs()),
             4,
             cases.oscillator_composite_rhs(),
-            _ti.CompositionIntegrator(
-                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
-                order=4,
-            ),
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
             cases.exact_osc,
             1.0e-8,
@@ -360,10 +356,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             composite_map_descriptor_from_rhs(_uncertified_oscillator_composite_rhs()),
             4,
             _uncertified_oscillator_composite_rhs(),
-            _ti.CompositionIntegrator(
-                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
-                order=4,
-            ),
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
             cases.exact_osc,
             1.0e-8,
@@ -374,10 +366,6 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             composite_map_descriptor_from_rhs(_damped_oscillator_composite_rhs()),
             2,
             _damped_oscillator_composite_rhs(),
-            _ti.CompositionIntegrator(
-                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
-                order=2,
-            ),
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
             _exact_damped_osc,
             2.0e-3,
@@ -407,9 +395,12 @@ class _StepSelectionClaim(Claim[Any]):
             )
         )
         assert selected.implementation == case.owner.__name__
-        state = case.step(1.0e-2)
-        assert cases.err(state.u, case.exact, state.t) < case.tolerance
-        case.postcheck(case, state)
+        integrator = case.selected_integrator()
+        if integrator is not None:
+            assert type(integrator) is case.owner
+            state = integrator.step(case.rhs, case.state, 1.0e-2)  # type: ignore[attr-defined]
+            assert cases.err(state.u, case.exact, state.t) < case.tolerance
+            case.postcheck(case, state)
 
 
 class _StepSelectionRegionCoverageClaim(Claim[Any]):

@@ -793,15 +793,14 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make step-selection cases execute the selected
-   implementation rather than carrying a parallel expected integrator object
-   wherever the constructor premise is already present in the descriptor-backed
-   request. The grounding calculations should remain descriptor-backed
-   step-selection, reaction-chain, and semi-discrete conservation cases. If a
-   selected implementation cannot yet be constructed from the request, name the
-   missing premise rather than adding an owner map. Do not add mesh, flux-form,
-   locality, or CFL axes until a real mesh object is the implementation premise
-   being tested.
+2. Candidate next calculation: make fixed-order Nordsieck step selection
+   executable from the selected capability, or delete its selector coverage if
+   the distinct scenario cannot be expressed precisely. The missing premise is
+   the multistep corrector family: it is currently constructor state, not
+   descriptor evidence. Ground the change in the existing Nordsieck history
+   scalar-decay calculation and the descriptor-backed step-selection cases. Do
+   not add mesh, flux-form, locality, or CFL axes until a real mesh object is
+   the implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
