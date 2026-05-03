@@ -31,6 +31,10 @@ from cosmic_foundry.computation.backends import (
     NumpyBackend,
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.computation.time_integrators.capabilities import (
+    nordsieck_history_descriptor,
+    rhs_history_descriptor,
+)
 from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
 from tests.claims import (
     BatchedFailure,
@@ -541,6 +545,51 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         assert rhs.state_domain.check(state.u).accepted
         assert abs(float(invariant @ state.u) - initial_invariant) < 1e-9
         assert float(state.u[1]) > float(state.u[2]) > float(state.u[3]) > 0.0
+
+
+class _HistoryStateSelectionClaim(Claim[Any]):
+    """Grounded claim for history-dependent method ownership."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/history_state_selection"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _scalar_decay_jacobian_rhs()
+        u0 = Tensor([1.0], backend=_TIME_BACKEND)
+        dt = 1.0e-2
+
+        ab = _ti.ExplicitMultistepIntegrator.for_order(4)
+        state = _ti.ODEState(0.0, u0)
+        for _ in range(3):
+            state = ab.step(rhs, state, dt)
+        assert isinstance(state.history, tuple)
+        assert len(state.history) == 3
+        selected_ab = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=rhs_history_descriptor(),
+            )
+        )
+        assert selected_ab.implementation == "ExplicitMultistepIntegrator"
+        state = ab.step(rhs, state, dt)
+        assert _err(state.u, _exact_scalar_decay, state.t) < 1.0e-8
+
+        nordsieck = _ti.MultistepIntegrator("adams", 4)
+        nordsieck_state = nordsieck.init_state(rhs, 0.0, u0, dt)
+        assert isinstance(nordsieck_state.history, _ti.NordsieckHistory)
+        assert nordsieck_state.history.q == 4
+        selected_nordsieck = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=nordsieck_history_descriptor(),
+            )
+        )
+        assert selected_nordsieck.implementation == "MultistepIntegrator"
+        nordsieck_state = nordsieck.step(rhs, nordsieck_state, dt)
+        assert _err(nordsieck_state.u, _exact_scalar_decay, nordsieck_state.t) < 1.0e-8
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1605,6 +1654,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _BatchedAdaptiveDecayCorrectnessClaim(),
     _ReactionChainIntegrationClaim(),
     _BranchedFiniteTransitionNetworkClaim(),
+    _HistoryStateSelectionClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
