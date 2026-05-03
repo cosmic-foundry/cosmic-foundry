@@ -45,7 +45,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     nordsieck_history_descriptor,
     rhs_evaluation_descriptor,
     rhs_history_descriptor,
-    time_integration_capabilities,
+    time_integration_step_map_regions,
 )
 from tests import test_structure as structure
 from tests.claims import Claim
@@ -189,15 +189,10 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
 
 def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
     regions: dict[type, CoverageRegion] = {}
-    map_fields = frozenset(MapStructureField)
     for region in linear_solver_coverage_regions():
         regions[region.owner] = region
-    for capability in time_integration_capabilities():
-        if capability.category != "method_family":
-            continue
-        for region in capability.coverage_regions:
-            if region.referenced_fields <= map_fields:
-                regions[region.owner] = region
+    for region in time_integration_step_map_regions():
+        regions[region.owner] = region
     return tuple(regions.values())
 
 

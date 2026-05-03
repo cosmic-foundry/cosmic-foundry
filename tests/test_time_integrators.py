@@ -21,9 +21,11 @@ import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRequest,
     LinearSolverField,
+    ParameterDescriptor,
     ReactionNetworkField,
     SolveRelationField,
     linear_solver_parameter_schema,
+    map_structure_parameter_schema,
     reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
@@ -34,6 +36,7 @@ from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.capabilities import (
     nordsieck_history_descriptor,
     rhs_history_descriptor,
+    time_integration_step_map_regions,
 )
 from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
 from tests.claims import (
@@ -46,6 +49,20 @@ _TIME_BACKEND = NumpyBackend()
 _PERF_TRIALS = 10
 _PERF_OVERHEAD = 80.0
 _GPU_MIN_PERF_FMAS = 1.0e6
+
+
+def _assert_owned_step_map_cell(
+    descriptor: ParameterDescriptor,
+    owner: type,
+) -> None:
+    schema = map_structure_parameter_schema()
+    regions = time_integration_step_map_regions()
+
+    schema.validate_descriptor(descriptor)
+    assert schema.cell_status(descriptor, regions) == "owned"
+    assert tuple(region.owner for region in regions if region.contains(descriptor)) == (
+        owner,
+    )
 
 
 # ── integration runner ────────────────────────────────────────────────────────
@@ -569,6 +586,10 @@ class _HistoryStateSelectionClaim(Claim[Any]):
             )
         )
         assert selected_ab.implementation == "ExplicitMultistepIntegrator"
+        _assert_owned_step_map_cell(
+            rhs_history_descriptor(),
+            _ti.ExplicitMultistepIntegrator,
+        )
         state = ab.step(rhs, state, dt)
         assert _err(state.u, _exact_scalar_decay, state.t) < 1.0e-8
 
@@ -584,6 +605,10 @@ class _HistoryStateSelectionClaim(Claim[Any]):
             )
         )
         assert selected_nordsieck.implementation == "MultistepIntegrator"
+        _assert_owned_step_map_cell(
+            nordsieck_history_descriptor(),
+            _ti.MultistepIntegrator,
+        )
         nordsieck_state = nordsieck.step(rhs, nordsieck_state, dt)
         assert _err(nordsieck_state.u, _exact_scalar_decay, nordsieck_state.t) < 1.0e-8
 

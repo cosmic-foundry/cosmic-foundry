@@ -425,6 +425,18 @@ def time_integration_capabilities() -> tuple[TimeIntegrationCapability, ...]:
     return TIME_INTEGRATION_REGISTRY.capabilities
 
 
+def time_integration_step_map_regions() -> tuple[CoverageRegion, ...]:
+    """Return ODE map regions owned by implementations that perform one step."""
+    map_fields = frozenset(MapStructureField)
+    return tuple(
+        region
+        for capability in _CAPABILITIES
+        for region in capability.coverage_regions
+        if region.referenced_fields <= map_fields
+        if callable(getattr(region.owner, "step", None))
+    )
+
+
 def select_time_integrator(
     request: AlgorithmRequest,
 ) -> TimeIntegrationCapability:
@@ -445,6 +457,7 @@ __all__ = [
     "split_map_descriptor",
     "TimeIntegrationCapability",
     "time_integration_capabilities",
+    "time_integration_step_map_regions",
     "TimeIntegrationRegistry",
     "TIME_INTEGRATION_REGISTRY",
 ]

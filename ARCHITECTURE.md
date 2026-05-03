@@ -790,13 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Use the same full-loop standard on the next atlas cleanup: if
-   time-integration method-family labels become rendered consequences rather
-   than request properties, ground the projection in a concrete calculation
-   whose descriptor lands in the rendered atlas cell.
-2. Pick the next PR by naming its target calculation first, then work backward
+1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
+2. Candidate next calculation: use a concrete implicit time step with an RHS
+   derivative oracle to decide whether derivative-oracle ownership belongs in
+   solve-relation space, map-structure space, or a cleaner composition of the
+   two. Any atlas or selection change should follow from that calculation's
+   descriptor coordinates, not from a category list.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
