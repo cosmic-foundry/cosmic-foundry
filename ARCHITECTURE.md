@@ -788,12 +788,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Add a small real-ish synthetic reaction-network integration claim that
-   exercises time-step descriptors, domain/conservation behavior, and any atlas
-   gap it exposes.
-2. Express time-integrator stage equations, Newton solves, and decomposition
+1. Express time-integrator stage equations, Newton solves, and decomposition
    certificates as composed transformation evidence in the shared solve-relation
    schema, deleting any projection-specific fields that stop being primitive.
+2. Decide whether repeated finite reaction-chain premises should be promoted
+   from test-local stoichiometric projections into a minimal conserved
+   finite-state transformation object, without creating a public network API
+   before a second grounded claim demands it.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -837,6 +838,10 @@ Implicit Runge-Kutta stage equations use the same descriptor entry point:
 stage matrices with on-diagonal or upper-triangular coupling map to nonlinear
 root solve relations over the stage unknowns, with Jacobian-callback evidence
 derived from the method's stage-equation premise.
+The synthetic reaction-chain grounding claim shows the next gap precisely: a
+finite stoichiometric chain can provide an affine RHS and an exact Jacobian,
+while the implicit stage descriptor still reports unavailable linearity evidence
+because stage-equation evidence is not yet composed from RHS evidence.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
