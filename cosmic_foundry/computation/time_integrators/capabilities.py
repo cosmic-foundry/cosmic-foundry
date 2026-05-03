@@ -56,10 +56,9 @@ TimeIntegrationRegistry = AlgorithmRegistry
 
 def _contract(
     *,
-    requires: tuple[str, ...] = (),
     provides: tuple[str, ...],
 ) -> AlgorithmStructureContract:
-    return AlgorithmStructureContract(frozenset(requires), frozenset(provides))
+    return AlgorithmStructureContract(frozenset(), frozenset(provides))
 
 
 def derivative_oracle_descriptor() -> ParameterDescriptor:
@@ -290,7 +289,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "AdaptiveNordsieckController",
         "controller",
         _contract(
-            requires=("state_domain",),
             provides=(
                 "advance",
                 "nordsieck",
@@ -309,7 +307,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "IntegrationDriver",
         "driver",
         _contract(
-            requires=("time_integrator", "controller"),
             provides=("advance", "adaptive_timestep", "domain_aware_acceptance"),
         ),
         1,
