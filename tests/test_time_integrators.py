@@ -18,6 +18,10 @@ from typing import Any
 import pytest
 
 import cosmic_foundry.computation.time_integrators as _ti
+from cosmic_foundry.computation.algorithm_capabilities import (
+    SolveRelationField,
+    solve_relation_parameter_schema,
+)
 from cosmic_foundry.computation.backends import (
     NumpyBackend,
 )
@@ -349,6 +353,50 @@ class _DomainClaim(Claim[Any]):
 
     def check(self, _calibration: Any) -> None:
         self._check()
+
+
+class _ReactionChainIntegrationClaim(Claim[Any]):
+    """Grounded claim for a finite reaction-chain projection."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/reaction_chain_projection_invariants"
+
+    def check(self, _calibration: Any) -> None:
+        chain = _ReactionChainPremise(
+            species_mass_number=(56, 56, 56),
+            transition_rates=(80.0, 12.0),
+        )
+        rhs = chain.build_rhs()
+        state = _ti.ODEState(0.0, chain.initial_state())
+        integrator = _ti.ImplicitRungeKuttaIntegrator(2)
+
+        descriptor = integrator.step_solve_relation_descriptor(state, 2.0e-3)
+        schema = solve_relation_parameter_schema()
+        schema.validate_descriptor(descriptor)
+        regions = {region.name: region for region in schema.derived_regions}
+
+        assert regions["nonlinear_root"].contains(descriptor)
+        assert descriptor.coordinate(SolveRelationField.DIM_X).value == (
+            state.u.shape[0] * len(integrator.A_sym)
+        )
+        assert not descriptor.coordinate(SolveRelationField.MAP_LINEARITY_DEFECT).known
+
+        invariant = chain.conserved_linear_form()
+        assert _linear_form_annihilates_stoichiometry(
+            invariant, rhs.stoichiometry_matrix
+        )
+        initial_invariant = float(invariant @ state.u)
+
+        for _ in range(20):
+            state = integrator.step(rhs, state, 2.0e-3)
+            assert rhs.state_domain.check(state.u).accepted
+
+        final_invariant = float(invariant @ state.u)
+        assert abs(final_invariant - initial_invariant) < 1e-10
+        assert (
+            abs(sum(float(state.u[i]) for i in range(state.u.shape[0])) - 1.0) < 1e-10
+        )
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -850,6 +898,72 @@ class _PerformanceClaim(Claim[ExecutionPlan]):
 
 
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class _ReactionChainPremise:
+    """Test-local nuclear-chain premise projected to a stoichiometric ODE."""
+
+    species_mass_number: tuple[int, ...]
+    transition_rates: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.species_mass_number) != len(self.transition_rates) + 1:
+            raise ValueError("a chain with n species has n - 1 transitions")
+        if len(set(self.species_mass_number)) != 1:
+            raise ValueError("this finite chain premise preserves one mass number")
+        if any(rate <= 0.0 for rate in self.transition_rates):
+            raise ValueError("reaction-chain transition rates must be positive")
+
+    def initial_state(self) -> Tensor:
+        return Tensor([1.0] + [0.0] * len(self.transition_rates), backend=_TIME_BACKEND)
+
+    def conserved_linear_form(self) -> Tensor:
+        return Tensor([1.0] * len(self.species_mass_number), backend=_TIME_BACKEND)
+
+    def stoichiometry_matrix(self) -> Tensor:
+        n_species = len(self.species_mass_number)
+        rows = [[0.0 for _ in self.transition_rates] for _ in range(n_species)]
+        for transition, _rate in enumerate(self.transition_rates):
+            rows[transition][transition] = -1.0
+            rows[transition + 1][transition] = 1.0
+        return Tensor(rows, backend=_TIME_BACKEND)
+
+    def build_rhs(self) -> _ti.ReactionNetworkRHS:
+        rates = self.transition_rates
+        n_species = len(self.species_mass_number)
+        stoichiometry = self.stoichiometry_matrix()
+
+        def forward_rate(t: float, u: Tensor) -> Tensor:
+            return Tensor(
+                [rate * float(u[i]) for i, rate in enumerate(rates)],
+                backend=u.backend,
+            )
+
+        def reverse_rate(t: float, u: Tensor) -> Tensor:
+            return Tensor([0.0 for _ in rates], backend=u.backend)
+
+        def jac(t: float, u: Tensor) -> Tensor:
+            rows = [[0.0 for _ in range(n_species)] for _ in range(n_species)]
+            for transition, rate in enumerate(rates):
+                rows[transition][transition] -= rate
+                rows[transition + 1][transition] += rate
+            return Tensor(rows, backend=u.backend)
+
+        return _ti.ReactionNetworkRHS(
+            stoichiometry,
+            forward_rate,
+            reverse_rate,
+            self.initial_state(),
+            jac=jac,
+        )
+
+
+def _linear_form_annihilates_stoichiometry(
+    linear_form: Tensor, stoichiometry: Tensor
+) -> bool:
+    product = linear_form @ stoichiometry
+    return all(abs(float(product[j])) < 1e-12 for j in range(product.shape[0]))
 
 
 @dataclass
@@ -1357,6 +1471,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _BatchedStiffDecayCorrectnessClaim(),
     _BatchedSemilinearCorrectnessClaim(),
     _BatchedAdaptiveDecayCorrectnessClaim(),
+    _ReactionChainIntegrationClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),

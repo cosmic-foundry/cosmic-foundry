@@ -2674,7 +2674,6 @@ _ATLAS_PROJECTIONS_BY_SCHEMA: dict[tuple[object, ...], _AtlasProjection] = {}
 _ATLAS_SIGNATURE_CELLS_BY_SCHEMA: dict[
     tuple[object, ...], tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...]
 ] = {}
-_ATLAS_CELL_SOURCES_BY_REGION: dict[int, _AtlasCellSource] = {}
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -3239,24 +3238,18 @@ def _atlas_source_key(source: _AtlasRegionSource) -> tuple[object, ...]:
 
 
 def _atlas_cell_source(source: InvalidCellRule | CoverageRegion) -> _AtlasCellSource:
-    cache_key = id(source)
-    if cache_key in _ATLAS_CELL_SOURCES_BY_REGION:
-        return _ATLAS_CELL_SOURCES_BY_REGION[cache_key]
     if isinstance(source, CoverageRegion):
-        cell_source = _AtlasCellSource(
+        return _AtlasCellSource(
             CoverageRegion,
             (
                 source.owner,
                 tuple(_predicate_key(predicate) for predicate in source.predicates),
             ),
         )
-    else:
-        cell_source = _AtlasCellSource(
-            InvalidCellRule,
-            (tuple(_predicate_key(predicate) for predicate in source.predicates),),
-        )
-    _ATLAS_CELL_SOURCES_BY_REGION[cache_key] = cell_source
-    return cell_source
+    return _AtlasCellSource(
+        InvalidCellRule,
+        (tuple(_predicate_key(predicate) for predicate in source.predicates),),
+    )
 
 
 def _atlas_uncovered_cell_source(
