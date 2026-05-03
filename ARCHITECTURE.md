@@ -790,13 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Return to the solver/time-integrator schema unification for method-family
-   selection: identify the smallest descriptor coordinates needed for
-   time-integrator method families to participate in the shared solve-relation
-   atlas without adding a parallel "time integrator" coverage vocabulary.
-2. Start deleting compatibility selection scaffolding: remove request structure
-   fields or capability contracts that now only restate descriptor predicates,
-   beginning with time-integration requests.
+1. Delete time-integration compatibility scaffolding that now only relays
+   descriptor predicates: collapse `TimeIntegrationRequest` away from the shared
+   string-structure request type, or delete the remaining structure fields from
+   time-integration calls that can be expressed as descriptor evidence.
+2. Return to the solver/time-integrator schema unification for method-family
+   selection: identify whether method-family coverage should be rendered from
+   the same solve-relation atlas or from the map-structure descriptor projection
+   introduced by time integrators.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -879,6 +880,12 @@ exact linear operator plus nonlinear residual; symplectic composition selects
 from separable Hamiltonian partition evidence; operator composition selects from
 an additive component count.  These are still human-facing method families, but
 they are no longer independent request vocabulary.
+The plain RHS label is gone from time-integration selection as well.  Explicit
+RK, explicit multistep, fixed-order Nordsieck, and the generic integration
+driver now select from direct RHS-evaluation descriptor evidence, with only
+non-map construction premises such as an already supplied controller remaining
+as structure requirements.  Descriptor-backed time-integration capability rows
+no longer carry empty structural contracts.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
