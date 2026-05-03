@@ -189,7 +189,9 @@ class MapStructureField(Enum):
     IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND = (
         "implicit_component_derivative_oracle_kind"
     )
+    NORDSIECK_HISTORY_AVAILABLE = "nordsieck_history_available"
     NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
+    RHS_HISTORY_AVAILABLE = "rhs_history_available"
     RHS_EVALUATION_AVAILABLE = "rhs_evaluation_available"
 
 
@@ -1470,6 +1472,75 @@ def reaction_network_parameter_schema() -> ParameterSpaceSchema:
     )
 
 
+def map_structure_parameter_schema() -> ParameterSpaceSchema:
+    """Return the ODE map/state-memory parameter-space schema."""
+    field = MapStructureField
+    return ParameterSpaceSchema(
+        name="map_structure",
+        axes=(
+            _bool_axis(field.RHS_EVALUATION_AVAILABLE),
+            _bool_axis(field.RHS_HISTORY_AVAILABLE),
+            _bool_axis(field.NORDSIECK_HISTORY_AVAILABLE),
+            _bool_axis(field.EXACT_LINEAR_OPERATOR_AVAILABLE),
+            _bool_axis(field.NONLINEAR_RESIDUAL_AVAILABLE),
+            _bool_axis(field.EXPLICIT_COMPONENT_AVAILABLE),
+            _bool_axis(field.IMPLICIT_COMPONENT_AVAILABLE),
+            ParameterAxis(
+                field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND,
+                (
+                    ParameterBin(
+                        "implicit_component_derivative_oracle_kind",
+                        frozenset({"jacobian_callback", "matrix", "unavailable"}),
+                    ),
+                ),
+            ),
+            _bool_axis(field.HAMILTONIAN_PARTITION_AVAILABLE),
+            _nonnegative_axis(field.ADDITIVE_COMPONENT_COUNT, units="components"),
+        ),
+        derived_regions=(
+            DerivedParameterRegion(
+                "single_step_rhs_evaluation",
+                (
+                    (
+                        MembershipPredicate(
+                            field.RHS_EVALUATION_AVAILABLE, frozenset({True})
+                        ),
+                        MembershipPredicate(
+                            field.RHS_HISTORY_AVAILABLE, frozenset({False})
+                        ),
+                        MembershipPredicate(
+                            field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})
+                        ),
+                    ),
+                ),
+            ),
+            DerivedParameterRegion(
+                "rhs_history_state",
+                (
+                    (
+                        MembershipPredicate(
+                            field.RHS_EVALUATION_AVAILABLE, frozenset({True})
+                        ),
+                        MembershipPredicate(
+                            field.RHS_HISTORY_AVAILABLE, frozenset({True})
+                        ),
+                    ),
+                ),
+            ),
+            DerivedParameterRegion(
+                "nordsieck_state",
+                (
+                    (
+                        MembershipPredicate(
+                            field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 def _decomposition_axes() -> tuple[ParameterAxis, ...]:
     decomposition_field = DecompositionField
     return (
@@ -1808,6 +1879,7 @@ __all__ = [
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",
     "MapStructureField",
+    "map_structure_parameter_schema",
     "MembershipPredicate",
     "NumericInterval",
     "ParameterAxis",

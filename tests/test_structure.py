@@ -49,6 +49,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     EvidencePredicate,
     InvalidCellRule,
     LinearSolverField,
+    MapStructureField,
     MembershipPredicate,
     NumericInterval,
     ParameterAxis,
@@ -62,6 +63,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
+    map_structure_parameter_schema,
     predicate_sets_are_disjoint,
     reaction_network_parameter_schema,
     solve_relation_parameter_schema,
@@ -1131,6 +1133,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         linear_schema = linear_solver_parameter_schema()
         decomposition_schema = decomposition_parameter_schema()
         reaction_network_schema = reaction_network_parameter_schema()
+        map_structure_schema = map_structure_parameter_schema()
 
         self._assert_solve_relation_fields_are_domain_neutral()
         assert solve_schema.descriptor_fields == set(SolveRelationField)
@@ -1142,11 +1145,13 @@ class _SolveRelationSchemaClaim(Claim[None]):
             set(SolveRelationField) | set(LinearSolverField) | set(DecompositionField)
         )
         assert reaction_network_schema.descriptor_fields == set(ReactionNetworkField)
+        assert map_structure_schema.descriptor_fields == set(MapStructureField)
         for schema in (
             solve_schema,
             linear_schema,
             decomposition_schema,
             reaction_network_schema,
+            map_structure_schema,
         ):
             schema.validate_schema()
             assert "problem_kind" not in schema.descriptor_fields
@@ -1286,6 +1291,20 @@ class _SolveRelationSchemaClaim(Claim[None]):
             )
             == "invalid"
         )
+
+        map_regions = self._regions(map_structure_schema)
+        rhs_descriptor = _rhs_evaluation_descriptor()
+        rhs_history_descriptor = _rhs_history_descriptor()
+        nordsieck_history_descriptor = _nordsieck_history_descriptor()
+        for descriptor in (
+            rhs_descriptor,
+            rhs_history_descriptor,
+            nordsieck_history_descriptor,
+        ):
+            map_structure_schema.validate_descriptor(descriptor)
+        assert map_regions["single_step_rhs_evaluation"].contains(rhs_descriptor)
+        assert map_regions["rhs_history_state"].contains(rhs_history_descriptor)
+        assert map_regions["nordsieck_state"].contains(nordsieck_history_descriptor)
 
         with pytest.raises(ValueError):
             ParameterSpaceSchema(
@@ -2883,6 +2902,13 @@ _rhs_evaluation_descriptor = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.capabilities."
     "rhs_evaluation_descriptor"
 )
+_rhs_history_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities." "rhs_history_descriptor"
+)
+_nordsieck_history_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities."
+    "nordsieck_history_descriptor"
+)
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -3014,6 +3040,22 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 descriptor=_rhs_evaluation_descriptor(),
             ),
             "RungeKuttaIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=_rhs_history_descriptor(),
+            ),
+            "ExplicitMultistepIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=_nordsieck_history_descriptor(),
+            ),
+            "MultistepIntegrator",
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(

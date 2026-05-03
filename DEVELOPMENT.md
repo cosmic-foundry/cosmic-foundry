@@ -228,6 +228,13 @@ a descriptor coordinate, structural invariant, generated atlas region,
 numerical claim, discovered structural test, or deletion of a misleading
 abstraction.
 
+Every PR must walk the full loop. A structural change, schema change,
+documentation change, or deletion is not complete until it grounds out in a
+concrete calculation claim in the same PR. Prefer extending an existing
+real-ish problem when that is the shortest honest path. If a change cannot be
+connected to a calculation without inventing fake work, stop and discuss the
+premise instead of opening a partial PR.
+
 After each real-ish problem, map the new premise back to `theory/` and ask
 whether the parameter schema or computation code has started to encode a
 theory object implicitly. One grounded occurrence stays test-local. Two

@@ -21,6 +21,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     EvidencePredicate,
     InvalidCellRule,
     LinearSolverField,
+    MapStructureField,
     MembershipPredicate,
     NumericInterval,
     ParameterAxis,
@@ -32,12 +33,19 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     StructuredPredicate,
     decomposition_parameter_schema,
     linear_solver_parameter_schema,
+    map_structure_parameter_schema,
     predicate_sets_are_disjoint,
     reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.solvers.capabilities import (
     linear_solver_coverage_regions,
+)
+from cosmic_foundry.computation.time_integrators.capabilities import (
+    nordsieck_history_descriptor,
+    rhs_evaluation_descriptor,
+    rhs_history_descriptor,
+    time_integration_capabilities,
 )
 from tests import test_structure as structure
 from tests.claims import Claim
@@ -47,7 +55,11 @@ _SolveRelationSchemaClaim = structure._SolveRelationSchemaClaim
 
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = (
-    SolveRelationField | LinearSolverField | DecompositionField | ReactionNetworkField
+    SolveRelationField
+    | LinearSolverField
+    | DecompositionField
+    | ReactionNetworkField
+    | MapStructureField
 )
 _AtlasDescriptorGroup: TypeAlias = tuple[ParameterDescriptor, ...]
 
@@ -159,6 +171,9 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             matrix_columns=5,
         ),
         _SolveRelationSchemaClaim._reaction_network_descriptor(),
+        rhs_evaluation_descriptor(),
+        rhs_history_descriptor(),
+        nordsieck_history_descriptor(),
     )
 
 
@@ -168,13 +183,21 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
         linear_solver_parameter_schema(),
         decomposition_parameter_schema(),
         reaction_network_parameter_schema(),
+        map_structure_parameter_schema(),
     )
 
 
 def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
     regions: dict[type, CoverageRegion] = {}
+    map_fields = frozenset(MapStructureField)
     for region in linear_solver_coverage_regions():
         regions[region.owner] = region
+    for capability in time_integration_capabilities():
+        if capability.category != "method_family":
+            continue
+        for region in capability.coverage_regions:
+            if region.referenced_fields <= map_fields:
+                regions[region.owner] = region
     return tuple(regions.values())
 
 
@@ -509,7 +532,8 @@ def _atlas_axis_field(axis: ParameterAxis) -> _AtlasDescriptorField:
         SolveRelationField
         | LinearSolverField
         | DecompositionField
-        | ReactionNetworkField,
+        | ReactionNetworkField
+        | MapStructureField,
     )
     return axis.field
 

@@ -790,16 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Unify the solver/time-integrator atlas view by rendering time-integration
-   method-family names as human labels derived from descriptor-owned coverage
-   regions plus implementation inheritance, not as request properties.  Before
-   re-admitting multistep method ownership, add a descriptor coordinate that
-   distinguishes history/state-memory requirements from single-step RHS
-   evaluation; otherwise leave the overlapping claims deleted.
-2. Review whether the reaction-chain grounding exposes any computational shadow
+1. Review whether the reaction-chain grounding exposes any computational shadow
    of the finite-state transition theory beyond the existing
    `FiniteStateTransitionSystem` projection; promote only a missing premise,
    not reaction-network application vocabulary.
+2. Use the same full-loop standard on the next atlas cleanup: if
+   time-integration method-family labels become rendered consequences rather
+   than request properties, ground the projection in a concrete calculation
+   whose descriptor lands in the rendered atlas cell.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

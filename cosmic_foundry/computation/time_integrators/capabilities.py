@@ -10,6 +10,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ComparisonPredicate,
     CoverageRegion,
     DescriptorCoordinate,
+    DescriptorField,
     MapStructureField,
     MembershipPredicate,
     ParameterDescriptor,
@@ -22,6 +23,9 @@ from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
 )
+from cosmic_foundry.computation.time_integrators.explicit_multistep import (
+    ExplicitMultistepIntegrator,
+)
 from cosmic_foundry.computation.time_integrators.exponential import (
     LawsonRungeKuttaIntegrator,
 )
@@ -33,6 +37,9 @@ from cosmic_foundry.computation.time_integrators.implicit import (
 )
 from cosmic_foundry.computation.time_integrators.integration_driver import (
     IntegrationDriver,
+)
+from cosmic_foundry.computation.time_integrators.nordsieck import (
+    MultistepIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
@@ -55,6 +62,29 @@ def _contract(
     return AlgorithmStructureContract(frozenset(), frozenset(provides))
 
 
+def _map_structure_coordinates(
+    overrides: dict[DescriptorField, DescriptorCoordinate] | None = None,
+) -> dict[DescriptorField, DescriptorCoordinate]:
+    field = MapStructureField
+    coordinates: dict[DescriptorField, DescriptorCoordinate] = {
+        field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(False),
+        field.RHS_HISTORY_AVAILABLE: DescriptorCoordinate(False),
+        field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(False),
+        field.EXACT_LINEAR_OPERATOR_AVAILABLE: DescriptorCoordinate(False),
+        field.NONLINEAR_RESIDUAL_AVAILABLE: DescriptorCoordinate(False),
+        field.EXPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(False),
+        field.IMPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(False),
+        field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+            "unavailable"
+        ),
+        field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(False),
+        field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(0),
+    }
+    if overrides is not None:
+        coordinates.update(overrides)
+    return coordinates
+
+
 def derivative_oracle_descriptor() -> ParameterDescriptor:
     """Return map evidence for an available Jacobian callback."""
     return ParameterDescriptor(
@@ -68,8 +98,37 @@ def derivative_oracle_descriptor() -> ParameterDescriptor:
 
 def rhs_evaluation_descriptor() -> ParameterDescriptor:
     """Return map evidence for direct RHS evaluation."""
+    field = MapStructureField
     return ParameterDescriptor(
-        {MapStructureField.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True)}
+        _map_structure_coordinates(
+            {field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True)}
+        )
+    )
+
+
+def rhs_history_descriptor() -> ParameterDescriptor:
+    """Return map evidence for RHS evaluation with stored RHS history."""
+    field = MapStructureField
+    return ParameterDescriptor(
+        _map_structure_coordinates(
+            {
+                field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
+                field.RHS_HISTORY_AVAILABLE: DescriptorCoordinate(True),
+            }
+        )
+    )
+
+
+def nordsieck_history_descriptor() -> ParameterDescriptor:
+    """Return map evidence for a populated Nordsieck state vector."""
+    field = MapStructureField
+    return ParameterDescriptor(
+        _map_structure_coordinates(
+            {
+                field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
+                field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(True),
+            }
+        )
     )
 
 
@@ -77,10 +136,12 @@ def semilinear_map_descriptor() -> ParameterDescriptor:
     """Return map evidence for ``f(t, u) = L u + N(t, u)``."""
     field = MapStructureField
     return ParameterDescriptor(
-        {
-            field.EXACT_LINEAR_OPERATOR_AVAILABLE: DescriptorCoordinate(True),
-            field.NONLINEAR_RESIDUAL_AVAILABLE: DescriptorCoordinate(True),
-        }
+        _map_structure_coordinates(
+            {
+                field.EXACT_LINEAR_OPERATOR_AVAILABLE: DescriptorCoordinate(True),
+                field.NONLINEAR_RESIDUAL_AVAILABLE: DescriptorCoordinate(True),
+            }
+        )
     )
 
 
@@ -88,31 +149,35 @@ def split_map_descriptor() -> ParameterDescriptor:
     """Return map evidence for an explicit/implicit additive split."""
     field = MapStructureField
     return ParameterDescriptor(
-        {
-            field.EXPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(True),
-            field.IMPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(True),
-            field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
-                "jacobian_callback"
-            ),
-        }
+        _map_structure_coordinates(
+            {
+                field.EXPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(True),
+                field.IMPLICIT_COMPONENT_AVAILABLE: DescriptorCoordinate(True),
+                field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+                    "jacobian_callback"
+                ),
+            }
+        )
     )
 
 
 def hamiltonian_map_descriptor() -> ParameterDescriptor:
     """Return map evidence for a separable Hamiltonian partition."""
+    field = MapStructureField
     return ParameterDescriptor(
-        {MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(True)}
+        _map_structure_coordinates(
+            {field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(True)}
+        )
     )
 
 
 def composite_map_descriptor(component_count: int) -> ParameterDescriptor:
     """Return map evidence for an operator-splitting component decomposition."""
+    field = MapStructureField
     return ParameterDescriptor(
-        {
-            MapStructureField.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(
-                component_count
-            )
-        }
+        _map_structure_coordinates(
+            {field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(component_count)}
+        )
     )
 
 
@@ -129,13 +194,34 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
 
 
 def _rhs_evaluation_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
     return CoverageRegion(
         owner,
         (
-            MembershipPredicate(
-                MapStructureField.RHS_EVALUATION_AVAILABLE, frozenset({True})
-            ),
+            MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
+            MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
+            MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})),
         ),
+    )
+
+
+def _rhs_history_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
+            MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({True})),
+            MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})),
+        ),
+    )
+
+
+def _nordsieck_history_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
+    return CoverageRegion(
+        owner,
+        (MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})),),
     )
 
 
@@ -273,6 +359,28 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         coverage_regions=(_derivative_oracle_region(AdaptiveNordsieckController),),
     ),
     TimeIntegrationCapability(
+        "explicit_multistep",
+        "ExplicitMultistepIntegrator",
+        "method_family",
+        _contract(
+            provides=("one_step", "explicit", "multistep"),
+        ),
+        1,
+        6,
+        coverage_regions=(_rhs_history_region(ExplicitMultistepIntegrator),),
+    ),
+    TimeIntegrationCapability(
+        "fixed_order_nordsieck",
+        "MultistepIntegrator",
+        "method_family",
+        _contract(
+            provides=("one_step", "nordsieck", "fixed_order"),
+        ),
+        1,
+        6,
+        coverage_regions=(_nordsieck_history_region(MultistepIntegrator),),
+    ),
+    TimeIntegrationCapability(
         "generic_integration_driver",
         "IntegrationDriver",
         "driver",
@@ -329,7 +437,9 @@ __all__ = [
     "derivative_oracle_descriptor",
     "composite_map_descriptor",
     "hamiltonian_map_descriptor",
+    "nordsieck_history_descriptor",
     "rhs_evaluation_descriptor",
+    "rhs_history_descriptor",
     "select_time_integrator",
     "semilinear_map_descriptor",
     "split_map_descriptor",
