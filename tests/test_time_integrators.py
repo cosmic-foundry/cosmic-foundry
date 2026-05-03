@@ -57,6 +57,7 @@ _TIME_BACKEND = NumpyBackend()
 _PERF_TRIALS = 10
 _PERF_OVERHEAD = 80.0
 _GPU_MIN_PERF_FMAS = 1.0e6
+_DAMPED_OSCILLATOR_GAMMA = 0.2
 
 
 def _assert_owned_step_map_cell(
@@ -161,6 +162,17 @@ def _exact_osc(t: float) -> tuple[float, ...]:
     return math.cos(t), math.sin(t)  # comp-split: u=(q,p) with u_dot=(-p,q)
 
 
+def _exact_damped_osc(t: float) -> tuple[float, ...]:
+    gamma = _DAMPED_OSCILLATOR_GAMMA
+    omega = math.sqrt(1.0 - (0.5 * gamma) ** 2)
+    envelope = math.exp(-0.5 * gamma * t)
+    sin_term = math.sin(omega * t)
+    cos_term = math.cos(omega * t)
+    q = envelope * (cos_term + 0.5 * gamma / omega * sin_term)
+    p = envelope * sin_term / omega
+    return q, p
+
+
 def _exact_ham(t: float) -> tuple[float, ...]:
     return math.cos(t), -math.sin(t)  # Hamiltonian H=(q²+p²)/2: q=cos t, p=-sin t
 
@@ -225,11 +237,11 @@ def _oscillator_composite_rhs() -> _ti.CompositeRHS:
         [
             _ti.ComponentFlowRHS(
                 lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend),
-                preserves_symplectic_form=True,
+                symplectic_form_defect_upper_bound=0.0,
             ),
             _ti.ComponentFlowRHS(
                 lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend),
-                preserves_symplectic_form=True,
+                symplectic_form_defect_upper_bound=0.0,
             ),
         ]
     )
@@ -240,11 +252,30 @@ def _uncertified_oscillator_composite_rhs() -> _ti.CompositeRHS:
         [
             _ti.ComponentFlowRHS(
                 lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend),
-                preserves_symplectic_form=False,
+                symplectic_form_defect_upper_bound=float("inf"),
             ),
             _ti.ComponentFlowRHS(
                 lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend),
-                preserves_symplectic_form=False,
+                symplectic_form_defect_upper_bound=float("inf"),
+            ),
+        ]
+    )
+
+
+def _damped_oscillator_composite_rhs() -> _ti.CompositeRHS:
+    gamma = _DAMPED_OSCILLATOR_GAMMA
+    return _ti.CompositeRHS(
+        [
+            _ti.ComponentFlowRHS(
+                lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend),
+                symplectic_form_defect_upper_bound=0.0,
+            ),
+            _ti.ComponentFlowRHS(
+                lambda t, u: Tensor(
+                    [0.0, float(u[0]) - gamma * float(u[1])],
+                    backend=u.backend,
+                ),
+                symplectic_form_defect_upper_bound=math.sqrt(2.0) * gamma,
             ),
         ]
     )
@@ -961,9 +992,20 @@ class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
         assert certified_descriptor.coordinate(
             MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
         ).value
+        assert (
+            certified_descriptor.coordinate(
+                MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
+            ).value
+            == 0.0
+        )
         assert not uncertified_descriptor.coordinate(
             MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
         ).value
+        assert math.isinf(
+            uncertified_descriptor.coordinate(
+                MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
+            ).value
+        )
         for descriptor in (certified_descriptor, uncertified_descriptor):
             assert (
                 _ti.select_time_integrator(
@@ -987,6 +1029,53 @@ class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
             max(abs(float(certified.u[i]) - float(uncertified.u[i])) for i in range(2))
             < 1.0e-14
         )
+
+
+class _DampedOscillatorSymplecticDefectClaim(Claim[Any]):
+    """Grounded claim for positive symplectic-defect evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/damped_oscillator_symplectic_defect"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _damped_oscillator_composite_rhs()
+        descriptor = composite_map_descriptor_from_rhs(rhs)
+        integrator = _ti.CompositionIntegrator(
+            [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+            order=2,
+        )
+        state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
+        dt = 2.5e-3
+        steps = 400
+
+        assert (
+            descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value == 2
+        )
+        assert not descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
+        assert descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
+        ).value == pytest.approx(math.sqrt(2.0) * _DAMPED_OSCILLATOR_GAMMA)
+        assert (
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"one_step"}),
+                    order=2,
+                    descriptor=descriptor,
+                )
+            ).implementation
+            == "CompositionIntegrator"
+        )
+        _assert_owned_step_map_cell(descriptor, _ti.CompositionIntegrator)
+
+        initial_energy = _oscillator_energy(state.u)
+        for _ in range(steps):
+            state = integrator.step(rhs, state, dt)
+
+        assert _err(state.u, _exact_damped_osc, state.t) < 2.0e-3
+        assert _oscillator_energy(state.u) < initial_energy
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -2015,6 +2104,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _CompositionStepMapSelectionClaim(),
     _OscillatorInvariantComparisonClaim(),
     _OscillatorNegativeInvariantEvidenceClaim(),
+    _DampedOscillatorSymplecticDefectClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),

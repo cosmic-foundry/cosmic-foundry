@@ -80,6 +80,7 @@ def _map_structure_coordinates(
             "unavailable"
         ),
         field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(False),
+        field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(float("inf")),
         field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
         field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(0),
     }
@@ -171,6 +172,7 @@ def hamiltonian_map_descriptor() -> ParameterDescriptor:
         _map_structure_coordinates(
             {
                 field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(True),
+                field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(0.0),
                 field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(True),
             }
         )
@@ -180,7 +182,7 @@ def hamiltonian_map_descriptor() -> ParameterDescriptor:
 def composite_map_descriptor(
     component_count: int,
     *,
-    symplectic_form_invariant_available: bool = False,
+    symplectic_form_defect_upper_bound: float = float("inf"),
 ) -> ParameterDescriptor:
     """Return map evidence for an operator-splitting component decomposition."""
     field = MapStructureField
@@ -188,8 +190,11 @@ def composite_map_descriptor(
         _map_structure_coordinates(
             {
                 field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(component_count),
+                field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(
+                    symplectic_form_defect_upper_bound
+                ),
                 field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(
-                    symplectic_form_invariant_available
+                    symplectic_form_defect_upper_bound == 0.0
                 ),
             }
         )
@@ -200,13 +205,15 @@ def composite_map_descriptor_from_rhs(
     rhs: CompositeRHSProtocol,
 ) -> ParameterDescriptor:
     """Return composition evidence derived from component-flow structure."""
+    defect_upper_bound = 0.0
+    for component in rhs.components:
+        if not isinstance(component, ComponentFlowProtocol):
+            defect_upper_bound = float("inf")
+            break
+        defect_upper_bound += component.symplectic_form_defect_upper_bound
     return composite_map_descriptor(
         len(rhs.components),
-        symplectic_form_invariant_available=all(
-            isinstance(component, ComponentFlowProtocol)
-            and component.preserves_symplectic_form
-            for component in rhs.components
-        ),
+        symplectic_form_defect_upper_bound=defect_upper_bound,
     )
 
 

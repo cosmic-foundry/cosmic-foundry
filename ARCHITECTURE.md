@@ -793,11 +793,11 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: introduce a two-component oscillator-like flow
-   whose components are not symplectic maps, then decide whether the schema
-   needs a quantitative symplectic-defect coordinate instead of only a boolean
-   invariant-evidence coordinate. Any atlas or selection change should follow
-   from descriptor coordinates, not from a category list.
+2. Candidate next calculation: add a one-dimensional scalar conservation or
+   linear-advection calculation that forces the atlas to represent flux form,
+   locality, and timestep stability premises. The goal is not a hydrodynamics
+   subsystem; it is to learn which descriptor coordinates are forced by a real
+   conservation-law calculation before iterating on time integrators further.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
