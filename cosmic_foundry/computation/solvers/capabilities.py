@@ -9,7 +9,6 @@ from types import ModuleType
 from cosmic_foundry.computation.algorithm_capabilities import (
     ComparisonPredicate,
     CoverageRegion,
-    DecompositionField,
     LinearSolverField,
     ParameterDescriptor,
     StructuredPredicate,
@@ -28,39 +27,14 @@ from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 
-_DECOMPOSITION_TO_LINEAR_FIELD = {
-    DecompositionField.CONDITION_ESTIMATE: LinearSolverField.CONDITION_ESTIMATE,
-    DecompositionField.MATRIX_NULLITY_ESTIMATE: LinearSolverField.NULLITY_ESTIMATE,
-    DecompositionField.MATRIX_RANK_ESTIMATE: LinearSolverField.RANK_ESTIMATE,
-    DecompositionField.SINGULAR_VALUE_LOWER_BOUND: (
-        LinearSolverField.SINGULAR_VALUE_LOWER_BOUND
-    ),
-}
-
-
-def _linear_solver_predicate_from_decomposition(
-    predicate: StructuredPredicate,
-) -> StructuredPredicate:
-    if not isinstance(predicate, ComparisonPredicate):
-        raise TypeError("decomposition feasibility currently supports comparisons")
-    if not isinstance(predicate.field, DecompositionField):
-        raise TypeError("decomposition feasibility must use decomposition fields")
-    field = _DECOMPOSITION_TO_LINEAR_FIELD[predicate.field]
-    return ComparisonPredicate(
-        field,
-        predicate.operator,
-        predicate.value,
-        predicate.accepted_evidence,
-    )
-
 
 def _linear_solve_predicates_from_decomposition(
     decomposition_type: type[Decomposition],
 ) -> tuple[StructuredPredicate, ...]:
-    return tuple(
-        _linear_solver_predicate_from_decomposition(predicate)
-        for predicate in decomposition_type.factorization_feasibility_certificate
-    )
+    for predicate in decomposition_type.factorization_feasibility_certificate:
+        if not isinstance(predicate, ComparisonPredicate):
+            raise TypeError("decomposition feasibility currently supports comparisons")
+    return decomposition_type.factorization_feasibility_certificate
 
 
 def _solver_package_modules() -> tuple[ModuleType, ...]:
