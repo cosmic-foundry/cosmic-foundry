@@ -793,13 +793,12 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: decide where the remaining NSE-style reaction
-   calculations belong by extracting the smallest equilibrium-seeking network
-   claim into either `test_reaction_networks.py` or an adaptive-controller
-   suite. The decision should follow from the calculation's premise: reaction
-   equilibrium structure versus controller behavior. Do not add mesh, flux-form,
-   locality, or CFL axes until a real mesh object is the implementation premise
-   being tested.
+2. Candidate next calculation: split the remaining NSE-style reaction-network
+   batch and stress claims by premise. Equilibrium-target assertions should move
+   toward `test_reaction_networks.py`; adaptive family-switching and stiffness
+   behavior should move toward an adaptive-controller suite. Do not add mesh,
+   flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
