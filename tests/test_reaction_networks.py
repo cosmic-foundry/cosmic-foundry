@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pytest
@@ -275,9 +276,52 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         assert float(state.u[1]) > float(state.u[2]) > float(state.u[3]) > 0.0
 
 
+class _TransientReactionEquilibriumClaim(Claim[Any]):
+    """Grounded claim for transient approach to a reaction-network equilibrium."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/nse/transient"
+
+    def check(self, _calibration: Any) -> None:
+        rate = 5.0
+        rhs = _ti.ReactionNetworkRHS(
+            Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
+            lambda t, u: Tensor([rate * float(u[0])], backend=u.backend),
+            lambda t, u: Tensor([rate * float(u[1])], backend=u.backend),
+            Tensor([0.9, 0.1], backend=_TIME_BACKEND),
+        )
+        controller = _ti.ConstraintAwareController(
+            rhs=rhs,
+            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
+            inner=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1e-5,
+                dt0=0.01,
+                factor_max=1.15,
+            ),
+            eps_activate=0.01,
+            eps_deactivate=0.1,
+        )
+
+        state = controller.advance(
+            Tensor([0.7, 0.3], backend=_TIME_BACKEND),
+            0.0,
+            0.1,
+        )
+        expected_0 = 0.5 + 0.2 * math.exp(-2.0 * rate * state.t)
+
+        assert abs(float(state.u[0]) - expected_0) < 1e-4
+        assert abs(float(state.u[1]) - (1.0 - expected_0)) < 1e-4
+        assert abs(float(state.u[0]) + float(state.u[1]) - 1.0) < 1e-10
+        assert rhs.state_domain.check(state.u).accepted
+
+
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _ReactionChainIntegrationClaim(),
     _BranchedFiniteTransitionNetworkClaim(),
+    _TransientReactionEquilibriumClaim(),
 )
 
 

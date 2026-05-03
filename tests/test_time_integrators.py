@@ -1436,38 +1436,6 @@ def _nse_correctness_spec(
     )
 
 
-def _nse_transient_correctness_spec() -> _CorrectnessSpec:
-    k = 5.0
-
-    def run() -> list[_ti.ODEState]:
-        rhs = _ti.ReactionNetworkRHS(
-            Tensor([[-1.0], [1.0]], backend=_TIME_BACKEND),
-            lambda t, u: Tensor([k * float(u[0])], backend=u.backend),
-            lambda t, u: Tensor([k * float(u[1])], backend=u.backend),
-            Tensor([0.9, 0.1], backend=_TIME_BACKEND),
-        )
-        ctrl = _ti.ConstraintAwareController(
-            rhs=rhs,
-            integrator=_ti.ImplicitRungeKuttaIntegrator(2),
-            inner=_ti.PIController(
-                alpha=0.35,
-                beta=0.2,
-                tol=1e-5,
-                dt0=0.01,
-                factor_max=1.15,
-            ),
-            eps_activate=0.01,
-            eps_deactivate=0.1,
-        )
-        return [ctrl.advance(Tensor([0.7, 0.3], backend=_TIME_BACKEND), 0.0, 0.1)]
-
-    def expected(t: float) -> tuple[float, float]:
-        x0 = 0.5 + 0.2 * math.exp(-2.0 * k * t)
-        return x0, 1.0 - x0
-
-    return _CorrectnessSpec("nse/transient", run, expected, 1e-4)
-
-
 RateFn = Callable[[float], list[tuple[int, int, float]]]
 
 
@@ -1709,7 +1677,6 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _DampedOscillatorSymplecticDefectClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
-    _CorrectnessClaim(_nse_transient_correctness_spec()),
     *[
         _CorrectnessClaim(_nse_correctness_spec(s, expected_walltime_s=5.0))
         for s in _OFF_SPECS
