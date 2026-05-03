@@ -580,6 +580,7 @@ class _ArchitectureOwnershipSpec:
     request_selector: str | None = None
     request_expectations: tuple[_CapabilityRequestExpectation, ...] = ()
     rejected_requests: tuple[_CapabilityRejectionExpectation, ...] = ()
+    descriptor_owned_capabilities: bool = False
     expected_class_modules: dict[str, str] | None = None
     required_name_fragments: dict[str, tuple[str, ...]] | None = None
 
@@ -642,6 +643,16 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             name for name in set(implementations) if implementations.count(name) > 1
         )
         assert not duplicates, f"duplicate capability implementations: {duplicates}"
+        if self._spec.descriptor_owned_capabilities:
+            structure_gated = [
+                self._capability_implementation_name(cap)
+                for cap in capabilities
+                if cap.contract.requires
+            ]
+            assert not structure_gated, (
+                "descriptor-owned capabilities require ad hoc structure gates: "
+                f"{structure_gated}"
+            )
 
         if self._spec.request_selector is None:
             return
@@ -3006,7 +3017,6 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                available_structure=frozenset({"state_domain"}),
                 requested_properties=frozenset(
                     {
                         "advance",
@@ -3024,7 +3034,6 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                available_structure=frozenset({"time_integrator", "controller"}),
                 requested_properties=frozenset({"advance", "adaptive_timestep"}),
                 order=3,
                 descriptor=_rhs_evaluation_descriptor(),
@@ -3073,12 +3082,12 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRejectionExpectation(
             _AlgorithmRequest(
-                available_structure=frozenset({"state_domain"}),
                 requested_properties=frozenset({"advance", "nordsieck"}),
                 order=2,
             )
         ),
     ),
+    descriptor_owned_capabilities=True,
     expected_class_modules={
         "AdaptiveNordsieckController": "adaptive_nordsieck",
         "AdditiveRungeKuttaIntegrator": "imex",

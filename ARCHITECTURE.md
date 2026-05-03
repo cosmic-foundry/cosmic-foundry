@@ -790,14 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Decide whether the remaining non-map structure requirements in
-   time-integration selection (`state_domain`, `time_integrator`, `controller`)
-   are construction evidence, descriptor coordinates, or redundant conclusions
-   that should be deleted.
-2. Return to the solver/time-integrator schema unification for method-family
+1. Return to the solver/time-integrator schema unification for method-family
    selection: identify whether method-family coverage should be rendered from
    the same solve-relation atlas or from the map-structure descriptor projection
    introduced by time integrators.
+2. If method-family selection is a projection over descriptor regions, delete
+   the remaining string-property family gates from time-integration requests and
+   derive human-facing labels from owned descriptor regions plus implementation
+   inheritance.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
