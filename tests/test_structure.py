@@ -1660,10 +1660,10 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                 selected = select_linear_solver_for_descriptor(
                     linear_descriptor.parameter_descriptor
                 )
-                direct_solver = _resolve_dotted(
-                    "cosmic_foundry.computation.solvers.DirectSolver"
+                dense_lu_solver = _resolve_dotted(
+                    "cosmic_foundry.computation.solvers.DenseLUSolver"
                 )
-                assert issubclass(selected, direct_solver)
+                assert selected is dense_lu_solver
         assert explicit_owners
         assert implicit_owners
 
@@ -1804,8 +1804,15 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             assert decomposition_type is not None
             certificate = decomposition_type.linear_solve_certificate
             assert certificate
+            feasible_fields = {
+                LinearSolverField.CONDITION_ESTIMATE,
+                LinearSolverField.NULLITY_ESTIMATE,
+                LinearSolverField.RHS_CONSISTENCY_DEFECT,
+                LinearSolverField.SINGULAR_VALUE_LOWER_BOUND,
+            }
             for predicate in certificate:
                 assert predicate in region.predicates
+                assert predicate.referenced_fields <= feasible_fields
 
     @staticmethod
     def _assert_stationary_iterations_do_not_own_final_solve_regions(
