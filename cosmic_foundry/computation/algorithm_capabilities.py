@@ -872,6 +872,8 @@ class ParameterSpaceSchema:
 
 _LINEARITY_EPS = 1.0e-12
 _NUMERIC_EPS = 1.0e-14
+LINEARITY_TOLERANCE = _LINEARITY_EPS
+CONDITION_LIMIT = 1.0e8
 
 
 def _axis(
@@ -1563,6 +1565,7 @@ __all__ = [
     "AlgorithmRequest",
     "AlgorithmStructureContract",
     "ComparisonPredicate",
+    "CONDITION_LIMIT",
     "coverage_regions_are_disjoint",
     "CoverageRegion",
     "DecompositionField",
@@ -1572,6 +1575,7 @@ __all__ = [
     "EvidencePredicate",
     "InvalidCellRule",
     "LinearSolverField",
+    "LINEARITY_TOLERANCE",
     "LinearOperatorDescriptor",
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",

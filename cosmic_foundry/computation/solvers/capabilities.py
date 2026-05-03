@@ -40,10 +40,20 @@ def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ..
     if issubclass(owner, LinearSolver):
         predicates += linear_system_predicates() + budget_predicates()
     if issubclass(owner, DirectSolver):
+        decomposition_type = getattr(owner, "decomposition_type", None)
         predicates += dense_matrix_predicates()
+        if decomposition_type is not None:
+            predicates += decomposition_type.linear_solve_certificate
     if issubclass(owner, KrylovSolver):
         predicates += matrix_free_operator_predicates()
     return predicates
+
+
+def _owns_coverage(owner: type) -> bool:
+    return (
+        "linear_solver_coverage" in owner.__dict__
+        or getattr(owner, "decomposition_type", None) is not None
+    )
 
 
 def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
@@ -52,13 +62,12 @@ def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
         for item in module.__dict__.values():
             if not isinstance(item, type) or item.__module__ != module.__name__:
                 continue
-            predicates = getattr(item, "linear_solver_coverage", None)
-            if predicates is not None:
+            if _owns_coverage(item):
                 regions.append(
                     coverage(
                         item,
                         coverage_predicates=_inherited_coverage_predicates(item)
-                        + predicates,
+                        + getattr(item, "linear_solver_coverage", ()),
                     )
                 )
     return tuple(regions)

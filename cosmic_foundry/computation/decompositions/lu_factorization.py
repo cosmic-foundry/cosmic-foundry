@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from cosmic_foundry.computation import tensor
+from cosmic_foundry.computation.algorithm_capabilities import (
+    CONDITION_LIMIT,
+    LINEARITY_TOLERANCE,
+    ComparisonPredicate,
+    LinearSolverField,
+)
 from cosmic_foundry.computation.decompositions.decomposition import DecomposedTensor
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.tensor import Tensor, arange, einsum, where
@@ -175,6 +181,19 @@ class LUFactorization(Factorization):
     Python data-dependent branch, so the factorize loop body is compatible
     with JAX tracing (no Python bool over traced values).
     """
+
+    linear_solve_certificate = (
+        ComparisonPredicate(LinearSolverField.DIAGONAL_DOMINANCE_MARGIN, "<=", 0.0),
+        ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
+        ComparisonPredicate(
+            LinearSolverField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
+        ),
+        ComparisonPredicate(
+            LinearSolverField.RHS_CONSISTENCY_DEFECT,
+            "<=",
+            LINEARITY_TOLERANCE,
+        ),
+    )
 
     def factorize(self, a: Tensor) -> LUDecomposedTensor:
         """Factor A with partial pivoting; return a LUDecomposedTensor."""

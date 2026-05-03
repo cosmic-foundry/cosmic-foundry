@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
+from cosmic_foundry.computation.algorithm_capabilities import StructuredPredicate
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -44,6 +46,8 @@ class Decomposition(ABC):
     Required:
         decompose — decompose A and return a DecomposedTensor
     """
+
+    linear_solve_certificate: ClassVar[tuple[StructuredPredicate, ...]] = ()
 
     @abstractmethod
     def decompose(self, a: Tensor) -> DecomposedTensor:

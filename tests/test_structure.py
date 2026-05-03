@@ -1668,6 +1668,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for region in regions:
             schema.validate_coverage_region(region)
         self._assert_linear_solver_coverage_is_square_residual_solve(schema, regions)
+        self._assert_direct_solver_coverage_uses_decomposition_certificate(regions)
         self._assert_final_solve_owners_are_schema_separated(regions)
 
         selected_owners: set[type] = set()
@@ -1716,6 +1717,26 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for solver in _LEAST_SQUARES_SOLVERS:
             assert not issubclass(solver, linear_solver)
             assert not hasattr(solver, "linear_solver_coverage")
+
+    @staticmethod
+    def _assert_direct_solver_coverage_uses_decomposition_certificate(
+        regions: tuple[CoverageRegion, ...],
+    ) -> None:
+        direct_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.DirectSolver"
+        )
+        direct_regions = [
+            region for region in regions if issubclass(region.owner, direct_solver)
+        ]
+        assert direct_regions
+        for region in direct_regions:
+            assert "linear_solver_coverage" not in region.owner.__dict__
+            decomposition_type = region.owner.decomposition_type
+            assert decomposition_type is not None
+            certificate = decomposition_type.linear_solve_certificate
+            assert certificate
+            for predicate in certificate:
+                assert predicate in region.predicates
 
     @staticmethod
     def _assert_stationary_iterations_do_not_own_final_solve_regions(

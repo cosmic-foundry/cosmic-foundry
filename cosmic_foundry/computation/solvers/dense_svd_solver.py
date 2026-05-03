@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-from cosmic_foundry.computation.algorithm_capabilities import (
-    ComparisonPredicate,
-    LinearSolverField,
-)
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
-from cosmic_foundry.computation.solvers.coverage import (
-    LINEARITY_TOLERANCE,
-)
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 
 
@@ -40,18 +33,10 @@ class DenseSVDSolver(DirectSolver):
         Singular values below rcond · σ₀ are treated as zero.
     """
 
+    decomposition_type = SVDFactorization
+
     def __init__(self, rcond: float = 1e-10) -> None:
         super().__init__(SVDFactorization(rcond))
-
-    linear_solver_coverage = (
-        ComparisonPredicate(LinearSolverField.NULLITY_ESTIMATE, ">", 0),
-        ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, "<=", 0.0),
-        ComparisonPredicate(
-            LinearSolverField.RHS_CONSISTENCY_DEFECT,
-            "<=",
-            LINEARITY_TOLERANCE,
-        ),
-    )
 
 
 __all__ = ["DenseSVDSolver"]
