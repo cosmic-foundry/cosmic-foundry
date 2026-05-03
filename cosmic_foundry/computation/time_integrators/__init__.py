@@ -86,11 +86,11 @@ from cosmic_foundry.computation.time_integrators.solve_relation import (
     time_integrator_step_solve_relation_descriptor,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
+    ComponentFlowProtocol,
+    ComponentFlowRHS,
     CompositeRHS,
     CompositeRHSProtocol,
     CompositionIntegrator,
-    SymplecticFlowProtocol,
-    SymplecticFlowRHS,
 )
 from cosmic_foundry.computation.time_integrators.stiffness import (
     FamilyName,
@@ -152,11 +152,11 @@ __all__ = [
     "SemilinearRHS",
     "SemilinearRHSProtocol",
     "PhiFunction",
+    "ComponentFlowProtocol",
+    "ComponentFlowRHS",
     "CompositeRHS",
     "CompositeRHSProtocol",
     "CompositionIntegrator",
-    "SymplecticFlowProtocol",
-    "SymplecticFlowRHS",
     "HamiltonianRHS",
     "HamiltonianRHSProtocol",
     "SymplecticCompositionIntegrator",
