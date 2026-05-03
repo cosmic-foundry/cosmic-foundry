@@ -256,13 +256,13 @@ class TimeIntegrator(ABC):
         integrator family; all state types carry at least (t, u, dt, err).
         """
 
-    def step_solve_relation_descriptor(self, state: Any, dt: float) -> Any:
+    def step_solve_relation_descriptor(self, rhs: Any, state: Any, dt: float) -> Any:
         """Return the primitive solve relation induced by one step."""
         from cosmic_foundry.computation.time_integrators.solve_relation import (
             time_integrator_step_solve_relation_descriptor,
         )
 
-        return time_integrator_step_solve_relation_descriptor(self, state, dt)
+        return time_integrator_step_solve_relation_descriptor(self, rhs, state, dt)
 
 
 __all__ = [
