@@ -790,14 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Return to the solver/time-integrator schema unification for method-family
-   selection: identify whether method-family coverage should be rendered from
-   the same solve-relation atlas or from the map-structure descriptor projection
-   introduced by time integrators.
-2. If method-family selection is a projection over descriptor regions, delete
-   the remaining string-property family gates from time-integration requests and
-   derive human-facing labels from owned descriptor regions plus implementation
-   inheritance.
+1. Ground the time-integration descriptor projection in a reversible
+   three-species reaction-chain simulation that checks conservation,
+   nonnegativity, derivative-oracle evidence, and constraint-aware ownership
+   against the same descriptor coordinates used for selection.
+2. Unify the solver/time-integrator atlas view by rendering time-integration
+   method-family names as human labels derived from descriptor-owned coverage
+   regions plus implementation inheritance, not as request properties.  Before
+   re-admitting multistep method ownership, add a descriptor coordinate that
+   distinguishes history/state-memory requirements from single-step RHS
+   evaluation; otherwise leave the overlapping claims deleted.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

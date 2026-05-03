@@ -36,6 +36,10 @@ import pytest
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
+    AlgorithmCapability,
+    AlgorithmRegistry,
+    AlgorithmRequest,
+    AlgorithmStructureContract,
     ComparisonPredicate,
     CoverageRegion,
     DecompositionField,
@@ -581,6 +585,7 @@ class _ArchitectureOwnershipSpec:
     request_expectations: tuple[_CapabilityRequestExpectation, ...] = ()
     rejected_requests: tuple[_CapabilityRejectionExpectation, ...] = ()
     descriptor_owned_capabilities: bool = False
+    descriptor_request_property_limit: int | None = None
     expected_class_modules: dict[str, str] | None = None
     required_name_fragments: dict[str, tuple[str, ...]] | None = None
 
@@ -657,6 +662,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         if self._spec.request_selector is None:
             return
         selector = _resolve_dotted(self._spec.request_selector)
+        self._check_descriptor_requests()
         for expectation in self._spec.request_expectations:
             selected = selector(expectation.request)
             selected_name = self._capability_implementation_name(selected)
@@ -673,6 +679,27 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             raise AssertionError(
                 f"{expectation.request!r} unexpectedly selected " f"{selected_name}"
             )
+
+    def _check_descriptor_requests(self) -> None:
+        limit = self._spec.descriptor_request_property_limit
+        if limit is None:
+            return
+        oversized = [
+            request
+            for request in (
+                *(
+                    expectation.request
+                    for expectation in self._spec.request_expectations
+                ),
+                *(expectation.request for expectation in self._spec.rejected_requests),
+            )
+            if request.descriptor is not None
+            and len(request.requested_properties) > limit
+        ]
+        assert not oversized, (
+            "descriptor-owned requests must not smuggle family labels through "
+            f"property lists: {oversized}"
+        )
 
     @staticmethod
     def _capability_implementation_name(capability: Any) -> str:
@@ -711,6 +738,23 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         assert not violations, "ownership-obscuring class names: " + "; ".join(
             violations
         )
+
+
+class _AlgorithmSelectionAmbiguityClaim(Claim[None]):
+    """Claim: overlapping algorithm ownership is an error, not a ranking."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/overlap_is_ambiguous"
+
+    def check(self, _calibration: None) -> None:
+        contract = AlgorithmStructureContract(frozenset(), frozenset())
+        capabilities = (
+            AlgorithmCapability("first", "First", "same", contract),
+            AlgorithmCapability("second", "Second", "same", contract),
+        )
+        with pytest.raises(ValueError, match="ambiguous algorithm request"):
+            AlgorithmRegistry(capabilities).select(AlgorithmRequest())
 
 
 class _TestFileStructureClaim(Claim[None]):
@@ -2965,7 +3009,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     request_expectations=(
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
+                requested_properties=frozenset({"one_step"}),
                 order=4,
                 descriptor=_rhs_evaluation_descriptor(),
             ),
@@ -2973,7 +3017,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"one_step", "implicit"}),
+                requested_properties=frozenset({"one_step"}),
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
             ),
@@ -2981,7 +3025,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"one_step", "imex"}),
+                requested_properties=frozenset({"one_step"}),
                 order=3,
                 descriptor=_split_map_descriptor(),
             ),
@@ -2989,7 +3033,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"one_step", "exponential"}),
+                requested_properties=frozenset({"one_step"}),
                 order=4,
                 descriptor=_semilinear_map_descriptor(),
             ),
@@ -2997,9 +3041,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset(
-                    {"one_step", "symplectic", "composition"}
-                ),
+                requested_properties=frozenset({"one_step"}),
                 order=4,
                 descriptor=_hamiltonian_map_descriptor(),
             ),
@@ -3007,9 +3049,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset(
-                    {"one_step", "operator_splitting", "composition"}
-                ),
+                requested_properties=frozenset({"one_step"}),
                 order=4,
                 descriptor=_composite_map_descriptor(2),
             ),
@@ -3017,16 +3057,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset(
-                    {
-                        "advance",
-                        "nordsieck",
-                        "adaptive_timestep",
-                        "variable_order",
-                        "stiffness_switching",
-                        "domain_aware_acceptance",
-                    }
-                ),
+                requested_properties=frozenset({"advance"}),
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
             ),
@@ -3034,7 +3065,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"advance", "adaptive_timestep"}),
+                requested_properties=frozenset({"advance"}),
                 order=3,
                 descriptor=_rhs_evaluation_descriptor(),
             ),
@@ -3042,7 +3073,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"advance", "constraint_lifecycle"}),
+                requested_properties=frozenset({"advance"}),
                 order=2,
                 descriptor=_SolveRelationSchemaClaim._reaction_network_descriptor(),
             ),
@@ -3052,31 +3083,27 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     rejected_requests=(
         _CapabilityRejectionExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset(
-                    {"one_step", "symplectic", "composition"}
-                ),
+                requested_properties=frozenset({"one_step"}),
                 order=3,
                 descriptor=_hamiltonian_map_descriptor(),
             )
         ),
         _CapabilityRejectionExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset(
-                    {"one_step", "operator_splitting", "composition"}
-                ),
+                requested_properties=frozenset({"one_step"}),
                 order=3,
                 descriptor=_composite_map_descriptor(2),
             )
         ),
         _CapabilityRejectionExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"advance", "constraint_lifecycle"}),
+                requested_properties=frozenset({"advance"}),
                 order=2,
             )
         ),
         _CapabilityRejectionExpectation(
             _AlgorithmRequest(
-                requested_properties=frozenset({"one_step", "implicit"}),
+                requested_properties=frozenset({"one_step"}),
                 order=2,
             )
         ),
@@ -3088,6 +3115,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
     ),
     descriptor_owned_capabilities=True,
+    descriptor_request_property_limit=1,
     expected_class_modules={
         "AdaptiveNordsieckController": "adaptive_nordsieck",
         "AdditiveRungeKuttaIntegrator": "imex",
@@ -3604,6 +3632,7 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_DECOMPOSITION_OWNERSHIP),
     _ArchitectureOwnershipClaim(_DISCRETE_OPERATOR_OWNERSHIP),
     _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
+    _AlgorithmSelectionAmbiguityClaim(),
     _AutoDiscoveryImportClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),

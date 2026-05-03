@@ -22,9 +22,6 @@ from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
 )
-from cosmic_foundry.computation.time_integrators.explicit_multistep import (
-    ExplicitMultistepIntegrator,
-)
 from cosmic_foundry.computation.time_integrators.exponential import (
     LawsonRungeKuttaIntegrator,
 )
@@ -36,9 +33,6 @@ from cosmic_foundry.computation.time_integrators.implicit import (
 )
 from cosmic_foundry.computation.time_integrators.integration_driver import (
     IntegrationDriver,
-)
-from cosmic_foundry.computation.time_integrators.nordsieck import (
-    MultistepIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
@@ -201,7 +195,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        priority=60,
         coverage_regions=(_rhs_evaluation_region(RungeKuttaIntegrator),),
     ),
     TimeIntegrationCapability(
@@ -260,29 +253,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         6,
         supported_orders=frozenset({1, 2, 4, 6}),
         coverage_regions=(_composite_map_region(CompositionIntegrator),),
-    ),
-    TimeIntegrationCapability(
-        "explicit_multistep",
-        "ExplicitMultistepIntegrator",
-        "method_family",
-        _contract(
-            provides=("one_step", "explicit", "multistep"),
-        ),
-        1,
-        6,
-        priority=50,
-        coverage_regions=(_rhs_evaluation_region(ExplicitMultistepIntegrator),),
-    ),
-    TimeIntegrationCapability(
-        "fixed_order_nordsieck",
-        "MultistepIntegrator",
-        "method_family",
-        _contract(
-            provides=("one_step", "nordsieck", "fixed_order"),
-        ),
-        1,
-        6,
-        coverage_regions=(_rhs_evaluation_region(MultistepIntegrator),),
     ),
     TimeIntegrationCapability(
         "adaptive_nordsieck",

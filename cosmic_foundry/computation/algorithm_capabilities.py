@@ -32,7 +32,6 @@ class AlgorithmCapability:
     max_order: int | None = None
     order_step: int | None = None
     supported_orders: frozenset[int] | None = None
-    priority: int | None = None
     coverage_regions: tuple[CoverageRegion, ...] = ()
 
     def supports(self, request: AlgorithmRequest) -> bool:
@@ -89,22 +88,15 @@ class AlgorithmRegistry:
         return tuple(cap for cap in self._capabilities if cap.supports(request))
 
     def select(self, request: AlgorithmRequest) -> AlgorithmCapability:
-        """Return the unique or explicitly prioritized implementation."""
+        """Return the unique implementation inhabiting ``request``."""
         matches = self.matching(request)
         if not matches:
             raise ValueError(f"no algorithm satisfies request {request!r}")
         if len(matches) == 1:
             return matches[0]
 
-        ranked = [cap for cap in matches if cap.priority is not None]
-        if not ranked:
-            names = ", ".join(cap.name for cap in matches)
-            raise ValueError(f"ambiguous algorithm request {request!r}: {names}")
-        ranked.sort(key=lambda cap: cap.priority if cap.priority is not None else 0)
-        if len(ranked) > 1 and ranked[0].priority == ranked[1].priority:
-            names = ", ".join(cap.name for cap in ranked)
-            raise ValueError(f"ambiguous algorithm priority {request!r}: {names}")
-        return ranked[0]
+        names = ", ".join(cap.name for cap in matches)
+        raise ValueError(f"ambiguous algorithm request {request!r}: {names}")
 
 
 ScalarValue: TypeAlias = bool | int | float | str

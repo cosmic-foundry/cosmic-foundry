@@ -80,44 +80,42 @@ def _require(branch: _T | None, name: str, order: int) -> _T:
 def _rhs_request(rhs: RHSProtocol, order: int) -> AlgorithmRequest:
     if isinstance(rhs, SemilinearRHSProtocol):
         return AlgorithmRequest(
-            requested_properties=frozenset({"one_step", "exponential", "runge_kutta"}),
+            requested_properties=frozenset({"one_step"}),
             order=order,
             descriptor=semilinear_map_descriptor(),
         )
     if isinstance(rhs, HamiltonianRHSProtocol):
         return AlgorithmRequest(
-            requested_properties=frozenset({"one_step", "symplectic", "composition"}),
+            requested_properties=frozenset({"one_step"}),
             order=order,
             descriptor=hamiltonian_map_descriptor(),
         )
     if isinstance(rhs, CompositeRHSProtocol):
         return AlgorithmRequest(
-            requested_properties=frozenset(
-                {"one_step", "operator_splitting", "composition"}
-            ),
+            requested_properties=frozenset({"one_step"}),
             order=order,
             descriptor=composite_map_descriptor(len(rhs.components)),
         )
     if isinstance(rhs, SplitRHSProtocol):
         return AlgorithmRequest(
-            requested_properties=frozenset({"one_step", "imex", "runge_kutta"}),
+            requested_properties=frozenset({"one_step"}),
             order=order,
             descriptor=split_map_descriptor(),
         )
     if isinstance(rhs, ReactionNetworkRHS):
         return AlgorithmRequest(
-            requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
+            requested_properties=frozenset({"one_step"}),
             order=order,
             descriptor=derivative_oracle_descriptor(),
         )
     if isinstance(rhs, WithJacobianRHSProtocol):
         return AlgorithmRequest(
-            requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
+            requested_properties=frozenset({"one_step"}),
             order=order,
             descriptor=derivative_oracle_descriptor(),
         )
     return AlgorithmRequest(
-        requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
+        requested_properties=frozenset({"one_step"}),
         order=order,
         descriptor=rhs_evaluation_descriptor(),
     )
