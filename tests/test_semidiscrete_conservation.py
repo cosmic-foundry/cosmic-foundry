@@ -21,23 +21,17 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     time_integration_step_map_regions,
 )
 from tests.claims import Claim
+from tests.selection_ownership import SelectionOwnership
 
 _TIME_BACKEND = NumpyBackend()
 
 
-def _owned_step_map_owner(descriptor: ParameterDescriptor) -> type:
-    regions = time_integration_step_map_regions()
-    owners = tuple(region.owner for region in regions if region.contains(descriptor))
-    assert len(owners) == 1
-    return owners[0]
-
-
-def _assert_owned_step_map_cell(descriptor: ParameterDescriptor) -> None:
-    schema = map_structure_parameter_schema()
-    regions = time_integration_step_map_regions()
-    schema.validate_descriptor(descriptor)
-    assert schema.cell_status(descriptor, regions) == "owned"
-    assert _owned_step_map_owner(descriptor)
+def _step_map_ownership(descriptor: ParameterDescriptor) -> SelectionOwnership:
+    return SelectionOwnership(
+        descriptor,
+        time_integration_step_map_regions(),
+        map_structure_parameter_schema(),
+    )
 
 
 def _sum_entries(u: Tensor) -> float:
@@ -89,9 +83,9 @@ class _PeriodicAdvectionConservationClaim(Claim[Any]):
                     descriptor=descriptor,
                 )
             ).implementation
-            == _owned_step_map_owner(descriptor).__name__
+            == _step_map_ownership(descriptor).owner.__name__
         )
-        _assert_owned_step_map_cell(descriptor)
+        _step_map_ownership(descriptor).assert_owned_cell()
 
         state = _ti.ODEState(0.0, Tensor(initial_values, backend=_TIME_BACKEND))
         initial_total = _sum_entries(state.u)

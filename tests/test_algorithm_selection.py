@@ -12,7 +12,6 @@ import pytest
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRequest,
-    CoverageRegion,
     MapStructureField,
     ParameterDescriptor,
     SolveRelationField,
@@ -35,29 +34,10 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
 )
 from tests import time_integrator_cases as cases
 from tests.claims import Claim
+from tests.selection_ownership import SelectionOwnership
 
 _TIME_BACKEND = cases.TIME_BACKEND
 _DAMPED_OSCILLATOR_GAMMA = 0.2
-
-
-def _owned_region_owner(
-    descriptor: ParameterDescriptor,
-    regions: tuple[CoverageRegion, ...],
-) -> type:
-    owners = tuple(region.owner for region in regions if region.contains(descriptor))
-    assert len(owners) == 1
-    return owners[0]
-
-
-def _assert_owned_cell(
-    descriptor: ParameterDescriptor,
-    *,
-    regions: tuple[CoverageRegion, ...],
-    schema: Any,
-) -> None:
-    schema.validate_descriptor(descriptor)
-    assert schema.cell_status(descriptor, regions) == "owned"
-    assert _owned_region_owner(descriptor, regions)
 
 
 def _exact_damped_osc(t: float) -> tuple[float, ...]:
@@ -119,8 +99,7 @@ class _StepSelectionCase:
     integrator: object
     exact: Callable[[float], tuple[float, ...]]
     tolerance: float
-    regions: tuple[CoverageRegion, ...]
-    schema: Any
+    ownership: SelectionOwnership
     auto_selectable: bool = True
     postcheck: Callable[[_StepSelectionCase, _ti.ODEState], None] = (
         lambda case, state: None
@@ -128,7 +107,7 @@ class _StepSelectionCase:
 
     @property
     def owner(self) -> type:
-        return _owned_region_owner(self.descriptor, self.regions)
+        return self.ownership.owner
 
     def step(self, dt: float) -> _ti.ODEState:
         return self.integrator.step(self.rhs, self.state, dt)  # type: ignore[attr-defined]
@@ -156,8 +135,11 @@ def _map_selection_case(
         integrator=integrator,
         exact=exact,
         tolerance=tolerance,
-        regions=time_integration_step_map_regions(),
-        schema=map_structure_parameter_schema(),
+        ownership=SelectionOwnership(
+            descriptor,
+            time_integration_step_map_regions(),
+            map_structure_parameter_schema(),
+        ),
         postcheck=postcheck,
     )
 
@@ -185,8 +167,11 @@ def _solve_selection_case() -> _StepSelectionCase:
         integrator=integrator,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-7,
-        regions=time_integration_step_solve_regions(),
-        schema=solve_relation_parameter_schema(),
+        ownership=SelectionOwnership(
+            descriptor,
+            time_integration_step_solve_regions(),
+            solve_relation_parameter_schema(),
+        ),
         postcheck=postcheck,
     )
 
@@ -209,8 +194,11 @@ def _rhs_history_selection_case() -> _StepSelectionCase:
         integrator=integrator,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-8,
-        regions=time_integration_step_map_regions(),
-        schema=map_structure_parameter_schema(),
+        ownership=SelectionOwnership(
+            rhs_history_descriptor(),
+            time_integration_step_map_regions(),
+            map_structure_parameter_schema(),
+        ),
         auto_selectable=False,
     )
 
@@ -230,8 +218,11 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
         integrator=integrator,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-8,
-        regions=time_integration_step_map_regions(),
-        schema=map_structure_parameter_schema(),
+        ownership=SelectionOwnership(
+            nordsieck_history_descriptor(),
+            time_integration_step_map_regions(),
+            map_structure_parameter_schema(),
+        ),
         auto_selectable=False,
     )
 
@@ -407,11 +398,7 @@ class _StepSelectionClaim(Claim[Any]):
 
     def check(self, _calibration: Any) -> None:
         case = self._case
-        _assert_owned_cell(
-            case.descriptor,
-            regions=case.regions,
-            schema=case.schema,
-        )
+        case.ownership.assert_owned_cell()
         selected = _ti.select_time_integrator(
             AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
@@ -439,7 +426,9 @@ class _StepSelectionRegionCoverageClaim(Claim[Any]):
             *time_integration_step_solve_regions(),
         ):
             assert any(
-                region.owner is case.owner and region.contains(case.descriptor)
+                region.owner is case.owner
+                and region in case.ownership.regions
+                and region.contains(case.descriptor)
                 for case in cases_by_region
             ), region.owner.__name__
 
