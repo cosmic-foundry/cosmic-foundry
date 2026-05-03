@@ -37,6 +37,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
     nordsieck_history_descriptor,
     rhs_history_descriptor,
+    semilinear_map_descriptor,
     split_map_descriptor,
     time_integration_step_map_regions,
     time_integration_step_solve_regions,
@@ -196,6 +197,13 @@ def _split_decay_rhs() -> _ti.SplitRHS:
     )
 
 
+def _semilinear_forcing_rhs(backend: Any = _TIME_BACKEND) -> _ti.SemilinearRHS:
+    return _ti.SemilinearRHS(
+        Tensor([[-2.0]], backend=backend),
+        lambda t, u: Tensor([math.sin(t)], backend=u.backend),
+    )
+
+
 # ── problem registry ──────────────────────────────────────────────────────────
 # Each problem supplies ONE canonical RHS; AutoIntegrator dispatches by its type.
 # (id, u0, n_species, exact_fn, mass_conserved, rhs)
@@ -217,9 +225,6 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
 
     def fB(t, u):  # type: ignore[misc]
         return Tensor([0.0, float(u[0])], backend=u.backend)
-
-    def semilinear_forcing(t, u):  # type: ignore[misc]
-        return Tensor([math.sin(t)], backend=u.backend)
 
     return [
         ("base2", tensor([1.0, 0.0]), 2, _exact2, True, _ti.BlackBoxRHS(f2)),
@@ -253,7 +258,7 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
             1,
             _exact_semilinear,
             False,
-            _ti.SemilinearRHS(tensor([[-2.0]]), semilinear_forcing),
+            _semilinear_forcing_rhs(backend),
         ),
         (
             "osc2",
@@ -693,6 +698,40 @@ class _SplitStepMapSelectionClaim(Claim[Any]):
 
         state = integrator.step(rhs, state, dt)
         assert _err(state.u, _exact_scalar_decay, state.t) < 1.0e-7
+
+
+class _SemilinearStepMapSelectionClaim(Claim[Any]):
+    """Grounded claim for semilinear ownership as map composition evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/semilinear_step_map_selection"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _semilinear_forcing_rhs()
+        integrator = _ti.LawsonRungeKuttaIntegrator(4)
+        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        dt = 1.0e-2
+
+        selected = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=semilinear_map_descriptor(),
+            )
+        )
+        assert selected.implementation == "LawsonRungeKuttaIntegrator"
+        _assert_owned_step_map_cell(
+            semilinear_map_descriptor(),
+            _ti.LawsonRungeKuttaIntegrator,
+        )
+        assert not callable(getattr(integrator, "step_solve_relation_descriptor", None))
+        assert not callable(
+            getattr(integrator, "step_linear_operator_descriptor", None)
+        )
+
+        state = integrator.step(rhs, state, dt)
+        assert _err(state.u, _exact_semilinear, state.t) < 1.0e-10
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1716,6 +1755,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _HistoryStateSelectionClaim(),
     _ImplicitStageSolveSelectionClaim(),
     _SplitStepMapSelectionClaim(),
+    _SemilinearStepMapSelectionClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
