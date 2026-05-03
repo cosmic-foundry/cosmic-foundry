@@ -51,10 +51,20 @@ class AlgorithmCapability:
                         return False
                     if (request.order - self.min_order) % self.order_step != 0:
                         return False
-        return (
-            self.contract.requires <= request.available_structure
-            and request.requested_properties <= self.contract.provides
+        if not request.requested_properties <= self.contract.provides:
+            return False
+        structure_satisfied = (
+            bool(self.contract.requires)
+            and self.contract.requires <= request.available_structure
         )
+        descriptor_satisfied = (
+            request.descriptor is not None
+            and bool(self.coverage_regions)
+            and any(
+                region.contains(request.descriptor) for region in self.coverage_regions
+            )
+        )
+        return structure_satisfied or descriptor_satisfied
 
 
 @dataclass(frozen=True)
@@ -64,6 +74,7 @@ class AlgorithmRequest:
     available_structure: frozenset[str] = frozenset()
     requested_properties: frozenset[str] = frozenset()
     order: int | None = None
+    descriptor: ParameterDescriptor | None = None
 
 
 class AlgorithmRegistry:
