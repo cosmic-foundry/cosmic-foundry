@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Protocol
 
 import numpy as np
 
@@ -12,6 +13,31 @@ from cosmic_foundry.computation.time_integrators.domains import NonnegativeState
 
 _LU = LUFactorization()
 _ABUNDANCE_ROUNDOFF_TOLERANCE = 1e-8
+
+
+class UnitTransferTransitionSystemProtocol(Protocol):
+    """Finite directed unit-transfer premise accepted by reaction-network projection."""
+
+    transitions: tuple[tuple[int, int], ...]
+
+    def stoichiometry_matrix(self) -> tuple[tuple[int, ...], ...]:
+        """Return the state-by-transition stoichiometry matrix."""
+        ...
+
+
+UnitTransferRates = Callable[[float], Sequence[float]] | Sequence[float]
+
+
+def _coefficients_at(rates: UnitTransferRates, t: float) -> tuple[float, ...]:
+    values = rates(t) if callable(rates) else rates
+    return tuple(float(value) for value in values)
+
+
+def _require_rate_count(
+    rates: tuple[float, ...], transitions: tuple[tuple[int, int], ...]
+) -> None:
+    if len(rates) != len(transitions):
+        raise ValueError("each transition must have one rate coefficient")
 
 
 def _left_null_space(s_tensor: Tensor) -> list[list[float]]:
@@ -202,6 +228,79 @@ class ReactionNetworkRHS:
             else Tensor([0.0], backend=backend)[:0]
         )
 
+    @classmethod
+    def from_unit_transfer_system(
+        cls,
+        transition_system: UnitTransferTransitionSystemProtocol,
+        forward_coefficients: UnitTransferRates,
+        initial_state: Tensor,
+        *,
+        reverse_coefficients: UnitTransferRates | None = None,
+    ) -> LinearReactionNetworkRHS:
+        """Project a finite unit-transfer system into a linear reaction network.
+
+        A transition ``src -> dst`` contributes
+        ``forward[src] * u[src] - reverse[dst] * u[dst]`` along the stoichiometric
+        column with ``-1`` at ``src`` and ``+1`` at ``dst``.  Omitting reverse
+        coefficients gives an irreversible directed transition system.
+        """
+        transitions = transition_system.transitions
+        stoichiometry: Tensor = Tensor(
+            transition_system.stoichiometry_matrix(), backend=initial_state.backend
+        )
+        n_species, _n_reactions = stoichiometry.shape
+
+        def forward_rate(t: float, u: Tensor) -> Tensor:
+            rates = _coefficients_at(forward_coefficients, t)
+            _require_rate_count(rates, transitions)
+            return Tensor(
+                [
+                    rate * float(u[src])
+                    for (src, _dst), rate in zip(transitions, rates, strict=True)
+                ],
+                backend=u.backend,
+            )
+
+        def reverse_rate(t: float, u: Tensor) -> Tensor:
+            rates = (
+                (0.0,) * len(transitions)
+                if reverse_coefficients is None
+                else _coefficients_at(reverse_coefficients, t)
+            )
+            _require_rate_count(rates, transitions)
+            return Tensor(
+                [
+                    rate * float(u[dst])
+                    for (_src, dst), rate in zip(transitions, rates, strict=True)
+                ],
+                backend=u.backend,
+            )
+
+        def linear_operator(t: float, u: Tensor) -> Tensor:
+            forward = _coefficients_at(forward_coefficients, t)
+            reverse = (
+                (0.0,) * len(transitions)
+                if reverse_coefficients is None
+                else _coefficients_at(reverse_coefficients, t)
+            )
+            _require_rate_count(forward, transitions)
+            _require_rate_count(reverse, transitions)
+            rows = [[0.0 for _ in range(n_species)] for _ in range(n_species)]
+            for (src, dst), fwd, rev in zip(transitions, forward, reverse, strict=True):
+                rows[src][src] -= fwd
+                rows[dst][src] += fwd
+                rows[src][dst] += rev
+                rows[dst][dst] -= rev
+            return Tensor(rows, backend=u.backend)
+
+        return LinearReactionNetworkRHS(
+            stoichiometry,
+            forward_rate,
+            reverse_rate,
+            initial_state,
+            linear_operator=linear_operator,
+        )
+
     @property
     def stoichiometry_matrix(self) -> Tensor:
         """S, shape (n_species, n_reactions)."""
@@ -245,4 +344,36 @@ class ReactionNetworkRHS:
         return Tensor(rows, backend=backend)
 
 
-__all__ = ["ReactionNetworkRHS", "project_conserved"]
+class LinearReactionNetworkRHS(ReactionNetworkRHS):
+    """Reaction-network RHS that exposes its exact affine operator."""
+
+    def __init__(
+        self,
+        stoichiometry_matrix: Tensor,
+        forward_rate: Callable[[float, Tensor], Tensor],
+        reverse_rate: Callable[[float, Tensor], Tensor],
+        initial_state: Tensor,
+        *,
+        linear_operator: Callable[[float, Tensor], Tensor],
+    ) -> None:
+        super().__init__(
+            stoichiometry_matrix,
+            forward_rate,
+            reverse_rate,
+            initial_state,
+            jac=linear_operator,
+        )
+        self._linear_operator = linear_operator
+
+    def linear_operator(self, t: float, u: Tensor) -> Tensor:
+        """Return the matrix A in ``f(t, u) = A u``."""
+        return self._linear_operator(t, u)
+
+
+__all__ = [
+    "LinearReactionNetworkRHS",
+    "ReactionNetworkRHS",
+    "UnitTransferRates",
+    "UnitTransferTransitionSystemProtocol",
+    "project_conserved",
+]
