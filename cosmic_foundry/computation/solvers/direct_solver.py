@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
 from cosmic_foundry.computation.solvers.linear_solver import (
     LinearOperator,
@@ -26,7 +28,13 @@ class DirectSolver(LinearSolver):
         The Decomposition algorithm to use.
     """
 
-    def __init__(self, decomposition: Decomposition) -> None:
+    decomposition_type: ClassVar[type[Decomposition] | None] = None
+
+    def __init__(self, decomposition: Decomposition | None = None) -> None:
+        if decomposition is None:
+            if self.decomposition_type is None:
+                raise TypeError("DirectSolver requires a decomposition")
+            decomposition = self.decomposition_type()
         self._decomposition = decomposition
 
     def _assemble(self, op: LinearOperator, b: Tensor) -> Tensor:

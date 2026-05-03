@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from cosmic_foundry.computation.algorithm_capabilities import (
+    CONDITION_LIMIT as CONDITION_LIMIT,
+)
+from cosmic_foundry.computation.algorithm_capabilities import (
+    LINEARITY_TOLERANCE as LINEARITY_TOLERANCE,
+)
+from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     CoverageRegion,
@@ -11,9 +17,6 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     SolveRelationField,
     StructuredPredicate,
 )
-
-LINEARITY_TOLERANCE = 1.0e-12
-CONDITION_LIMIT = 1.0e8
 
 
 def coverage(
@@ -118,4 +121,12 @@ def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
     )
 
 
-__all__: list[str] = []
+__all__ = [
+    "CONDITION_LIMIT",
+    "LINEARITY_TOLERANCE",
+    "budget_predicates",
+    "coverage",
+    "dense_matrix_predicates",
+    "linear_system_predicates",
+    "matrix_free_operator_predicates",
+]

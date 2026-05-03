@@ -788,12 +788,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Map decomposition primitives as structure-exposing transformations whose
-   certificates can discharge solve-relation premises without duplicating solver
-   ownership claims.
-2. Add a small real-ish synthetic reaction-network integration claim that
+1. Add a small real-ish synthetic reaction-network integration claim that
    exercises time-step descriptors, domain/conservation behavior, and any atlas
    gap it exposes.
+2. Express time-integrator stage equations, Newton solves, and decomposition
+   certificates as composed transformation evidence in the shared solve-relation
+   schema, deleting any projection-specific fields that stop being primitive.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -840,6 +840,10 @@ derived from the method's stage-equation premise.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
+Decomposition primitives expose structure through class-owned solve
+certificates.  Direct dense solver wrappers name their decomposition type; the
+coverage aggregator derives the solver predicates from that decomposition
+certificate instead of maintaining a parallel coverage claim on the wrapper.
 Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not
