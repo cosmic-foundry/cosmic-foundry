@@ -34,9 +34,11 @@ from cosmic_foundry.computation.backends import (
 )
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.capabilities import (
+    derivative_oracle_descriptor,
     nordsieck_history_descriptor,
     rhs_history_descriptor,
     time_integration_step_map_regions,
+    time_integration_step_solve_regions,
 )
 from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
 from tests.claims import (
@@ -57,6 +59,20 @@ def _assert_owned_step_map_cell(
 ) -> None:
     schema = map_structure_parameter_schema()
     regions = time_integration_step_map_regions()
+
+    schema.validate_descriptor(descriptor)
+    assert schema.cell_status(descriptor, regions) == "owned"
+    assert tuple(region.owner for region in regions if region.contains(descriptor)) == (
+        owner,
+    )
+
+
+def _assert_owned_step_solve_cell(
+    descriptor: ParameterDescriptor,
+    owner: type,
+) -> None:
+    schema = solve_relation_parameter_schema()
+    regions = time_integration_step_solve_regions()
 
     schema.validate_descriptor(descriptor)
     assert schema.cell_status(descriptor, regions) == "owned"
@@ -611,6 +627,40 @@ class _HistoryStateSelectionClaim(Claim[Any]):
         )
         nordsieck_state = nordsieck.step(rhs, nordsieck_state, dt)
         assert _err(nordsieck_state.u, _exact_scalar_decay, nordsieck_state.t) < 1.0e-8
+
+
+class _ImplicitStageSolveSelectionClaim(Claim[Any]):
+    """Grounded claim for derivative-oracle ownership as a step solve."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/implicit_stage_solve_selection"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _scalar_decay_jacobian_rhs()
+        integrator = _ti.ImplicitRungeKuttaIntegrator(2)
+        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        dt = 1.0e-2
+
+        selected = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=2,
+                descriptor=derivative_oracle_descriptor(),
+            )
+        )
+        assert selected.implementation == "ImplicitRungeKuttaIntegrator"
+
+        descriptor = integrator.step_solve_relation_descriptor(rhs, state, dt)
+        _assert_owned_step_solve_cell(descriptor, _ti.ImplicitRungeKuttaIntegrator)
+        assert descriptor.coordinate(
+            SolveRelationField.DERIVATIVE_ORACLE_KIND
+        ) == derivative_oracle_descriptor().coordinate(
+            SolveRelationField.DERIVATIVE_ORACLE_KIND
+        )
+
+        state = integrator.step(rhs, state, dt)
+        assert _err(state.u, _exact_scalar_decay, state.t) < 1.0e-7
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1632,6 +1682,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _ReactionChainIntegrationClaim(),
     _BranchedFiniteTransitionNetworkClaim(),
     _HistoryStateSelectionClaim(),
+    _ImplicitStageSolveSelectionClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),

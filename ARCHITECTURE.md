@@ -793,11 +793,11 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: use a concrete implicit time step with an RHS
-   derivative oracle to decide whether derivative-oracle ownership belongs in
-   solve-relation space, map-structure space, or a cleaner composition of the
-   two. Any atlas or selection change should follow from that calculation's
-   descriptor coordinates, not from a category list.
+2. Candidate next calculation: use a concrete IMEX split decay step to decide
+   whether an implicit-component derivative oracle is a primitive map-structure
+   coordinate or a solve-relation coordinate produced by composing the implicit
+   component with a stage solve. Any atlas or selection change should follow
+   from that calculation's descriptor coordinates, not from a category list.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
