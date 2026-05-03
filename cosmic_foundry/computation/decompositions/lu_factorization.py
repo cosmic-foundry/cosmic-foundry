@@ -183,7 +183,6 @@ class LUFactorization(Factorization):
     """
 
     linear_solve_certificate = (
-        ComparisonPredicate(LinearSolverField.DIAGONAL_DOMINANCE_MARGIN, "<=", 0.0),
         ComparisonPredicate(LinearSolverField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
         ComparisonPredicate(
             LinearSolverField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT

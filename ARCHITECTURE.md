@@ -792,9 +792,9 @@ Current short queue:
    from test-local stoichiometric projections into a minimal conserved
    finite-state transformation object, without creating a public network API
    before a second grounded claim demands it.
-2. Replace the LU coverage partition's diagonal-dominance complement with
-   actual factorization feasibility evidence, so dense nonsymmetric full-rank
-   affine stage operators are not left uncovered for presentation reasons.
+2. Decide whether dense factorization feasibility has enough independent
+   occurrences to deserve a decomposition-level schema instead of reusing
+   linear-solver coordinates as its certificate surface.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -997,10 +997,10 @@ The sprint is complete when the following are true:
   iteration cost fit budget, and only a matrix-free matvec is available.
   `DenseJacobiSolver` covers the strictly diagonally dominant dense
   stationary-iteration region.  `DenseLUSolver` covers full-rank square dense
-  linear maps outside the strict diagonal-dominance region and inside
-  memory/work budget.  `DenseSVDSolver` covers rank-deficient or minimum-norm
-  dense regions.  `DenseGMRESSolver` covers nonsymmetric matrix-free linear maps
-  only under restart, memory, and predicted-work bounds.
+  linear maps inside memory/work budget.  `DenseSVDSolver` covers
+  rank-deficient or minimum-norm dense regions.  `DenseGMRESSolver` covers
+  nonsymmetric matrix-free linear maps only under restart, memory, and
+  predicted-work bounds.
 - **Decomposition coverage regions.**  Decomposition capabilities are coverage
   regions over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,
