@@ -96,6 +96,9 @@ class _AtlasCellSource(NamedTuple):
 
 _AtlasCellSignature: TypeAlias = frozenset[_AtlasCellSource]
 _ATLAS_PROJECTIONS_BY_SCHEMA: dict[tuple[object, ...], _AtlasProjection] = {}
+_ATLAS_CANDIDATE_PROJECTIONS_BY_SCHEMA: dict[
+    tuple[object, ...], tuple[_AtlasProjection, ...]
+] = {}
 _ATLAS_SIGNATURE_CELLS_BY_SCHEMA: dict[
     tuple[object, ...], tuple[tuple[tuple[int, ...], _AtlasCellSignature], ...]
 ] = {}
@@ -110,9 +113,8 @@ _AXIS_CELLS_BY_AXIS: dict[
     tuple[object, tuple[ParameterBin | NumericInterval, ...]],
     tuple[tuple[StructuredPredicate, ...], ...],
 ] = {}
-_PREDICATE_SET_DISJOINTNESS: dict[
-    tuple[tuple[object, ...], tuple[object, ...]], bool
-] = {}
+_PREDICATE_SET_DISJOINTNESS: dict[tuple[int, int], bool] = {}
+_CELL_PREDICATE_DISJOINTNESS: dict[tuple[tuple[int, ...], int], bool] = {}
 
 
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
@@ -266,6 +268,18 @@ def _atlas_schema_region_key(
 
 
 def _atlas_candidate_projections(
+    schema: ParameterSpaceSchema,
+    regions: tuple[CoverageRegion, ...],
+) -> tuple[_AtlasProjection, ...]:
+    key = _atlas_schema_region_key(schema, regions)
+    if key not in _ATLAS_CANDIDATE_PROJECTIONS_BY_SCHEMA:
+        _ATLAS_CANDIDATE_PROJECTIONS_BY_SCHEMA[key] = (
+            _compute_atlas_candidate_projections(schema, regions)
+        )
+    return _ATLAS_CANDIDATE_PROJECTIONS_BY_SCHEMA[key]
+
+
+def _compute_atlas_candidate_projections(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...],
 ) -> tuple[_AtlasProjection, ...]:
@@ -616,16 +630,11 @@ def _compute_capability_atlas_uncovered_cells(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...],
 ) -> tuple[_AtlasUncoveredCell, ...]:
-    excluded = tuple(rule.predicates for rule in schema.invalid_cells) + tuple(
-        region.predicates for region in regions
-    )
+    cells = dict(_schema_indexed_cells(schema))
     return tuple(
-        _AtlasUncoveredCell(cell)
-        for cell in _schema_cells(schema)
-        if all(
-            _predicate_sets_are_disjoint(cell, excluded_predicates)
-            for excluded_predicates in excluded
-        )
+        _AtlasUncoveredCell(cells[coordinates])
+        for coordinates, signature in _schema_signature_cells(schema, regions)
+        if _atlas_signature_has_source(signature, _AtlasUncoveredCell)
     )
 
 
@@ -764,16 +773,25 @@ def _predicate_sets_are_disjoint(
     left: tuple[StructuredPredicate, ...],
     right: tuple[StructuredPredicate, ...],
 ) -> bool:
-    key = (
-        tuple(id(predicate) for predicate in left),
-        tuple(id(predicate) for predicate in right),
-    )
+    key = (id(left), id(right))
     reverse_key = (key[1], key[0])
     if reverse_key in _PREDICATE_SET_DISJOINTNESS:
         return _PREDICATE_SET_DISJOINTNESS[reverse_key]
     if key not in _PREDICATE_SET_DISJOINTNESS:
         _PREDICATE_SET_DISJOINTNESS[key] = predicate_sets_are_disjoint(left, right)
     return _PREDICATE_SET_DISJOINTNESS[key]
+
+
+def _cell_is_disjoint_from_predicate(
+    cell: tuple[StructuredPredicate, ...],
+    predicate: StructuredPredicate,
+) -> bool:
+    key = (tuple(id(cell_predicate) for cell_predicate in cell), id(predicate))
+    if key not in _CELL_PREDICATE_DISJOINTNESS:
+        _CELL_PREDICATE_DISJOINTNESS[key] = predicate_sets_are_disjoint(
+            cell, (predicate,)
+        )
+    return _CELL_PREDICATE_DISJOINTNESS[key]
 
 
 def _atlas_regions_for_schema(
@@ -816,7 +834,7 @@ def _project_alternative_geometry(
         for y_index, y_cell in enumerate(_axis_cells(y_axis)):
             cell = x_cell + y_cell
             if any(
-                _predicate_sets_are_disjoint(cell, (predicate,))
+                _cell_is_disjoint_from_predicate(cell, predicate)
                 for predicate in predicates
             ):
                 continue
@@ -994,17 +1012,13 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         for schema in _capability_atlas_schemas():
             regions = _atlas_regions_for_schema(schema)
             uncovered = _capability_atlas_uncovered_cells(schema, regions)
-            excluded = tuple(rule.predicates for rule in schema.invalid_cells) + tuple(
-                region.predicates for region in regions
+            indexed_cells = dict(_schema_indexed_cells(schema))
+            signature_uncovered = tuple(
+                _AtlasUncoveredCell(indexed_cells[coordinates])
+                for coordinates, signature in _schema_signature_cells(schema, regions)
+                if _atlas_signature_has_source(signature, _AtlasUncoveredCell)
             )
-            assert uncovered == tuple(
-                _AtlasUncoveredCell(cell)
-                for cell in _schema_cells(schema)
-                if all(
-                    _predicate_sets_are_disjoint(cell, excluded_predicates)
-                    for excluded_predicates in excluded
-                )
-            )
+            assert uncovered == signature_uncovered
             for source in uncovered:
                 assert all(
                     _predicate_sets_are_disjoint(source.predicates, rule.predicates)
