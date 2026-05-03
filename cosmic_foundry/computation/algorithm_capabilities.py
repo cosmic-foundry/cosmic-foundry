@@ -182,6 +182,7 @@ class MapStructureField(Enum):
     """Schema-owned descriptor fields for ODE map/operator structure."""
 
     ADDITIVE_COMPONENT_COUNT = "additive_component_count"
+    CONSERVED_LINEAR_FORM_COUNT = "conserved_linear_form_count"
     EXACT_LINEAR_OPERATOR_AVAILABLE = "exact_linear_operator_available"
     EXPLICIT_COMPONENT_AVAILABLE = "explicit_component_available"
     HAMILTONIAN_PARTITION_AVAILABLE = "hamiltonian_partition_available"
@@ -1501,6 +1502,10 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
             _nonnegative_axis(
                 field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND,
                 units="canonical two-form defect upper bound",
+            ),
+            _nonnegative_axis(
+                field.CONSERVED_LINEAR_FORM_COUNT,
+                units="independent linear forms",
             ),
             _nonnegative_axis(field.ADDITIVE_COMPONENT_COUNT, units="components"),
         ),
