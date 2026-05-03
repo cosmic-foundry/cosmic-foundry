@@ -9,10 +9,20 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmStructureContract,
     ComparisonPredicate,
     CoverageRegion,
+    DescriptorCoordinate,
+    MembershipPredicate,
+    ParameterDescriptor,
     ReactionNetworkField,
+    SolveRelationField,
+)
+from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
+    AdaptiveNordsieckController,
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
+)
+from cosmic_foundry.computation.time_integrators.implicit import (
+    ImplicitRungeKuttaIntegrator,
 )
 
 TimeIntegrationCapability = AlgorithmCapability
@@ -26,6 +36,29 @@ def _contract(
     provides: tuple[str, ...],
 ) -> AlgorithmStructureContract:
     return AlgorithmStructureContract(frozenset(requires), frozenset(provides))
+
+
+def derivative_oracle_descriptor() -> ParameterDescriptor:
+    """Return map evidence for an available Jacobian callback."""
+    return ParameterDescriptor(
+        {
+            SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+                "jacobian_callback"
+            )
+        }
+    )
+
+
+def _derivative_oracle_region(owner: type) -> CoverageRegion:
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(
+                SolveRelationField.DERIVATIVE_ORACLE_KIND,
+                frozenset({"jacobian_callback", "matrix"}),
+            ),
+        ),
+    )
 
 
 _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
@@ -46,11 +79,12 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "ImplicitRungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=("jacobian_rhs",),
+            requires=(),
             provides=("one_step", "implicit", "runge_kutta"),
         ),
         1,
         6,
+        coverage_regions=(_derivative_oracle_region(ImplicitRungeKuttaIntegrator),),
     ),
     TimeIntegrationCapability(
         "additive_runge_kutta",
@@ -126,7 +160,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "AdaptiveNordsieckController",
         "controller",
         _contract(
-            requires=("jacobian_rhs", "state_domain"),
+            requires=("state_domain",),
             provides=(
                 "advance",
                 "nordsieck",
@@ -138,6 +172,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
+        coverage_regions=(_derivative_oracle_region(AdaptiveNordsieckController),),
     ),
     TimeIntegrationCapability(
         "generic_integration_driver",
@@ -194,6 +229,7 @@ def select_time_integrator(
 
 __all__ = [
     "AlgorithmStructureContract",
+    "derivative_oracle_descriptor",
     "select_time_integrator",
     "TimeIntegrationCapability",
     "time_integration_capabilities",
