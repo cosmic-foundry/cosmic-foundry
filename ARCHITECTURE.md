@@ -818,6 +818,10 @@ declaration order, presentation names, or rendered status text.
 Current `LinearSolver.solve(op, b)` ownership is square residual solving:
 rectangular least-squares ownership is not claimed through that interface even
 though `SVDFactorization` proves the Moore-Penrose least-squares primitive.
+Stationary iterations are not final-solve owners in the atlas unless the schema
+can state the contraction and iteration-budget premise that makes them
+appropriate as final solvers; until then they remain numerical iterations, not
+selection coverage.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG

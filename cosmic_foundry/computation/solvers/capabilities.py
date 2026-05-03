@@ -20,10 +20,7 @@ from cosmic_foundry.computation.solvers.coverage import (
     matrix_free_operator_predicates,
 )
 from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
-from cosmic_foundry.computation.solvers.iterative_solver import (
-    KrylovSolver,
-    StationaryIterationSolver,
-)
+from cosmic_foundry.computation.solvers.iterative_solver import KrylovSolver
 from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 
 
@@ -42,7 +39,7 @@ def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ..
     predicates: tuple[StructuredPredicate, ...] = ()
     if issubclass(owner, LinearSolver):
         predicates += linear_system_predicates() + budget_predicates()
-    if issubclass(owner, DirectSolver | StationaryIterationSolver):
+    if issubclass(owner, DirectSolver):
         predicates += dense_matrix_predicates()
     if issubclass(owner, KrylovSolver):
         predicates += matrix_free_operator_predicates()
