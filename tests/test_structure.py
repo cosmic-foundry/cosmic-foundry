@@ -67,7 +67,10 @@ from cosmic_foundry.computation.solvers.capabilities import (
     linear_solver_coverage_regions,
     select_linear_solver_for_descriptor,
 )
-from cosmic_foundry.computation.solvers.iterative_solver import IterativeSolver
+from cosmic_foundry.computation.solvers.iterative_solver import (
+    IterativeSolver,
+    StationaryIterationSolver,
+)
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
@@ -1483,6 +1486,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         schema = linear_solver_parameter_schema()
         assert set(LinearSolverField) == schema.descriptor_fields
         regions = linear_solver_coverage_regions()
+        self._assert_stationary_iterations_do_not_own_final_solve_regions(regions)
         self._assert_no_declared_coverage_literals(regions)
         for region in regions:
             schema.validate_coverage_region(region)
@@ -1517,6 +1521,14 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for descriptor in (least_squares, overdetermined_least_squares):
             schema.validate_descriptor(descriptor)
             assert schema.cell_status(descriptor, regions) == "uncovered"
+
+    @staticmethod
+    def _assert_stationary_iterations_do_not_own_final_solve_regions(
+        regions: tuple[CoverageRegion, ...],
+    ) -> None:
+        assert not any(
+            issubclass(region.owner, StationaryIterationSolver) for region in regions
+        )
 
     @classmethod
     def _selected_region_owner(
