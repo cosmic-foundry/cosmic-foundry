@@ -793,12 +793,12 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: decide whether `test_time_integrators.py` should
-   continue owning step-map selection claims, or whether those claims belong in
-   an atlas/algorithm-selection suite while `test_time_integrators.py` keeps
-   convergence and method-local stepping behavior. Do not add mesh, flux-form,
-   locality, or CFL axes until a real mesh object is the implementation premise
-   being tested.
+2. Candidate next calculation: make the algorithm-selection suite derive its
+   selector claims from ownership regions and concrete descriptor builders,
+   rather than maintaining one claim class per branch. The grounding calculation
+   should remain a real step for each discovered descriptor family. Do not add
+   mesh, flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
