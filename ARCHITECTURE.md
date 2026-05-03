@@ -788,11 +788,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Add the next grounded reaction-network claim that exercises the
-   `FiniteStateTransitionSystem` premise through `ReactionNetworkRHS`.
-2. Use that claim to decide whether finite transition systems should remain
-   theory premises projected into computation, or become the public construction
-   surface for reaction-network RHS objects.
+1. Decide whether finite transition systems should remain theory premises
+   projected into computation, or become the public construction surface for
+   reaction-network RHS objects.
+2. If they remain premises, delete duplicate test-local reaction-network
+   builders by routing finite unit-transfer fixtures through one projection
+   helper.  If they become public construction surface, promote only the minimal
+   constructor that follows from the two grounded claims.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -848,6 +850,11 @@ state-by-transition stoichiometry matrix whose columns sum to zero, so the
 all-ones linear form is conserved.  Computation still projects that premise into
 `ReactionNetworkRHS`; the theory object is not yet a public reaction-network
 builder.
+The grounded projection evidence now includes both a chain and a branched
+finite transition system.  Both preserve the all-ones linear form after
+projection through `ReactionNetworkRHS`, so the next decision is whether this
+projection remains test-local computation glue or becomes the public
+construction path.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

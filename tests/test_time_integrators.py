@@ -366,8 +366,8 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         return "correctness/reaction_chain_projection_invariants"
 
     def check(self, _calibration: Any) -> None:
-        chain = _ReactionChainPremise(
-            species_mass_number=(56, 56, 56),
+        chain = _FiniteTransitionNetworkPremise.chain(
+            (56, 56, 56),
             transition_rates=(80.0, 12.0),
         )
         rhs = chain.build_rhs()
@@ -419,6 +419,53 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         assert (
             abs(sum(float(state.u[i]) for i in range(state.u.shape[0])) - 1.0) < 1e-10
         )
+
+
+class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
+    """Grounded claim for a branched finite transition-system projection."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/branched_finite_transition_projection_invariants"
+
+    def check(self, _calibration: Any) -> None:
+        premise = _FiniteTransitionNetworkPremise(
+            species_mass_number=(56, 56, 56, 56),
+            transitions=((0, 1), (0, 2), (2, 3)),
+            transition_rates=(25.0, 5.0, 7.0),
+        )
+        rhs = premise.build_rhs()
+        state = _ti.ODEState(0.0, premise.initial_state())
+        controller = _ti.IntegrationDriver(
+            _ti.RungeKuttaIntegrator(4),
+            controller=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1e-7,
+                dt0=1e-3,
+            ),
+        )
+
+        transition_system = premise.transition_system()
+        assert transition_system.stoichiometry_matrix() == tuple(
+            tuple(
+                int(float(rhs.stoichiometry_matrix[i, j]))
+                for j in range(transition_system.transition_count)
+            )
+            for i in range(transition_system.state_count)
+        )
+        invariant = premise.conserved_linear_form()
+        assert _linear_form_annihilates_stoichiometry(
+            invariant,
+            rhs.stoichiometry_matrix,
+        )
+        initial_invariant = float(invariant @ state.u)
+
+        state = controller.advance(rhs, state.u, state.t, 0.08)
+
+        assert rhs.state_domain.check(state.u).accepted
+        assert abs(float(invariant @ state.u) - initial_invariant) < 1e-9
+        assert float(state.u[1]) > float(state.u[2]) > float(state.u[3]) > 0.0
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -934,25 +981,45 @@ class _LinearReactionNetworkRHS(_ti.ReactionNetworkRHS):
 
 
 @dataclass(frozen=True)
-class _ReactionChainPremise:
-    """Test-local nuclear-chain premise projected to a stoichiometric ODE."""
+class _FiniteTransitionNetworkPremise:
+    """Test-local finite unit-transfer premise projected to a stoichiometric ODE."""
 
     species_mass_number: tuple[int, ...]
+    transitions: tuple[tuple[int, int], ...]
     transition_rates: tuple[float, ...]
 
     def __post_init__(self) -> None:
-        if len(self.species_mass_number) != len(self.transition_rates) + 1:
-            raise ValueError("a chain with n species has n - 1 transitions")
+        if len(self.transitions) != len(self.transition_rates):
+            raise ValueError("each transition must have one rate")
         if len(set(self.species_mass_number)) != 1:
-            raise ValueError("this finite chain premise preserves one mass number")
+            raise ValueError("this finite transition premise preserves one mass number")
         if any(rate <= 0.0 for rate in self.transition_rates):
-            raise ValueError("reaction-chain transition rates must be positive")
+            raise ValueError("reaction-network transition rates must be positive")
+        self.transition_system()
+
+    @classmethod
+    def chain(
+        cls,
+        species_mass_number: tuple[int, ...],
+        transition_rates: tuple[float, ...],
+    ) -> _FiniteTransitionNetworkPremise:
+        return cls(
+            species_mass_number,
+            FiniteStateTransitionSystem.chain(len(species_mass_number)).transitions,
+            transition_rates,
+        )
 
     def initial_state(self) -> Tensor:
-        return Tensor([1.0] + [0.0] * len(self.transition_rates), backend=_TIME_BACKEND)
+        return Tensor(
+            [1.0] + [0.0] * (len(self.species_mass_number) - 1),
+            backend=_TIME_BACKEND,
+        )
 
     def transition_system(self) -> FiniteStateTransitionSystem:
-        return FiniteStateTransitionSystem.chain(len(self.species_mass_number))
+        return FiniteStateTransitionSystem(
+            len(self.species_mass_number),
+            self.transitions,
+        )
 
     def conserved_linear_form(self) -> Tensor:
         return Tensor(
@@ -968,11 +1035,19 @@ class _ReactionChainPremise:
     def build_rhs(self) -> _ti.ReactionNetworkRHS:
         rates = self.transition_rates
         n_species = len(self.species_mass_number)
+        transitions = self.transitions
         stoichiometry = self.stoichiometry_matrix()
 
         def forward_rate(t: float, u: Tensor) -> Tensor:
             return Tensor(
-                [rate * float(u[i]) for i, rate in enumerate(rates)],
+                [
+                    rate * float(u[src])
+                    for (src, _dst), rate in zip(
+                        transitions,
+                        rates,
+                        strict=True,
+                    )
+                ],
                 backend=u.backend,
             )
 
@@ -981,9 +1056,9 @@ class _ReactionChainPremise:
 
         def linear_operator(t: float, u: Tensor) -> Tensor:
             rows = [[0.0 for _ in range(n_species)] for _ in range(n_species)]
-            for transition, rate in enumerate(rates):
-                rows[transition][transition] -= rate
-                rows[transition + 1][transition] += rate
+            for (src, dst), rate in zip(transitions, rates, strict=True):
+                rows[src][src] -= rate
+                rows[dst][src] += rate
             return Tensor(rows, backend=u.backend)
 
         return _LinearReactionNetworkRHS(
@@ -1508,6 +1583,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _BatchedSemilinearCorrectnessClaim(),
     _BatchedAdaptiveDecayCorrectnessClaim(),
     _ReactionChainIntegrationClaim(),
+    _BranchedFiniteTransitionNetworkClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
