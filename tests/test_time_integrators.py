@@ -35,6 +35,7 @@ from cosmic_foundry.computation.backends import (
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
+    hamiltonian_map_descriptor,
     nordsieck_history_descriptor,
     rhs_history_descriptor,
     semilinear_map_descriptor,
@@ -204,6 +205,14 @@ def _semilinear_forcing_rhs(backend: Any = _TIME_BACKEND) -> _ti.SemilinearRHS:
     )
 
 
+def _harmonic_hamiltonian_rhs() -> _ti.HamiltonianRHS:
+    return _ti.HamiltonianRHS(
+        dT_dp=lambda p: p,
+        dV_dq=lambda q: q,
+        split_index=1,
+    )
+
+
 # ── problem registry ──────────────────────────────────────────────────────────
 # Each problem supplies ONE canonical RHS; AutoIntegrator dispatches by its type.
 # (id, u0, n_species, exact_fn, mass_conserved, rhs)
@@ -274,7 +283,7 @@ def _build_probs(backend: Any = _TIME_BACKEND) -> list:
             2,
             _exact_ham,
             False,
-            _ti.HamiltonianRHS(dT_dp=lambda p: p, dV_dq=lambda q: q, split_index=1),
+            _harmonic_hamiltonian_rhs(),
         ),
     ]
 
@@ -732,6 +741,40 @@ class _SemilinearStepMapSelectionClaim(Claim[Any]):
 
         state = integrator.step(rhs, state, dt)
         assert _err(state.u, _exact_semilinear, state.t) < 1.0e-10
+
+
+class _HamiltonianStepMapSelectionClaim(Claim[Any]):
+    """Grounded claim for Hamiltonian ownership as map partition evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/hamiltonian_step_map_selection"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _harmonic_hamiltonian_rhs()
+        integrator = _ti.SymplecticCompositionIntegrator(4)
+        state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
+        dt = 1.0e-2
+
+        selected = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=hamiltonian_map_descriptor(),
+            )
+        )
+        assert selected.implementation == "SymplecticCompositionIntegrator"
+        _assert_owned_step_map_cell(
+            hamiltonian_map_descriptor(),
+            _ti.SymplecticCompositionIntegrator,
+        )
+        with pytest.raises(ValueError):
+            integrator.step_solve_relation_descriptor(rhs, state, dt)
+        with pytest.raises(ValueError):
+            integrator.step_linear_operator_descriptor(rhs, state, dt)
+
+        state = integrator.step(rhs, state, dt)
+        assert _err(state.u, _exact_ham, state.t) < 1.0e-10
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1756,6 +1799,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _ImplicitStageSolveSelectionClaim(),
     _SplitStepMapSelectionClaim(),
     _SemilinearStepMapSelectionClaim(),
+    _HamiltonianStepMapSelectionClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
