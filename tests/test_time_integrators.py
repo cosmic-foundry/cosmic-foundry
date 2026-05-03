@@ -181,6 +181,10 @@ def _err(u: Tensor, exact: Any, t: float) -> float:
     return max(abs(float(u[i]) - v) for i, v in enumerate(exact(t)))
 
 
+def _oscillator_energy(u: Tensor) -> float:
+    return 0.5 * sum(float(u[i]) ** 2 for i in range(u.shape[0]))
+
+
 def _conserved(u: Tensor, n: int) -> bool:
     return abs(sum(float(u[i]) for i in range(n)) - 1.0) < 1e-10
 
@@ -816,6 +820,9 @@ class _CompositionStepMapSelectionClaim(Claim[Any]):
         assert not descriptor.coordinate(
             MapStructureField.HAMILTONIAN_PARTITION_AVAILABLE
         ).value
+        assert not descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
         with pytest.raises(ValueError):
             integrator.step_solve_relation_descriptor(rhs, state, dt)
         with pytest.raises(ValueError):
@@ -823,6 +830,57 @@ class _CompositionStepMapSelectionClaim(Claim[Any]):
 
         state = integrator.step(rhs, state, dt)
         assert _err(state.u, _exact_osc, state.t) < 1.0e-8
+
+
+class _OscillatorInvariantComparisonClaim(Claim[Any]):
+    """Grounded claim that component count alone does not encode invariance."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/oscillator_invariant_comparison"
+
+    def check(self, _calibration: Any) -> None:
+        dt = 5.0e-2
+        steps = 400
+        initial = Tensor([1.0, 0.0], backend=_TIME_BACKEND)
+        composition = _ti.ODEState(0.0, initial)
+        hamiltonian = _ti.ODEState(0.0, initial)
+        composition_integrator = _ti.CompositionIntegrator(
+            [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+            order=4,
+        )
+        hamiltonian_integrator = _ti.SymplecticCompositionIntegrator(4)
+        composition_rhs = _oscillator_composite_rhs()
+        hamiltonian_rhs = _harmonic_hamiltonian_rhs()
+        composition_descriptor = composite_map_descriptor(
+            len(composition_rhs.components)
+        )
+        hamiltonian_descriptor = hamiltonian_map_descriptor()
+
+        assert not composition_descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
+        assert hamiltonian_descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
+
+        initial_energy = _oscillator_energy(initial)
+        composition_peak = 0.0
+        hamiltonian_peak = 0.0
+        for _ in range(steps):
+            composition = composition_integrator.step(composition_rhs, composition, dt)
+            hamiltonian = hamiltonian_integrator.step(hamiltonian_rhs, hamiltonian, dt)
+            composition_peak = max(
+                composition_peak,
+                abs(_oscillator_energy(composition.u) - initial_energy),
+            )
+            hamiltonian_peak = max(
+                hamiltonian_peak,
+                abs(_oscillator_energy(hamiltonian.u) - initial_energy),
+            )
+
+        assert hamiltonian_peak < 1.0e-5
+        assert composition_peak < 1.0e-5
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1849,6 +1907,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _SemilinearStepMapSelectionClaim(),
     _HamiltonianStepMapSelectionClaim(),
     _CompositionStepMapSelectionClaim(),
+    _OscillatorInvariantComparisonClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
