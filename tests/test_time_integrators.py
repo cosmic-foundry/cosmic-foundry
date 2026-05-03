@@ -969,17 +969,6 @@ class _PerformanceClaim(Claim[ExecutionPlan]):
 # ── parametric network spec + NSE helpers ─────────────────────────────────────
 
 
-class _LinearReactionNetworkRHS(_ti.ReactionNetworkRHS):
-    """Test-local reaction network whose RHS is exactly affine."""
-
-    def __init__(self, *args: Any, linear_operator: Callable[[float, Tensor], Tensor]):
-        super().__init__(*args, jac=linear_operator)
-        self._linear_operator = linear_operator
-
-    def linear_operator(self, t: float, u: Tensor) -> Tensor:
-        return self._linear_operator(t, u)
-
-
 @dataclass(frozen=True)
 class _FiniteTransitionNetworkPremise:
     """Test-local finite unit-transfer premise projected to a stoichiometric ODE."""
@@ -1033,40 +1022,16 @@ class _FiniteTransitionNetworkPremise:
         )
 
     def build_rhs(self) -> _ti.ReactionNetworkRHS:
-        rates = self.transition_rates
-        n_species = len(self.species_mass_number)
-        transitions = self.transitions
-        stoichiometry = self.stoichiometry_matrix()
+        return self.build_time_dependent_rhs(self.transition_rates)
 
-        def forward_rate(t: float, u: Tensor) -> Tensor:
-            return Tensor(
-                [
-                    rate * float(u[src])
-                    for (src, _dst), rate in zip(
-                        transitions,
-                        rates,
-                        strict=True,
-                    )
-                ],
-                backend=u.backend,
-            )
-
-        def reverse_rate(t: float, u: Tensor) -> Tensor:
-            return Tensor([0.0 for _ in rates], backend=u.backend)
-
-        def linear_operator(t: float, u: Tensor) -> Tensor:
-            rows = [[0.0 for _ in range(n_species)] for _ in range(n_species)]
-            for (src, dst), rate in zip(transitions, rates, strict=True):
-                rows[src][src] -= rate
-                rows[dst][src] += rate
-            return Tensor(rows, backend=u.backend)
-
-        return _LinearReactionNetworkRHS(
-            stoichiometry,
-            forward_rate,
-            reverse_rate,
+    def build_time_dependent_rhs(
+        self,
+        rate_fn: _ti.UnitTransferRates,
+    ) -> _ti.ReactionNetworkRHS:
+        return _ti.ReactionNetworkRHS.from_unit_transfer_system(
+            self.transition_system(),
+            rate_fn,
             self.initial_state(),
-            linear_operator=linear_operator,
         )
 
 
@@ -1231,33 +1196,14 @@ RateFn = Callable[[float], list[tuple[int, int, float]]]
 def _linear_network_rhs(rate_fn: RateFn, n: int) -> _ti.ReactionNetworkRHS:
     """Build a mass-conserving linear reaction network RHS from edge rates."""
     edges0 = rate_fn(0.0)
-    transition_system = FiniteStateTransitionSystem(
-        n,
-        tuple((src, dst) for src, dst, _rate in edges0),
+    premise = _FiniteTransitionNetworkPremise(
+        species_mass_number=(1,) * n,
+        transitions=tuple((src, dst) for src, dst, _rate in edges0),
+        transition_rates=tuple(rate for _src, _dst, rate in edges0),
     )
 
-    def forward_rate(t: float, u: Tensor) -> Tensor:
-        return Tensor(
-            [rate * float(u[src]) for src, _dst, rate in rate_fn(t)],
-            backend=u.backend,
-        )
-
-    def reverse_rate(t: float, u: Tensor) -> Tensor:
-        return Tensor([0.0 for _ in edges0], backend=u.backend)
-
-    def jac(t: float, u: Tensor) -> Tensor:
-        mat = [[0.0 for _ in range(n)] for _ in range(n)]
-        for src, dst, rate in rate_fn(t):
-            mat[src][src] -= rate
-            mat[dst][src] += rate
-        return Tensor(mat, backend=u.backend)
-
-    return _ti.ReactionNetworkRHS(
-        Tensor(transition_system.stoichiometry_matrix(), backend=_TIME_BACKEND),
-        forward_rate,
-        reverse_rate,
-        Tensor([1.0] + [0.0] * (n - 1), backend=_TIME_BACKEND),
-        jac=jac,
+    return premise.build_time_dependent_rhs(
+        lambda t: tuple(rate for _src, _dst, rate in rate_fn(t))
     )
 
 

@@ -90,7 +90,9 @@ from all other packages.
 `theory/` or `geometry/` or `physics/`; enforced by
 `scripts/ci/check_computation_imports.py`. All numeric library imports
 (`math`, `numpy`, `jax`, etc.) are confined here; enforced by
-`scripts/ci/check_numeric_imports.py`.
+`scripts/ci/check_numeric_imports.py`. Computation APIs may accept structural
+protocols satisfied by symbolic objects, but they must phrase those protocols in
+numeric terms and must not import the symbolic implementations.
 
 ### foundation/
 
@@ -788,13 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Decide whether finite transition systems should remain theory premises
-   projected into computation, or become the public construction surface for
-   reaction-network RHS objects.
-2. If they remain premises, delete duplicate test-local reaction-network
-   builders by routing finite unit-transfer fixtures through one projection
-   helper.  If they become public construction surface, promote only the minimal
-   constructor that follows from the two grounded claims.
+1. Use the public finite-unit-transfer projection to decide which
+   reaction-network descriptor coordinates are premises of the RHS and which are
+   integrator or selector evidence.
+2. Return to the solver/time-integrator schema unification: identify the
+   smallest descriptor coordinates needed for time integrators to participate in
+   the shared solve-relation atlas without adding a parallel "time integrator"
+   coverage vocabulary.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -847,14 +849,13 @@ consistency coordinates used by linear-solver selection.
 Repeated finite reaction-chain fixtures now share a theory-level
 `FiniteStateTransitionSystem`: directed unit-transfer edges derive a
 state-by-transition stoichiometry matrix whose columns sum to zero, so the
-all-ones linear form is conserved.  Computation still projects that premise into
-`ReactionNetworkRHS`; the theory object is not yet a public reaction-network
-builder.
-The grounded projection evidence now includes both a chain and a branched
-finite transition system.  Both preserve the all-ones linear form after
-projection through `ReactionNetworkRHS`, so the next decision is whether this
-projection remains test-local computation glue or becomes the public
-construction path.
+all-ones linear form is conserved.  `ReactionNetworkRHS` now exposes that
+projection as a public structural constructor: computation does not import the
+theory class, but it accepts any finite unit-transfer object with transitions
+and a stoichiometry matrix.  The grounded projection evidence includes both a
+chain and a branched finite transition system, and repeated test fixtures route
+through the same projection instead of maintaining duplicate reaction-network
+builders.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

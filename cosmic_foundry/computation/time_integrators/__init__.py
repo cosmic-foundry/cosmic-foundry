@@ -72,7 +72,10 @@ from cosmic_foundry.computation.time_integrators.nordsieck import (
     NordsieckHistory,
 )
 from cosmic_foundry.computation.time_integrators.reaction_network import (
+    LinearReactionNetworkRHS,
     ReactionNetworkRHS,
+    UnitTransferRates,
+    UnitTransferTransitionSystemProtocol,
     project_conserved,
 )
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
@@ -119,7 +122,10 @@ __all__ = [
     "predict_domain_step_limit",
     "solve_nse",
     "StateDomain",
+    "LinearReactionNetworkRHS",
     "ReactionNetworkRHS",
+    "UnitTransferRates",
+    "UnitTransferTransitionSystemProtocol",
     "project_conserved",
     "ConstantStep",
     "Controller",
