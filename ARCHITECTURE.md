@@ -788,12 +788,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Extend time-integration descriptors from explicit one-step maps to implicit
-   stage solves by deriving nonlinear-root descriptors from coupled stage
-   equations and Jacobian availability.
-2. Map decomposition primitives as structure-exposing transformations whose
+1. Map decomposition primitives as structure-exposing transformations whose
    certificates can discharge solve-relation premises without duplicating solver
    ownership claims.
+2. Add a small real-ish synthetic reaction-network integration claim that
+   exercises time-step descriptors, domain/conservation behavior, and any atlas
+   gap it exposes.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -833,6 +833,10 @@ Explicit Runge-Kutta time steps expose their primitive solve relation through
 admitted only when the stage matrix is strictly lower triangular, making the
 next-state residual `R(x) = x - Phi_h(t_n, u_n) = 0` affine in the unknown
 next state.
+Implicit Runge-Kutta stage equations use the same descriptor entry point:
+stage matrices with on-diagonal or upper-triangular coupling map to nonlinear
+root solve relations over the stage unknowns, with Jacobian-callback evidence
+derived from the method's stage-equation premise.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
