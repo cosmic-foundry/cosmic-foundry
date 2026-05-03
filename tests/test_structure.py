@@ -1491,6 +1491,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         for region in regions:
             schema.validate_coverage_region(region)
         self._assert_linear_solver_coverage_is_square_residual_solve(schema, regions)
+        self._assert_final_solve_owners_are_schema_separated(regions)
 
         selected_owners: set[type] = set()
         self._assert_coverage_regions_disjoint(regions)
@@ -1529,6 +1530,18 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         assert not any(
             issubclass(region.owner, StationaryIterationSolver) for region in regions
         )
+
+    @staticmethod
+    def _assert_final_solve_owners_are_schema_separated(
+        regions: tuple[CoverageRegion, ...],
+    ) -> None:
+        assert len({region.owner for region in regions}) == len(regions)
+        assert len(
+            {_coverage_region_predicate_key(region) for region in regions}
+        ) == len(regions)
+        for index, left in enumerate(regions):
+            for right in regions[index + 1 :]:
+                assert predicate_sets_are_disjoint(left.predicates, right.predicates)
 
     @classmethod
     def _selected_region_owner(
@@ -3084,6 +3097,10 @@ def _region_inhabits_schema(
 
 def _coverage_region_name(region: CoverageRegion) -> str:
     return region.owner.__name__
+
+
+def _coverage_region_predicate_key(region: CoverageRegion) -> tuple[object, ...]:
+    return tuple(_predicate_key(predicate) for predicate in region.predicates)
 
 
 def _project_alternative_geometry(

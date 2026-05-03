@@ -786,6 +786,17 @@ tests are overlaid on top of those regions as evidence markers; they are not the
 coverage model itself.  Explicit missing regions are useful after a gap is
 noticed; the region grid is what exposes gaps that nobody has named yet.
 
+Current short queue:
+
+1. Finalize final-solve linear solver ownership boundaries: every retained final
+   owner must have a schema-predicate region distinct from every other retained
+   owner; stationary iterations stay out of final-solve ownership until
+   contraction and iteration-budget premises exist in the schema.
+2. Decide whether least-squares solving gets a dedicated interface or remains a
+   decomposition primitive exposed through `SVDFactorization`.
+3. Map one time-integrator solve relation using the same descriptor, coverage,
+   and verification pattern used for linear solvers.
+
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
 space being described, the evidence available for locating a concrete problem in
