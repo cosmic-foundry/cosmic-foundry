@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import html
+import importlib
 from pathlib import Path
 
-from tests import test_structure as atlas
+from tests import test_structure as _structure_claims  # noqa: F401
+
+atlas = importlib.import_module("tests.structure_atlas")
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _DOCS_OUT = _PROJECT_ROOT / "docs"
@@ -617,7 +620,7 @@ def render_capability_atlas() -> str:
         "Each plot names the axes shown directly, the coordinates fixed outside the",
         "projection, and the higher-dimensional axes that are only summarized.",
         "Region geometry is drawn first; concrete",
-        "descriptor fixtures from `tests/test_structure.py` are overlaid as",
+        "structural descriptor fixtures are overlaid as",
         "numbered evidence points.  Plot region lists are autodiscovered from",
         "`InvalidCellRule`, `CoverageRegion`, and computed uncovered schema cells.",
         "",
