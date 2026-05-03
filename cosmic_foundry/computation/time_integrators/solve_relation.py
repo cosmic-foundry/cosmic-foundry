@@ -6,8 +6,8 @@ from typing import Any
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     DescriptorCoordinate,
-    LinearSolverField,
     ParameterDescriptor,
+    SolveRelationField,
 )
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -37,7 +37,7 @@ def time_integrator_step_solve_relation_descriptor(
     if not _stage_matrix_is_strictly_lower(getattr(integrator, "A_sym", ())):
         raise ValueError("time-step solve relation is explicit-stage only")
 
-    field = LinearSolverField
+    field = SolveRelationField
     n = state.u.shape[0]
     return ParameterDescriptor(
         {

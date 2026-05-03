@@ -788,13 +788,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Decide whether common solve-relation primitives should be factored out of
-   `LinearSolverField` into a domain-neutral schema field enum, now that linear
-   solvers, least-squares solvers, and explicit time steps all inhabit the same
-   primitive relation.
-2. Extend time-integration descriptors from explicit one-step maps to implicit
+1. Extend time-integration descriptors from explicit one-step maps to implicit
    stage solves by deriving nonlinear-root descriptors from coupled stage
    equations and Jacobian availability.
+2. Map decomposition primitives as structure-exposing transformations whose
+   certificates can discharge solve-relation premises without duplicating solver
+   ownership claims.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -834,6 +833,9 @@ Explicit Runge-Kutta time steps expose their primitive solve relation through
 admitted only when the stage matrix is strictly lower triangular, making the
 next-state residual `R(x) = x - Phi_h(t_n, u_n) = 0` affine in the unknown
 next state.
+Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
+`LinearSolverField`; linear-solver coverage is the shared solve-relation schema
+plus linear-operator coordinates.
 Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not

@@ -8,6 +8,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     CoverageRegion,
     LinearSolverField,
     MembershipPredicate,
+    SolveRelationField,
     StructuredPredicate,
 )
 
@@ -31,25 +32,25 @@ def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
     """Return the primitive predicates for a linear residual solve."""
     return (
         ComparisonPredicate(
-            LinearSolverField.MAP_LINEARITY_DEFECT,
+            SolveRelationField.MAP_LINEARITY_DEFECT,
             "<=",
             LINEARITY_TOLERANCE,
         ),
         AffineComparisonPredicate(
-            {LinearSolverField.DIM_X: 1.0, LinearSolverField.DIM_Y: -1.0},
+            {SolveRelationField.DIM_X: 1.0, SolveRelationField.DIM_Y: -1.0},
             "==",
             0.0,
         ),
         MembershipPredicate(
-            LinearSolverField.RESIDUAL_TARGET_AVAILABLE,
+            SolveRelationField.RESIDUAL_TARGET_AVAILABLE,
             frozenset({True}),
         ),
         MembershipPredicate(
-            LinearSolverField.ACCEPTANCE_RELATION,
+            SolveRelationField.ACCEPTANCE_RELATION,
             frozenset({"residual_below_tolerance"}),
         ),
         MembershipPredicate(
-            LinearSolverField.OBJECTIVE_RELATION,
+            SolveRelationField.OBJECTIVE_RELATION,
             frozenset({"none"}),
         ),
     )
@@ -59,7 +60,7 @@ def dense_matrix_predicates() -> tuple[MembershipPredicate, ...]:
     """Return predicates for an available dense assembled matrix."""
     return (
         MembershipPredicate(
-            LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE,
+            SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE,
             frozenset({True}),
         ),
         MembershipPredicate(
@@ -74,7 +75,7 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
     return (
         AffineComparisonPredicate(
             {
-                LinearSolverField.WORK_BUDGET_FMAS: 1.0,
+                SolveRelationField.WORK_BUDGET_FMAS: 1.0,
                 LinearSolverField.ASSEMBLY_COST_FMAS: -1.0,
             },
             ">=",
@@ -82,7 +83,7 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
         ),
         AffineComparisonPredicate(
             {
-                LinearSolverField.WORK_BUDGET_FMAS: 1.0,
+                SolveRelationField.WORK_BUDGET_FMAS: 1.0,
                 LinearSolverField.MATVEC_COST_FMAS: -1.0,
             },
             ">=",
@@ -90,7 +91,7 @@ def budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
         ),
         AffineComparisonPredicate(
             {
-                LinearSolverField.MEMORY_BUDGET_BYTES: 1.0,
+                SolveRelationField.MEMORY_BUDGET_BYTES: 1.0,
                 LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: -1.0,
             },
             ">=",
@@ -103,7 +104,7 @@ def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
     """Return predicates for solvers that use operator application directly."""
     return (
         MembershipPredicate(
-            LinearSolverField.MATRIX_REPRESENTATION_AVAILABLE,
+            SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE,
             frozenset({False}),
         ),
         MembershipPredicate(
@@ -111,7 +112,7 @@ def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
             frozenset({False}),
         ),
         MembershipPredicate(
-            LinearSolverField.OPERATOR_APPLICATION_AVAILABLE,
+            SolveRelationField.OPERATOR_APPLICATION_AVAILABLE,
             frozenset({True}),
         ),
     )
