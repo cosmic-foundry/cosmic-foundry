@@ -22,6 +22,9 @@ from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
 )
+from cosmic_foundry.computation.time_integrators.explicit_multistep import (
+    ExplicitMultistepIntegrator,
+)
 from cosmic_foundry.computation.time_integrators.exponential import (
     LawsonRungeKuttaIntegrator,
 )
@@ -30,6 +33,15 @@ from cosmic_foundry.computation.time_integrators.imex import (
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
     ImplicitRungeKuttaIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.integration_driver import (
+    IntegrationDriver,
+)
+from cosmic_foundry.computation.time_integrators.nordsieck import (
+    MultistepIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.runge_kutta import (
+    RungeKuttaIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
     CompositionIntegrator,
@@ -45,7 +57,7 @@ TimeIntegrationRequest = AlgorithmRequest
 
 def _contract(
     *,
-    requires: tuple[str, ...],
+    requires: tuple[str, ...] = (),
     provides: tuple[str, ...],
 ) -> AlgorithmStructureContract:
     return AlgorithmStructureContract(frozenset(requires), frozenset(provides))
@@ -59,6 +71,13 @@ def derivative_oracle_descriptor() -> ParameterDescriptor:
                 "jacobian_callback"
             )
         }
+    )
+
+
+def rhs_evaluation_descriptor() -> ParameterDescriptor:
+    """Return map evidence for direct RHS evaluation."""
+    return ParameterDescriptor(
+        {MapStructureField.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True)}
     )
 
 
@@ -117,6 +136,17 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
     )
 
 
+def _rhs_evaluation_region(owner: type) -> CoverageRegion:
+    return CoverageRegion(
+        owner,
+        (
+            MembershipPredicate(
+                MapStructureField.RHS_EVALUATION_AVAILABLE, frozenset({True})
+            ),
+        ),
+    )
+
+
 def _semilinear_map_region(owner: type) -> CoverageRegion:
     field = MapStructureField
     return CoverageRegion(
@@ -169,19 +199,18 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "RungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=("plain_rhs",),
             provides=("one_step", "explicit", "runge_kutta"),
         ),
         1,
         6,
         priority=60,
+        coverage_regions=(_rhs_evaluation_region(RungeKuttaIntegrator),),
     ),
     TimeIntegrationCapability(
         "implicit_runge_kutta",
         "ImplicitRungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=(),
             provides=("one_step", "implicit", "runge_kutta"),
         ),
         1,
@@ -193,7 +222,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "AdditiveRungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=(),
             provides=("one_step", "imex", "runge_kutta"),
         ),
         1,
@@ -205,7 +233,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "LawsonRungeKuttaIntegrator",
         "method_family",
         _contract(
-            requires=(),
             provides=("one_step", "exponential", "runge_kutta"),
         ),
         1,
@@ -217,7 +244,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "SymplecticCompositionIntegrator",
         "method_family",
         _contract(
-            requires=(),
             provides=("one_step", "symplectic", "composition"),
         ),
         1,
@@ -230,7 +256,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "CompositionIntegrator",
         "method_family",
         _contract(
-            requires=(),
             provides=("one_step", "operator_splitting", "composition"),
         ),
         1,
@@ -243,23 +268,23 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "ExplicitMultistepIntegrator",
         "method_family",
         _contract(
-            requires=("plain_rhs",),
             provides=("one_step", "explicit", "multistep"),
         ),
         1,
         6,
         priority=50,
+        coverage_regions=(_rhs_evaluation_region(ExplicitMultistepIntegrator),),
     ),
     TimeIntegrationCapability(
         "fixed_order_nordsieck",
         "MultistepIntegrator",
         "method_family",
         _contract(
-            requires=("plain_rhs",),
             provides=("one_step", "nordsieck", "fixed_order"),
         ),
         1,
         6,
+        coverage_regions=(_rhs_evaluation_region(MultistepIntegrator),),
     ),
     TimeIntegrationCapability(
         "adaptive_nordsieck",
@@ -285,18 +310,18 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         "IntegrationDriver",
         "driver",
         _contract(
-            requires=("plain_rhs", "time_integrator", "controller"),
+            requires=("time_integrator", "controller"),
             provides=("advance", "adaptive_timestep", "domain_aware_acceptance"),
         ),
         1,
         6,
+        coverage_regions=(_rhs_evaluation_region(IntegrationDriver),),
     ),
     TimeIntegrationCapability(
         "constraint_aware_controller",
         "ConstraintAwareController",
         "controller",
         _contract(
-            requires=(),
             provides=("advance", "constraint_lifecycle", "domain_aware_acceptance"),
         ),
         1,
@@ -338,6 +363,7 @@ __all__ = [
     "derivative_oracle_descriptor",
     "composite_map_descriptor",
     "hamiltonian_map_descriptor",
+    "rhs_evaluation_descriptor",
     "select_time_integrator",
     "semilinear_map_descriptor",
     "split_map_descriptor",

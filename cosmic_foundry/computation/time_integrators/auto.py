@@ -11,6 +11,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     composite_map_descriptor,
     derivative_oracle_descriptor,
     hamiltonian_map_descriptor,
+    rhs_evaluation_descriptor,
     select_time_integrator,
     semilinear_map_descriptor,
     split_map_descriptor,
@@ -116,9 +117,9 @@ def _rhs_request(rhs: RHSProtocol, order: int) -> TimeIntegrationRequest:
             descriptor=derivative_oracle_descriptor(),
         )
     return TimeIntegrationRequest(
-        available_structure=frozenset({"plain_rhs"}),
         requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
         order=order,
+        descriptor=rhs_evaluation_descriptor(),
     )
 
 

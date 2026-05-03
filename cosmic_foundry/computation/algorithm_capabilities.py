@@ -198,6 +198,7 @@ class MapStructureField(Enum):
         "implicit_component_derivative_oracle_kind"
     )
     NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
+    RHS_EVALUATION_AVAILABLE = "rhs_evaluation_available"
 
 
 DescriptorField: TypeAlias = (

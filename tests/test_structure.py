@@ -2824,6 +2824,10 @@ _composite_map_descriptor = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.capabilities."
     "composite_map_descriptor"
 )
+_rhs_evaluation_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities."
+    "rhs_evaluation_descriptor"
+)
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -2951,9 +2955,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     request_expectations=(
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"plain_rhs"}),
                 requested_properties=frozenset({"one_step", "explicit", "runge_kutta"}),
                 order=4,
+                descriptor=_rhs_evaluation_descriptor(),
             ),
             "RungeKuttaIntegrator",
         ),
@@ -3021,11 +3025,10 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset(
-                    {"plain_rhs", "time_integrator", "controller"}
-                ),
+                available_structure=frozenset({"time_integrator", "controller"}),
                 requested_properties=frozenset({"advance", "adaptive_timestep"}),
                 order=3,
+                descriptor=_rhs_evaluation_descriptor(),
             ),
             "IntegrationDriver",
         ),
