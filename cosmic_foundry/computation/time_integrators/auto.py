@@ -8,6 +8,7 @@ from typing import Any, TypeVar, cast
 from cosmic_foundry.computation.time_integrators.capabilities import (
     TimeIntegrationCapability,
     TimeIntegrationRequest,
+    derivative_oracle_descriptor,
     select_time_integrator,
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
@@ -100,15 +101,15 @@ def _rhs_request(rhs: RHSProtocol, order: int) -> TimeIntegrationRequest:
         )
     if isinstance(rhs, ReactionNetworkRHS):
         return TimeIntegrationRequest(
-            available_structure=frozenset({"jacobian_rhs"}),
             requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
             order=order,
+            descriptor=derivative_oracle_descriptor(),
         )
     if isinstance(rhs, WithJacobianRHSProtocol):
         return TimeIntegrationRequest(
-            available_structure=frozenset({"jacobian_rhs"}),
             requested_properties=frozenset({"one_step", "implicit", "runge_kutta"}),
             order=order,
+            descriptor=derivative_oracle_descriptor(),
         )
     return TimeIntegrationRequest(
         available_structure=frozenset({"plain_rhs"}),

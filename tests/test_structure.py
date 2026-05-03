@@ -2805,6 +2805,10 @@ _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 _TimeIntegrationRequest = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.TimeIntegrationRequest"
 )
+_derivative_oracle_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities."
+    "derivative_oracle_descriptor"
+)
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -2940,9 +2944,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"jacobian_rhs"}),
                 requested_properties=frozenset({"one_step", "implicit"}),
                 order=2,
+                descriptor=_derivative_oracle_descriptor(),
             ),
             "ImplicitRungeKuttaIntegrator",
         ),
@@ -2976,7 +2980,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"jacobian_rhs", "state_domain"}),
+                available_structure=frozenset({"state_domain"}),
                 requested_properties=frozenset(
                     {
                         "advance",
@@ -2988,6 +2992,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                     }
                 ),
                 order=2,
+                descriptor=_derivative_oracle_descriptor(),
             ),
             "AdaptiveNordsieckController",
         ),
@@ -3032,6 +3037,19 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         _CapabilityRejectionExpectation(
             _TimeIntegrationRequest(
                 requested_properties=frozenset({"advance", "constraint_lifecycle"}),
+                order=2,
+            )
+        ),
+        _CapabilityRejectionExpectation(
+            _TimeIntegrationRequest(
+                requested_properties=frozenset({"one_step", "implicit"}),
+                order=2,
+            )
+        ),
+        _CapabilityRejectionExpectation(
+            _TimeIntegrationRequest(
+                available_structure=frozenset({"state_domain"}),
+                requested_properties=frozenset({"advance", "nordsieck"}),
                 order=2,
             )
         ),

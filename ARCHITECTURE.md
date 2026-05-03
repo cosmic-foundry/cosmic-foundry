@@ -790,13 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Collapse Jacobian-specific RHS selection into map evidence: replace
-   `jacobian_rhs` request structure with derivative-oracle descriptor
-   predicates wherever time-integrator selection only needs access to `Df`.
-2. Return to the solver/time-integrator schema unification for method-family
+1. Return to the solver/time-integrator schema unification for method-family
    selection: identify the smallest descriptor coordinates needed for
    time-integrator method families to participate in the shared solve-relation
    atlas without adding a parallel "time integrator" coverage vocabulary.
+2. Collapse the remaining RHS-family request labels, such as split,
+   semilinear, Hamiltonian, and composite RHS, into map/operator structure
+   descriptor evidence where the selector only needs that mathematical premise.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -867,6 +867,11 @@ structure.  Its capability is selected by predicates over the reaction-network
 descriptor: conserved networks with independent equilibrium constraints support
 constraint lifecycle management.  This is the first time-integrator selection
 path that consumes descriptor evidence directly rather than a named RHS label.
+Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
+`jacobian_rhs` structure label.  They select from derivative-oracle descriptor
+evidence: an available Jacobian callback or matrix derivative is the premise
+needed for Newton-based stage solves, while state-domain evidence remains a
+separate requirement for domain-aware adaptive advancement.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

@@ -53,18 +53,14 @@ class AlgorithmCapability:
                         return False
         if not request.requested_properties <= self.contract.provides:
             return False
-        structure_satisfied = (
-            bool(self.contract.requires)
-            and self.contract.requires <= request.available_structure
-        )
-        descriptor_satisfied = (
+        structure_satisfied = self.contract.requires <= request.available_structure
+        descriptor_satisfied = not self.coverage_regions or (
             request.descriptor is not None
-            and bool(self.coverage_regions)
             and any(
                 region.contains(request.descriptor) for region in self.coverage_regions
             )
         )
-        return structure_satisfied or descriptor_satisfied
+        return structure_satisfied and descriptor_satisfied
 
 
 @dataclass(frozen=True)
