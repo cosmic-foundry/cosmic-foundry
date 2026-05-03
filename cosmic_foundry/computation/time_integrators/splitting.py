@@ -42,8 +42,8 @@ class CompositeRHS:
 
 
 @runtime_checkable
-class SymplecticFlowProtocol(RHSProtocol, Protocol):
-    """RHS whose exact component flow preserves the symplectic form."""
+class ComponentFlowProtocol(RHSProtocol, Protocol):
+    """RHS with evidence about its exact component flow."""
 
     @property
     def preserves_symplectic_form(self) -> bool:
@@ -51,12 +51,16 @@ class SymplecticFlowProtocol(RHSProtocol, Protocol):
         ...
 
 
-class SymplecticFlowRHS(BlackBoxRHS):
-    """Black-box RHS with explicit symplectic-flow evidence."""
+class ComponentFlowRHS(BlackBoxRHS):
+    """Black-box RHS with explicit component-flow evidence."""
+
+    def __init__(self, f: object, *, preserves_symplectic_form: bool) -> None:
+        super().__init__(f)
+        self._preserves_symplectic_form = preserves_symplectic_form
 
     @property
     def preserves_symplectic_form(self) -> bool:
-        return True
+        return self._preserves_symplectic_form
 
 
 @dataclasses.dataclass(frozen=True)
@@ -209,6 +213,6 @@ __all__ = [
     "CompositeRHS",
     "CompositeRHSProtocol",
     "CompositionIntegrator",
-    "SymplecticFlowProtocol",
-    "SymplecticFlowRHS",
+    "ComponentFlowProtocol",
+    "ComponentFlowRHS",
 ]

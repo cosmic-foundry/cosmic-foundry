@@ -45,9 +45,9 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
+    ComponentFlowProtocol,
     CompositeRHSProtocol,
     CompositionIntegrator,
-    SymplecticFlowProtocol,
 )
 from cosmic_foundry.computation.time_integrators.symplectic import (
     SymplecticCompositionIntegrator,
@@ -203,7 +203,7 @@ def composite_map_descriptor_from_rhs(
     return composite_map_descriptor(
         len(rhs.components),
         symplectic_form_invariant_available=all(
-            isinstance(component, SymplecticFlowProtocol)
+            isinstance(component, ComponentFlowProtocol)
             and component.preserves_symplectic_form
             for component in rhs.components
         ),

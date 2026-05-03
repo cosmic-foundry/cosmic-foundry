@@ -223,11 +223,28 @@ def _harmonic_hamiltonian_rhs() -> _ti.HamiltonianRHS:
 def _oscillator_composite_rhs() -> _ti.CompositeRHS:
     return _ti.CompositeRHS(
         [
-            _ti.SymplecticFlowRHS(
-                lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend)
+            _ti.ComponentFlowRHS(
+                lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend),
+                preserves_symplectic_form=True,
             ),
-            _ti.SymplecticFlowRHS(
-                lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend)
+            _ti.ComponentFlowRHS(
+                lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend),
+                preserves_symplectic_form=True,
+            ),
+        ]
+    )
+
+
+def _uncertified_oscillator_composite_rhs() -> _ti.CompositeRHS:
+    return _ti.CompositeRHS(
+        [
+            _ti.ComponentFlowRHS(
+                lambda t, u: Tensor([-float(u[1]), 0.0], backend=u.backend),
+                preserves_symplectic_form=False,
+            ),
+            _ti.ComponentFlowRHS(
+                lambda t, u: Tensor([0.0, float(u[0])], backend=u.backend),
+                preserves_symplectic_form=False,
             ),
         ]
     )
@@ -906,6 +923,35 @@ class _OscillatorInvariantComparisonClaim(Claim[Any]):
 
         assert hamiltonian_peak < 1.0e-5
         assert composition_peak < 1.0e-5
+
+
+class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
+    """Grounded claim that negative component evidence keeps invariant unset."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/oscillator_negative_invariant_evidence"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _uncertified_oscillator_composite_rhs()
+        descriptor = composite_map_descriptor_from_rhs(rhs)
+
+        assert (
+            descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value == 2
+        )
+        assert not descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+        ).value
+        assert (
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"one_step"}),
+                    order=4,
+                    descriptor=descriptor,
+                )
+            ).implementation
+            == "CompositionIntegrator"
+        )
 
 
 def _domain_claims() -> list[_DomainClaim]:
@@ -1933,6 +1979,7 @@ _CORRECT_CLAIMS: list[Claim[Any]] = [
     _HamiltonianStepMapSelectionClaim(),
     _CompositionStepMapSelectionClaim(),
     _OscillatorInvariantComparisonClaim(),
+    _OscillatorNegativeInvariantEvidenceClaim(),
     *[_CorrectnessClaim(s) for s in _ode_correctness_specs()],
     *[_CorrectnessClaim(_nse_correctness_spec(s)) for s in _CI_SPECS],
     _CorrectnessClaim(_nse_transient_correctness_spec()),
