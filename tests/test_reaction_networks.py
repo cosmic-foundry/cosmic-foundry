@@ -30,46 +30,33 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
 )
 from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
 from tests.claims import Claim
+from tests.selection_ownership import SelectionOwnership
 
 _TIME_BACKEND = NumpyBackend()
 
 
-def _owned_step_map_owner(descriptor: ParameterDescriptor) -> type:
-    regions = time_integration_step_map_regions()
-    owners = tuple(region.owner for region in regions if region.contains(descriptor))
-    assert len(owners) == 1
-    return owners[0]
-
-
-def _assert_owned_step_map_cell(
-    descriptor: ParameterDescriptor,
-) -> None:
-    schema = map_structure_parameter_schema()
-    regions = time_integration_step_map_regions()
-
-    schema.validate_descriptor(descriptor)
-    assert schema.cell_status(descriptor, regions) == "owned"
-    assert _owned_step_map_owner(descriptor)
-
-
-def _owned_time_integration_owner(
+def _time_integration_ownership(
     descriptor: ParameterDescriptor,
     *,
     requested_properties: frozenset[str],
     order: int,
-) -> type:
-    request = AlgorithmRequest(
-        requested_properties=requested_properties,
-        order=order,
-        descriptor=descriptor,
+) -> SelectionOwnership:
+    return SelectionOwnership.from_request(
+        AlgorithmRequest(
+            requested_properties=requested_properties,
+            order=order,
+            descriptor=descriptor,
+        ),
+        time_integration_capabilities(),
     )
-    owners = tuple(
-        capability.coverage_regions[0].owner
-        for capability in time_integration_capabilities()
-        if capability.supports(request)
+
+
+def _step_map_ownership(descriptor: ParameterDescriptor) -> SelectionOwnership:
+    return SelectionOwnership(
+        descriptor,
+        time_integration_step_map_regions(),
+        map_structure_parameter_schema(),
     )
-    assert len(owners) == 1
-    return owners[0]
 
 
 def _finite_transition_initial_state(
@@ -120,11 +107,11 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         step_descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
         assert (
             auto.select(rhs).implementation
-            == _owned_time_integration_owner(
+            == _time_integration_ownership(
                 derivative_oracle_descriptor(),
                 requested_properties=frozenset({"one_step"}),
                 order=2,
-            ).__name__
+            ).owner.__name__
         )
 
         reaction_descriptor = rhs.reaction_network_descriptor()
@@ -173,9 +160,9 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
                     descriptor=map_descriptor,
                 )
             ).implementation
-            == _owned_step_map_owner(map_descriptor).__name__
+            == _step_map_ownership(map_descriptor).owner.__name__
         )
-        _assert_owned_step_map_cell(map_descriptor)
+        _step_map_ownership(map_descriptor).assert_owned_cell()
         assert (
             reaction_descriptor.coordinate(
                 ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
@@ -192,11 +179,11 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         )
         assert (
             constraint_owner.implementation
-            == _owned_time_integration_owner(
+            == _time_integration_ownership(
                 constraint_descriptor,
                 requested_properties=frozenset({"advance"}),
                 order=2,
-            ).__name__
+            ).owner.__name__
         )
 
         descriptor = step_descriptor

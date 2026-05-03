@@ -904,7 +904,7 @@ class _AutoDiscoveryImportClaim(Claim[None]):
 
 
 class _SelectorExpectationDerivationClaim(Claim[None]):
-    """Claim: selector tests derive expected owners from descriptor regions."""
+    """Claim: selector tests project expected implementations from owners."""
 
     @property
     def description(self) -> str:
@@ -925,11 +925,11 @@ class _SelectorExpectationDerivationClaim(Claim[None]):
                 ]
                 if not implementation_exprs:
                     continue
-                if not any(self._is_derived_owner_name(expr) for expr in expressions):
+                if not any(self._is_owner_projection(expr) for expr in expressions):
                     violations.append(f"{path.name}:{node.lineno}")
         assert not violations, (
-            "selector implementation expectations must be derived from descriptor "
-            "case ownership regions: " + ", ".join(violations)
+            "selector implementation expectations must project an ownership "
+            "witness through .owner.__name__: " + ", ".join(violations)
         )
 
     @staticmethod
@@ -937,16 +937,12 @@ class _SelectorExpectationDerivationClaim(Claim[None]):
         return isinstance(node, ast.Attribute) and node.attr == "implementation"
 
     @staticmethod
-    def _is_derived_owner_name(node: ast.expr) -> bool:
+    def _is_owner_projection(node: ast.expr) -> bool:
         return (
             isinstance(node, ast.Attribute)
             and node.attr == "__name__"
-            and (
-                isinstance(node.value, ast.Call)
-                or (
-                    isinstance(node.value, ast.Attribute) and node.value.attr == "owner"
-                )
-            )
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == "owner"
         )
 
 
