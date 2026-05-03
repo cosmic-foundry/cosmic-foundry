@@ -790,16 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Ground the time-integration descriptor projection in a reversible
-   three-species reaction-chain simulation that checks conservation,
-   nonnegativity, derivative-oracle evidence, and constraint-aware ownership
-   against the same descriptor coordinates used for selection.
-2. Unify the solver/time-integrator atlas view by rendering time-integration
+1. Unify the solver/time-integrator atlas view by rendering time-integration
    method-family names as human labels derived from descriptor-owned coverage
    regions plus implementation inheritance, not as request properties.  Before
    re-admitting multistep method ownership, add a descriptor coordinate that
    distinguishes history/state-memory requirements from single-step RHS
    evaluation; otherwise leave the overlapping claims deleted.
+2. Review whether the reaction-chain grounding exposes any computational shadow
+   of the finite-state transition theory beyond the existing
+   `FiniteStateTransitionSystem` projection; promote only a missing premise,
+   not reaction-network application vocabulary.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

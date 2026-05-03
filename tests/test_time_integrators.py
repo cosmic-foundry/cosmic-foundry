@@ -19,6 +19,7 @@ import pytest
 
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
+    AlgorithmRequest,
     LinearSolverField,
     ReactionNetworkField,
     SolveRelationField,
@@ -375,6 +376,9 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         rhs = chain.build_rhs()
         state = _ti.ODEState(0.0, chain.initial_state())
         integrator = _ti.ImplicitRungeKuttaIntegrator(2)
+        auto = _ti.AutoIntegrator(2)
+
+        assert auto.select(rhs).implementation == "ImplicitRungeKuttaIntegrator"
 
         reaction_descriptor = rhs.reaction_network_descriptor()
         reaction_schema = reaction_network_parameter_schema()
@@ -403,6 +407,20 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
             == 1
         )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
+            ).value
+            == 2
+        )
+        constraint_owner = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"advance"}),
+                order=2,
+                descriptor=reaction_descriptor,
+            )
+        )
+        assert constraint_owner.implementation == "ConstraintAwareController"
 
         descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
         schema = solve_relation_parameter_schema()
@@ -449,6 +467,25 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         assert (
             abs(sum(float(state.u[i]) for i in range(state.u.shape[0])) - 1.0) < 1e-10
         )
+
+        controller = _ti.ConstraintAwareController(
+            rhs=rhs,
+            integrator=integrator,
+            inner=_ti.PIController(
+                alpha=0.35,
+                beta=0.2,
+                tol=1e-7,
+                dt0=2.0e-3,
+                factor_max=1.15,
+            ),
+        )
+        controlled_state = controller.advance(
+            chain.initial_state(),
+            0.0,
+            2.0e-2,
+        )
+        assert rhs.state_domain.check(controlled_state.u).accepted
+        assert abs(float(invariant @ controlled_state.u) - initial_invariant) < 1e-10
 
 
 class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
