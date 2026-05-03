@@ -9,6 +9,7 @@ import numpy as np
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     DescriptorCoordinate,
+    MapStructureField,
     ParameterDescriptor,
     ReactionNetworkField,
 )
@@ -325,6 +326,20 @@ class ReactionNetworkRHS:
                 field.CONSERVATION_LAW_COUNT: DescriptorCoordinate(self.n_conserved),
                 field.EQUILIBRIUM_CONSTRAINT_COUNT: DescriptorCoordinate(
                     self.constraint_basis.shape[0]
+                ),
+            }
+        )
+
+    def map_structure_descriptor(self) -> ParameterDescriptor:
+        """Return map-level evidence implied by the stoichiometric RHS."""
+        field = MapStructureField
+        return ParameterDescriptor(
+            {
+                field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
+                field.RHS_HISTORY_AVAILABLE: DescriptorCoordinate(False),
+                field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(False),
+                field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(
+                    self.n_conserved
                 ),
             }
         )

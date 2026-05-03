@@ -793,11 +793,11 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: compare the periodic advection conserved-linear-
-   form evidence with reaction-network conservation evidence, then decide
-   whether conservation should be one map-level premise projected into
-   reaction-network views or remain a reaction-network-owned coordinate. Do not
-   add mesh, flux-form, locality, or CFL axes until a real mesh object is the
+2. Candidate next calculation: use a constraint-aware reaction-network advance
+   to decide whether algorithm selection should consume map-level conserved
+   linear forms plus reaction-network equilibrium constraints, rather than
+   selecting on reaction-network conservation directly. Do not add mesh,
+   flux-form, locality, or CFL axes until a real mesh object is the
    implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
