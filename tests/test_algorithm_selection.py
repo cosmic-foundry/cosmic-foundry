@@ -268,6 +268,40 @@ def _composition_postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> Non
     _assert_no_step_solve_or_linear_operator(case, state)
 
 
+def _uncertified_composition_postcheck(
+    case: _StepSelectionCase, state: _ti.ODEState
+) -> None:
+    assert (
+        case.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value
+        == 2
+    )
+    assert not case.descriptor.coordinate(
+        MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+    ).value
+    assert math.isinf(
+        case.descriptor.coordinate(
+            MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
+        ).value
+    )
+    _assert_no_step_solve_or_linear_operator(case, state)
+
+
+def _damped_composition_postcheck(
+    case: _StepSelectionCase, state: _ti.ODEState
+) -> None:
+    assert (
+        case.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value
+        == 2
+    )
+    assert not case.descriptor.coordinate(
+        MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
+    ).value
+    assert case.descriptor.coordinate(
+        MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
+    ).value == pytest.approx(math.sqrt(2.0) * _DAMPED_OSCILLATOR_GAMMA)
+    _assert_no_step_solve_or_linear_operator(case, state)
+
+
 def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
     return (
         _map_selection_case(
@@ -317,7 +351,7 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
         ),
         _map_selection_case(
-            "composition_map",
+            "certified_composition_map",
             composite_map_descriptor_from_rhs(cases.oscillator_composite_rhs()),
             4,
             cases.oscillator_composite_rhs(),
@@ -329,6 +363,34 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             cases.exact_osc,
             1.0e-8,
             _composition_postcheck,
+        ),
+        _map_selection_case(
+            "uncertified_composition_map",
+            composite_map_descriptor_from_rhs(_uncertified_oscillator_composite_rhs()),
+            4,
+            _uncertified_oscillator_composite_rhs(),
+            _ti.CompositionIntegrator(
+                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+                order=4,
+            ),
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            cases.exact_osc,
+            1.0e-8,
+            _uncertified_composition_postcheck,
+        ),
+        _map_selection_case(
+            "damped_composition_map",
+            composite_map_descriptor_from_rhs(_damped_oscillator_composite_rhs()),
+            2,
+            _damped_oscillator_composite_rhs(),
+            _ti.CompositionIntegrator(
+                [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
+                order=2,
+            ),
+            Tensor([1.0, 0.0], backend=_TIME_BACKEND),
+            _exact_damped_osc,
+            2.0e-3,
+            _damped_composition_postcheck,
         ),
     )
 
@@ -402,35 +464,6 @@ class _OscillatorInvariantComparisonClaim(Claim[Any]):
         hamiltonian_integrator = _ti.SymplecticCompositionIntegrator(4)
         composition_rhs = cases.oscillator_composite_rhs()
         hamiltonian_rhs = cases.harmonic_hamiltonian_rhs()
-        composition_descriptor = composite_map_descriptor_from_rhs(composition_rhs)
-        hamiltonian_descriptor = hamiltonian_map_descriptor()
-
-        assert composition_descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        assert hamiltonian_descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        assert (
-            _ti.select_time_integrator(
-                AlgorithmRequest(
-                    requested_properties=frozenset({"one_step"}),
-                    order=4,
-                    descriptor=composition_descriptor,
-                )
-            ).implementation
-            == _ti.CompositionIntegrator.__name__
-        )
-        assert (
-            _ti.select_time_integrator(
-                AlgorithmRequest(
-                    requested_properties=frozenset({"one_step"}),
-                    order=4,
-                    descriptor=hamiltonian_descriptor,
-                )
-            ).implementation
-            == _ti.SymplecticCompositionIntegrator.__name__
-        )
 
         initial_energy = _oscillator_energy(initial)
         composition_peak = 0.0
@@ -461,8 +494,6 @@ class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
     def check(self, _calibration: Any) -> None:
         certified_rhs = cases.oscillator_composite_rhs()
         uncertified_rhs = _uncertified_oscillator_composite_rhs()
-        certified_descriptor = composite_map_descriptor_from_rhs(certified_rhs)
-        uncertified_descriptor = composite_map_descriptor_from_rhs(uncertified_rhs)
         integrator = _ti.CompositionIntegrator(
             [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
             order=4,
@@ -471,53 +502,6 @@ class _OscillatorNegativeInvariantEvidenceClaim(Claim[Any]):
         uncertified = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
         dt = 5.0e-2
         steps = 200
-
-        assert (
-            certified_descriptor.coordinate(
-                MapStructureField.ADDITIVE_COMPONENT_COUNT
-            ).value
-            == 2
-        )
-        assert (
-            uncertified_descriptor.coordinate(
-                MapStructureField.ADDITIVE_COMPONENT_COUNT
-            ).value
-            == 2
-        )
-        assert certified_descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        assert (
-            certified_descriptor.coordinate(
-                MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
-            ).value
-            == 0.0
-        )
-        assert not uncertified_descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        assert math.isinf(
-            uncertified_descriptor.coordinate(
-                MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
-            ).value
-        )
-        for descriptor in (certified_descriptor, uncertified_descriptor):
-            owner = _owned_region_owner(descriptor, time_integration_step_map_regions())
-            assert (
-                _ti.select_time_integrator(
-                    AlgorithmRequest(
-                        requested_properties=frozenset({"one_step"}),
-                        order=4,
-                        descriptor=descriptor,
-                    )
-                ).implementation
-                == owner.__name__
-            )
-            _assert_owned_cell(
-                descriptor,
-                regions=time_integration_step_map_regions(),
-                schema=map_structure_parameter_schema(),
-            )
 
         for _ in range(steps):
             certified = integrator.step(certified_rhs, certified, dt)
@@ -540,7 +524,6 @@ class _DampedOscillatorSymplecticDefectClaim(Claim[Any]):
 
     def check(self, _calibration: Any) -> None:
         rhs = _damped_oscillator_composite_rhs()
-        descriptor = composite_map_descriptor_from_rhs(rhs)
         integrator = _ti.CompositionIntegrator(
             [_ti.RungeKuttaIntegrator(1), _ti.RungeKuttaIntegrator(1)],
             order=2,
@@ -548,33 +531,6 @@ class _DampedOscillatorSymplecticDefectClaim(Claim[Any]):
         state = _ti.ODEState(0.0, Tensor([1.0, 0.0], backend=_TIME_BACKEND))
         dt = 2.5e-3
         steps = 400
-
-        assert (
-            descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value == 2
-        )
-        assert not descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
-        ).value
-        assert descriptor.coordinate(
-            MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
-        ).value == pytest.approx(math.sqrt(2.0) * _DAMPED_OSCILLATOR_GAMMA)
-        assert (
-            _ti.select_time_integrator(
-                AlgorithmRequest(
-                    requested_properties=frozenset({"one_step"}),
-                    order=2,
-                    descriptor=descriptor,
-                )
-            ).implementation
-            == _owned_region_owner(
-                descriptor, time_integration_step_map_regions()
-            ).__name__
-        )
-        _assert_owned_cell(
-            descriptor,
-            regions=time_integration_step_map_regions(),
-            schema=map_structure_parameter_schema(),
-        )
 
         initial_energy = _oscillator_energy(state.u)
         for _ in range(steps):
