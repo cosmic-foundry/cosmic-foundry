@@ -788,13 +788,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Decide whether repeated finite reaction-chain premises should be promoted
-   from test-local stoichiometric projections into a minimal conserved
-   finite-state transformation object, without creating a public network API
-   before a second grounded claim demands it.
-2. Decide whether dense factorization feasibility has enough independent
+1. Decide whether dense factorization feasibility has enough independent
    occurrences to deserve a decomposition-level schema instead of reusing
    linear-solver coordinates as its certificate surface.
+2. Decide whether `ReactionNetworkRHS` should accept a finite transition system
+   directly, or whether that would prematurely turn a theory premise into a
+   public network API before the next grounded physics claim.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -844,6 +843,12 @@ descriptor schema: the block matrix is assembled from the Butcher matrix and
 RHS linear operators, the right-hand side is derived from the affine offset,
 and the resulting descriptor carries the same rank, conditioning, cost, and
 consistency coordinates used by linear-solver selection.
+Repeated finite reaction-chain fixtures now share a theory-level
+`FiniteStateTransitionSystem`: directed unit-transfer edges derive a
+state-by-transition stoichiometry matrix whose columns sum to zero, so the
+all-ones linear form is conserved.  Computation still projects that premise into
+`ReactionNetworkRHS`; the theory object is not yet a public reaction-network
+builder.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

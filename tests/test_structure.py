@@ -1562,6 +1562,40 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
         assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
 
 
+class _FiniteStateTransitionSystemClaim(Claim[None]):
+    """Claim: finite directed unit transfers imply total conservation."""
+
+    @property
+    def description(self) -> str:
+        return "theory/finite_state_transition_system"
+
+    def check(self, _calibration: None) -> None:
+        transition_system = _resolve_dotted(
+            "cosmic_foundry.theory.discrete.FiniteStateTransitionSystem"
+        )
+        indexed_set = _resolve_dotted("cosmic_foundry.theory.foundation.IndexedSet")
+        system = transition_system(4, ((0, 1), (1, 2), (1, 3)))
+
+        stoichiometry = system.stoichiometry_matrix()
+        conserved = system.conserved_total_form()
+
+        assert isinstance(system, indexed_set)
+        assert system.shape == (4,)
+        assert system.ndim == 1
+        assert system.transition_count == len(system.transitions)
+        assert conserved == (1, 1, 1, 1)
+        assert len(stoichiometry) == 4
+        assert all(len(row) == system.transition_count for row in stoichiometry)
+        assert all(
+            sum(row[column] for row in stoichiometry) == 0
+            for column in range(system.transition_count)
+        )
+        assert transition_system.chain(4).transitions == ((0, 1), (1, 2), (2, 3))
+        assert system.intersect(transition_system(3, ((0, 1), (1, 2)))) == (
+            transition_system(3, ((0, 1), (1, 2)))
+        )
+
+
 class _TimeIntegratorSolveRelationClaim(Claim[None]):
     """Claim: time-step solve relations are inferred from stage equations."""
 
@@ -4174,6 +4208,7 @@ _DISCRETE_OPERATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         "mesh_topology": frozenset(
             {
                 "CellComplex",
+                "FiniteStateTransitionSystem",
                 "Mesh",
                 "StructuredMesh",
             }
@@ -4479,6 +4514,7 @@ _CLAIMS: list[Claim[None]] = [
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
+    _FiniteStateTransitionSystemClaim(),
     _TimeIntegratorSolveRelationClaim(),
     _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoverageRegionClaim(),
