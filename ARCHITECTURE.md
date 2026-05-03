@@ -815,6 +815,9 @@ preserves source-signature distinctions.  Source signatures preserve actual
 semantic source identity: invalid-rule predicates, coverage owner plus
 predicates, and uncovered schema-cell coordinates.  They are not collapsed to schema
 declaration order, presentation names, or rendered status text.
+Current `LinearSolver.solve(op, b)` ownership is square residual solving:
+rectangular least-squares ownership is not claimed through that interface even
+though `SVDFactorization` proves the Moore-Penrose least-squares primitive.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG

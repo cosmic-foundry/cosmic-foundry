@@ -48,6 +48,10 @@ def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
             LinearSolverField.ACCEPTANCE_RELATION,
             frozenset({"residual_below_tolerance"}),
         ),
+        MembershipPredicate(
+            LinearSolverField.OBJECTIVE_RELATION,
+            frozenset({"none"}),
+        ),
     )
 
 

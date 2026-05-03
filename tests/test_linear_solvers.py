@@ -240,6 +240,57 @@ class _SolverClaim(Claim[ExecutionPlan]):
         ).format()
 
 
+class _SVDLeastSquaresClaim(Claim[ExecutionPlan]):
+    """Claim: SVD factorization solves rectangular least-squares systems."""
+
+    @property
+    def description(self) -> str:
+        return "SVDFactorization/rectangular_least_squares"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        a = Tensor(
+            (
+                (1.0, 0.0),
+                (0.0, 1.0),
+                (1.0, 1.0),
+            ),
+            backend=_NP_BACKEND,
+        )
+        b = Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND)
+        x = SVDFactorization().factorize(a).solve(b)
+        expected = (4.0 / 3.0, 7.0 / 3.0)
+        error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(2)))
+        residual = a @ x - b
+        normal_residual = _transpose_matvec(a, residual)
+        normal_error = math.sqrt(sum(float(normal_residual[i]) ** 2 for i in range(2)))
+        tolerance = 1.0e-10
+        assert error < tolerance and normal_error < tolerance, BatchedFailure(
+            claim=self.description,
+            device_kind=execution_plan.device_kind,
+            batch_size=1,
+            batch_index=0,
+            method="SVDFactorization",
+            order=0,
+            problem="least_squares",
+            parameters={"rows": 3, "columns": 2},
+            actual=max(error, normal_error),
+            expected=0.0,
+            error=max(error, normal_error),
+            tolerance=tolerance,
+        ).format()
+
+
+def _transpose_matvec(matrix: Tensor, vector: Tensor) -> Tensor:
+    rows, columns = matrix.shape
+    return Tensor(
+        [
+            sum(float(matrix[row, column]) * float(vector[row]) for row in range(rows))
+            for column in range(columns)
+        ],
+        backend=vector.backend,
+    )
+
+
 class _DirectSolverClaim(Claim[ExecutionPlan]):
     """Claim: direct solver residual < tol across a batched RHS set.
 
@@ -417,6 +468,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 # ---------------------------------------------------------------------------
 
 _CORRECTNESS_CLAIMS: list[Claim[ExecutionPlan]] = []
+_CORRECTNESS_CLAIMS.append(_SVDLeastSquaresClaim())
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)

@@ -1486,6 +1486,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         self._assert_no_declared_coverage_literals(regions)
         for region in regions:
             schema.validate_coverage_region(region)
+        self._assert_linear_solver_coverage_is_square_residual_solve(schema, regions)
 
         selected_owners: set[type] = set()
         self._assert_coverage_regions_disjoint(regions)
@@ -1497,6 +1498,25 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             assert selected_owner is expected_owner
             selected_owners.add(expected_owner)
         assert selected_owners == {region.owner for region in regions}
+
+    @classmethod
+    def _assert_linear_solver_coverage_is_square_residual_solve(
+        cls,
+        schema: ParameterSpaceSchema,
+        regions: tuple[CoverageRegion, ...],
+    ) -> None:
+        least_squares = _SolveRelationSchemaClaim._linear_descriptor(
+            objective_relation="least_squares"
+        )
+        overdetermined_least_squares = _SolveRelationSchemaClaim._linear_descriptor(
+            dim_y=cls._two() + cls._one(),
+            objective_relation="least_squares",
+            symmetry_defect=cls._one(),
+            coercivity_lower_bound=cls._zero(),
+        )
+        for descriptor in (least_squares, overdetermined_least_squares):
+            schema.validate_descriptor(descriptor)
+            assert schema.cell_status(descriptor, regions) == "uncovered"
 
     @classmethod
     def _selected_region_owner(
