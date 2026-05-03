@@ -2809,6 +2809,21 @@ _derivative_oracle_descriptor = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.capabilities."
     "derivative_oracle_descriptor"
 )
+_semilinear_map_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities."
+    "semilinear_map_descriptor"
+)
+_split_map_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities.split_map_descriptor"
+)
+_hamiltonian_map_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities."
+    "hamiltonian_map_descriptor"
+)
+_composite_map_descriptor = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.capabilities."
+    "composite_map_descriptor"
+)
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -2952,29 +2967,37 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"split_rhs"}),
                 requested_properties=frozenset({"one_step", "imex"}),
                 order=3,
+                descriptor=_split_map_descriptor(),
             ),
             "AdditiveRungeKuttaIntegrator",
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"hamiltonian_rhs"}),
+                requested_properties=frozenset({"one_step", "exponential"}),
+                order=4,
+                descriptor=_semilinear_map_descriptor(),
+            ),
+            "LawsonRungeKuttaIntegrator",
+        ),
+        _CapabilityRequestExpectation(
+            _TimeIntegrationRequest(
                 requested_properties=frozenset(
                     {"one_step", "symplectic", "composition"}
                 ),
                 order=4,
+                descriptor=_hamiltonian_map_descriptor(),
             ),
             "SymplecticCompositionIntegrator",
         ),
         _CapabilityRequestExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"composite_rhs"}),
                 requested_properties=frozenset(
                     {"one_step", "operator_splitting", "composition"}
                 ),
                 order=4,
+                descriptor=_composite_map_descriptor(2),
             ),
             "CompositionIntegrator",
         ),
@@ -3018,20 +3041,20 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     rejected_requests=(
         _CapabilityRejectionExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"hamiltonian_rhs"}),
                 requested_properties=frozenset(
                     {"one_step", "symplectic", "composition"}
                 ),
                 order=3,
+                descriptor=_hamiltonian_map_descriptor(),
             )
         ),
         _CapabilityRejectionExpectation(
             _TimeIntegrationRequest(
-                available_structure=frozenset({"composite_rhs"}),
                 requested_properties=frozenset(
                     {"one_step", "operator_splitting", "composition"}
                 ),
                 order=3,
+                descriptor=_composite_map_descriptor(2),
             )
         ),
         _CapabilityRejectionExpectation(

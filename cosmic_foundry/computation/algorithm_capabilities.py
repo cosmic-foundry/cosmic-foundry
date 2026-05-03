@@ -186,12 +186,27 @@ class ReactionNetworkField(Enum):
     STOICHIOMETRY_RANK = "stoichiometry_rank"
 
 
+class MapStructureField(Enum):
+    """Schema-owned descriptor fields for ODE map/operator structure."""
+
+    ADDITIVE_COMPONENT_COUNT = "additive_component_count"
+    EXACT_LINEAR_OPERATOR_AVAILABLE = "exact_linear_operator_available"
+    EXPLICIT_COMPONENT_AVAILABLE = "explicit_component_available"
+    HAMILTONIAN_PARTITION_AVAILABLE = "hamiltonian_partition_available"
+    IMPLICIT_COMPONENT_AVAILABLE = "implicit_component_available"
+    IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND = (
+        "implicit_component_derivative_oracle_kind"
+    )
+    NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
+
+
 DescriptorField: TypeAlias = (
     str
     | SolveRelationField
     | LinearSolverField
     | DecompositionField
     | ReactionNetworkField
+    | MapStructureField
 )
 
 
@@ -201,7 +216,8 @@ def _field_label(field: DescriptorField) -> str:
         SolveRelationField
         | LinearSolverField
         | DecompositionField
-        | ReactionNetworkField,
+        | ReactionNetworkField
+        | MapStructureField,
     ):
         return str(field.value)
     return field
@@ -1798,6 +1814,7 @@ __all__ = [
     "LinearOperatorDescriptor",
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",
+    "MapStructureField",
     "MembershipPredicate",
     "NumericInterval",
     "ParameterAxis",

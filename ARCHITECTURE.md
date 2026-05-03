@@ -794,9 +794,9 @@ Current short queue:
    selection: identify the smallest descriptor coordinates needed for
    time-integrator method families to participate in the shared solve-relation
    atlas without adding a parallel "time integrator" coverage vocabulary.
-2. Collapse the remaining RHS-family request labels, such as split,
-   semilinear, Hamiltonian, and composite RHS, into map/operator structure
-   descriptor evidence where the selector only needs that mathematical premise.
+2. Start deleting compatibility selection scaffolding: remove request structure
+   fields or capability contracts that now only restate descriptor predicates,
+   beginning with time-integration requests.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
@@ -872,6 +872,13 @@ Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
 evidence: an available Jacobian callback or matrix derivative is the premise
 needed for Newton-based stage solves, while state-domain evidence remains a
 separate requirement for domain-aware adaptive advancement.
+The remaining RHS-family request labels have likewise collapsed into
+map/operator descriptor evidence.  Additive RK selects from explicit/implicit
+component evidence with an implicit derivative oracle; Lawson RK selects from an
+exact linear operator plus nonlinear residual; symplectic composition selects
+from separable Hamiltonian partition evidence; operator composition selects from
+an additive component count.  These are still human-facing method families, but
+they are no longer independent request vocabulary.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
