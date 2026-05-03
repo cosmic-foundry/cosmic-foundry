@@ -197,43 +197,46 @@ three tasks, not a backlog.
 
 ## Development loop
 
-Develop mathematical infrastructure by alternating abstraction, grounded use,
-and correction. The loop is not "add capability, add test, add docs." It is
-"identify the premise, encode it once, make the consequences discovered, then
-delete anything that was only recording the consequence by hand."
+Develop mathematical infrastructure by starting from a concrete calculation,
+then working backward to the premise that makes the calculation meaningful.
+The loop is not "add capability, add test, add docs." It is "name the
+calculation, identify the premise, encode it once, make the consequences
+discovered, then delete anything that was only recording the consequence by
+hand."
 
-The preferred loop is:
+Every PR must walk the full loop. A PR proposal starts by naming the concrete
+calculation claim it will deliver. If the calculation cannot be named, the PR
+is not yet well-posed. A structural change, schema change, documentation
+change, or deletion is not complete until it grounds out in that calculation
+claim in the same PR. Prefer extending an existing real-ish problem when that
+is the shortest honest path. If the change cannot be connected to a
+calculation without inventing fake work, stop and discuss the premise instead
+of opening a partial PR.
 
-1. **Generalize before implementing.** Ask what a more ambitious programmer
-   would demand, then recursively generalize the proposal until another
+The required loop is:
+
+1. **Name the calculation.** Choose the concrete workload that should pass
+   after the PR: a synthetic reaction network, transient
+   diffusion/advection-diffusion problem, implicit step, conservation
+   projection, or similarly meaningful case.
+2. **Generalize the premise.** Ask what mathematical fact would make that
+   calculation non-accidental, then recursively generalize until another
    generalization would make the requirement less precise, less testable, or
    harder for a human to read.
-2. **Encode the premise.** Improve schemas, ownership models, descriptor
-   construction, or capability projections by representing the mathematical
-   fact from which the desired behavior follows.
-3. **Make discovery do the work.** New implementations, claims, and atlas
+3. **Encode the premise.** Improve schemas, ownership models, descriptor
+   construction, theory objects, or capability projections by representing
+   the fact from which the desired behavior follows.
+4. **Make discovery do the work.** New implementations, claims, and atlas
    regions should become subject to the relevant requirements by inheritance,
    structure, schema registration, or implemented methods; editing a list by
    hand is a temporary smell unless the list is itself the mathematical object.
-4. **Exercise it on a real-ish problem.** Add or improve a small scientifically
-   meaningful workload such as a synthetic reaction network, transient
-   diffusion/advection-diffusion problem, implicit step, conservation
-   projection, or similar case that stresses the abstraction.
-5. **Correct the model by deleting.** Delete names, fields, categories,
+5. **Run the calculation.** Add or improve the calculation claim named in step
+   1. It should leave behind at least one durable formal result: a descriptor
+   coordinate, structural invariant, generated atlas region, numerical claim,
+   discovered structural test, or deletion of a misleading abstraction.
+6. **Correct the model by deleting.** Delete names, fields, categories,
    coverage claims, object-level test cases, docs, or examples that the
-   workload shows are fake, redundant, stale, or insufficiently precise.
-
-Every real-ish problem should leave behind at least one durable formal result:
-a descriptor coordinate, structural invariant, generated atlas region,
-numerical claim, discovered structural test, or deletion of a misleading
-abstraction.
-
-Every PR must walk the full loop. A structural change, schema change,
-documentation change, or deletion is not complete until it grounds out in a
-concrete calculation claim in the same PR. Prefer extending an existing
-real-ish problem when that is the shortest honest path. If a change cannot be
-connected to a calculation without inventing fake work, stop and discuss the
-premise instead of opening a partial PR.
+   calculation shows are fake, redundant, stale, or insufficiently precise.
 
 After each real-ish problem, map the new premise back to `theory/` and ask
 whether the parameter schema or computation code has started to encode a
