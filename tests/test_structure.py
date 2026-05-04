@@ -583,7 +583,6 @@ class _ArchitectureOwnershipSpec:
 
     package: types.ModuleType | str
     public_categories: dict[str, frozenset[Any]] | None = None
-    public_ownership: tuple[_PublicOwnershipGroup, ...] = ()
     forbidden_public_symbols: frozenset[str] = frozenset()
     capability_provider: Callable[[], tuple[Any, ...]] | str | None = None
     request_selector: Callable[[Any], Any] | str | None = None
@@ -683,16 +682,6 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         return labels
 
     def _public_categories(self) -> dict[str, frozenset[Any]]:
-        if self._spec.descriptor_owned_capabilities:
-            assert self._spec.public_ownership, (
-                "descriptor-owned architecture specs must use grouped public "
-                "ownership"
-            )
-            assert self._spec.public_categories is None, (
-                "descriptor-owned architecture specs must derive public "
-                "categories from grouped ownership"
-            )
-            return _public_categories_from_groups(self._spec.public_ownership)
         assert self._spec.public_categories is not None
         return self._spec.public_categories
 
@@ -862,7 +851,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         if self._spec.descriptor_owned_capabilities:
             assert self._spec.expected_class_modules is None, (
                 "descriptor-owned architecture specs must derive class/module "
-                "expectations from grouped ownership"
+                "expectations from public categories"
             )
         violations = []
         for expected_cls, expected_module in expected.items():
@@ -889,7 +878,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
 
     def _expected_class_modules(self) -> dict[type | str, types.ModuleType | str]:
         if self._spec.descriptor_owned_capabilities:
-            return _class_module_expectations_from_groups(self._spec.public_ownership)
+            return _class_module_expectations_from_categories(self._public_categories())
         return self._spec.expected_class_modules or {}
 
 
@@ -3191,30 +3180,13 @@ _ALGORITHM_CAPABILITIES_MODULE = importlib.import_module(
 _AlgorithmRequest = _ALGORITHM_CAPABILITIES_MODULE.AlgorithmRequest
 
 
-@dataclass(frozen=True)
-class _PublicOwnershipGroup:
-    """Public objects sharing one ownership category."""
-
-    category: str
-    objects: tuple[Any, ...]
-
-
-def _public_categories_from_groups(
-    groups: tuple[_PublicOwnershipGroup, ...],
-) -> dict[str, frozenset[Any]]:
-    categories: dict[str, list[Any]] = {}
-    for group in groups:
-        categories.setdefault(group.category, []).extend(group.objects)
-    return {category: frozenset(objects) for category, objects in categories.items()}
-
-
-def _class_module_expectations_from_groups(
-    groups: tuple[_PublicOwnershipGroup, ...],
+def _class_module_expectations_from_categories(
+    categories: dict[str, frozenset[Any]],
 ) -> dict[type, types.ModuleType]:
     return {
         obj: importlib.import_module(obj.__module__)
-        for group in groups
-        for obj in group.objects
+        for objects in categories.values()
+        for obj in objects
         if isinstance(obj, type) and obj.__module__.startswith("cosmic_foundry.")
     }
 
@@ -3226,224 +3198,111 @@ _DiscreteOperatorRequest = _resolve_dotted(
     "cosmic_foundry.theory.discrete.DiscreteOperatorRequest"
 )
 _GeometryRequest = _resolve_dotted("cosmic_foundry.geometry.GeometryRequest")
-_TIME_INTEGRATOR_PUBLIC_GROUPS = (
-    _PublicOwnershipGroup(
-        "capability_contract",
-        (
-            _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract,
-            _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability,
-            _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "capability_contract",
-        (
-            _TIME_INTEGRATOR_PACKAGE.select_time_integrator,
-            _TIME_INTEGRATOR_PACKAGE.time_integration_capabilities,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "capability_contract",
-        (
-            _TIME_INTEGRATOR_PACKAGE.time_integrator_step_linear_operator_descriptor,
-            _TIME_INTEGRATOR_PACKAGE.time_integrator_step_solve_relation_descriptor,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "method_family",
-        (_TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "driver_controller",
-        (
-            _TIME_INTEGRATOR_PACKAGE.ConstantStep,
-            _TIME_INTEGRATOR_PACKAGE.Controller,
-            _TIME_INTEGRATOR_PACKAGE.PIController,
-            _TIME_INTEGRATOR_PACKAGE.TimeIntegrator,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "driver_controller",
-        (_TIME_INTEGRATOR_PACKAGE.AutoIntegrator,),
-    ),
-    _PublicOwnershipGroup(
-        "driver_controller",
-        (_TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,),
-    ),
-    _PublicOwnershipGroup(
-        "driver_controller",
-        (_TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,),
-    ),
-    _PublicOwnershipGroup(
-        "driver_controller",
-        (_TIME_INTEGRATOR_PACKAGE.IntegrationDriver,),
-    ),
-    _PublicOwnershipGroup(
-        "policy",
-        (
-            _TIME_INTEGRATOR_PACKAGE.FamilySwitch,
-            _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic,
-            _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "policy",
-        (
-            _TIME_INTEGRATOR_PACKAGE.OrderDecision,
-            _TIME_INTEGRATOR_PACKAGE.OrderSelector,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "policy",
-        (_TIME_INTEGRATOR_PACKAGE.FamilyName,),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS,
-            _TIME_INTEGRATOR_PACKAGE.RHSProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (_TIME_INTEGRATOR_PACKAGE.AffineRHSProtocol,),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS,
-            _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol,
-            _TIME_INTEGRATOR_PACKAGE.CompositeRHS,
-            _TIME_INTEGRATOR_PACKAGE.CompositeRHSProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS,
-            _TIME_INTEGRATOR_PACKAGE.JacobianRHS,
-            _TIME_INTEGRATOR_PACKAGE.WithJacobianRHSProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS,
-            _TIME_INTEGRATOR_PACKAGE.HamiltonianRHSProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS,
-            _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS,
-            _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.SemilinearRHS,
-            _TIME_INTEGRATOR_PACKAGE.SemilinearRHSProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (
-            _TIME_INTEGRATOR_PACKAGE.SplitRHS,
-            _TIME_INTEGRATOR_PACKAGE.SplitRHSProtocol,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "rhs",
-        (_TIME_INTEGRATOR_PACKAGE.UnitTransferRates,),
-    ),
-    _PublicOwnershipGroup(
-        "domain",
-        (
-            _TIME_INTEGRATOR_PACKAGE.check_state_domain,
-            _TIME_INTEGRATOR_PACKAGE.DomainCheck,
-            _TIME_INTEGRATOR_PACKAGE.DomainViolation,
-            _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain,
-            _TIME_INTEGRATOR_PACKAGE.predict_domain_step_limit,
-            _TIME_INTEGRATOR_PACKAGE.StateDomain,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "state_result",
-        (_TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult,),
-    ),
-    _PublicOwnershipGroup(
-        "state_result",
-        (_TIME_INTEGRATOR_PACKAGE.NordsieckHistory,),
-    ),
-    _PublicOwnershipGroup(
-        "state_result",
-        (_TIME_INTEGRATOR_PACKAGE.ODEState,),
-    ),
-    _PublicOwnershipGroup(
-        "state_result",
-        (_TIME_INTEGRATOR_PACKAGE.PhiFunction,),
-    ),
-    _PublicOwnershipGroup(
-        "verification_helper",
-        (
-            _TIME_INTEGRATOR_PACKAGE.elementary_weight,
-            _TIME_INTEGRATOR_PACKAGE.gamma,
-            _TIME_INTEGRATOR_PACKAGE.order,
-            _TIME_INTEGRATOR_PACKAGE.sigma,
-            _TIME_INTEGRATOR_PACKAGE.Tree,
-            _TIME_INTEGRATOR_PACKAGE.trees_up_to_order,
-        ),
-    ),
-    _PublicOwnershipGroup(
-        "verification_helper",
-        (_TIME_INTEGRATOR_PACKAGE.nonlinear_solve,),
-    ),
-    _PublicOwnershipGroup(
-        "verification_helper",
-        (_TIME_INTEGRATOR_PACKAGE.project_conserved,),
-    ),
-    _PublicOwnershipGroup(
-        "verification_helper",
-        (_TIME_INTEGRATOR_PACKAGE.solve_nse,),
-    ),
-    _PublicOwnershipGroup(
-        "verification_helper",
-        (_TIME_INTEGRATOR_PACKAGE.stability_function,),
-    ),
-)
 _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     package=_TIME_INTEGRATOR_PACKAGE,
-    public_ownership=_TIME_INTEGRATOR_PUBLIC_GROUPS,
+    public_categories={
+        "capability_contract": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry,
+                _TIME_INTEGRATOR_PACKAGE.select_time_integrator,
+                _TIME_INTEGRATOR_PACKAGE.time_integration_capabilities,
+                _TIME_INTEGRATOR_PACKAGE.time_integrator_step_linear_operator_descriptor,
+                _TIME_INTEGRATOR_PACKAGE.time_integrator_step_solve_relation_descriptor,
+            }
+        ),
+        "method_family": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,
+            }
+        ),
+        "driver_controller": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.ConstantStep,
+                _TIME_INTEGRATOR_PACKAGE.Controller,
+                _TIME_INTEGRATOR_PACKAGE.PIController,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.AutoIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
+                _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,
+                _TIME_INTEGRATOR_PACKAGE.IntegrationDriver,
+            }
+        ),
+        "policy": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.FamilySwitch,
+                _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic,
+                _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher,
+                _TIME_INTEGRATOR_PACKAGE.OrderDecision,
+                _TIME_INTEGRATOR_PACKAGE.OrderSelector,
+                _TIME_INTEGRATOR_PACKAGE.FamilyName,
+            }
+        ),
+        "rhs": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS,
+                _TIME_INTEGRATOR_PACKAGE.RHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.AffineRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS,
+                _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol,
+                _TIME_INTEGRATOR_PACKAGE.CompositeRHS,
+                _TIME_INTEGRATOR_PACKAGE.CompositeRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS,
+                _TIME_INTEGRATOR_PACKAGE.JacobianRHS,
+                _TIME_INTEGRATOR_PACKAGE.WithJacobianRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS,
+                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS,
+                _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS,
+                _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol,
+                _TIME_INTEGRATOR_PACKAGE.SemilinearRHS,
+                _TIME_INTEGRATOR_PACKAGE.SemilinearRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.SplitRHS,
+                _TIME_INTEGRATOR_PACKAGE.SplitRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.UnitTransferRates,
+            }
+        ),
+        "domain": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.check_state_domain,
+                _TIME_INTEGRATOR_PACKAGE.DomainCheck,
+                _TIME_INTEGRATOR_PACKAGE.DomainViolation,
+                _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain,
+                _TIME_INTEGRATOR_PACKAGE.predict_domain_step_limit,
+                _TIME_INTEGRATOR_PACKAGE.StateDomain,
+            }
+        ),
+        "state_result": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult,
+                _TIME_INTEGRATOR_PACKAGE.NordsieckHistory,
+                _TIME_INTEGRATOR_PACKAGE.ODEState,
+                _TIME_INTEGRATOR_PACKAGE.PhiFunction,
+            }
+        ),
+        "verification_helper": frozenset(
+            {
+                _TIME_INTEGRATOR_PACKAGE.elementary_weight,
+                _TIME_INTEGRATOR_PACKAGE.gamma,
+                _TIME_INTEGRATOR_PACKAGE.order,
+                _TIME_INTEGRATOR_PACKAGE.sigma,
+                _TIME_INTEGRATOR_PACKAGE.Tree,
+                _TIME_INTEGRATOR_PACKAGE.trees_up_to_order,
+                _TIME_INTEGRATOR_PACKAGE.nonlinear_solve,
+                _TIME_INTEGRATOR_PACKAGE.project_conserved,
+                _TIME_INTEGRATOR_PACKAGE.solve_nse,
+                _TIME_INTEGRATOR_PACKAGE.stability_function,
+            }
+        ),
+    },
     forbidden_public_symbols=frozenset(
         {
             "FamilySwitchingNordsieckIntegrator",
