@@ -28,6 +28,7 @@ import inspect
 import pkgutil
 import sys
 import types
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -580,11 +581,11 @@ class _CapabilityRejectionExpectation:
 class _ArchitectureOwnershipSpec:
     """Package-level ownership contract checked by _ArchitectureOwnershipClaim."""
 
-    package: str
+    package: types.ModuleType | str
     public_categories: dict[str, frozenset[Any]]
     forbidden_public_symbols: frozenset[str] = frozenset()
-    capability_provider: str | None = None
-    request_selector: str | None = None
+    capability_provider: Callable[[], tuple[Any, ...]] | str | None = None
+    request_selector: Callable[[Any], Any] | str | None = None
     request_expectations: tuple[_CapabilityRequestExpectation, ...] = ()
     rejected_requests: tuple[_CapabilityRejectionExpectation, ...] = ()
     descriptor_owned_capabilities: bool = False
@@ -605,10 +606,10 @@ class _ArchitectureOwnershipClaim(Claim[None]):
 
     @property
     def description(self) -> str:
-        return f"architecture_ownership/{self._spec.package}"
+        return f"architecture_ownership/{self._package_name()}"
 
     def check(self, _calibration: None) -> None:
-        package = importlib.import_module(self._spec.package)
+        package = self._package()
         exported = set(getattr(package, "__all__", []))
         categorized = self._categorized_public_labels(package, exported)
         missing = exported - categorized
@@ -624,7 +625,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         local_class_names = {
             clsname
             for modname, clsname, _cls in _all_local_classes()
-            if modname.startswith(f"{self._spec.package}.")
+            if modname.startswith(f"{package.__name__}.")
         }
         forbidden_classes = local_class_names & self._spec.forbidden_public_symbols
         assert (
@@ -634,6 +635,20 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         if self._spec.capability_provider is not None:
             self._check_capabilities(exported)
         self._check_class_modules(package)
+
+    def _package(self) -> types.ModuleType:
+        package = self._spec.package
+        if isinstance(package, str):
+            assert not self._spec.descriptor_owned_capabilities, (
+                "descriptor-owned architecture specs must use package identity: "
+                f"{package}"
+            )
+            return importlib.import_module(package)
+        return package
+
+    def _package_name(self) -> str:
+        package = self._spec.package
+        return package if isinstance(package, str) else package.__name__
 
     def _categorized_public_labels(
         self,
@@ -666,7 +681,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         return labels
 
     def _check_capabilities(self, exported: set[str]) -> None:
-        provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
+        provider = self._capability_provider()
         capabilities = tuple(provider())
         if self._spec.descriptor_owned_capabilities:
             self._check_descriptor_owned_capabilities(capabilities, exported)
@@ -675,7 +690,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
 
         if self._spec.request_selector is None:
             return
-        selector = _resolve_dotted(self._spec.request_selector)
+        selector = self._request_selector()
         self._check_descriptor_requests()
         for expectation in self._spec.request_expectations:
             selected = selector(expectation.request)
@@ -689,6 +704,32 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             raise AssertionError(
                 f"{expectation.request!r} unexpectedly selected " f"{selected_name}"
             )
+
+    def _capability_provider(self) -> Callable[[], tuple[Any, ...]]:
+        provider = self._spec.capability_provider
+        assert provider is not None
+        if isinstance(provider, str):
+            assert not self._spec.descriptor_owned_capabilities, (
+                "descriptor-owned architecture specs must use provider identity: "
+                f"{provider}"
+            )
+            resolved = _resolve_dotted(provider)
+            assert callable(resolved)
+            return resolved
+        return provider
+
+    def _request_selector(self) -> Callable[[Any], Any]:
+        selector = self._spec.request_selector
+        assert selector is not None
+        if isinstance(selector, str):
+            assert not self._spec.descriptor_owned_capabilities, (
+                "descriptor-owned architecture specs must use selector identity: "
+                f"{selector}"
+            )
+            resolved = _resolve_dotted(selector)
+            assert callable(resolved)
+            return resolved
+        return selector
 
     def _check_label_owned_capabilities(
         self,
@@ -3184,7 +3225,7 @@ _DiscreteOperatorRequest = _resolve_dotted(
 )
 _GeometryRequest = _resolve_dotted("cosmic_foundry.geometry.GeometryRequest")
 _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
-    package="cosmic_foundry.computation.time_integrators",
+    package=_TIME_INTEGRATOR_PACKAGE,
     public_categories={
         "capability_contract": frozenset(
             {
@@ -3297,10 +3338,8 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             "VariableOrderNordsieckIntegrator",
         }
     ),
-    capability_provider=(
-        "cosmic_foundry.computation.time_integrators.time_integration_capabilities"
-    ),
-    request_selector="cosmic_foundry.computation.time_integrators.select_time_integrator",
+    capability_provider=_TIME_INTEGRATOR_PACKAGE.time_integration_capabilities,
+    request_selector=_TIME_INTEGRATOR_PACKAGE.select_time_integrator,
     request_expectations=(
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
