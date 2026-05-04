@@ -208,16 +208,12 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             descriptor
         )
         linear_schema = linear_solver_parameter_schema()
-        linear_schema.validate_descriptor(linear_descriptor.parameter_descriptor)
+        linear_schema.validate_descriptor(linear_descriptor)
         linear_regions = {
             region.name: region for region in linear_schema.derived_regions
         }
-        assert linear_regions["linear_system"].contains(
-            linear_descriptor.parameter_descriptor
-        )
-        assert linear_regions["full_rank"].contains(
-            linear_descriptor.parameter_descriptor
-        )
+        assert linear_regions["linear_system"].contains(linear_descriptor)
+        assert linear_regions["full_rank"].contains(linear_descriptor)
         assert linear_descriptor.coordinate(LinearSolverField.RANK_ESTIMATE).value == (
             state.u.shape[0] * len(integrator.A_sym)
         )
@@ -230,15 +226,16 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
                 SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE
             ).value
         )
-        selected_solver = select_linear_solver_for_descriptor(
-            linear_descriptor.parameter_descriptor
-        )
+        selected_solver = select_linear_solver_for_descriptor(linear_descriptor)
+        assert linear_descriptor.linear_operator is not None
+        assert linear_descriptor.linear_rhs is not None
         stage_solution = selected_solver().solve(
-            linear_descriptor.operator,
-            linear_descriptor.rhs,
+            linear_descriptor.linear_operator,
+            linear_descriptor.linear_rhs,
         )
         residual = (
-            linear_descriptor.operator.apply(stage_solution) - linear_descriptor.rhs
+            linear_descriptor.linear_operator.apply(stage_solution)
+            - linear_descriptor.linear_rhs
         )
         assert (
             _residual_norm(residual)
