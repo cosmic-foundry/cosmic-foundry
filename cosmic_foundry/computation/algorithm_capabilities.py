@@ -20,12 +20,12 @@ class AlgorithmStructureContract:
     provides: frozenset[str]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class AlgorithmCapability:
     """Declared capability of one selectable algorithm implementation."""
 
     name: str
-    implementation: str
+    _implementation: str | None
     category: str
     contract: AlgorithmStructureContract
     min_order: int | None = None
@@ -34,6 +34,45 @@ class AlgorithmCapability:
     supported_orders: frozenset[int] | None = None
     coverage_regions: tuple[CoverageRegion, ...] = ()
     constructor: Callable[[AlgorithmRequest], object] | None = None
+
+    def __init__(
+        self,
+        name: str,
+        implementation: str | None,
+        category: str,
+        contract: AlgorithmStructureContract,
+        min_order: int | None = None,
+        max_order: int | None = None,
+        order_step: int | None = None,
+        supported_orders: frozenset[int] | None = None,
+        coverage_regions: tuple[CoverageRegion, ...] = (),
+        constructor: Callable[[AlgorithmRequest], object] | None = None,
+    ) -> None:
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "_implementation", implementation)
+        object.__setattr__(self, "category", category)
+        object.__setattr__(self, "contract", contract)
+        object.__setattr__(self, "min_order", min_order)
+        object.__setattr__(self, "max_order", max_order)
+        object.__setattr__(self, "order_step", order_step)
+        object.__setattr__(self, "supported_orders", supported_orders)
+        object.__setattr__(self, "coverage_regions", coverage_regions)
+        object.__setattr__(self, "constructor", constructor)
+
+    @property
+    def owner(self) -> type:
+        """Unique implementation owner induced by coverage regions."""
+        owners = tuple({region.owner for region in self.coverage_regions})
+        if len(owners) != 1:
+            raise ValueError(f"{self.name} does not have a unique coverage owner")
+        return owners[0]
+
+    @property
+    def implementation(self) -> str:
+        """Human-facing implementation label projected from capability identity."""
+        if self._implementation is not None:
+            return self._implementation
+        return self.owner.__name__
 
     def supports(self, request: AlgorithmRequest) -> bool:
         """Return whether this declaration inhabits ``request``."""

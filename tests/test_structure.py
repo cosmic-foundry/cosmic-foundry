@@ -946,6 +946,37 @@ class _SelectorExpectationDerivationClaim(Claim[None]):
         )
 
 
+class _ExecutableCapabilityIdentityClaim(Claim[None]):
+    """Claim: executable capabilities do not carry literal identity labels."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/executable_identity_projection"
+
+    def check(self, _calibration: None) -> None:
+        violations = []
+        for path in sorted(_PACKAGE_ROOT.rglob("*.py")):
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if not self._has_constructor_keyword(node):
+                    continue
+                if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+                    if isinstance(node.args[1].value, str):
+                        violations.append(
+                            f"{path.relative_to(_PROJECT_ROOT)}:{node.lineno}"
+                        )
+        assert not violations, (
+            "constructor-bearing capabilities must derive implementation identity "
+            "from the executable owner: " + ", ".join(violations)
+        )
+
+    @staticmethod
+    def _has_constructor_keyword(node: ast.Call) -> bool:
+        return any(keyword.arg == "constructor" for keyword in node.keywords)
+
+
 class _ParameterSpaceSchemaClaim(Claim[None]):
     """Claim: parameter-space coverage primitives fail closed structurally."""
 
@@ -3780,6 +3811,7 @@ _CLAIMS: list[Claim[None]] = [
     _AlgorithmSelectionAmbiguityClaim(),
     _AutoDiscoveryImportClaim(),
     _SelectorExpectationDerivationClaim(),
+    _ExecutableCapabilityIdentityClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
