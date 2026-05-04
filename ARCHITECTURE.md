@@ -793,14 +793,15 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make descriptor-owned public categories derive
-   exported labels from public objects, so `__all__` string partitions become a
-   rendered view rather than the premise of architecture ownership. Ground the
-   change in the time-integration ownership spec and the existing
-   descriptor-backed selector and calculation tests. Labels may remain for
-   human-facing exports and docs, but they must not be the premise that proves
-   selector correctness. Do not add mesh, flux-form, locality, or CFL axes until
-   a real mesh object is the implementation premise being tested.
+2. Candidate next calculation: make descriptor-owned architecture specs take
+   package modules, capability providers, and selectors as callable/module
+   objects rather than dotted import strings, so import paths become loading
+   mechanics rather than ownership premises. Ground the change in the
+   time-integration ownership spec and the existing descriptor-backed selector
+   and calculation tests. Labels may remain for human-facing exports and docs,
+   but they must not be the premise that proves selector correctness. Do not add
+   mesh, flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
