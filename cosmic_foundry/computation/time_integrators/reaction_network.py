@@ -345,6 +345,9 @@ class ReactionNetworkRHS:
                 field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(
                     self.n_conserved
                 ),
+                field.ALGEBRAIC_CONSTRAINT_COUNT: DescriptorCoordinate(
+                    self.constraint_basis.shape[0]
+                ),
             }
         )
 

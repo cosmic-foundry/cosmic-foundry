@@ -1566,6 +1566,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         ):
             schema.validate_schema()
             assert "problem_kind" not in schema.descriptor_fields
+        self._assert_time_integrator_coverage_uses_map_or_solve_fields()
 
         solve_regions = self._regions(solve_schema)
         assert {
@@ -1803,6 +1804,20 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert region.referenced_fields <= schema.descriptor_fields
 
     @staticmethod
+    def _assert_time_integrator_coverage_uses_map_or_solve_fields() -> None:
+        admitted = set(MapStructureField) | set(SolveRelationField)
+        offenders = [
+            f"{capability.owner.__name__}:{sorted(field.value for field in extra)}"
+            for capability in _TIME_INTEGRATOR_PACKAGE.time_integration_capabilities()
+            for region in capability.coverage_regions
+            if (extra := region.referenced_fields - admitted)
+        ]
+        assert not offenders, (
+            "time-integrator ownership must consume generic map/solve evidence, "
+            f"not RHS-family schema coordinates: {offenders}"
+        )
+
+    @staticmethod
     def _solve_descriptor(
         *,
         dim_x: int = 4,
@@ -2037,31 +2052,22 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
 
     @staticmethod
-    def _domain_limited_conserved_network_descriptor(
+    def _domain_limited_constrained_map_descriptor(
         *,
-        species_count: int = 4,
-        reaction_count: int = 3,
-        stoichiometry_rank: int = 3,
         conserved_linear_form_count: int = 1,
-        equilibrium_constraint_count: int = 3,
+        algebraic_constraint_count: int = 3,
     ) -> ParameterDescriptor:
-        reaction_field = ReactionNetworkField
         map_field = MapStructureField
         return ParameterDescriptor(
             {
-                reaction_field.SPECIES_COUNT: DescriptorCoordinate(species_count),
-                reaction_field.REACTION_COUNT: DescriptorCoordinate(reaction_count),
-                reaction_field.STOICHIOMETRY_RANK: DescriptorCoordinate(
-                    stoichiometry_rank
-                ),
-                reaction_field.EQUILIBRIUM_CONSTRAINT_COUNT: DescriptorCoordinate(
-                    equilibrium_constraint_count
-                ),
                 map_field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
                 map_field.RHS_HISTORY_AVAILABLE: DescriptorCoordinate(False),
                 map_field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(False),
                 map_field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(
                     conserved_linear_form_count
+                ),
+                map_field.ALGEBRAIC_CONSTRAINT_COUNT: DescriptorCoordinate(
+                    algebraic_constraint_count
                 ),
                 map_field.DOMAIN_STEP_MARGIN: DescriptorCoordinate(-1.0),
             }
@@ -4301,7 +4307,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 requested_properties=frozenset({"advance"}),
                 order=2,
                 descriptor=(
-                    _SolveRelationSchemaClaim._domain_limited_conserved_network_descriptor()
+                    _SolveRelationSchemaClaim._domain_limited_constrained_map_descriptor()
                 ),
             ),
             _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,

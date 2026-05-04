@@ -790,14 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: delete the remaining reaction-network-specific one-step selector
-   branch now that Jacobian availability is already a structural protocol
-   premise.
-2. Review whether reaction-network constraint lifecycle evidence and generic map
-   structure evidence now compose cleanly enough that any remaining
-   reaction-specific selector setup can be deleted.
-3. Delete any advance-controller ownership region that cannot be separated from
+1. Current PR: move constraint-lifecycle selection from reaction-network
+   equilibrium-count evidence to generic map algebraic-constraint evidence.
+2. Delete any advance-controller ownership region that cannot be separated from
    another controller by descriptor predicates grounded in a calculation.
+3. Review whether the remaining `AutoIntegrator.step` reaction-network branch is
+   an execution concern that should be expressed as generic constrained-Newton
+   step evidence instead of a concrete RHS type check.
 
 Roadmap sketch:
 
@@ -892,19 +891,20 @@ independent equilibrium-constraint count are intrinsic to the RHS.  State-domain
 checks, time-step solve relations, and integrator/controller selection remain
 separate downstream evidence.  The schema enforces rank/nullity consistency and
 is included in atlas generation as a discovered parameter space.
-Reaction-network RHS objects also expose step-local map descriptors: the same
-stoichiometric map evidence composes with domain-step margin, stiffness, error
-target, retry budget, and RHS-cost coordinates for a proposed `(state, dt)`.
+Reaction-network RHS objects expose map-structure evidence: the same
+stoichiometric map evidence composes with generic domain-step margin,
+stiffness, error target, retry budget, and RHS-cost coordinates for a proposed
+`(state, dt)`.
 For abundance networks near the nonnegative boundary, the domain-step margin
 identifies the limiting coordinate before a controller chooses how to shorten
 the step.
-The constraint-aware controller no longer selects from reaction-network string
-structure.  Its capability is selected by predicates over the reaction-network
-descriptor plus domain-step evidence: conserved networks with independent
-equilibrium constraints support constraint lifecycle management when the
-proposed step is domain-limited.  The controller no longer advertises a
-parallel domain-awareness capability label; domain awareness is a
-consequence of the `DOMAIN_STEP_MARGIN` coordinate.
+Constraint-lifecycle selection now consumes only generic map evidence:
+conserved linear forms, algebraic constraint count, and domain-step margin.
+Reaction-network equilibrium constraints remain intrinsic reaction-network
+evidence, but they project into map `ALGEBRAIC_CONSTRAINT_COUNT` before
+time-integrator ownership is evaluated.  The constraint-aware controller no
+longer advertises a parallel domain-awareness capability label; domain awareness
+is a consequence of the `DOMAIN_STEP_MARGIN` coordinate.
 Reaction-network RHS classes expose intrinsic stoichiometric evidence and
 map-structure evidence only; step-local diagnostics are projected by the
 generic RHS step descriptor and composed at the request site.  Implementation

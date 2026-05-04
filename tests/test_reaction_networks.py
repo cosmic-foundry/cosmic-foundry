@@ -162,6 +162,14 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
         )
         assert (
+            map_descriptor.coordinate(
+                MapStructureField.ALGEBRAIC_CONSTRAINT_COUNT
+            ).value
+            == reaction_descriptor.coordinate(
+                ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
+            ).value
+        )
+        assert (
             _ti.select_time_integrator(
                 AlgorithmRequest(
                     requested_properties=frozenset({"one_step"}),
@@ -183,8 +191,7 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             Tensor([1.0e-3, 1.0 - 1.0e-3, 0.0], backend=_TIME_BACKEND),
         )
         constraint_descriptor = ParameterDescriptor(
-            rhs.reaction_network_descriptor().coordinates
-            | rhs.map_structure_descriptor().coordinates
+            rhs.map_structure_descriptor().coordinates
             | rhs_step_diagnostics_descriptor(
                 rhs, domain_limited_state, 2.0e-2
             ).coordinates
