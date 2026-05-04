@@ -387,12 +387,14 @@ class LinearOperatorDescriptor:
     """Small assembled linear-operator descriptor plus matrix witness.
 
     The parameter descriptor is the schema-level object consumed by selection
-    and atlas code.  The assembled matrix is retained as a deterministic witness
-    for structural tests and documentation generators; it is not a performance
-    timing result.
+    and atlas code.  The operator, right-hand side, and assembled matrix are
+    retained as deterministic witnesses for structural tests and documentation
+    generators; they are not performance timing results.
     """
 
     parameter_descriptor: ParameterDescriptor
+    operator: SmallLinearOperator
+    rhs: Tensor
     matrix: tuple[tuple[float, ...], ...]
 
     def coordinate(self, field: DescriptorField) -> DescriptorCoordinate:
@@ -1927,7 +1929,7 @@ def linear_operator_descriptor_from_assembled_operator(
             ),
         }
     )
-    return LinearOperatorDescriptor(descriptor, matrix)
+    return LinearOperatorDescriptor(descriptor, op, b, matrix)
 
 
 __all__ = [

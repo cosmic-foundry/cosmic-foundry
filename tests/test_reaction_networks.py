@@ -22,6 +22,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends import NumpyBackend
+from cosmic_foundry.computation.solvers import select_linear_solver_for_descriptor
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
@@ -87,6 +88,10 @@ def _linear_form_annihilates_stoichiometry(
 ) -> bool:
     product = linear_form @ stoichiometry
     return all(abs(float(product[j])) < 1e-12 for j in range(product.shape[0]))
+
+
+def _residual_norm(residual: Tensor) -> float:
+    return math.sqrt(sum(float(residual[i]) ** 2 for i in range(residual.shape[0])))
 
 
 class _ReactionChainIntegrationClaim(Claim[Any]):
@@ -214,6 +219,31 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         )
         assert linear_descriptor.coordinate(LinearSolverField.RANK_ESTIMATE).value == (
             state.u.shape[0] * len(integrator.A_sym)
+        )
+        assert descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value == (
+            linear_descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value
+        )
+        assert (
+            descriptor.coordinate(SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE).value
+            == linear_descriptor.coordinate(
+                SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE
+            ).value
+        )
+        selected_solver = select_linear_solver_for_descriptor(
+            linear_descriptor.parameter_descriptor
+        )
+        stage_solution = selected_solver().solve(
+            linear_descriptor.operator,
+            linear_descriptor.rhs,
+        )
+        residual = (
+            linear_descriptor.operator.apply(stage_solution) - linear_descriptor.rhs
+        )
+        assert (
+            _residual_norm(residual)
+            <= linear_descriptor.coordinate(
+                SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE
+            ).value
         )
 
         invariant = _finite_transition_conserved_form(system)
