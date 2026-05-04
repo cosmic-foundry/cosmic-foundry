@@ -1970,13 +1970,14 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         schema = linear_solver_parameter_schema()
         regions = _SolveRelationSchemaClaim._regions(schema)
         self._assert_no_descriptor_projection_wrappers()
+        self._assert_no_linear_fields_on_parameter_descriptor()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
             Tensor([1.0, 0.0], backend=_JIT_BACKEND),
         )
         schema.validate_descriptor(spd)
-        assert spd.linear_matrix == ((2.0, -1.0), (-1.0, 2.0))
+        assert spd.linear_operator_evidence().matrix == ((2.0, -1.0), (-1.0, 2.0))
         assert regions["linear_system"].contains(spd)
         assert regions["symmetric_positive_definite"].contains(spd)
         assert regions["full_rank"].contains(spd)
@@ -2041,6 +2042,32 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             "descriptor-space projections must be functions returning "
             f"ParameterDescriptor, not descriptor-owning wrapper classes: {wrappers}"
         )
+
+    @staticmethod
+    def _assert_no_linear_fields_on_parameter_descriptor() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != "ParameterDescriptor":
+                continue
+            fields = {
+                child.target.id
+                for child in node.body
+                if isinstance(child, ast.AnnAssign)
+                and isinstance(child.target, ast.Name)
+            }
+            linear_fields = {
+                field
+                for field in fields
+                if field.startswith("linear_") or field.endswith("_matrix")
+            }
+            assert not linear_fields, (
+                "linear witnesses must live in evidence objects, not "
+                f"ParameterDescriptor fields: {sorted(linear_fields)}"
+            )
+            return
+        raise AssertionError("ParameterDescriptor class not found")
 
     @staticmethod
     def _annotation_name(annotation: ast.expr) -> str | None:
