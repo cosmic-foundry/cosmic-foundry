@@ -1986,6 +1986,7 @@ def assembled_linear_evidence_coordinates(
         raise ValueError(
             "assembled-linear relation dimensions must match evidence shape"
         )
+    solve_relation_fields = fields & frozenset(SolveRelationField)
     a = np.array(matrix, dtype=float)
     rhs_array = np.array(rhs, dtype=float)
     frobenius_norm = float(np.linalg.norm(a))
@@ -2039,53 +2040,6 @@ def assembled_linear_evidence_coordinates(
     memory_estimate = float(8 * (n * n + n))
 
     coordinates: dict[DescriptorField, DescriptorCoordinate] = {
-        SolveRelationField.DIM_X: DescriptorCoordinate(relation.domain_dimension),
-        SolveRelationField.DIM_Y: DescriptorCoordinate(relation.codomain_dimension),
-        SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
-        SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-        SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-        SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
-            relation.residual_target_available
-        ),
-        SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(
-            relation.target_is_zero
-        ),
-        SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
-            relation.map_linearity_defect
-        ),
-        SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
-            relation.matrix_representation_available
-        ),
-        SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
-            relation.operator_application_available
-        ),
-        SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
-            relation.derivative_oracle_kind
-        ),
-        SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate(
-            relation.objective_relation
-        ),
-        SolveRelationField.ACCEPTANCE_RELATION: DescriptorCoordinate(
-            relation.acceptance_relation
-        ),
-        SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
-            requested_residual_tolerance
-        ),
-        SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
-            requested_solution_tolerance
-        ),
-        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(
-            relation.domain.backend_kind
-        ),
-        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(
-            relation.domain.device_kind
-        ),
-        SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(
-            relation.work_budget_fmas
-        ),
-        SolveRelationField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
-            relation.memory_budget_bytes
-        ),
         LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: DescriptorCoordinate(True),
         LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(assembly_cost_fmas),
         LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(matvec_cost_fmas),
@@ -2141,10 +2095,84 @@ def assembled_linear_evidence_coordinates(
             nullity_estimate, evidence="estimate"
         ),
     }
+    coordinates.update(
+        transformation_relation_coordinates(
+            relation,
+            solve_relation_fields,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        )
+    )
     missing_fields = fields - coordinates.keys()
     if missing_fields:
         raise ValueError(
             "assembled-linear evidence cannot project fields "
+            f"{tuple(_field_label(field) for field in missing_fields)}"
+        )
+    return {field: coordinates[field] for field in fields}
+
+
+def transformation_relation_coordinates(
+    relation: TransformationRelation,
+    fields: frozenset[DescriptorField],
+    *,
+    requested_residual_tolerance: float = 1.0e-8,
+    requested_solution_tolerance: float = 1.0e-8,
+) -> dict[DescriptorField, DescriptorCoordinate]:
+    """Project a transformation relation onto solve-relation coordinates."""
+    coordinates: dict[DescriptorField, DescriptorCoordinate] = {
+        SolveRelationField.DIM_X: DescriptorCoordinate(relation.domain_dimension),
+        SolveRelationField.DIM_Y: DescriptorCoordinate(relation.codomain_dimension),
+        SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
+            relation.residual_target_available
+        ),
+        SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(
+            relation.target_is_zero
+        ),
+        SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
+            relation.map_linearity_defect
+        ),
+        SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
+            relation.matrix_representation_available
+        ),
+        SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
+            relation.operator_application_available
+        ),
+        SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+            relation.derivative_oracle_kind
+        ),
+        SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate(
+            relation.objective_relation
+        ),
+        SolveRelationField.ACCEPTANCE_RELATION: DescriptorCoordinate(
+            relation.acceptance_relation
+        ),
+        SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
+            requested_residual_tolerance
+        ),
+        SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
+            requested_solution_tolerance
+        ),
+        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(
+            relation.domain.backend_kind
+        ),
+        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(
+            relation.domain.device_kind
+        ),
+        SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(
+            relation.work_budget_fmas
+        ),
+        SolveRelationField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
+            relation.memory_budget_bytes
+        ),
+    }
+    missing_fields = fields - coordinates.keys()
+    if missing_fields:
+        raise ValueError(
+            "transformation relation cannot project fields "
             f"{tuple(_field_label(field) for field in missing_fields)}"
         )
     return {field: coordinates[field] for field in fields}
@@ -2233,5 +2261,6 @@ __all__ = [
     "solve_relation_parameter_schema",
     "SolveRelationField",
     "TransformationRelation",
+    "transformation_relation_coordinates",
     "TransformationSpace",
 ]

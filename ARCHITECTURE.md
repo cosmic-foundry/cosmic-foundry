@@ -793,13 +793,14 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: factor linear-operator, decomposition, and
-   time-integrator map projections around a shared transformation relation API
-   with explicit domain, codomain, residual, oracle, and cost coordinates.
-3. Candidate following calculation: move affine implicit-stage evidence toward
-   that shared API by producing a transformation relation before descriptor
-   projection, so solve-relation and linear-solver coordinates are both views
-   of the same map object.
+2. Candidate next calculation: move affine implicit-stage evidence toward the
+   shared transformation API by producing a transformation relation before
+   descriptor projection, so solve-relation and linear-solver coordinates are
+   both views of the same map object.
+3. Candidate following calculation: factor linear-operator and decomposition
+   algebra coordinates behind transformation-specific projection functions, so
+   the assembled-linear helper stops acting as the single mixed schema
+   projection for solve, linear, and decomposition fields.
 
 Roadmap sketch:
 
