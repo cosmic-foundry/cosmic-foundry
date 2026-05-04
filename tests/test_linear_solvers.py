@@ -14,7 +14,15 @@ from typing import Any
 import pytest
 import sympy
 
+from cosmic_foundry.computation.algorithm_capabilities import (
+    DecompositionField,
+    decomposition_descriptor_from_linear_operator_descriptor,
+    linear_operator_descriptor_from_assembled_operator,
+)
 from cosmic_foundry.computation.backends import NumpyBackend
+from cosmic_foundry.computation.decompositions import (
+    select_decomposition_for_descriptor,
+)
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
@@ -325,6 +333,85 @@ def _transpose_matvec(matrix: Tensor, vector: Tensor) -> Tensor:
     )
 
 
+class _DecompositionDescriptorSelectionClaim(Claim[ExecutionPlan]):
+    """Claim: decomposition descriptors select the factorization used to solve."""
+
+    @property
+    def description(self) -> str:
+        return "Decomposition/descriptor_selection_solve"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        backend = execution_plan.backend
+        full_rank_matrix = ((3.0, 1.0), (1.0, 2.0))
+        full_rank_rhs = Tensor((1.0, 4.0), backend=backend)
+        full_rank_descriptor = decomposition_descriptor_from_linear_operator_descriptor(
+            linear_operator_descriptor_from_assembled_operator(
+                _SmallMatrixOperator(full_rank_matrix),
+                full_rank_rhs,
+            )
+        )
+        assert (
+            select_decomposition_for_descriptor(full_rank_descriptor) is LUFactorization
+        )
+        full_rank_solution = (
+            LUFactorization()
+            .factorize(Tensor(full_rank_matrix, backend=backend))
+            .solve(full_rank_rhs)
+        )
+        full_rank_residual = (
+            Tensor(full_rank_matrix, backend=backend) @ (full_rank_solution)
+            - full_rank_rhs
+        )
+        assert _norm(full_rank_residual) < 1.0e-10
+
+        singular_matrix = ((1.0, 1.0), (1.0, 1.0))
+        singular_rhs = Tensor((2.0, 2.0), backend=backend)
+        singular_descriptor = decomposition_descriptor_from_linear_operator_descriptor(
+            linear_operator_descriptor_from_assembled_operator(
+                _SmallMatrixOperator(singular_matrix),
+                singular_rhs,
+            )
+        )
+        assert (
+            singular_descriptor.coordinate(
+                DecompositionField.MATRIX_NULLITY_ESTIMATE
+            ).value
+            == 1
+        )
+        assert (
+            select_decomposition_for_descriptor(singular_descriptor) is SVDFactorization
+        )
+        singular_solution = (
+            SVDFactorization()
+            .factorize(Tensor(singular_matrix, backend=backend))
+            .solve(singular_rhs)
+        )
+        singular_residual = (
+            Tensor(singular_matrix, backend=backend) @ (singular_solution)
+            - singular_rhs
+        )
+        assert _norm(singular_residual) < 1.0e-10
+        assert abs(float(singular_solution[0]) - float(singular_solution[1])) < 1.0e-10
+
+
+class _SmallMatrixOperator:
+    def __init__(self, matrix: tuple[tuple[float, ...], ...]) -> None:
+        self._matrix = matrix
+
+    def apply(self, u: Tensor) -> Tensor:
+        return Tensor(
+            [
+                sum(row[column] * float(u[column]) for column in range(len(row)))
+                for row in self._matrix
+            ],
+            backend=u.backend,
+        )
+
+
+def _norm(vector: Tensor) -> float:
+    return math.sqrt(sum(float(vector[i]) ** 2 for i in range(vector.shape[0])))
+
+
 class _DirectSolverClaim(Claim[ExecutionPlan]):
     """Claim: direct solver residual < tol across a batched RHS set.
 
@@ -504,6 +591,7 @@ _DIRECT_SOLVERS = [DenseLUSolver(), DenseSVDSolver()]
 _CORRECTNESS_CLAIMS: list[Claim[ExecutionPlan]] = []
 _CORRECTNESS_CLAIMS.append(_SVDLeastSquaresClaim())
 _CORRECTNESS_CLAIMS.append(_DenseSVDLeastSquaresSolverClaim())
+_CORRECTNESS_CLAIMS.append(_DecompositionDescriptorSelectionClaim())
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)

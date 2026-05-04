@@ -31,9 +31,6 @@ from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 def _linear_solve_predicates_from_decomposition(
     decomposition_type: type[Decomposition],
 ) -> tuple[StructuredPredicate, ...]:
-    for predicate in decomposition_type.factorization_feasibility_certificate:
-        if not isinstance(predicate, ComparisonPredicate):
-            raise TypeError("decomposition feasibility currently supports comparisons")
     return decomposition_type.factorization_feasibility_certificate
 
 

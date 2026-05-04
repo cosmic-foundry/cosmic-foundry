@@ -215,7 +215,9 @@ class DecompositionField(Enum):
     """Schema-owned descriptor fields for decomposition coverage."""
 
     CONDITION_ESTIMATE = "decomposition_condition_estimate"
+    FACTORIZATION_MEMORY_BYTES = "factorization_memory_bytes"
     FACTORIZATION_MEMORY_BUDGET_BYTES = "factorization_memory_budget_bytes"
+    FACTORIZATION_WORK_FMAS = "factorization_work_fmas"
     FACTORIZATION_WORK_BUDGET_FMAS = "factorization_work_budget_fmas"
     MATRIX_COLUMNS = "matrix_columns"
     MATRIX_NULLITY_ESTIMATE = "matrix_nullity_estimate"
@@ -1715,8 +1717,13 @@ def _decomposition_axes() -> tuple[ParameterAxis, ...]:
             units="fused multiply-adds",
         ),
         _positive_axis(
+            decomposition_field.FACTORIZATION_WORK_FMAS,
+            units="fused multiply-adds",
+        ),
+        _positive_axis(
             decomposition_field.FACTORIZATION_MEMORY_BUDGET_BYTES, units="bytes"
         ),
+        _positive_axis(decomposition_field.FACTORIZATION_MEMORY_BYTES, units="bytes"),
         _axis(
             decomposition_field.SINGULAR_VALUE_LOWER_BOUND,
             (
@@ -1976,6 +1983,8 @@ def assembled_linear_evidence_coordinates(
     matrix = evidence.matrix or _assemble_matrix(evidence.operator, evidence.rhs)
     rhs = _rhs_tuple(evidence.rhs)
     n = len(rhs)
+    rows = len(matrix)
+    columns = len(matrix[0]) if matrix else 0
     relation: TransformationRelation = assembled_linear_transformation_relation(
         evidence,
         work_budget_fmas=work_budget_fmas,
@@ -2074,13 +2083,19 @@ def assembled_linear_evidence_coordinates(
         LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
             rhs_consistency_defect
         ),
-        DecompositionField.MATRIX_ROWS: DescriptorCoordinate(n),
-        DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(n),
+        DecompositionField.MATRIX_ROWS: DescriptorCoordinate(rows),
+        DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(columns),
         DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
             factorization_work_budget_fmas
         ),
+        DecompositionField.FACTORIZATION_WORK_FMAS: DescriptorCoordinate(
+            float(max(1, rows * columns * min(rows, columns)))
+        ),
         DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
             DescriptorCoordinate(factorization_memory_budget_bytes)
+        ),
+        DecompositionField.FACTORIZATION_MEMORY_BYTES: DescriptorCoordinate(
+            float(8 * (rows * columns + min(rows, columns)))
         ),
         DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
             singular_value_lower_bound, evidence="lower_bound"
