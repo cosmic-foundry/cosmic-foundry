@@ -33,6 +33,9 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     time_integration_capabilities,
     time_integration_step_map_regions,
 )
+from cosmic_foundry.computation.time_integrators.implicit import (
+    ConstrainedNewtonRHSProtocol,
+)
 from cosmic_foundry.theory.discrete import FiniteStateTransitionSystem
 from tests.claims import Claim
 from tests.selection_ownership import SelectionOwnership
@@ -122,6 +125,22 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
                 order=2,
             ).owner
         )
+        assert isinstance(rhs, ConstrainedNewtonRHSProtocol)
+        constrained_state = state._replace(active_constraints=frozenset({0}))
+        constraint_gradients = rhs.constraint_gradients(
+            constrained_state.active_constraints or frozenset(),
+            constrained_state.t,
+            constrained_state.u,
+        )
+        assert constraint_gradients is not None
+        direct_constrained = integrator.step(
+            rhs,
+            constrained_state,
+            2.0e-3,
+            constraint_gradients=constraint_gradients,
+        )
+        auto_constrained = auto.step(rhs, constrained_state, 2.0e-3)
+        assert _residual_norm(auto_constrained.u - direct_constrained.u) < 1.0e-12
 
         reaction_descriptor = rhs.reaction_network_descriptor()
         map_descriptor = rhs.map_structure_descriptor()

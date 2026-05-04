@@ -790,15 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: delete advance-controller ownership regions that split on
-   domain-step margin without selecting a different controller or constructing
-   different behavior.
-2. Review whether the remaining `AutoIntegrator.step` reaction-network branch is
-   an execution concern that should be expressed as generic constrained-Newton
-   step evidence instead of a concrete RHS type check.
-3. Review whether multi-region time-integrator ownership should always project
+1. Current PR: replace the remaining `AutoIntegrator.step` reaction-network
+   branch with generic constrained-Newton gradient evidence.
+2. Review whether multi-region time-integrator ownership should always project
    into constructor parameters or into distinct owners, with no documentation-only
    region splits.
+3. Review whether active algebraic-constraint evidence should become a
+   descriptor coordinate for step-solve relations rather than an execution-only
+   protocol.
 
 Roadmap sketch:
 
@@ -917,6 +916,11 @@ branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle
 evidence.  Request builders may branch on structural protocols, not concrete
 implementation classes.
+Constrained Newton execution follows the same rule.  `AutoIntegrator.step`
+projects active algebraic constraints through a structural constrained-Newton
+gradient protocol instead of checking for reaction-network RHS classes.
+Reaction networks provide that protocol by returning gradient rows for active
+equilibrium constraints.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

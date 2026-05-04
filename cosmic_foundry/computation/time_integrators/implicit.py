@@ -64,6 +64,21 @@ class WithJacobianRHSProtocol(Protocol):
         ...
 
 
+@runtime_checkable
+class ConstrainedNewtonRHSProtocol(Protocol):
+    """Protocol for RHS objects that expose active constraint gradients."""
+
+    def constraint_gradients(
+        self,
+        active: frozenset[int],
+        t: float,
+        u: Tensor,
+        eps: float = 1e-7,
+    ) -> Tensor | None:
+        """Return gradient rows for active algebraic constraints."""
+        ...
+
+
 class JacobianRHS:
     """WithJacobianRHSProtocol wrapping explicit f and Jacobian callables.
 
@@ -457,6 +472,7 @@ __all__ = [
     "FiniteDiffJacobianRHS",
     "JacobianRHS",
     "ImplicitRungeKuttaIntegrator",
+    "ConstrainedNewtonRHSProtocol",
     "WithJacobianRHSProtocol",
     "stability_function",
 ]
