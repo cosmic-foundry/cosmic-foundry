@@ -577,12 +577,17 @@ class _CapabilityRejectionExpectation:
     request: Any
 
 
+_PublicCategoryProvider: TypeAlias = (
+    dict[str, frozenset[Any]] | Callable[[types.ModuleType], dict[str, frozenset[Any]]]
+)
+
+
 @dataclass(frozen=True)
 class _ArchitectureOwnershipSpec:
     """Package-level ownership contract checked by _ArchitectureOwnershipClaim."""
 
     package: types.ModuleType | str
-    public_categories: dict[str, frozenset[Any]] | None = None
+    public_categories: _PublicCategoryProvider | None = None
     forbidden_public_symbols: frozenset[str] = frozenset()
     capability_provider: Callable[[], tuple[Any, ...]] | str | None = None
     request_selector: Callable[[Any], Any] | str | None = None
@@ -683,6 +688,13 @@ class _ArchitectureOwnershipClaim(Claim[None]):
 
     def _public_categories(self) -> dict[str, frozenset[Any]]:
         assert self._spec.public_categories is not None
+        if self._spec.descriptor_owned_capabilities:
+            assert callable(self._spec.public_categories), (
+                "descriptor-owned public categories must be derived from "
+                "package exports"
+            )
+        if callable(self._spec.public_categories):
+            return self._spec.public_categories(self._package())
         return self._spec.public_categories
 
     def _check_capabilities(self, exported: set[str]) -> None:
@@ -3191,6 +3203,32 @@ def _class_module_expectations_from_categories(
     }
 
 
+def _public_categories_from_classifier(
+    package: types.ModuleType,
+    classifier: Callable[[Any], str | None],
+) -> dict[str, frozenset[Any]]:
+    categories: dict[str, list[Any]] = {}
+    uncategorized = []
+    for name in getattr(package, "__all__", ()):
+        obj = getattr(package, name)
+        category = classifier(obj)
+        if category is None:
+            uncategorized.append(name)
+            continue
+        categories.setdefault(category, []).append(obj)
+    assert not uncategorized, (
+        "public exports without derived category: " f"{sorted(uncategorized)}"
+    )
+    return {category: frozenset(objects) for category, objects in categories.items()}
+
+
+def _object_module(obj: Any) -> types.ModuleType | None:
+    module_name = getattr(obj, "__module__", None)
+    if not isinstance(module_name, str):
+        return None
+    return importlib.import_module(module_name)
+
+
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -3198,111 +3236,139 @@ _DiscreteOperatorRequest = _resolve_dotted(
     "cosmic_foundry.theory.discrete.DiscreteOperatorRequest"
 )
 _GeometryRequest = _resolve_dotted("cosmic_foundry.geometry.GeometryRequest")
+
+_TIME_INTEGRATOR_CAPABILITY_MODULES = frozenset(
+    {
+        importlib.import_module("cosmic_foundry.computation.algorithm_capabilities"),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.capabilities"
+        ),
+    }
+)
+_TIME_INTEGRATOR_DRIVER_MODULES = frozenset(
+    {
+        importlib.import_module("cosmic_foundry.computation.time_integrators.auto"),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.integrator"
+        ),
+    }
+)
+_TIME_INTEGRATOR_STATE_RESULT_MODULES = frozenset(
+    {
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.integration_driver"
+        ),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.nordsieck"
+        ),
+    }
+)
+_TIME_INTEGRATOR_DOMAIN_MODULES = frozenset(
+    {importlib.import_module("cosmic_foundry.computation.time_integrators.domains")}
+)
+_TIME_INTEGRATOR_POLICY_MODULES = frozenset(
+    {
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.stiffness"
+        ),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.variable_order"
+        ),
+    }
+)
+_TIME_INTEGRATOR_RHS_MODULES = frozenset(
+    {
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.exponential"
+        ),
+        importlib.import_module("cosmic_foundry.computation.time_integrators.imex"),
+        importlib.import_module("cosmic_foundry.computation.time_integrators.implicit"),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.reaction_network"
+        ),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.solve_relation"
+        ),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.splitting"
+        ),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.symplectic"
+        ),
+    }
+)
+_TIME_INTEGRATOR_SOLVE_RELATION_MODULE = importlib.import_module(
+    "cosmic_foundry.computation.time_integrators.solve_relation"
+)
+_TIME_INTEGRATOR_VERIFICATION_MODULES = frozenset(
+    {
+        importlib.import_module("cosmic_foundry.computation.time_integrators._newton"),
+        importlib.import_module("cosmic_foundry.computation.time_integrators.bseries"),
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.constraint_aware"
+        ),
+    }
+)
+
+
+def _time_integrator_capability_owner_categories() -> dict[type, str]:
+    categories = {}
+    for capability in _TIME_INTEGRATOR_PACKAGE.time_integration_capabilities():
+        if "one_step" in capability.contract.provides:
+            categories[capability.owner] = "method_family"
+        elif "advance" in capability.contract.provides:
+            categories[capability.owner] = "driver_controller"
+    return categories
+
+
+def _time_integrator_public_category(obj: Any) -> str | None:
+    owner_categories = _time_integrator_capability_owner_categories()
+    if isinstance(obj, type) and obj in owner_categories:
+        return owner_categories[obj]
+    if obj is tuple:
+        return "verification_helper"
+    if obj is _TIME_INTEGRATOR_PACKAGE.FamilyName:
+        return "policy"
+    if obj is _TIME_INTEGRATOR_PACKAGE.UnitTransferRates:
+        return "rhs"
+
+    module = _object_module(obj)
+    if module in _TIME_INTEGRATOR_CAPABILITY_MODULES:
+        return "capability_contract"
+    if module in _TIME_INTEGRATOR_DOMAIN_MODULES:
+        return "domain"
+    if module in _TIME_INTEGRATOR_POLICY_MODULES:
+        return "policy"
+    if module in _TIME_INTEGRATOR_VERIFICATION_MODULES:
+        return "verification_helper"
+    if module in _TIME_INTEGRATOR_STATE_RESULT_MODULES:
+        return "state_result"
+    if module in _TIME_INTEGRATOR_RHS_MODULES:
+        if module is _TIME_INTEGRATOR_SOLVE_RELATION_MODULE and not isinstance(
+            obj, type
+        ):
+            return "capability_contract"
+        if not isinstance(obj, type) and callable(obj):
+            return "verification_helper"
+        if obj is _TIME_INTEGRATOR_PACKAGE.PhiFunction:
+            return "state_result"
+        return "rhs"
+    if module in _TIME_INTEGRATOR_DRIVER_MODULES:
+        if obj is _TIME_INTEGRATOR_PACKAGE.ODEState:
+            return "state_result"
+        return "driver_controller"
+    return None
+
+
+def _time_integrator_public_categories(
+    package: types.ModuleType,
+) -> dict[str, frozenset[Any]]:
+    return _public_categories_from_classifier(package, _time_integrator_public_category)
+
+
 _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     package=_TIME_INTEGRATOR_PACKAGE,
-    public_categories={
-        "capability_contract": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract,
-                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability,
-                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry,
-                _TIME_INTEGRATOR_PACKAGE.select_time_integrator,
-                _TIME_INTEGRATOR_PACKAGE.time_integration_capabilities,
-                _TIME_INTEGRATOR_PACKAGE.time_integrator_step_linear_operator_descriptor,
-                _TIME_INTEGRATOR_PACKAGE.time_integrator_step_solve_relation_descriptor,
-            }
-        ),
-        "method_family": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,
-            }
-        ),
-        "driver_controller": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.ConstantStep,
-                _TIME_INTEGRATOR_PACKAGE.Controller,
-                _TIME_INTEGRATOR_PACKAGE.PIController,
-                _TIME_INTEGRATOR_PACKAGE.TimeIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.AutoIntegrator,
-                _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
-                _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,
-                _TIME_INTEGRATOR_PACKAGE.IntegrationDriver,
-            }
-        ),
-        "policy": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.FamilySwitch,
-                _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic,
-                _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher,
-                _TIME_INTEGRATOR_PACKAGE.OrderDecision,
-                _TIME_INTEGRATOR_PACKAGE.OrderSelector,
-                _TIME_INTEGRATOR_PACKAGE.FamilyName,
-            }
-        ),
-        "rhs": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS,
-                _TIME_INTEGRATOR_PACKAGE.RHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.AffineRHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS,
-                _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol,
-                _TIME_INTEGRATOR_PACKAGE.CompositeRHS,
-                _TIME_INTEGRATOR_PACKAGE.CompositeRHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS,
-                _TIME_INTEGRATOR_PACKAGE.JacobianRHS,
-                _TIME_INTEGRATOR_PACKAGE.WithJacobianRHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS,
-                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS,
-                _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS,
-                _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol,
-                _TIME_INTEGRATOR_PACKAGE.SemilinearRHS,
-                _TIME_INTEGRATOR_PACKAGE.SemilinearRHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.SplitRHS,
-                _TIME_INTEGRATOR_PACKAGE.SplitRHSProtocol,
-                _TIME_INTEGRATOR_PACKAGE.UnitTransferRates,
-            }
-        ),
-        "domain": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.check_state_domain,
-                _TIME_INTEGRATOR_PACKAGE.DomainCheck,
-                _TIME_INTEGRATOR_PACKAGE.DomainViolation,
-                _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain,
-                _TIME_INTEGRATOR_PACKAGE.predict_domain_step_limit,
-                _TIME_INTEGRATOR_PACKAGE.StateDomain,
-            }
-        ),
-        "state_result": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult,
-                _TIME_INTEGRATOR_PACKAGE.NordsieckHistory,
-                _TIME_INTEGRATOR_PACKAGE.ODEState,
-                _TIME_INTEGRATOR_PACKAGE.PhiFunction,
-            }
-        ),
-        "verification_helper": frozenset(
-            {
-                _TIME_INTEGRATOR_PACKAGE.elementary_weight,
-                _TIME_INTEGRATOR_PACKAGE.gamma,
-                _TIME_INTEGRATOR_PACKAGE.order,
-                _TIME_INTEGRATOR_PACKAGE.sigma,
-                _TIME_INTEGRATOR_PACKAGE.Tree,
-                _TIME_INTEGRATOR_PACKAGE.trees_up_to_order,
-                _TIME_INTEGRATOR_PACKAGE.nonlinear_solve,
-                _TIME_INTEGRATOR_PACKAGE.project_conserved,
-                _TIME_INTEGRATOR_PACKAGE.solve_nse,
-                _TIME_INTEGRATOR_PACKAGE.stability_function,
-            }
-        ),
-    },
+    public_categories=_time_integrator_public_categories,
     forbidden_public_symbols=frozenset(
         {
             "FamilySwitchingNordsieckIntegrator",
