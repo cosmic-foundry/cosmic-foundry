@@ -364,6 +364,38 @@ class ReactionNetworkRHS:
         """Evaluate r⁻(t, u), shape (n_reactions,)."""
         return self._r_minus(t, u)
 
+    def constraint_gradients(
+        self,
+        active: frozenset[int],
+        t: float,
+        u: Tensor,
+        eps: float = 1e-7,
+    ) -> Tensor | None:
+        """Return gradient rows for currently active equilibrium constraints."""
+        if not active:
+            return None
+        n = u.shape[0]
+        backend = u.backend
+        indices = sorted(active)
+        r0_plus = self.forward_rate(t, u)
+        r0_minus = self.reverse_rate(t, u)
+
+        grad = [[0.0] * n for _ in indices]
+        for k_idx in range(n):
+            e_k = Tensor.zeros(n, backend=backend)
+            e_k = e_k.set(k_idx, Tensor(eps, backend=backend))
+            r_plus_p = self.forward_rate(t, u + e_k)
+            r_minus_p = self.reverse_rate(t, u + e_k)
+            for row_idx, reaction_index in enumerate(indices):
+                grad[row_idx][k_idx] = (
+                    float(r_plus_p[reaction_index])
+                    - float(r_minus_p[reaction_index])
+                    - float(r0_plus[reaction_index])
+                    + float(r0_minus[reaction_index])
+                ) / eps
+
+        return Tensor(grad, backend=backend)
+
     def __call__(self, t: float, u: Tensor) -> Tensor:
         """Evaluate du/dt = S · (r⁺(t, u) − r⁻(t, u))."""
         r_net = self._r_plus(t, u) - self._r_minus(t, u)

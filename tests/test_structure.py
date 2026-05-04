@@ -1311,6 +1311,31 @@ class _AutoIntegratorConstructionClaim(Claim[None]):
             and node.func.attr == "construct"
         ]
         assert constructs, "AutoIntegrator must execute selected.construct(request)"
+        concrete_branches = [
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == isinstance.__name__
+            and len(node.args) == 2
+            if not self._is_protocol_branch(node.args[1])
+        ]
+        assert not concrete_branches, (
+            "AutoIntegrator must branch on structural protocols, not concrete "
+            f"implementation classes: {concrete_branches}"
+        )
+
+    @staticmethod
+    def _is_protocol_branch(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Name)
+            and node.id.endswith("Protocol")
+            or isinstance(node, ast.Tuple)
+            and all(
+                isinstance(element, ast.Name) and element.id.endswith("Protocol")
+                for element in node.elts
+            )
+        )
 
 
 class _ParameterSpaceSchemaClaim(Claim[None]):

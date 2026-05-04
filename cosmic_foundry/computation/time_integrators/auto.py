@@ -15,21 +15,18 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     semilinear_map_descriptor,
     split_map_descriptor,
 )
-from cosmic_foundry.computation.time_integrators.constraint_aware import (
-    build_constraint_gradients,
-)
 from cosmic_foundry.computation.time_integrators.exponential import (
     SemilinearRHSProtocol,
 )
 from cosmic_foundry.computation.time_integrators.imex import SplitRHSProtocol
-from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
+from cosmic_foundry.computation.time_integrators.implicit import (
+    ConstrainedNewtonRHSProtocol,
+    WithJacobianRHSProtocol,
+)
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
     RHSProtocol,
     TimeIntegrator,
-)
-from cosmic_foundry.computation.time_integrators.reaction_network import (
-    ReactionNetworkRHS,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHSProtocol,
@@ -106,9 +103,9 @@ class AutoIntegrator(TimeIntegrator):
         request = _rhs_request(rhs, self._order)
         selected = select_time_integrator(request)
         branch = cast(Any, selected.construct(request))
-        if isinstance(rhs, ReactionNetworkRHS):
+        if isinstance(rhs, ConstrainedNewtonRHSProtocol):
             active = state.active_constraints or frozenset()
-            cg = build_constraint_gradients(rhs, active, state.t, state.u)
+            cg = rhs.constraint_gradients(active, state.t, state.u)
             return cast(
                 ODEState,
                 branch.step(rhs, state, dt, constraint_gradients=cg),

@@ -24,6 +24,7 @@ from cosmic_foundry.computation.time_integrators.domains import (
     predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
+    ConstrainedNewtonRHSProtocol,
     ImplicitRungeKuttaIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.integrator import (
@@ -40,57 +41,14 @@ _RATE_THRESHOLD = 1e-10  # pair is considered absent; ratio = inf → no activat
 
 
 def build_constraint_gradients(
-    rhs: ReactionNetworkRHS,
+    rhs: ConstrainedNewtonRHSProtocol,
     active: frozenset[int],
     t: float,
     u: Tensor,
     eps: float = 1e-7,
 ) -> Tensor | None:
-    """Return the k × n gradient matrix for the active constraint set.
-
-    Row r of the result is ∂(r⁺_j − r⁻_j)/∂u evaluated at (t, u) via
-    forward finite differences, where j = sorted(active)[r].  Returns
-    ``None`` when ``active`` is empty.
-
-    Parameters
-    ----------
-    rhs:
-        Reaction-network RHS (provides ``forward_rate`` and
-        ``reverse_rate`` callables).
-    active:
-        Frozenset of reaction-pair indices currently treated as constraints.
-    t:
-        Time at which to evaluate the rate gradients.
-    u:
-        State vector at which to evaluate the rate gradients.
-    eps:
-        Finite-difference step size.
-    """
-    if not active:
-        return None
-    n = u.shape[0]
-    backend = u.backend
-    indices = sorted(active)
-    k = len(indices)
-    r0_plus = rhs.forward_rate(t, u)
-    r0_minus = rhs.reverse_rate(t, u)
-
-    # grad[row_idx][k_idx] = d(r⁺_j − r⁻_j)/du_{k_idx}
-    grad = [[0.0] * n for _ in range(k)]
-    for k_idx in range(n):
-        e_k = Tensor.zeros(n, backend=backend)
-        e_k = e_k.set(k_idx, Tensor(eps, backend=backend))
-        r_plus_p = rhs.forward_rate(t, u + e_k)
-        r_minus_p = rhs.reverse_rate(t, u + e_k)
-        for row_idx, j in enumerate(indices):
-            grad[row_idx][k_idx] = (
-                float(r_plus_p[j])
-                - float(r_minus_p[j])
-                - float(r0_plus[j])
-                + float(r0_minus[j])
-            ) / eps
-
-    return Tensor(grad, backend=backend)
+    """Return gradient rows for active algebraic constraints."""
+    return rhs.constraint_gradients(active, t, u, eps)
 
 
 def _equilibrium_ratios(
