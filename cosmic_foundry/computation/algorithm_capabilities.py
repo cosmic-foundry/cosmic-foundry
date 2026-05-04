@@ -355,6 +355,14 @@ class LinearOperatorEvidence:
     rhs: Tensor
     matrix: tuple[tuple[float, ...], ...]
 
+    @property
+    def supported_fields(self) -> frozenset[DescriptorField]:
+        """Return descriptor fields this witness can substantiate."""
+        fields: frozenset[DescriptorField] = frozenset(LinearSolverField)
+        if self.matrix:
+            return fields | frozenset(DecompositionField)
+        return fields
+
 
 @dataclass(frozen=True)
 class ParameterDescriptor:
@@ -373,15 +381,20 @@ class ParameterDescriptor:
                     return coordinate
         return DescriptorCoordinate(None, evidence="unavailable")
 
-    def linear_operator_evidence(self) -> LinearOperatorEvidence:
-        """Return the unique linear-operator witness for this descriptor."""
+    def evidence_for(
+        self, required_fields: frozenset[DescriptorField]
+    ) -> LinearOperatorEvidence:
+        """Return the unique witness supporting ``required_fields``."""
         matches = tuple(
             evidence
             for evidence in self.evidence
-            if isinstance(evidence, LinearOperatorEvidence)
+            if required_fields <= evidence.supported_fields
         )
         if len(matches) != 1:
-            raise ValueError("descriptor does not have unique linear operator evidence")
+            raise ValueError(
+                "descriptor does not have unique evidence for "
+                f"{tuple(_field_label(field) for field in required_fields)}"
+            )
         return matches[0]
 
 
@@ -1697,7 +1710,14 @@ def decomposition_descriptor_from_linear_operator_descriptor(
     factorization_memory_budget_bytes: float = 1.0e9,
 ) -> ParameterDescriptor:
     """Project a linear-operator descriptor onto dense decomposition coordinates."""
-    evidence = descriptor.linear_operator_evidence()
+    evidence = descriptor.evidence_for(
+        frozenset(
+            {
+                DecompositionField.MATRIX_ROWS,
+                DecompositionField.MATRIX_COLUMNS,
+            }
+        )
+    )
     return ParameterDescriptor(
         {
             DecompositionField.MATRIX_ROWS: DescriptorCoordinate(len(evidence.matrix)),
@@ -1730,7 +1750,7 @@ def linear_operator_descriptor_from_solve_relation_descriptor(
     descriptor: ParameterDescriptor,
 ) -> ParameterDescriptor:
     """Project a solve-relation descriptor with matrix evidence to linear form."""
-    evidence = descriptor.linear_operator_evidence()
+    evidence = descriptor.evidence_for(frozenset(LinearSolverField))
     return linear_operator_descriptor_from_assembled_operator(
         evidence.operator,
         evidence.rhs,

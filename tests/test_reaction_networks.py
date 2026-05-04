@@ -227,7 +227,7 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
         )
         selected_solver = select_linear_solver_for_descriptor(linear_descriptor)
-        linear_evidence = linear_descriptor.linear_operator_evidence()
+        linear_evidence = linear_descriptor.evidence_for(frozenset(LinearSolverField))
         stage_solution = selected_solver().solve(
             linear_evidence.operator,
             linear_evidence.rhs,

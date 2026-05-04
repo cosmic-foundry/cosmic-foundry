@@ -1971,13 +1971,21 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         regions = _SolveRelationSchemaClaim._regions(schema)
         self._assert_no_descriptor_projection_wrappers()
         self._assert_no_linear_fields_on_parameter_descriptor()
+        self._assert_descriptor_evidence_selection_is_field_structural()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
             Tensor([1.0, 0.0], backend=_JIT_BACKEND),
         )
         schema.validate_descriptor(spd)
-        assert spd.linear_operator_evidence().matrix == ((2.0, -1.0), (-1.0, 2.0))
+        assert spd.evidence_for(
+            frozenset(
+                {
+                    DecompositionField.MATRIX_ROWS,
+                    DecompositionField.MATRIX_COLUMNS,
+                }
+            )
+        ).matrix == ((2.0, -1.0), (-1.0, 2.0))
         assert regions["linear_system"].contains(spd)
         assert regions["symmetric_positive_definite"].contains(spd)
         assert regions["full_rank"].contains(spd)
@@ -2070,6 +2078,37 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         raise AssertionError("ParameterDescriptor class not found")
 
     @staticmethod
+    def _assert_descriptor_evidence_selection_is_field_structural() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        descriptor = next(
+            (
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ClassDef) and node.name == "ParameterDescriptor"
+            ),
+            None,
+        )
+        if descriptor is None:
+            raise AssertionError("ParameterDescriptor class not found")
+        concrete_dispatches = [
+            getattr(node, "lineno", 0)
+            for evidence_scan in ast.walk(descriptor)
+            if isinstance(
+                evidence_scan,
+                ast.For | ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
+            )
+            and _LinearOperatorProjectionClaim._scans_descriptor_evidence(evidence_scan)
+            for node in ast.walk(evidence_scan)
+            if _LinearOperatorProjectionClaim._is_isinstance_call(node)
+        ]
+        assert not concrete_dispatches, (
+            "descriptor evidence selection must follow supported descriptor "
+            f"fields, not concrete evidence classes: {concrete_dispatches}"
+        )
+
+    @staticmethod
     def _annotation_name(annotation: ast.expr) -> str | None:
         if isinstance(annotation, ast.Name):
             return annotation.id
@@ -2080,6 +2119,24 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         if isinstance(annotation, ast.Attribute):
             return annotation.attr
         return None
+
+    @staticmethod
+    def _scans_descriptor_evidence(node: ast.AST) -> bool:
+        return any(
+            isinstance(child, ast.Attribute)
+            and isinstance(child.value, ast.Name)
+            and child.value.id == "self"
+            and child.attr == "evidence"
+            for child in ast.walk(node)
+        )
+
+    @staticmethod
+    def _is_isinstance_call(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "isinstance"
+        )
 
 
 class _FiniteStateTransitionSystemClaim(Claim[None]):
