@@ -43,6 +43,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRegistry,
     AlgorithmRequest,
     AlgorithmStructureContract,
+    AssembledLinearEvidence,
     ComparisonPredicate,
     CoverageRegion,
     DecompositionField,
@@ -1971,6 +1972,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         regions = _SolveRelationSchemaClaim._regions(schema)
         self._assert_no_descriptor_projection_wrappers()
         self._assert_no_linear_fields_on_parameter_descriptor()
+        self._assert_descriptor_evidence_storage_is_protocol_typed()
         self._assert_descriptor_evidence_selection_is_field_structural()
 
         spd = linear_operator_descriptor_from_assembled_operator(
@@ -1978,14 +1980,16 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             Tensor([1.0, 0.0], backend=_JIT_BACKEND),
         )
         schema.validate_descriptor(spd)
-        assert spd.evidence_for(
+        linear_evidence = spd.evidence_for(
             frozenset(
                 {
                     DecompositionField.MATRIX_ROWS,
                     DecompositionField.MATRIX_COLUMNS,
                 }
             )
-        ).matrix == ((2.0, -1.0), (-1.0, 2.0))
+        )
+        assert isinstance(linear_evidence, AssembledLinearEvidence)
+        assert linear_evidence.matrix == ((2.0, -1.0), (-1.0, 2.0))
         assert regions["linear_system"].contains(spd)
         assert regions["symmetric_positive_definite"].contains(spd)
         assert regions["full_rank"].contains(spd)
@@ -2109,7 +2113,49 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
 
     @staticmethod
-    def _annotation_name(annotation: ast.expr) -> str | None:
+    def _assert_descriptor_evidence_storage_is_protocol_typed() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        dataclasses = {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef)
+            and any(
+                _LinearOperatorProjectionClaim._annotation_name(decorator)
+                == "dataclass"
+                for decorator in node.decorator_list
+            )
+        }
+        descriptor = next(
+            (
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ClassDef) and node.name == "ParameterDescriptor"
+            ),
+            None,
+        )
+        if descriptor is None:
+            raise AssertionError("ParameterDescriptor class not found")
+        evidence_annotations = [
+            child.annotation
+            for child in descriptor.body
+            if isinstance(child, ast.AnnAssign)
+            and isinstance(child.target, ast.Name)
+            and child.target.id == "evidence"
+        ]
+        assert len(evidence_annotations) == 1
+        concrete_evidence_types = sorted(
+            dataclasses
+            & _LinearOperatorProjectionClaim._annotation_names(evidence_annotations[0])
+        )
+        assert not concrete_evidence_types, (
+            "descriptor evidence storage must be typed by an evidence protocol, "
+            f"not concrete evidence dataclasses: {concrete_evidence_types}"
+        )
+
+    @staticmethod
+    def _annotation_name(annotation: ast.AST) -> str | None:
         if isinstance(annotation, ast.Name):
             return annotation.id
         if isinstance(annotation, ast.Subscript):
@@ -2119,6 +2165,15 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         if isinstance(annotation, ast.Attribute):
             return annotation.attr
         return None
+
+    @staticmethod
+    def _annotation_names(annotation: ast.expr) -> frozenset[str]:
+        names: set[str] = set()
+        for node in ast.walk(annotation):
+            name = _LinearOperatorProjectionClaim._annotation_name(node)
+            if name is not None:
+                names.add(name)
+        return frozenset(names)
 
     @staticmethod
     def _scans_descriptor_evidence(node: ast.AST) -> bool:

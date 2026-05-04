@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal, Protocol, TypeAlias
+from typing import Literal, Protocol, TypeAlias, runtime_checkable
 
 import numpy as np
 
@@ -347,6 +347,24 @@ class DescriptorCoordinate:
         return self.value is not None and self.evidence != "unavailable"
 
 
+class DescriptorEvidence(Protocol):
+    """Evidence object that can substantiate descriptor fields."""
+
+    @property
+    def supported_fields(self) -> frozenset[DescriptorField]:
+        """Return descriptor fields supported by this evidence."""
+        ...
+
+
+@runtime_checkable
+class AssembledLinearEvidence(DescriptorEvidence, Protocol):
+    """Evidence carrying an assembled linear operator and target."""
+
+    operator: SmallLinearOperator
+    rhs: Tensor
+    matrix: tuple[tuple[float, ...], ...]
+
+
 @dataclass(frozen=True)
 class LinearOperatorEvidence:
     """Concrete evidence for an assembled linear solve relation."""
@@ -369,7 +387,7 @@ class ParameterDescriptor:
     """Concrete problem location in descriptor coordinates."""
 
     coordinates: dict[DescriptorField, DescriptorCoordinate]
-    evidence: tuple[LinearOperatorEvidence, ...] = ()
+    evidence: tuple[DescriptorEvidence, ...] = ()
 
     def coordinate(self, field: DescriptorField) -> DescriptorCoordinate:
         """Return the coordinate for ``field`` or an explicit unavailable value."""
@@ -383,7 +401,7 @@ class ParameterDescriptor:
 
     def evidence_for(
         self, required_fields: frozenset[DescriptorField]
-    ) -> LinearOperatorEvidence:
+    ) -> DescriptorEvidence:
         """Return the unique witness supporting ``required_fields``."""
         matches = tuple(
             evidence
@@ -1710,13 +1728,14 @@ def decomposition_descriptor_from_linear_operator_descriptor(
     factorization_memory_budget_bytes: float = 1.0e9,
 ) -> ParameterDescriptor:
     """Project a linear-operator descriptor onto dense decomposition coordinates."""
-    evidence = descriptor.evidence_for(
+    evidence = _assembled_linear_evidence_for(
+        descriptor,
         frozenset(
             {
                 DecompositionField.MATRIX_ROWS,
                 DecompositionField.MATRIX_COLUMNS,
             }
-        )
+        ),
     )
     return ParameterDescriptor(
         {
@@ -1750,7 +1769,7 @@ def linear_operator_descriptor_from_solve_relation_descriptor(
     descriptor: ParameterDescriptor,
 ) -> ParameterDescriptor:
     """Project a solve-relation descriptor with matrix evidence to linear form."""
-    evidence = descriptor.evidence_for(frozenset(LinearSolverField))
+    evidence = _assembled_linear_evidence_for(descriptor, frozenset(LinearSolverField))
     return linear_operator_descriptor_from_assembled_operator(
         evidence.operator,
         evidence.rhs,
@@ -1770,6 +1789,16 @@ def linear_operator_descriptor_from_solve_relation_descriptor(
             descriptor, SolveRelationField.DEVICE_KIND
         ),
     )
+
+
+def _assembled_linear_evidence_for(
+    descriptor: ParameterDescriptor,
+    required_fields: frozenset[DescriptorField],
+) -> AssembledLinearEvidence:
+    evidence = descriptor.evidence_for(required_fields)
+    if not isinstance(evidence, AssembledLinearEvidence):
+        raise ValueError("descriptor evidence cannot assemble a linear solve")
+    return evidence
 
 
 def _required_float_coordinate(
@@ -1994,11 +2023,13 @@ __all__ = [
     "AlgorithmRegistry",
     "AlgorithmRequest",
     "AlgorithmStructureContract",
+    "AssembledLinearEvidence",
     "ComparisonPredicate",
     "CONDITION_LIMIT",
     "coverage_regions_are_disjoint",
     "CoverageRegion",
     "DecompositionField",
+    "DescriptorEvidence",
     "DerivedParameterRegion",
     "DescriptorCoordinate",
     "decomposition_descriptor_from_linear_operator_descriptor",
