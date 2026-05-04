@@ -400,6 +400,26 @@ class LinearOperatorEvidence:
 
 
 @dataclass(frozen=True)
+class TransformationRelation:
+    """Primitive map relation used to project capability coordinates."""
+
+    domain_dimension: int
+    codomain_dimension: int
+    residual_target_available: bool
+    target_is_zero: bool
+    map_linearity_defect: float | None
+    matrix_representation_available: bool
+    operator_application_available: bool
+    derivative_oracle_kind: str
+    objective_relation: str
+    acceptance_relation: str
+    backend_kind: str
+    device_kind: str
+    work_budget_fmas: float
+    memory_budget_bytes: float
+
+
+@dataclass(frozen=True)
 class ParameterDescriptor:
     """Concrete problem location in descriptor coordinates."""
 
@@ -1937,6 +1957,16 @@ def assembled_linear_evidence_coordinates(
     matrix = evidence.matrix or _assemble_matrix(evidence.operator, evidence.rhs)
     rhs = _rhs_tuple(evidence.rhs)
     n = len(rhs)
+    relation: TransformationRelation = assembled_linear_transformation_relation(
+        evidence,
+        work_budget_fmas=work_budget_fmas,
+        memory_budget_bytes=memory_budget_bytes,
+        device_kind=device_kind,
+    )
+    if relation.domain_dimension != n or relation.codomain_dimension != n:
+        raise ValueError(
+            "assembled-linear relation dimensions must match evidence shape"
+        )
     a = np.array(matrix, dtype=float)
     rhs_array = np.array(rhs, dtype=float)
     frobenius_norm = float(np.linalg.norm(a))
@@ -1990,20 +2020,34 @@ def assembled_linear_evidence_coordinates(
     memory_estimate = float(8 * (n * n + n))
 
     coordinates: dict[DescriptorField, DescriptorCoordinate] = {
-        SolveRelationField.DIM_X: DescriptorCoordinate(n),
-        SolveRelationField.DIM_Y: DescriptorCoordinate(n),
+        SolveRelationField.DIM_X: DescriptorCoordinate(relation.domain_dimension),
+        SolveRelationField.DIM_Y: DescriptorCoordinate(relation.codomain_dimension),
         SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
         SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
         SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-        SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(True),
-        SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(False),
-        SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(0.0),
-        SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(True),
-        SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(True),
-        SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate("matrix"),
-        SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate("none"),
+        SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
+            relation.residual_target_available
+        ),
+        SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(
+            relation.target_is_zero
+        ),
+        SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
+            relation.map_linearity_defect
+        ),
+        SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
+            relation.matrix_representation_available
+        ),
+        SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
+            relation.operator_application_available
+        ),
+        SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+            relation.derivative_oracle_kind
+        ),
+        SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate(
+            relation.objective_relation
+        ),
         SolveRelationField.ACCEPTANCE_RELATION: DescriptorCoordinate(
-            "residual_below_tolerance"
+            relation.acceptance_relation
         ),
         SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
             requested_residual_tolerance
@@ -2011,13 +2055,13 @@ def assembled_linear_evidence_coordinates(
         SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
             requested_solution_tolerance
         ),
-        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(
-            _backend_kind(evidence.rhs.backend)
+        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(relation.backend_kind),
+        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(relation.device_kind),
+        SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(
+            relation.work_budget_fmas
         ),
-        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(device_kind),
-        SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
         SolveRelationField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
-            memory_budget_bytes
+            relation.memory_budget_bytes
         ),
         LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: DescriptorCoordinate(True),
         LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(assembly_cost_fmas),
@@ -2083,6 +2127,37 @@ def assembled_linear_evidence_coordinates(
     return {field: coordinates[field] for field in fields}
 
 
+def assembled_linear_transformation_relation(
+    evidence: AssembledLinearEvidence,
+    *,
+    work_budget_fmas: float = 1.0e9,
+    memory_budget_bytes: float = 1.0e9,
+    device_kind: str = "cpu",
+) -> TransformationRelation:
+    """Return the primitive map relation induced by assembled-linear evidence."""
+    matrix = evidence.matrix or _assemble_matrix(evidence.operator, evidence.rhs)
+    rhs = _rhs_tuple(evidence.rhs)
+    dimension = len(rhs)
+    if len(matrix) != dimension or any(len(row) != dimension for row in matrix):
+        raise ValueError("assembled-linear relation requires a square matrix")
+    return TransformationRelation(
+        domain_dimension=dimension,
+        codomain_dimension=dimension,
+        residual_target_available=True,
+        target_is_zero=False,
+        map_linearity_defect=0.0,
+        matrix_representation_available=True,
+        operator_application_available=True,
+        derivative_oracle_kind="matrix",
+        objective_relation="none",
+        acceptance_relation="residual_below_tolerance",
+        backend_kind=_backend_kind(evidence.rhs.backend),
+        device_kind=device_kind,
+        work_budget_fmas=work_budget_fmas,
+        memory_budget_bytes=memory_budget_bytes,
+    )
+
+
 __all__ = [
     "AffineComparisonPredicate",
     "AlgorithmCapability",
@@ -2093,6 +2168,7 @@ __all__ = [
     "assembled_linear_evidence_coordinates",
     "assembled_linear_evidence_for",
     "assembled_linear_evidence_projection",
+    "assembled_linear_transformation_relation",
     "ComparisonPredicate",
     "CONDITION_LIMIT",
     "coverage_regions_are_disjoint",
@@ -2128,4 +2204,5 @@ __all__ = [
     "SmallLinearOperator",
     "solve_relation_parameter_schema",
     "SolveRelationField",
+    "TransformationRelation",
 ]
