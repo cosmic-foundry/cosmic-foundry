@@ -793,15 +793,15 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make descriptor projections compute their
-   coordinate maps directly from evidence plus requested budgets/tolerances, so
-   `ParameterDescriptor` becomes a passive point with evidence attached rather
-   than a helper that knows how evidence should be selected.
-3. Candidate following calculation: move the assembled-linear coordinate
+2. Candidate next calculation: move the assembled-linear coordinate
    relation toward the shared transformation schema, so linear solvers,
    decompositions, and time integrators all consume maps with explicit domains,
    codomains, residual relations, and cost coordinates rather than
    solver-family-specific helper APIs.
+3. Candidate following calculation: use the affine implicit-stage calculation
+   to introduce the first explicit transformation-domain object, then project
+   both solve-relation and linear-solver coordinates from that domain instead
+   of from solver-family-specific descriptor helper functions.
 
 Roadmap sketch:
 
