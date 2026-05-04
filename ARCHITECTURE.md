@@ -793,12 +793,13 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: delete the parallel implementation-name string
-   from executable capabilities whose owner/constructor already determines the
-   implementation identity. A selected capability should project a human label
-   from the executable relation, not maintain a second identity field. Ground
-   the change in the descriptor-backed step-selection cases, reaction-chain
-   selection, and semi-discrete conservation selection. Do not add mesh,
+2. Candidate next calculation: make `AutoIntegrator` execute the selected
+   capability construction relation instead of maintaining its own parallel
+   branch map keyed by implementation labels. Ground the change in
+   descriptor-backed auto-selection for reaction chains, split maps,
+   semi-linear maps, Hamiltonian maps, and composition maps. If user-provided
+   override branches still matter, express them as an explicit construction
+   premise rather than a private name-indexed cache. Do not add mesh,
    flux-form, locality, or CFL axes until a real mesh object is the
    implementation premise being tested.
 

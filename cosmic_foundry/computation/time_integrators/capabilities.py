@@ -379,7 +379,7 @@ def _nordsieck_corrector_family(request: AlgorithmRequest) -> Literal["adams", "
 _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     TimeIntegrationCapability(
         "explicit_runge_kutta",
-        "RungeKuttaIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "explicit", "runge_kutta"),
@@ -391,7 +391,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "implicit_runge_kutta",
-        "ImplicitRungeKuttaIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "implicit", "runge_kutta"),
@@ -405,7 +405,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "additive_runge_kutta",
-        "AdditiveRungeKuttaIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "imex", "runge_kutta"),
@@ -419,7 +419,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "lawson_runge_kutta",
-        "LawsonRungeKuttaIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "exponential", "runge_kutta"),
@@ -433,7 +433,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "symplectic_composition",
-        "SymplecticCompositionIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "symplectic", "composition"),
@@ -448,7 +448,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "operator_composition",
-        "CompositionIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "operator_splitting", "composition"),
@@ -482,7 +482,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "explicit_multistep",
-        "ExplicitMultistepIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "explicit", "multistep"),
@@ -496,7 +496,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "fixed_order_nordsieck",
-        "MultistepIntegrator",
+        None,
         "method_family",
         _contract(
             provides=("one_step", "nordsieck", "fixed_order"),
