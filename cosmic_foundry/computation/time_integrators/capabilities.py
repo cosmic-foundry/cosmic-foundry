@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Literal
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmCapability,
@@ -88,7 +88,6 @@ def _map_structure_coordinates(
         field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
             "unavailable"
         ),
-        field.NORDSIECK_CORRECTOR_FAMILY: DescriptorCoordinate("unavailable"),
         field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(False),
         field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(float("inf")),
         field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
@@ -206,18 +205,18 @@ def rhs_history_descriptor() -> ParameterDescriptor:
     )
 
 
-def nordsieck_history_descriptor(
-    corrector_family: Literal["adams", "bdf"],
-) -> ParameterDescriptor:
+def nordsieck_history_descriptor(stiffness_estimate: float) -> ParameterDescriptor:
     """Return map evidence for a populated Nordsieck state vector."""
+    if stiffness_estimate < 0.0:
+        raise ValueError("stiffness estimate must be nonnegative")
     field = MapStructureField
     return ParameterDescriptor(
         _map_structure_coordinates(
             {
                 field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
                 field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(True),
-                field.NORDSIECK_CORRECTOR_FAMILY: DescriptorCoordinate(
-                    corrector_family
+                field.STIFFNESS_ESTIMATE: DescriptorCoordinate(
+                    stiffness_estimate, evidence="upper_bound"
                 ),
             }
         )
@@ -354,14 +353,25 @@ def _rhs_history_region(owner: type) -> CoverageRegion:
     )
 
 
-def _nordsieck_history_region(owner: type) -> CoverageRegion:
+def _nordsieck_history_regions(owner: type) -> tuple[CoverageRegion, ...]:
     field = MapStructureField
-    return CoverageRegion(
-        owner,
-        (
-            MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})),
-            MembershipPredicate(
-                field.NORDSIECK_CORRECTOR_FAMILY, frozenset({"adams", "bdf"})
+    return (
+        CoverageRegion(
+            owner,
+            (
+                MembershipPredicate(
+                    field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})
+                ),
+                ComparisonPredicate(field.STIFFNESS_ESTIMATE, "<=", 0.5),
+            ),
+        ),
+        CoverageRegion(
+            owner,
+            (
+                MembershipPredicate(
+                    field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})
+                ),
+                ComparisonPredicate(field.STIFFNESS_ESTIMATE, ">", 1.0),
             ),
         ),
     )
@@ -431,11 +441,13 @@ def _component_count(request: AlgorithmRequest) -> int:
 
 def _nordsieck_corrector_family(request: AlgorithmRequest) -> Literal["adams", "bdf"]:
     assert request.descriptor is not None
-    family = request.descriptor.coordinate(
-        MapStructureField.NORDSIECK_CORRECTOR_FAMILY
-    ).value
-    assert family == "adams" or family == "bdf"
-    return cast(Literal["adams", "bdf"], family)
+    stiffness = request.descriptor.coordinate(MapStructureField.STIFFNESS_ESTIMATE)
+    assert isinstance(stiffness.value, int | float)
+    if stiffness.value <= 0.5:
+        return "adams"
+    if stiffness.value > 1.0:
+        return "bdf"
+    raise ValueError("Nordsieck corrector family is undefined in stiffness transition")
 
 
 _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
@@ -565,7 +577,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        coverage_regions=(_nordsieck_history_region(MultistepIntegrator),),
+        coverage_regions=_nordsieck_history_regions(MultistepIntegrator),
         constructor=lambda request: MultistepIntegrator(
             _nordsieck_corrector_family(request),
             _requested_order(request),

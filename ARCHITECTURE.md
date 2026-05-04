@@ -790,16 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: add quantitative time-integrator map coordinates for
-   domain-step margin, step-local stiffness estimate, local error target, retry
-   budget, and RHS evaluation cost, grounded by stiff/nonstiff scalar decay
-   and a one-component domain-boundary calculation.
-2. Use those quantitative coordinates in time-integrator selection and delete
-   any selector vocabulary, such as stored Nordsieck family labels, that can be
-   derived from the coordinates plus available state history.
-3. Extend the same calculation loop to domain-limited reaction-network steps:
+1. Current PR: derive fixed-order Nordsieck Adams/BDF construction from
+   quantitative stiffness evidence and delete the stored Nordsieck family
+   selector coordinate.
+2. Extend the same calculation loop to domain-limited reaction-network steps:
    the descriptor should expose when state-domain distance, not method order,
    controls the next admissible step.
+3. Use domain-step margin in controller selection and delete any remaining
+   domain-aware request vocabulary that merely restates this coordinate.
 
 Roadmap sketch:
 
@@ -922,6 +920,9 @@ structural: a proposed RHS step can expose domain-step margin, Gershgorin
 stiffness estimate for `hJ`, local error target, retry budget, and RHS
 evaluation cost.  Nonstiff, stiff, and domain-limited step labels are derived
 regions over those coordinates.  They are not independent method requests.
+Fixed-order Nordsieck selection follows the same rule: the descriptor records
+history availability and stiffness evidence, and Adams/BDF construction is
+derived from the stiffness cell rather than stored as a parallel family label.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

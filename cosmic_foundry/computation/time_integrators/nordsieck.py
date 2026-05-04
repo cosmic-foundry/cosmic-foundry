@@ -394,6 +394,11 @@ class MultistepIntegrator:
         """Declared convergence order."""
         return self._q
 
+    @property
+    def family(self) -> FamilyName:
+        """Corrector family induced by the selected step descriptor."""
+        return self._family_name
+
     def init_state(
         self,
         rhs: RHSProtocol,
