@@ -316,6 +316,35 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
     )
 
 
+def _domain_step_margin_regions(
+    owner: type,
+    predicates: tuple[ComparisonPredicate | MembershipPredicate, ...],
+) -> tuple[CoverageRegion, CoverageRegion]:
+    field = MapStructureField
+    return (
+        CoverageRegion(
+            owner,
+            predicates + (ComparisonPredicate(field.DOMAIN_STEP_MARGIN, "<=", 0.0),),
+        ),
+        CoverageRegion(
+            owner,
+            predicates + (ComparisonPredicate(field.DOMAIN_STEP_MARGIN, ">", 0.0),),
+        ),
+    )
+
+
+def _adaptive_advance_regions(owner: type) -> tuple[CoverageRegion, CoverageRegion]:
+    return _domain_step_margin_regions(
+        owner,
+        (
+            MembershipPredicate(
+                SolveRelationField.DERIVATIVE_ORACLE_KIND,
+                frozenset({"jacobian_callback"}),
+            ),
+        ),
+    )
+
+
 def _rhs_evaluation_region(owner: type) -> CoverageRegion:
     field = MapStructureField
     return CoverageRegion(
@@ -328,9 +357,11 @@ def _rhs_evaluation_region(owner: type) -> CoverageRegion:
     )
 
 
-def _unconstrained_rhs_evaluation_region(owner: type) -> CoverageRegion:
+def _unconstrained_rhs_evaluation_regions(
+    owner: type,
+) -> tuple[CoverageRegion, CoverageRegion]:
     field = MapStructureField
-    return CoverageRegion(
+    return _domain_step_margin_regions(
         owner,
         (
             MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
@@ -551,7 +582,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        coverage_regions=(_derivative_oracle_region(AdaptiveNordsieckController),),
+        coverage_regions=_adaptive_advance_regions(AdaptiveNordsieckController),
     ),
     TimeIntegrationCapability(
         "explicit_multistep",
@@ -591,7 +622,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        coverage_regions=(_unconstrained_rhs_evaluation_region(IntegrationDriver),),
+        coverage_regions=_unconstrained_rhs_evaluation_regions(IntegrationDriver),
     ),
     TimeIntegrationCapability(
         "constraint_aware_controller",
