@@ -1998,6 +1998,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 map_field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(
                     conserved_linear_form_count
                 ),
+                map_field.DOMAIN_STEP_MARGIN: DescriptorCoordinate(-1.0),
             }
         )
 

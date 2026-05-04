@@ -177,7 +177,20 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
             == 2
         )
-        constraint_descriptor = rhs.constraint_aware_descriptor()
+        domain_limited_state = _ti.ODEState(
+            0.0,
+            Tensor([1.0e-3, 1.0 - 1.0e-3, 0.0], backend=_TIME_BACKEND),
+        )
+        constraint_descriptor = ParameterDescriptor(
+            rhs.reaction_network_descriptor().coordinates
+            | rhs.step_map_structure_descriptor(
+                domain_limited_state, 2.0e-2
+            ).coordinates
+        )
+        assert (
+            constraint_descriptor.coordinate(MapStructureField.DOMAIN_STEP_MARGIN).value
+            < 0.0
+        )
         constraint_owner = _ti.select_time_integrator(
             AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),

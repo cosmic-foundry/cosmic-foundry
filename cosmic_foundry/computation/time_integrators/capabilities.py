@@ -547,7 +547,6 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
                 "adaptive_timestep",
                 "variable_order",
                 "stiffness_switching",
-                "domain_aware_acceptance",
             ),
         ),
         1,
@@ -588,7 +587,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         None,
         "driver",
         _contract(
-            provides=("advance", "adaptive_timestep", "domain_aware_acceptance"),
+            provides=("advance", "adaptive_timestep"),
         ),
         1,
         6,
@@ -599,7 +598,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         None,
         "controller",
         _contract(
-            provides=("advance", "constraint_lifecycle", "domain_aware_acceptance"),
+            provides=("advance", "constraint_lifecycle"),
         ),
         1,
         6,
@@ -612,6 +611,9 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
                     ),
                     ComparisonPredicate(
                         ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT, ">", 0
+                    ),
+                    ComparisonPredicate(
+                        MapStructureField.DOMAIN_STEP_MARGIN, "<=", 0.0
                     ),
                 ),
             ),
