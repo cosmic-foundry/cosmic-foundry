@@ -582,7 +582,8 @@ class _ArchitectureOwnershipSpec:
     """Package-level ownership contract checked by _ArchitectureOwnershipClaim."""
 
     package: types.ModuleType | str
-    public_categories: dict[str, frozenset[Any]]
+    public_categories: dict[str, frozenset[Any]] | None = None
+    public_ownership: tuple[_PublicOwnershipGroup, ...] = ()
     forbidden_public_symbols: frozenset[str] = frozenset()
     capability_provider: Callable[[], tuple[Any, ...]] | str | None = None
     request_selector: Callable[[Any], Any] | str | None = None
@@ -655,10 +656,11 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         package: types.ModuleType,
         exported: set[str],
     ) -> set[str]:
+        public_categories = self._public_categories()
         if self._spec.descriptor_owned_capabilities:
             label_items = [
                 item
-                for items in self._spec.public_categories.values()
+                for items in public_categories.values()
                 for item in items
                 if isinstance(item, str)
             ]
@@ -667,7 +669,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
                 f"{label_items}"
             )
         labels: set[str] = set()
-        for items in self._spec.public_categories.values():
+        for items in public_categories.values():
             for item in items:
                 if isinstance(item, str):
                     labels.add(item)
@@ -679,6 +681,20 @@ class _ArchitectureOwnershipClaim(Claim[None]):
                 )
                 labels.add(matches[0])
         return labels
+
+    def _public_categories(self) -> dict[str, frozenset[Any]]:
+        if self._spec.descriptor_owned_capabilities:
+            assert self._spec.public_ownership, (
+                "descriptor-owned architecture specs must use grouped public "
+                "ownership"
+            )
+            assert self._spec.public_categories is None, (
+                "descriptor-owned architecture specs must derive public "
+                "categories from grouped ownership"
+            )
+            return _public_categories_from_groups(self._spec.public_ownership)
+        assert self._spec.public_categories is not None
+        return self._spec.public_categories
 
     def _check_capabilities(self, exported: set[str]) -> None:
         provider = self._capability_provider()
@@ -842,21 +858,11 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         return str(capability)
 
     def _check_class_modules(self, package: types.ModuleType) -> None:
-        expected = self._spec.expected_class_modules or {}
+        expected = self._expected_class_modules()
         if self._spec.descriptor_owned_capabilities:
-            label_keys = [cls for cls in expected if isinstance(cls, str)]
-            assert not label_keys, (
-                "descriptor-owned class/module expectations must use class identity: "
-                f"{label_keys}"
-            )
-            label_values = [
-                cls.__name__
-                for cls, expected_module in expected.items()
-                if isinstance(expected_module, str)
-            ]
-            assert not label_values, (
-                "descriptor-owned class/module expectations must use module identity: "
-                f"{label_values}"
+            assert self._spec.expected_class_modules is None, (
+                "descriptor-owned architecture specs must derive class/module "
+                "expectations from grouped ownership"
             )
         violations = []
         for expected_cls, expected_module in expected.items():
@@ -880,6 +886,11 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         assert not violations, "class/module ownership mismatch: " + "; ".join(
             violations
         )
+
+    def _expected_class_modules(self) -> dict[type | str, types.ModuleType | str]:
+        if self._spec.descriptor_owned_capabilities:
+            return _class_module_expectations_from_groups(self._spec.public_ownership)
+        return self._spec.expected_class_modules or {}
 
 
 class _AlgorithmSelectionAmbiguityClaim(Claim[None]):
@@ -3475,7 +3486,7 @@ _TIME_INTEGRATOR_PUBLIC_GROUPS = (
 )
 _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     package=_TIME_INTEGRATOR_PACKAGE,
-    public_categories=_public_categories_from_groups(_TIME_INTEGRATOR_PUBLIC_GROUPS),
+    public_ownership=_TIME_INTEGRATOR_PUBLIC_GROUPS,
     forbidden_public_symbols=frozenset(
         {
             "FamilySwitchingNordsieckIntegrator",
@@ -3615,9 +3626,6 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     ),
     descriptor_owned_capabilities=True,
     descriptor_request_property_limit=1,
-    expected_class_modules=_class_module_expectations_from_groups(
-        _TIME_INTEGRATOR_PUBLIC_GROUPS
-    ),
 )
 
 _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
