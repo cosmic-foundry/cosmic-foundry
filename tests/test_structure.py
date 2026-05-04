@@ -65,8 +65,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     assembled_linear_evidence_for,
     assembled_linear_transformation_relation,
     coverage_regions_are_disjoint,
+    decomposition_coordinates,
     decomposition_descriptor_from_linear_operator_descriptor,
     decomposition_parameter_schema,
+    linear_operator_coordinates,
     linear_operator_descriptor_from_assembled_operator,
     linear_operator_descriptor_from_solve_relation_descriptor,
     linear_solver_parameter_schema,
@@ -2002,6 +2004,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_descriptor_evidence_selection_is_field_structural()
         self._assert_descriptor_projections_do_not_read_evidence_layout()
         self._assert_solve_relation_coordinate_projections_use_transformations()
+        self._assert_coordinate_map_literals_are_single_schema()
         self._assert_transformation_relations_have_explicit_spaces()
 
         spd = linear_operator_descriptor_from_assembled_operator(
@@ -2021,6 +2024,14 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert isinstance(linear_evidence, AssembledLinearEvidence)
         assert linear_evidence.matrix == ((2.0, -1.0), (-1.0, 2.0))
         relation = assembled_linear_transformation_relation(linear_evidence)
+        linear_coordinates = linear_operator_coordinates(
+            linear_evidence, frozenset(LinearSolverField)
+        )
+        decomposition_coordinates_ = decomposition_coordinates(
+            linear_evidence, frozenset(DecompositionField)
+        )
+        assert set(linear_coordinates) == set(LinearSolverField)
+        assert set(decomposition_coordinates_) == set(DecompositionField)
         assert relation.domain == relation.codomain
         assert relation.domain.dimension == 2
         assert (
@@ -2043,6 +2054,9 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert regions["symmetric_positive_definite"].contains(spd)
         assert regions["full_rank"].contains(spd)
         assert spd.coordinate("symmetry_defect").value == 0.0
+        assert spd.coordinate("symmetry_defect") == (
+            linear_coordinates[LinearSolverField.SYMMETRY_DEFECT]
+        )
         assert spd.coordinate("coercivity_lower_bound").value == 1.0
         assert spd.coordinate("coercivity_lower_bound").evidence == "lower_bound"
         assert spd.coordinate("rank_estimate").value == 2
@@ -2058,6 +2072,10 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert (
             spd_decomposition.coordinate(DecompositionField.MATRIX_RANK_ESTIMATE).value
             == spd.coordinate(LinearSolverField.RANK_ESTIMATE).value
+        )
+        assert (
+            spd_decomposition.coordinate(DecompositionField.MATRIX_ROWS)
+            == decomposition_coordinates_[DecompositionField.MATRIX_ROWS]
         )
 
         rank_deficient = linear_operator_descriptor_from_assembled_operator(
@@ -2291,6 +2309,45 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             "coordinate projections that emit solve-relation fields must derive "
             f"them from transformation relations: {offenders}"
         )
+
+    @staticmethod
+    def _assert_coordinate_map_literals_are_single_schema() -> None:
+        offenders = []
+        for path in sorted((_PACKAGE_ROOT / "computation").rglob("*.py")):
+            tree = ast.parse(path.read_text())
+            for function in ast.walk(tree):
+                if not isinstance(function, ast.FunctionDef):
+                    continue
+                if not _LinearOperatorProjectionClaim._returns_coordinate_map(function):
+                    continue
+                for node in ast.walk(function):
+                    if not isinstance(node, ast.Dict):
+                        continue
+                    schemas = _LinearOperatorProjectionClaim._coordinate_map_schemas(
+                        node
+                    )
+                    if len(schemas) > 1:
+                        offenders.append(
+                            f"{path.relative_to(_PROJECT_ROOT)}:{function.name}"
+                        )
+                        break
+        assert not offenders, (
+            "coordinate-map literals must project one schema; compose separate "
+            f"projections instead of mixing field families: {offenders}"
+        )
+
+    @staticmethod
+    def _coordinate_map_schemas(node: ast.Dict) -> frozenset[str]:
+        schemas = {
+            key.value.id
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Attribute)
+            and isinstance(key.value, ast.Name)
+            and isinstance(value, ast.Call)
+            and _LinearOperatorProjectionClaim._annotation_name(value.func)
+            == "DescriptorCoordinate"
+        }
+        return frozenset(schemas)
 
     @staticmethod
     def _emits_solve_relation_coordinates(function: ast.FunctionDef) -> bool:
