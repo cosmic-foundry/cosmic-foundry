@@ -793,15 +793,16 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: generalize descriptor evidence into a small
-   protocol so `ParameterDescriptor` carries evidence objects by supported
-   symbolic fields, not by the current linear-operator evidence class; the
-   affine implicit-stage calculation should still solve from the discovered
-   evidence without naming a linear-specific descriptor field.
-3. Candidate following calculation: make evidence objects expose only the
-   concrete transformations they can perform, and derive supported descriptor
-   fields from those transformations plus schema projection functions rather
-   than from per-evidence field inventories.
+2. Candidate next calculation: make evidence objects expose only the concrete
+   transformations they can perform, and derive supported descriptor fields
+   from those transformations plus schema projection functions rather than
+   from per-evidence field inventories; the affine implicit-stage solve should
+   still discover the assembled linear solve evidence through descriptor
+   premises.
+3. Candidate following calculation: pull the assembled-linear evidence
+   projection behind a small transformation relation so decomposition and
+   linear-solver descriptors request the same map from evidence to coordinates,
+   instead of each projection knowing the concrete witness layout.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
