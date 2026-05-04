@@ -790,18 +790,17 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Move affine implicit-stage evidence through the shared transformation API:
-   construct a transformation relation before descriptor projection, so
-   solve-relation and linear-solver coordinates are both views of the same
-   affine stage map object.
-2. Factor linear-operator and decomposition algebra coordinates behind
-   transformation-specific projection functions, so the assembled-linear helper
-   stops acting as the single mixed schema projection for solve, linear, and
-   decomposition fields.
-3. Add a follow-up sprint plan for quantitative time-integrator descriptors:
+1. Current PR: factor solve-relation, linear-operator, and decomposition
+   coordinates into target-specific projection functions, so assembled-linear
+   evidence composes schema projections instead of maintaining one mixed
+   coordinate dictionary.
+2. Add a follow-up sprint plan for quantitative time-integrator descriptors:
    domain distance, stiffness estimates, Jacobian availability, local error
    target, retry budget, and RHS evaluation cost should reuse the same
    descriptor/coverage machinery.
+3. Ground the time-integrator descriptor plan in one stiff/nonstiff concrete
+   calculation, then delete any selector vocabulary that cannot be derived from
+   those quantitative coordinates.
 
 Roadmap sketch:
 
@@ -873,11 +872,13 @@ evidence: an affine RHS produces an affine stage residual over the stage
 unknowns, while an RHS without affine evidence remains a nonlinear-root solve
 relation with Jacobian-callback evidence.
 Affine implicit stage residuals first produce a transformation relation, then
-project into solve-relation and shared linear-operator descriptor schemas.  The
-block matrix is assembled from the Butcher matrix and RHS linear operators, the
-right-hand side is derived from the affine offset, and the resulting descriptor
-carries the same rank, conditioning, cost, and consistency coordinates used by
-linear-solver selection.
+project separately into solve-relation, shared linear-operator, and
+decomposition descriptor schemas.  The block matrix is assembled from the
+Butcher matrix and RHS linear operators, the right-hand side is derived from the
+affine offset, and target-specific projections carry the rank, conditioning,
+cost, and consistency coordinates used by linear-solver and factorization
+selection.  A mixed descriptor may compose these projections, but no projection
+dictionary owns multiple schema families at once.
 Repeated finite reaction-chain fixtures now share a theory-level
 `FiniteStateTransitionSystem`: directed unit-transfer edges derive a
 state-by-transition stoichiometry matrix whose columns sum to zero, so the

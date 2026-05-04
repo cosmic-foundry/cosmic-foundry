@@ -1802,7 +1802,7 @@ def decomposition_descriptor_from_linear_operator_descriptor(
         ),
     )
     return ParameterDescriptor(
-        assembled_linear_evidence_coordinates(
+        decomposition_coordinates(
             evidence,
             frozenset(DecompositionField),
             factorization_work_budget_fmas=factorization_work_budget_fmas,
@@ -1816,26 +1816,31 @@ def linear_operator_descriptor_from_solve_relation_descriptor(
 ) -> ParameterDescriptor:
     """Project a solve-relation descriptor with matrix evidence to linear form."""
     evidence = _assembled_linear_evidence_for(descriptor, frozenset(LinearSolverField))
+    relation = assembled_linear_transformation_relation(
+        evidence,
+        work_budget_fmas=_required_float_coordinate(
+            descriptor, SolveRelationField.WORK_BUDGET_FMAS
+        ),
+        memory_budget_bytes=_required_float_coordinate(
+            descriptor, SolveRelationField.MEMORY_BUDGET_BYTES
+        ),
+        device_kind=_required_string_coordinate(
+            descriptor, SolveRelationField.DEVICE_KIND
+        ),
+    )
     return ParameterDescriptor(
-        assembled_linear_evidence_coordinates(
-            evidence,
-            _ASSEMBLED_LINEAR_DESCRIPTOR_FIELDS,
+        transformation_relation_coordinates(
+            relation,
+            frozenset(SolveRelationField),
             requested_residual_tolerance=_required_float_coordinate(
                 descriptor, SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE
             ),
             requested_solution_tolerance=_required_float_coordinate(
                 descriptor, SolveRelationField.REQUESTED_SOLUTION_TOLERANCE
             ),
-            work_budget_fmas=_required_float_coordinate(
-                descriptor, SolveRelationField.WORK_BUDGET_FMAS
-            ),
-            memory_budget_bytes=_required_float_coordinate(
-                descriptor, SolveRelationField.MEMORY_BUDGET_BYTES
-            ),
-            device_kind=_required_string_coordinate(
-                descriptor, SolveRelationField.DEVICE_KIND
-            ),
-        ),
+        )
+        | linear_operator_coordinates(evidence, frozenset(LinearSolverField))
+        | decomposition_coordinates(evidence, frozenset(DecompositionField)),
         evidence=(evidence,),
     )
 
@@ -1944,16 +1949,26 @@ def linear_operator_descriptor_from_assembled_operator(
 
     matrix = _assemble_matrix(op, b)
     evidence = LinearOperatorEvidence(op, b, matrix)
-    coordinates = assembled_linear_evidence_coordinates(
+    relation = assembled_linear_transformation_relation(
         evidence,
-        _ASSEMBLED_LINEAR_DESCRIPTOR_FIELDS,
-        requested_residual_tolerance=requested_residual_tolerance,
-        requested_solution_tolerance=requested_solution_tolerance,
         work_budget_fmas=work_budget_fmas,
         memory_budget_bytes=memory_budget_bytes,
         device_kind=device_kind,
-        factorization_work_budget_fmas=work_budget_fmas,
-        factorization_memory_budget_bytes=memory_budget_bytes,
+    )
+    coordinates = (
+        transformation_relation_coordinates(
+            relation,
+            frozenset(SolveRelationField),
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        )
+        | linear_operator_coordinates(evidence, frozenset(LinearSolverField))
+        | decomposition_coordinates(
+            evidence,
+            frozenset(DecompositionField),
+            factorization_work_budget_fmas=work_budget_fmas,
+            factorization_memory_budget_bytes=memory_budget_bytes,
+        )
     )
     return ParameterDescriptor(
         coordinates,
@@ -1961,54 +1976,33 @@ def linear_operator_descriptor_from_assembled_operator(
     )
 
 
-_ASSEMBLED_LINEAR_DESCRIPTOR_FIELDS = (
-    frozenset(SolveRelationField)
-    | frozenset(LinearSolverField)
-    | frozenset(DecompositionField)
-)
+@dataclass(frozen=True)
+class _AssembledLinearAlgebra:
+    matrix: tuple[tuple[float, ...], ...]
+    rhs: tuple[float, ...]
+    singular_value_lower_bound: float
+    condition_estimate: float
+    rank_estimate: int
+    nullity_estimate: int
+
+    @property
+    def rows(self) -> int:
+        return len(self.matrix)
+
+    @property
+    def columns(self) -> int:
+        return len(self.matrix[0]) if self.matrix else 0
 
 
-def assembled_linear_evidence_coordinates(
+def _assembled_linear_algebra(
     evidence: AssembledLinearEvidence,
-    fields: frozenset[DescriptorField],
-    *,
-    requested_residual_tolerance: float = 1.0e-8,
-    requested_solution_tolerance: float = 1.0e-8,
-    work_budget_fmas: float = 1.0e9,
-    memory_budget_bytes: float = 1.0e9,
-    device_kind: str = "cpu",
-    factorization_work_budget_fmas: float = 1.0e9,
-    factorization_memory_budget_bytes: float = 1.0e9,
-) -> dict[DescriptorField, DescriptorCoordinate]:
-    """Project assembled-linear evidence onto requested descriptor coordinates."""
+) -> _AssembledLinearAlgebra:
     matrix = evidence.matrix or _assemble_matrix(evidence.operator, evidence.rhs)
+    if matrix and any(len(row) != len(matrix[0]) for row in matrix):
+        raise ValueError("assembled-linear evidence requires rectangular rows")
     rhs = _rhs_tuple(evidence.rhs)
-    n = len(rhs)
-    rows = len(matrix)
     columns = len(matrix[0]) if matrix else 0
-    relation: TransformationRelation = assembled_linear_transformation_relation(
-        evidence,
-        work_budget_fmas=work_budget_fmas,
-        memory_budget_bytes=memory_budget_bytes,
-        device_kind=device_kind,
-    )
-    if relation.domain_dimension != n or relation.codomain_dimension != n:
-        raise ValueError(
-            "assembled-linear relation dimensions must match evidence shape"
-        )
-    solve_relation_fields = fields & frozenset(SolveRelationField)
     a = np.array(matrix, dtype=float)
-    rhs_array = np.array(rhs, dtype=float)
-    frobenius_norm = float(np.linalg.norm(a))
-    scale = max(frobenius_norm, _NUMERIC_EPS)
-    symmetry_defect = _zero_small(float(np.linalg.norm(a - a.T)) / scale)
-    skew_symmetry_defect = _zero_small(float(np.linalg.norm(a + a.T)) / scale)
-    diagonal_nonzero_margin = min(abs(matrix[i][i]) for i in range(n))
-    diagonal_dominance_margin = min(
-        abs(matrix[i][i]) - sum(abs(matrix[i][j]) for j in range(n) if j != i)
-        for i in range(n)
-    )
-
     singular_values = np.linalg.svd(a, compute_uv=False)
     singular_tolerance = (
         max(a.shape)
@@ -2024,7 +2018,7 @@ def assembled_linear_evidence_coordinates(
     ]
     singular_value_lower_bound = min(cleaned_singular_values, default=0.0)
     rank_estimate = sum(value > 0.0 for value in cleaned_singular_values)
-    nullity_estimate = n - rank_estimate
+    nullity_estimate = columns - rank_estimate
     positive_singular_values = [
         value for value in cleaned_singular_values if value > 0.0
     ]
@@ -2033,11 +2027,40 @@ def assembled_linear_evidence_coordinates(
         if positive_singular_values
         else 1.0e300
     )
+    return _AssembledLinearAlgebra(
+        matrix=matrix,
+        rhs=rhs,
+        singular_value_lower_bound=singular_value_lower_bound,
+        condition_estimate=condition_estimate,
+        rank_estimate=rank_estimate,
+        nullity_estimate=nullity_estimate,
+    )
 
+
+def linear_operator_coordinates(
+    evidence: AssembledLinearEvidence,
+    fields: frozenset[DescriptorField],
+) -> dict[DescriptorField, DescriptorCoordinate]:
+    """Project assembled-linear evidence onto linear-operator coordinates."""
+    algebra = _assembled_linear_algebra(evidence)
+    matrix = algebra.matrix
+    n = len(algebra.rhs)
+    if algebra.rows != n or algebra.columns != n:
+        raise ValueError("linear-operator coordinates require a square matrix")
+    a = np.array(matrix, dtype=float)
+    rhs_array = np.array(algebra.rhs, dtype=float)
+    frobenius_norm = float(np.linalg.norm(a))
+    scale = max(frobenius_norm, _NUMERIC_EPS)
+    symmetry_defect = _zero_small(float(np.linalg.norm(a - a.T)) / scale)
+    skew_symmetry_defect = _zero_small(float(np.linalg.norm(a + a.T)) / scale)
+    diagonal_nonzero_margin = min(abs(matrix[i][i]) for i in range(n))
+    diagonal_dominance_margin = min(
+        abs(matrix[i][i]) - sum(abs(matrix[i][j]) for j in range(n) if j != i)
+        for i in range(n)
+    )
     symmetric_part = 0.5 * (a + a.T)
     eigenvalues = np.linalg.eigvalsh(symmetric_part)
     coercivity_lower_bound = _zero_small(float(np.min(eigenvalues)))
-
     least_squares_solution, *_ = np.linalg.lstsq(a, rhs_array, rcond=None)
     residual = rhs_array - a @ least_squares_solution
     rhs_consistency_defect = _zero_small(
@@ -2046,15 +2069,14 @@ def assembled_linear_evidence_coordinates(
     )
     nonzeros = int(np.count_nonzero(np.abs(a) > _NUMERIC_EPS))
     matvec_cost_fmas = float(max(1, 2 * nonzeros))
-    assembly_cost_fmas = float(n) * matvec_cost_fmas
-    memory_estimate = float(8 * (n * n + n))
-
     coordinates: dict[DescriptorField, DescriptorCoordinate] = {
         LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: DescriptorCoordinate(True),
-        LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(assembly_cost_fmas),
+        LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(
+            float(n) * matvec_cost_fmas
+        ),
         LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(matvec_cost_fmas),
         LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: DescriptorCoordinate(
-            memory_estimate
+            float(8 * (n * n + n))
         ),
         LinearSolverField.SYMMETRY_DEFECT: DescriptorCoordinate(symmetry_defect),
         LinearSolverField.SKEW_SYMMETRY_DEFECT: DescriptorCoordinate(
@@ -2070,59 +2092,79 @@ def assembled_linear_evidence_coordinates(
             coercivity_lower_bound, evidence="lower_bound"
         ),
         LinearSolverField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
-            singular_value_lower_bound, evidence="lower_bound"
+            algebra.singular_value_lower_bound, evidence="lower_bound"
         ),
         LinearSolverField.CONDITION_ESTIMATE: DescriptorCoordinate(
-            condition_estimate, evidence="estimate"
+            algebra.condition_estimate, evidence="estimate"
         ),
         LinearSolverField.RANK_ESTIMATE: DescriptorCoordinate(
-            rank_estimate, evidence="estimate"
+            algebra.rank_estimate, evidence="estimate"
         ),
         LinearSolverField.NULLITY_ESTIMATE: DescriptorCoordinate(
-            nullity_estimate, evidence="estimate"
+            algebra.nullity_estimate, evidence="estimate"
         ),
         LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
             rhs_consistency_defect
         ),
-        DecompositionField.MATRIX_ROWS: DescriptorCoordinate(rows),
-        DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(columns),
+    }
+    return _coordinates_for_fields("linear-operator", fields, coordinates)
+
+
+def decomposition_coordinates(
+    evidence: AssembledLinearEvidence,
+    fields: frozenset[DescriptorField],
+    *,
+    factorization_work_budget_fmas: float = 1.0e9,
+    factorization_memory_budget_bytes: float = 1.0e9,
+) -> dict[DescriptorField, DescriptorCoordinate]:
+    """Project assembled-linear evidence onto dense decomposition coordinates."""
+    algebra = _assembled_linear_algebra(evidence)
+    factorization_extent = (
+        algebra.rows * algebra.columns * min(algebra.rows, algebra.columns)
+    )
+    factorization_storage = algebra.rows * algebra.columns + min(
+        algebra.rows, algebra.columns
+    )
+    coordinates: dict[DescriptorField, DescriptorCoordinate] = {
+        DecompositionField.MATRIX_ROWS: DescriptorCoordinate(algebra.rows),
+        DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(algebra.columns),
         DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
             factorization_work_budget_fmas
         ),
         DecompositionField.FACTORIZATION_WORK_FMAS: DescriptorCoordinate(
-            float(max(1, rows * columns * min(rows, columns)))
+            float(max(1, factorization_extent))
         ),
         DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
             DescriptorCoordinate(factorization_memory_budget_bytes)
         ),
         DecompositionField.FACTORIZATION_MEMORY_BYTES: DescriptorCoordinate(
-            float(8 * (rows * columns + min(rows, columns)))
+            float(8 * factorization_storage)
         ),
         DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
-            singular_value_lower_bound, evidence="lower_bound"
+            algebra.singular_value_lower_bound, evidence="lower_bound"
         ),
         DecompositionField.CONDITION_ESTIMATE: DescriptorCoordinate(
-            condition_estimate, evidence="estimate"
+            algebra.condition_estimate, evidence="estimate"
         ),
         DecompositionField.MATRIX_RANK_ESTIMATE: DescriptorCoordinate(
-            rank_estimate, evidence="estimate"
+            algebra.rank_estimate, evidence="estimate"
         ),
         DecompositionField.MATRIX_NULLITY_ESTIMATE: DescriptorCoordinate(
-            nullity_estimate, evidence="estimate"
+            algebra.nullity_estimate, evidence="estimate"
         ),
     }
-    coordinates.update(
-        transformation_relation_coordinates(
-            relation,
-            solve_relation_fields,
-            requested_residual_tolerance=requested_residual_tolerance,
-            requested_solution_tolerance=requested_solution_tolerance,
-        )
-    )
+    return _coordinates_for_fields("decomposition", fields, coordinates)
+
+
+def _coordinates_for_fields(
+    projection: str,
+    fields: frozenset[DescriptorField],
+    coordinates: dict[DescriptorField, DescriptorCoordinate],
+) -> dict[DescriptorField, DescriptorCoordinate]:
     missing_fields = fields - coordinates.keys()
     if missing_fields:
         raise ValueError(
-            "assembled-linear evidence cannot project fields "
+            f"{projection} evidence cannot project fields "
             f"{tuple(_field_label(field) for field in missing_fields)}"
         )
     return {field: coordinates[field] for field in fields}
@@ -2239,7 +2281,6 @@ __all__ = [
     "AlgorithmRequest",
     "AlgorithmStructureContract",
     "AssembledLinearEvidence",
-    "assembled_linear_evidence_coordinates",
     "assembled_linear_evidence_for",
     "assembled_linear_evidence_projection",
     "assembled_linear_transformation_relation",
@@ -2252,6 +2293,7 @@ __all__ = [
     "DerivedParameterRegion",
     "DescriptorCoordinate",
     "decomposition_descriptor_from_linear_operator_descriptor",
+    "decomposition_coordinates",
     "decomposition_parameter_schema",
     "evidence_for",
     "EvidencePredicate",
@@ -2261,6 +2303,7 @@ __all__ = [
     "LinearOperatorEvidence",
     "LINEARITY_TOLERANCE",
     "linear_solver_parameter_schema",
+    "linear_operator_coordinates",
     "linear_operator_descriptor_from_assembled_operator",
     "linear_operator_descriptor_from_solve_relation_descriptor",
     "MapStructureField",
