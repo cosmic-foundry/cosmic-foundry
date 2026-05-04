@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmCapability,
     AlgorithmRegistry,
@@ -79,6 +81,7 @@ def _map_structure_coordinates(
         field.IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
             "unavailable"
         ),
+        field.NORDSIECK_CORRECTOR_FAMILY: DescriptorCoordinate("unavailable"),
         field.HAMILTONIAN_PARTITION_AVAILABLE: DescriptorCoordinate(False),
         field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(float("inf")),
         field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
@@ -141,7 +144,9 @@ def rhs_history_descriptor() -> ParameterDescriptor:
     )
 
 
-def nordsieck_history_descriptor() -> ParameterDescriptor:
+def nordsieck_history_descriptor(
+    corrector_family: Literal["adams", "bdf"],
+) -> ParameterDescriptor:
     """Return map evidence for a populated Nordsieck state vector."""
     field = MapStructureField
     return ParameterDescriptor(
@@ -149,6 +154,9 @@ def nordsieck_history_descriptor() -> ParameterDescriptor:
             {
                 field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
                 field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(True),
+                field.NORDSIECK_CORRECTOR_FAMILY: DescriptorCoordinate(
+                    corrector_family
+                ),
             }
         )
     )
@@ -288,7 +296,12 @@ def _nordsieck_history_region(owner: type) -> CoverageRegion:
     field = MapStructureField
     return CoverageRegion(
         owner,
-        (MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})),),
+        (
+            MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})),
+            MembershipPredicate(
+                field.NORDSIECK_CORRECTOR_FAMILY, frozenset({"adams", "bdf"})
+            ),
+        ),
     )
 
 

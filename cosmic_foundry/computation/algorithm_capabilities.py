@@ -190,6 +190,7 @@ class MapStructureField(Enum):
     IMPLICIT_COMPONENT_DERIVATIVE_ORACLE_KIND = (
         "implicit_component_derivative_oracle_kind"
     )
+    NORDSIECK_CORRECTOR_FAMILY = "nordsieck_corrector_family"
     NORDSIECK_HISTORY_AVAILABLE = "nordsieck_history_available"
     NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
     RHS_HISTORY_AVAILABLE = "rhs_history_available"
@@ -1497,6 +1498,15 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
                     ),
                 ),
             ),
+            ParameterAxis(
+                field.NORDSIECK_CORRECTOR_FAMILY,
+                (
+                    ParameterBin(
+                        "nordsieck_corrector_family",
+                        frozenset({"adams", "bdf", "unavailable"}),
+                    ),
+                ),
+            ),
             _bool_axis(field.HAMILTONIAN_PARTITION_AVAILABLE),
             _bool_axis(field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE),
             _nonnegative_axis(
@@ -1545,6 +1555,10 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
                     (
                         MembershipPredicate(
                             field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})
+                        ),
+                        MembershipPredicate(
+                            field.NORDSIECK_CORRECTOR_FAMILY,
+                            frozenset({"adams", "bdf"}),
                         ),
                     ),
                 ),
