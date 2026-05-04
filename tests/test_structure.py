@@ -63,6 +63,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ReactionNetworkField,
     SolveRelationField,
     assembled_linear_evidence_for,
+    assembled_linear_transformation_relation,
     coverage_regions_are_disjoint,
     decomposition_descriptor_from_linear_operator_descriptor,
     decomposition_parameter_schema,
@@ -1977,6 +1978,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_descriptor_evidence_storage_is_protocol_typed()
         self._assert_descriptor_evidence_selection_is_field_structural()
         self._assert_descriptor_projections_do_not_read_evidence_layout()
+        self._assert_solve_relation_coordinate_projections_use_transformations()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -1994,6 +1996,16 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
         assert isinstance(linear_evidence, AssembledLinearEvidence)
         assert linear_evidence.matrix == ((2.0, -1.0), (-1.0, 2.0))
+        relation = assembled_linear_transformation_relation(linear_evidence)
+        assert spd.coordinate(SolveRelationField.DIM_X).value == (
+            relation.domain_dimension
+        )
+        assert spd.coordinate(SolveRelationField.DIM_Y).value == (
+            relation.codomain_dimension
+        )
+        assert spd.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value == (
+            relation.acceptance_relation
+        )
         assert regions["linear_system"].contains(spd)
         assert regions["symmetric_positive_definite"].contains(spd)
         assert regions["full_rank"].contains(spd)
@@ -2224,6 +2236,48 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert not direct_layout_reads, (
             "descriptor projections must pass evidence into transformation "
             f"relations, not read witness layout directly: {direct_layout_reads}"
+        )
+
+    @staticmethod
+    def _assert_solve_relation_coordinate_projections_use_transformations() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        offenders = [
+            function.name
+            for function in ast.walk(tree)
+            if isinstance(function, ast.FunctionDef)
+            and _LinearOperatorProjectionClaim._returns_coordinate_map(function)
+            and _LinearOperatorProjectionClaim._references_enum(
+                function, "SolveRelationField"
+            )
+            and not _LinearOperatorProjectionClaim._references_enum(
+                function, "TransformationRelation"
+            )
+        ]
+        assert not offenders, (
+            "coordinate projections that emit solve-relation fields must derive "
+            f"them from transformation relations: {offenders}"
+        )
+
+    @staticmethod
+    def _returns_coordinate_map(function: ast.FunctionDef) -> bool:
+        annotation = function.returns
+        return (
+            isinstance(annotation, ast.Subscript)
+            and _LinearOperatorProjectionClaim._annotation_name(annotation.value)
+            == "dict"
+            and any(
+                _LinearOperatorProjectionClaim._annotation_name(node)
+                == "DescriptorCoordinate"
+                for node in ast.walk(annotation)
+            )
+        )
+
+    @staticmethod
+    def _references_enum(node: ast.AST, name: str) -> bool:
+        return any(
+            isinstance(child, ast.Name) and child.id == name for child in ast.walk(node)
         )
 
     @staticmethod
