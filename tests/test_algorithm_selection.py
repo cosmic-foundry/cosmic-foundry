@@ -396,7 +396,7 @@ class _StepSelectionClaim(Claim[Any]):
             descriptor=case.descriptor,
         )
         selected = _ti.select_time_integrator(request)
-        assert selected.implementation == case.owner.__name__
+        assert selected.owner is case.owner
         integrator = selected.construct(request)
         assert type(integrator) is case.owner
         state = integrator.step(case.rhs, case.state, 1.0e-2)  # type: ignore[attr-defined]
@@ -533,7 +533,7 @@ class _AutoIntegratorSelectionClaim(Claim[Any]):
             if not case.auto_selectable:
                 continue
             auto = _ti.AutoIntegrator(case.order)
-            assert auto.select(case.rhs).implementation == case.owner.__name__
+            assert auto.select(case.rhs).owner is case.owner
             state = auto.step(case.rhs, case.state, 1.0e-2)
             assert cases.err(state.u, case.exact, state.t) < case.tolerance
 

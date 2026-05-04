@@ -793,14 +793,15 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make selector tests compare selected capability
-   owners directly rather than comparing rendered implementation labels. Ground
-   the change in descriptor-backed step selection, AutoIntegrator reaction-chain
-   selection, and semi-discrete conservation selection. The structural guard
-   should forbid implementation-label comparisons when owner identity is
-   available, so labels remain a human projection and not a testing premise. Do
-   not add mesh, flux-form, locality, or CFL axes until a real mesh object is
-   the implementation premise being tested.
+2. Candidate next calculation: remove rendered implementation labels from the
+   architecture ownership request expectations and compare selected owners
+   directly there as well. Ground the change in the existing time-integration
+   request expectations for RHS evaluation, derivative-oracle, split,
+   semi-linear, Hamiltonian, composition, RHS-history, and Nordsieck descriptors.
+   Labels may remain for human-facing exports and docs, but they must not be the
+   premise that proves selector correctness. Do not add mesh, flux-form,
+   locality, or CFL axes until a real mesh object is the implementation premise
+   being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

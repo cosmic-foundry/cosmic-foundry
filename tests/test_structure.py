@@ -904,7 +904,7 @@ class _AutoDiscoveryImportClaim(Claim[None]):
 
 
 class _SelectorExpectationDerivationClaim(Claim[None]):
-    """Claim: selector tests project expected implementations from owners."""
+    """Claim: selector tests assert owner identity, not implementation labels."""
 
     @property
     def description(self) -> str:
@@ -919,31 +919,19 @@ class _SelectorExpectationDerivationClaim(Claim[None]):
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Compare):
                     continue
-                expressions = (node.left, *node.comparators)
-                implementation_exprs = [
-                    expr for expr in expressions if self._is_implementation_attr(expr)
-                ]
-                if not implementation_exprs:
-                    continue
-                if not any(self._is_owner_projection(expr) for expr in expressions):
+                if any(
+                    self._is_implementation_attr(expr)
+                    for expr in (node.left, *node.comparators)
+                ):
                     violations.append(f"{path.name}:{node.lineno}")
         assert not violations, (
-            "selector implementation expectations must project an ownership "
-            "witness through .owner.__name__: " + ", ".join(violations)
+            "selector tests must compare owner identity instead of rendered "
+            "implementation labels: " + ", ".join(violations)
         )
 
     @staticmethod
     def _is_implementation_attr(node: ast.expr) -> bool:
         return isinstance(node, ast.Attribute) and node.attr == "implementation"
-
-    @staticmethod
-    def _is_owner_projection(node: ast.expr) -> bool:
-        return (
-            isinstance(node, ast.Attribute)
-            and node.attr == "__name__"
-            and isinstance(node.value, ast.Attribute)
-            and node.value.attr == "owner"
-        )
 
 
 class _ExecutableCapabilityIdentityClaim(Claim[None]):
