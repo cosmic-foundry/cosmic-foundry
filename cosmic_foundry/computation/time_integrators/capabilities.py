@@ -13,17 +13,22 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     CoverageRegion,
     DescriptorCoordinate,
     DescriptorField,
+    EvidenceSource,
     MapStructureField,
     MembershipPredicate,
     ParameterDescriptor,
     ReactionNetworkField,
     SolveRelationField,
 )
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
     AdaptiveNordsieckController,
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
+)
+from cosmic_foundry.computation.time_integrators.domains import (
+    predict_domain_step_limit,
 )
 from cosmic_foundry.computation.time_integrators.explicit_multistep import (
     ExplicitMultistepIntegrator,
@@ -40,6 +45,7 @@ from cosmic_foundry.computation.time_integrators.implicit import (
 from cosmic_foundry.computation.time_integrators.integration_driver import (
     IntegrationDriver,
 )
+from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     MultistepIntegrator,
 )
@@ -51,6 +57,7 @@ from cosmic_foundry.computation.time_integrators.splitting import (
     CompositeRHSProtocol,
     CompositionIntegrator,
 )
+from cosmic_foundry.computation.time_integrators.stiffness import StiffnessDiagnostic
 from cosmic_foundry.computation.time_integrators.symplectic import (
     SymplecticCompositionIntegrator,
 )
@@ -87,6 +94,11 @@ def _map_structure_coordinates(
         field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
         field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(0),
         field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(0),
+        field.DOMAIN_STEP_MARGIN: DescriptorCoordinate(float("inf")),
+        field.STIFFNESS_ESTIMATE: DescriptorCoordinate(0.0),
+        field.LOCAL_ERROR_TARGET: DescriptorCoordinate(1.0e-8),
+        field.RETRY_BUDGET: DescriptorCoordinate(0),
+        field.RHS_EVALUATION_COST_FMAS: DescriptorCoordinate(0.0),
     }
     if overrides is not None:
         coordinates.update(overrides)
@@ -110,6 +122,56 @@ def rhs_evaluation_descriptor() -> ParameterDescriptor:
     return ParameterDescriptor(
         _map_structure_coordinates(
             {field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True)}
+        )
+    )
+
+
+def rhs_step_diagnostics_descriptor(
+    rhs: object,
+    state: ODEState,
+    dt: float,
+    *,
+    local_error_target: float = 1.0e-8,
+    retry_budget: int = 0,
+) -> ParameterDescriptor:
+    """Return quantitative map evidence for one proposed RHS step."""
+    if dt <= 0.0:
+        raise ValueError("step diagnostics require dt > 0")
+    if local_error_target <= 0.0:
+        raise ValueError("local error target must be positive")
+    if retry_budget < 0:
+        raise ValueError("retry budget must be nonnegative")
+    t = float(state.t)
+    u = state.u
+    if not isinstance(u, Tensor):
+        raise TypeError("step diagnostics require a Tensor state vector")
+    jacobian = getattr(rhs, "jacobian", None)
+    stiffness = 0.0
+    stiffness_evidence: EvidenceSource = "unavailable"
+    if callable(jacobian):
+        stiffness = StiffnessDiagnostic().update(jacobian(t, u), dt)
+        stiffness_evidence = "upper_bound"
+    step_limit = predict_domain_step_limit(rhs, t, u)
+    domain_step_margin = (
+        float("inf") if step_limit is None else (float(step_limit) / dt) - 1.0
+    )
+    field = MapStructureField
+    return ParameterDescriptor(
+        _map_structure_coordinates(
+            {
+                field.RHS_EVALUATION_AVAILABLE: DescriptorCoordinate(True),
+                field.STIFFNESS_ESTIMATE: DescriptorCoordinate(
+                    stiffness, evidence=stiffness_evidence
+                ),
+                field.DOMAIN_STEP_MARGIN: DescriptorCoordinate(
+                    domain_step_margin, evidence="estimate"
+                ),
+                field.LOCAL_ERROR_TARGET: DescriptorCoordinate(local_error_target),
+                field.RETRY_BUDGET: DescriptorCoordinate(retry_budget),
+                field.RHS_EVALUATION_COST_FMAS: DescriptorCoordinate(
+                    float(max(1, u.shape[0]))
+                ),
+            }
         )
     )
 
@@ -594,6 +656,7 @@ __all__ = [
     "hamiltonian_map_descriptor",
     "nordsieck_history_descriptor",
     "rhs_evaluation_descriptor",
+    "rhs_step_diagnostics_descriptor",
     "rhs_history_descriptor",
     "select_time_integrator",
     "semilinear_map_descriptor",
