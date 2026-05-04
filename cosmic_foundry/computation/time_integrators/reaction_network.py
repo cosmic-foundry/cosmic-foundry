@@ -31,10 +31,14 @@ class UnitTransferTransitionSystemProtocol(Protocol):
         ...
 
 
-UnitTransferRates = Callable[[float], Sequence[float]] | Sequence[float]
+_UnitTransferRates = Callable[[float], Sequence[float]] | Sequence[float]
 
 
-def _coefficients_at(rates: UnitTransferRates, t: float) -> tuple[float, ...]:
+class UnitTransferRates:
+    """Public marker for unit-transfer rate coefficient data."""
+
+
+def _coefficients_at(rates: _UnitTransferRates, t: float) -> tuple[float, ...]:
     values = rates(t) if callable(rates) else rates
     return tuple(float(value) for value in values)
 
@@ -238,10 +242,10 @@ class ReactionNetworkRHS:
     def from_unit_transfer_system(
         cls,
         transition_system: UnitTransferTransitionSystemProtocol,
-        forward_coefficients: UnitTransferRates,
+        forward_coefficients: _UnitTransferRates,
         initial_state: Tensor,
         *,
-        reverse_coefficients: UnitTransferRates | None = None,
+        reverse_coefficients: _UnitTransferRates | None = None,
     ) -> LinearReactionNetworkRHS:
         """Project a finite unit-transfer system into a linear reaction network.
 

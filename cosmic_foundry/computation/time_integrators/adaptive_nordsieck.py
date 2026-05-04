@@ -39,7 +39,7 @@ class AdaptiveNordsieckController:
         stiffness_switcher: StiffnessSwitcher,
         diagnostic: StiffnessDiagnostic | None = None,
         q_initial: int | None = None,
-        initial_family: FamilyName = "adams",
+        initial_family: FamilyName | str = "adams",
         max_rejections: int = 20,
     ) -> None:
         if order_selector.q_max > 6:
@@ -50,7 +50,7 @@ class AdaptiveNordsieckController:
         self._q = order_selector.q_min if q_initial is None else q_initial
         if not order_selector.q_min <= self._q <= order_selector.q_max:
             raise ValueError("q_initial must lie inside the selector range.")
-        self._family: FamilyName = initial_family
+        self._family = FamilyName(initial_family)
         self._max_rejections = max_rejections
 
         self.accepted_families: list[FamilyName] = []

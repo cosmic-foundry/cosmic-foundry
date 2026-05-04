@@ -41,7 +41,6 @@ satisfies plain RHSProtocol and is preferred for non-stiff problems.
 from __future__ import annotations
 
 from math import comb, factorial  # comb used in _pascal_predict
-from typing import Literal
 
 import sympy
 
@@ -55,6 +54,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 from cosmic_foundry.computation.time_integrators.runge_kutta import (
     RungeKuttaIntegrator as _RungeKuttaIntegrator,
 )
+from cosmic_foundry.computation.time_integrators.stiffness import FamilyName
 
 _bootstrap_rk = _RungeKuttaIntegrator(6)
 
@@ -379,7 +379,8 @@ class MultistepIntegrator:
         Method order (1 ≤ q ≤ 6).
     """
 
-    def __init__(self, family: Literal["bdf", "adams"], q: int) -> None:
+    def __init__(self, family: FamilyName | str, q: int) -> None:
+        family = FamilyName(family)
         fam = _COEFFS.bdf if family == "bdf" else _COEFFS.adams
         if not 1 <= q <= fam.q_max:
             raise ValueError(f"q={q} outside [1, {fam.q_max}]")

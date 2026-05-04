@@ -22,7 +22,12 @@ from math import factorial
 
 import sympy
 
-Tree = tuple  # Recursive: tuple["Tree", ...]
+
+class Tree(tuple):
+    """Rooted tree represented by its sorted child trees."""
+
+    def __new__(cls, children: tuple[Tree, ...] = ()) -> Tree:
+        return tuple.__new__(cls, children)
 
 
 @cache
@@ -81,8 +86,8 @@ def elementary_weight(
 
 def _trees_of_order(n: int, by_order: dict[int, list[Tree]]) -> list[Tree]:
     if n == 1:
-        return [()]
-    return _sorted_forests(n - 1, by_order, ())
+        return [Tree()]
+    return _sorted_forests(n - 1, by_order, Tree())
 
 
 def _sorted_forests(
@@ -92,14 +97,14 @@ def _sorted_forests(
 ) -> list[Tree]:
     """Sorted tuples of trees summing to `remaining` nodes, all children ≥ min_child."""
     if remaining == 0:
-        return [()]
+        return [Tree()]
     result: list[Tree] = []
     for n1 in range(1, remaining + 1):
         for t1 in by_order.get(n1, []):
             if t1 < min_child:
                 continue
             for rest in _sorted_forests(remaining - n1, by_order, t1):
-                result.append((t1,) + rest)
+                result.append(Tree((t1,) + rest))
     return result
 
 
