@@ -100,30 +100,13 @@ class _StepSelectionCase:
     tolerance: float
     ownership: SelectionOwnership
     auto_selectable: bool = True
-    postcheck: Callable[[_StepSelectionCase, _ti.ODEState], None] = (
-        lambda case, state: None
+    postcheck: Callable[[_StepSelectionCase, _ti.ODEState, object], None] = (
+        lambda case, state, integrator: None
     )
 
     @property
     def owner(self) -> type:
         return self.ownership.owner
-
-    def selected_integrator(self) -> object:
-        owner = self.owner
-        if issubclass(owner, _ti.ExplicitMultistepIntegrator):
-            return owner.for_order(self.order)
-        if issubclass(owner, _ti.MultistepIntegrator):
-            corrector_family = self.descriptor.coordinate(
-                MapStructureField.NORDSIECK_CORRECTOR_FAMILY
-            ).value
-            assert corrector_family in ("adams", "bdf")
-            return owner(corrector_family, self.order)
-        if issubclass(owner, _ti.CompositionIntegrator):
-            return owner(
-                [_ti.RungeKuttaIntegrator(1) for _ in self.rhs.components],  # type: ignore[attr-defined]
-                order=self.order,
-            )
-        return owner(self.order)
 
 
 def _map_selection_case(
@@ -134,8 +117,8 @@ def _map_selection_case(
     u0: Tensor,
     exact: Callable[[float], tuple[float, ...]],
     tolerance: float,
-    postcheck: Callable[[_StepSelectionCase, _ti.ODEState], None] = (
-        lambda case, state: None
+    postcheck: Callable[[_StepSelectionCase, _ti.ODEState, object], None] = (
+        lambda case, state, integrator: None
     ),
 ) -> _StepSelectionCase:
     return _StepSelectionCase(
@@ -162,7 +145,11 @@ def _solve_selection_case() -> _StepSelectionCase:
     dt = 1.0e-2
     descriptor = descriptor_integrator.step_solve_relation_descriptor(rhs, state, dt)
 
-    def postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> None:
+    def postcheck(
+        case: _StepSelectionCase,
+        state: _ti.ODEState,
+        _integrator: object,
+    ) -> None:
         assert case.descriptor.coordinate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND
         ) == derivative_oracle_descriptor().coordinate(
@@ -239,18 +226,23 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
 def _assert_no_step_solve_or_linear_operator(
     case: _StepSelectionCase,
     state: _ti.ODEState,
+    integrator: object,
 ) -> None:
     for method in (
         "step_solve_relation_descriptor",
         "step_linear_operator_descriptor",
     ):
-        candidate = getattr(case.selected_integrator(), method, None)
+        candidate = getattr(integrator, method, None)
         if callable(candidate):
             with pytest.raises(ValueError):
                 candidate(case.rhs, state, 1.0e-2)
 
 
-def _composition_postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> None:
+def _composition_postcheck(
+    case: _StepSelectionCase,
+    state: _ti.ODEState,
+    integrator: object,
+) -> None:
     assert (
         case.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value
         == 2
@@ -265,11 +257,11 @@ def _composition_postcheck(case: _StepSelectionCase, state: _ti.ODEState) -> Non
     assert not generic_descriptor.coordinate(
         MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
     ).value
-    _assert_no_step_solve_or_linear_operator(case, state)
+    _assert_no_step_solve_or_linear_operator(case, state, integrator)
 
 
 def _uncertified_composition_postcheck(
-    case: _StepSelectionCase, state: _ti.ODEState
+    case: _StepSelectionCase, state: _ti.ODEState, integrator: object
 ) -> None:
     assert (
         case.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value
@@ -283,11 +275,11 @@ def _uncertified_composition_postcheck(
             MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
         ).value
     )
-    _assert_no_step_solve_or_linear_operator(case, state)
+    _assert_no_step_solve_or_linear_operator(case, state, integrator)
 
 
 def _damped_composition_postcheck(
-    case: _StepSelectionCase, state: _ti.ODEState
+    case: _StepSelectionCase, state: _ti.ODEState, integrator: object
 ) -> None:
     assert (
         case.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT).value
@@ -299,7 +291,7 @@ def _damped_composition_postcheck(
     assert case.descriptor.coordinate(
         MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
     ).value == pytest.approx(math.sqrt(2.0) * _DAMPED_OSCILLATOR_GAMMA)
-    _assert_no_step_solve_or_linear_operator(case, state)
+    _assert_no_step_solve_or_linear_operator(case, state, integrator)
 
 
 def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
@@ -324,7 +316,9 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_scalar_decay,
             1.0e-7,
-            lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
+            lambda case, state, integrator: _assert_no_step_solve_or_linear_operator(
+                case, state, integrator
+            ),
         ),
         _map_selection_case(
             "semilinear_map",
@@ -334,7 +328,9 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_semilinear,
             1.0e-10,
-            lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
+            lambda case, state, integrator: _assert_no_step_solve_or_linear_operator(
+                case, state, integrator
+            ),
         ),
         _map_selection_case(
             "hamiltonian_map",
@@ -344,7 +340,9 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
             cases.exact_ham,
             1.0e-10,
-            lambda case, state: _assert_no_step_solve_or_linear_operator(case, state),
+            lambda case, state, integrator: _assert_no_step_solve_or_linear_operator(
+                case, state, integrator
+            ),
         ),
         _map_selection_case(
             "certified_composition_map",
@@ -392,19 +390,18 @@ class _StepSelectionClaim(Claim[Any]):
     def check(self, _calibration: Any) -> None:
         case = self._case
         case.ownership.assert_owned_cell()
-        selected = _ti.select_time_integrator(
-            AlgorithmRequest(
-                requested_properties=frozenset({"one_step"}),
-                order=case.order,
-                descriptor=case.descriptor,
-            )
+        request = AlgorithmRequest(
+            requested_properties=frozenset({"one_step"}),
+            order=case.order,
+            descriptor=case.descriptor,
         )
+        selected = _ti.select_time_integrator(request)
         assert selected.implementation == case.owner.__name__
-        integrator = case.selected_integrator()
+        integrator = selected.construct(request)
         assert type(integrator) is case.owner
         state = integrator.step(case.rhs, case.state, 1.0e-2)  # type: ignore[attr-defined]
         assert cases.err(state.u, case.exact, state.t) < case.tolerance
-        case.postcheck(case, state)
+        case.postcheck(case, state, integrator)
 
 
 class _StepSelectionRegionCoverageClaim(Claim[Any]):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Protocol, TypeAlias
@@ -33,6 +33,7 @@ class AlgorithmCapability:
     order_step: int | None = None
     supported_orders: frozenset[int] | None = None
     coverage_regions: tuple[CoverageRegion, ...] = ()
+    constructor: Callable[[AlgorithmRequest], object] | None = None
 
     def supports(self, request: AlgorithmRequest) -> bool:
         """Return whether this declaration inhabits ``request``."""
@@ -60,6 +61,14 @@ class AlgorithmCapability:
             )
         )
         return structure_satisfied and descriptor_satisfied
+
+    def construct(self, request: AlgorithmRequest) -> object:
+        """Construct the selected implementation for ``request``."""
+        if self.constructor is None:
+            raise ValueError(f"{self.name} does not declare an executable constructor")
+        if not self.supports(request):
+            raise ValueError(f"{self.name} does not support request {request!r}")
+        return self.constructor(request)
 
 
 @dataclass(frozen=True)
