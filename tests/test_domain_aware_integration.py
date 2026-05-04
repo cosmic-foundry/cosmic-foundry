@@ -10,10 +10,14 @@ import pytest
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     MapStructureField,
+    ParameterDescriptor,
     map_structure_parameter_schema,
 )
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.time_integrators.capabilities import (
+    rhs_step_diagnostics_descriptor,
+)
 from tests.claims import Claim
 
 _TIME_BACKEND = NumpyBackend()
@@ -219,11 +223,15 @@ class _ReactionNetworkStepDescriptorDomainLimitClaim(Claim[Any]):
             Tensor([1.0e-3, 1.0 - 1.0e-3], backend=_TIME_BACKEND),
         )
         dt = 5.0e-3
-        descriptor = rhs.step_map_structure_descriptor(
-            state,
-            dt,
-            local_error_target=1.0e-6,
-            retry_budget=5,
+        descriptor = ParameterDescriptor(
+            rhs.map_structure_descriptor().coordinates
+            | rhs_step_diagnostics_descriptor(
+                rhs,
+                state,
+                dt,
+                local_error_target=1.0e-6,
+                retry_budget=5,
+            ).coordinates
         )
         schema = map_structure_parameter_schema()
         regions = {region.name: region for region in schema.derived_regions}

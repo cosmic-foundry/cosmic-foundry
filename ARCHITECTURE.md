@@ -790,14 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: use domain-step margin in constraint-aware controller selection
-   and delete the remaining parallel domain-awareness capability vocabulary.
-2. Review whether reaction-network step diagnostics and generic RHS step
-   diagnostics are now the same projection; if so, keep one projection path and
-   delete the duplicate name.
-3. Use domain-step margin in generic/adaptive controller selection where a
+1. Current PR: keep generic RHS step diagnostics as the only step-local map
+   projection path, and delete reaction-network methods that merely wrap or
+   rename that projection.
+2. Use domain-step margin in generic/adaptive controller selection where a
    concrete calculation shows the selector needs to distinguish domain-limited
    advancement from ordinary RHS advancement.
+3. Review whether reaction-network constraint lifecycle evidence and generic map
+   structure evidence now compose cleanly enough that any remaining
+   reaction-specific selector setup can be deleted.
 
 Roadmap sketch:
 
@@ -905,6 +906,11 @@ equilibrium constraints support constraint lifecycle management when the
 proposed step is domain-limited.  The controller no longer advertises a
 parallel domain-awareness capability label; domain awareness is a
 consequence of the `DOMAIN_STEP_MARGIN` coordinate.
+Reaction-network RHS classes expose intrinsic stoichiometric evidence and
+map-structure evidence only; step-local diagnostics are projected by the
+generic RHS step descriptor and composed at the request site.  Implementation
+methods must not import capability modules to manufacture selection descriptors
+from inside the class.
 Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
 `jacobian_rhs` structure label.  They select from derivative-oracle descriptor
 evidence: an available Jacobian callback or matrix derivative is the premise
