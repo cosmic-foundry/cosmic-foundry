@@ -108,12 +108,16 @@ class _StepSelectionCase:
     def owner(self) -> type:
         return self.ownership.owner
 
-    def selected_integrator(self) -> object | None:
+    def selected_integrator(self) -> object:
         owner = self.owner
         if issubclass(owner, _ti.ExplicitMultistepIntegrator):
             return owner.for_order(self.order)
         if issubclass(owner, _ti.MultistepIntegrator):
-            return None
+            corrector_family = self.descriptor.coordinate(
+                MapStructureField.NORDSIECK_CORRECTOR_FAMILY
+            ).value
+            assert corrector_family in ("adams", "bdf")
+            return owner(corrector_family, self.order)
         if issubclass(owner, _ti.CompositionIntegrator):
             return owner(
                 [_ti.RungeKuttaIntegrator(1) for _ in self.rhs.components],  # type: ignore[attr-defined]
@@ -212,18 +216,19 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
     rhs = cases.scalar_decay_jacobian_rhs()
     integrator = _ti.MultistepIntegrator("adams", 4)
     state = integrator.init_state(rhs, 0.0, Tensor([1.0], backend=_TIME_BACKEND), 1e-2)
+    descriptor = nordsieck_history_descriptor("adams")
     assert isinstance(state.history, _ti.NordsieckHistory)
     assert state.history.q == 4
     return _StepSelectionCase(
         name="nordsieck_history",
-        descriptor=nordsieck_history_descriptor(),
+        descriptor=descriptor,
         order=4,
         state=state,
         rhs=rhs,
         exact=cases.exact_scalar_decay,
         tolerance=1.0e-8,
         ownership=SelectionOwnership(
-            nordsieck_history_descriptor(),
+            descriptor,
             time_integration_step_map_regions(),
             map_structure_parameter_schema(),
         ),
@@ -396,11 +401,10 @@ class _StepSelectionClaim(Claim[Any]):
         )
         assert selected.implementation == case.owner.__name__
         integrator = case.selected_integrator()
-        if integrator is not None:
-            assert type(integrator) is case.owner
-            state = integrator.step(case.rhs, case.state, 1.0e-2)  # type: ignore[attr-defined]
-            assert cases.err(state.u, case.exact, state.t) < case.tolerance
-            case.postcheck(case, state)
+        assert type(integrator) is case.owner
+        state = integrator.step(case.rhs, case.state, 1.0e-2)  # type: ignore[attr-defined]
+        assert cases.err(state.u, case.exact, state.t) < case.tolerance
+        case.postcheck(case, state)
 
 
 class _StepSelectionRegionCoverageClaim(Claim[Any]):

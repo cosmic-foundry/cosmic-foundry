@@ -174,7 +174,7 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
         _SolveRelationSchemaClaim._reaction_network_descriptor(),
         rhs_evaluation_descriptor(),
         rhs_history_descriptor(),
-        nordsieck_history_descriptor(),
+        nordsieck_history_descriptor("adams"),
     )
 
 

@@ -793,14 +793,16 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make fixed-order Nordsieck step selection
-   executable from the selected capability, or delete its selector coverage if
-   the distinct scenario cannot be expressed precisely. The missing premise is
-   the multistep corrector family: it is currently constructor state, not
-   descriptor evidence. Ground the change in the existing Nordsieck history
-   scalar-decay calculation and the descriptor-backed step-selection cases. Do
-   not add mesh, flux-form, locality, or CFL axes until a real mesh object is
-   the implementation premise being tested.
+2. Candidate next calculation: move selected implementation construction out
+   of `tests/test_algorithm_selection.py` and into the capability model, so a
+   selected capability is an executable construction relation rather than a
+   label plus a test-local factory. Ground the change in the descriptor-backed
+   step-selection cases, including Nordsieck history, composition, and
+   semi-linear scalar-decay calculations. If the capability model cannot
+   construct an implementation from the request, name the missing descriptor
+   premise or delete that selector coverage. Do not add mesh, flux-form,
+   locality, or CFL axes until a real mesh object is the implementation premise
+   being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

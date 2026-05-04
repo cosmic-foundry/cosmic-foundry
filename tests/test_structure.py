@@ -1348,7 +1348,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         map_regions = self._regions(map_structure_schema)
         rhs_descriptor = _rhs_evaluation_descriptor()
         rhs_history_descriptor = _rhs_history_descriptor()
-        nordsieck_history_descriptor = _nordsieck_history_descriptor()
+        nordsieck_history_descriptor = _nordsieck_history_descriptor("adams")
         for descriptor in (
             rhs_descriptor,
             rhs_history_descriptor,
@@ -3154,7 +3154,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_nordsieck_history_descriptor(),
+                descriptor=_nordsieck_history_descriptor("adams"),
             ),
             "MultistepIntegrator",
         ),
