@@ -183,6 +183,9 @@ class _AffineTestRHS:
     def linear_operator(self, _t: float, u: Tensor) -> Tensor:
         return Tensor([[0.0, 8.0], [0.0, 0.0]], backend=u.backend)
 
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return self.linear_operator(_t, u)
+
 
 def _unknown_test_rhs(_t: float, u: Tensor) -> Tensor:
     return u
@@ -1660,6 +1663,18 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert map_regions["single_step_rhs_evaluation"].contains(rhs_descriptor)
         assert map_regions["rhs_history_state"].contains(rhs_history_descriptor)
         assert map_regions["nordsieck_state"].contains(nordsieck_history_descriptor)
+        assert map_regions["nonstiff_step"].contains(rhs_descriptor)
+        stiff_descriptor = (
+            _TIME_INTEGRATOR_CAPABILITIES.rhs_step_diagnostics_descriptor(
+                _AffineTestRHS(),
+                _resolve_dotted("cosmic_foundry.computation.time_integrators.ODEState")(
+                    0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND)
+                ),
+                1.0,
+            )
+        )
+        map_structure_schema.validate_descriptor(stiff_descriptor)
+        assert map_regions["stiff_step"].contains(stiff_descriptor)
 
         with pytest.raises(ValueError):
             ParameterSpaceSchema(

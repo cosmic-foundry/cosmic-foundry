@@ -790,17 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: factor solve-relation, linear-operator, and decomposition
-   coordinates into target-specific projection functions, so assembled-linear
-   evidence composes schema projections instead of maintaining one mixed
-   coordinate dictionary.
-2. Add a follow-up sprint plan for quantitative time-integrator descriptors:
-   domain distance, stiffness estimates, Jacobian availability, local error
-   target, retry budget, and RHS evaluation cost should reuse the same
-   descriptor/coverage machinery.
-3. Ground the time-integrator descriptor plan in one stiff/nonstiff concrete
-   calculation, then delete any selector vocabulary that cannot be derived from
-   those quantitative coordinates.
+1. Current PR: add quantitative time-integrator map coordinates for
+   domain-step margin, step-local stiffness estimate, local error target, retry
+   budget, and RHS evaluation cost, grounded by stiff/nonstiff scalar decay
+   and a one-component domain-boundary calculation.
+2. Use those quantitative coordinates in time-integrator selection and delete
+   any selector vocabulary, such as stored Nordsieck family labels, that can be
+   derived from the coordinates plus available state history.
+3. Extend the same calculation loop to domain-limited reaction-network steps:
+   the descriptor should expose when state-domain distance, not method order,
+   controls the next admissible step.
 
 Roadmap sketch:
 
@@ -918,6 +917,11 @@ driver now select from direct RHS-evaluation descriptor evidence, with only
 non-map construction premises such as an already supplied controller remaining
 as structure requirements.  Descriptor-backed time-integration capability rows
 no longer carry empty structural contracts.
+Time-integrator map descriptors are becoming quantitative rather than purely
+structural: a proposed RHS step can expose domain-step margin, Gershgorin
+stiffness estimate for `hJ`, local error target, retry budget, and RHS
+evaluation cost.  Nonstiff, stiff, and domain-limited step labels are derived
+regions over those coordinates.  They are not independent method requests.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.

@@ -241,6 +241,7 @@ class MapStructureField(Enum):
 
     ADDITIVE_COMPONENT_COUNT = "additive_component_count"
     CONSERVED_LINEAR_FORM_COUNT = "conserved_linear_form_count"
+    DOMAIN_STEP_MARGIN = "domain_step_margin"
     EXACT_LINEAR_OPERATOR_AVAILABLE = "exact_linear_operator_available"
     EXPLICIT_COMPONENT_AVAILABLE = "explicit_component_available"
     HAMILTONIAN_PARTITION_AVAILABLE = "hamiltonian_partition_available"
@@ -251,8 +252,12 @@ class MapStructureField(Enum):
     NORDSIECK_CORRECTOR_FAMILY = "nordsieck_corrector_family"
     NORDSIECK_HISTORY_AVAILABLE = "nordsieck_history_available"
     NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
+    LOCAL_ERROR_TARGET = "local_error_target"
+    RETRY_BUDGET = "retry_budget"
     RHS_HISTORY_AVAILABLE = "rhs_history_available"
     RHS_EVALUATION_AVAILABLE = "rhs_evaluation_available"
+    RHS_EVALUATION_COST_FMAS = "rhs_evaluation_cost_fmas"
+    STIFFNESS_ESTIMATE = "stiffness_estimate"
     SYMPLECTIC_FORM_DEFECT_UPPER_BOUND = "symplectic_form_defect_upper_bound"
     SYMPLECTIC_FORM_INVARIANT_AVAILABLE = "symplectic_form_invariant_available"
 
@@ -1650,6 +1655,31 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
             ),
             _bool_axis(field.HAMILTONIAN_PARTITION_AVAILABLE),
             _bool_axis(field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE),
+            _axis(
+                field.DOMAIN_STEP_MARGIN,
+                (
+                    NumericInterval("domain_crossing", upper=0.0),
+                    NumericInterval("domain_interior", lower=0.0),
+                ),
+                units="domain-limited step margin",
+            ),
+            _axis(
+                field.STIFFNESS_ESTIMATE,
+                (
+                    NumericInterval("nonstiff", lower=0.0, upper=0.5),
+                    NumericInterval(
+                        "transition", lower=0.5, upper=1.0, include_lower=False
+                    ),
+                    NumericInterval("stiff", lower=1.0, include_lower=False),
+                ),
+                units="Gershgorin bound for hJ",
+            ),
+            _positive_axis(field.LOCAL_ERROR_TARGET, units="state norm"),
+            _nonnegative_axis(field.RETRY_BUDGET, units="step attempts"),
+            _nonnegative_axis(
+                field.RHS_EVALUATION_COST_FMAS,
+                units="fused multiply-adds",
+            ),
             _nonnegative_axis(
                 field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND,
                 units="canonical two-form defect upper bound",
@@ -1703,6 +1733,18 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
                         ),
                     ),
                 ),
+            ),
+            DerivedParameterRegion(
+                "nonstiff_step",
+                ((ComparisonPredicate(field.STIFFNESS_ESTIMATE, "<=", 0.5),),),
+            ),
+            DerivedParameterRegion(
+                "stiff_step",
+                ((ComparisonPredicate(field.STIFFNESS_ESTIMATE, ">", 1.0),),),
+            ),
+            DerivedParameterRegion(
+                "domain_limited_step",
+                ((ComparisonPredicate(field.DOMAIN_STEP_MARGIN, "<=", 0.0),),),
             ),
         ),
     )

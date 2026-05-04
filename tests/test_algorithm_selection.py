@@ -34,6 +34,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     nordsieck_history_descriptor,
     rhs_evaluation_descriptor,
     rhs_history_descriptor,
+    rhs_step_diagnostics_descriptor,
     semilinear_map_descriptor,
     split_map_descriptor,
     time_integration_step_map_regions,
@@ -48,11 +49,24 @@ _DAMPED_OSCILLATOR_GAMMA = 0.2
 
 
 class _AffineDecayRHS:
+    def __init__(self, rate: float = 1.0) -> None:
+        self._rate = rate
+
     def __call__(self, t: float, u: Tensor) -> Tensor:
         return self.linear_operator(t, u) @ u
 
     def linear_operator(self, _t: float, u: Tensor) -> Tensor:
-        return Tensor([[-1.0]], backend=u.backend)
+        return Tensor([[-self._rate]], backend=u.backend)
+
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return self.linear_operator(_t, u)
+
+
+class _BoundaryApproachRHS:
+    state_domain = _ti.NonnegativeStateDomain(1)
+
+    def __call__(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([-1.0], backend=u.backend)
 
 
 def _exact_damped_osc(t: float) -> tuple[float, ...]:
@@ -532,6 +546,55 @@ class _DampedOscillatorSymplecticDefectClaim(Claim[Any]):
         assert _oscillator_energy(state.u) < initial_energy
 
 
+class _StepDiagnosticStiffnessClaim(Claim[Any]):
+    """Grounded claim for quantitative stiff/nonstiff map evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/step_diagnostics_stiffness"
+
+    def check(self, _calibration: Any) -> None:
+        schema = map_structure_parameter_schema()
+        regions = {region.name: region for region in schema.derived_regions}
+        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        nonstiff = rhs_step_diagnostics_descriptor(
+            _AffineDecayRHS(0.1),
+            state,
+            1.0e-1,
+            local_error_target=1.0e-6,
+            retry_budget=3,
+        )
+        stiff = rhs_step_diagnostics_descriptor(_AffineDecayRHS(100.0), state, 1.0e-1)
+        for descriptor in (nonstiff, stiff):
+            schema.validate_descriptor(descriptor)
+            assert regions["single_step_rhs_evaluation"].contains(descriptor)
+        assert regions["nonstiff_step"].contains(nonstiff)
+        assert regions["stiff_step"].contains(stiff)
+        assert nonstiff.coordinate(
+            MapStructureField.STIFFNESS_ESTIMATE
+        ).value == pytest.approx(1.0e-2)
+        assert stiff.coordinate(
+            MapStructureField.STIFFNESS_ESTIMATE
+        ).value == pytest.approx(10.0)
+        assert nonstiff.coordinate(
+            MapStructureField.LOCAL_ERROR_TARGET
+        ).value == pytest.approx(1.0e-6)
+        assert nonstiff.coordinate(MapStructureField.RETRY_BUDGET).value == 3
+        assert (
+            nonstiff.coordinate(MapStructureField.RHS_EVALUATION_COST_FMAS).value == 1.0
+        )
+        domain_limited = rhs_step_diagnostics_descriptor(
+            _BoundaryApproachRHS(),
+            _ti.ODEState(0.0, Tensor([0.1], backend=_TIME_BACKEND)),
+            1.0e-1,
+        )
+        schema.validate_descriptor(domain_limited)
+        assert regions["domain_limited_step"].contains(domain_limited)
+        assert domain_limited.coordinate(
+            MapStructureField.DOMAIN_STEP_MARGIN
+        ).value == pytest.approx(-0.1)
+
+
 class _AutoIntegratorSelectionClaim(Claim[Any]):
     """Grounded claim for RHS-type projection into capability selection."""
 
@@ -589,6 +652,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _OscillatorInvariantComparisonClaim(),
     _OscillatorNegativeInvariantEvidenceClaim(),
     _DampedOscillatorSymplecticDefectClaim(),
+    _StepDiagnosticStiffnessClaim(),
 )
 
 
