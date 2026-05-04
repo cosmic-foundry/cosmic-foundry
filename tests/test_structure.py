@@ -589,8 +589,7 @@ class _ArchitectureOwnershipSpec:
     rejected_requests: tuple[_CapabilityRejectionExpectation, ...] = ()
     descriptor_owned_capabilities: bool = False
     descriptor_request_property_limit: int | None = None
-    expected_class_modules: dict[str, str] | None = None
-    required_name_fragments: dict[str, tuple[str, ...]] | None = None
+    expected_class_modules: dict[type | str, str] | None = None
 
 
 def _resolve_dotted(name: str) -> Any:
@@ -635,7 +634,6 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         if self._spec.capability_provider is not None:
             self._check_capabilities(exported)
         self._check_class_modules(package)
-        self._check_name_fragments(package)
 
     def _check_capabilities(self, exported: set[str]) -> None:
         provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
@@ -774,25 +772,24 @@ class _ArchitectureOwnershipClaim(Claim[None]):
 
     def _check_class_modules(self, package: types.ModuleType) -> None:
         expected = self._spec.expected_class_modules or {}
+        if self._spec.descriptor_owned_capabilities:
+            label_keys = [cls for cls in expected if isinstance(cls, str)]
+            assert not label_keys, (
+                "descriptor-owned class/module expectations must use class identity: "
+                f"{label_keys}"
+            )
         violations = []
-        for clsname, module_stem in expected.items():
-            cls = getattr(package, clsname)
+        for expected_cls, module_stem in expected.items():
+            cls = (
+                getattr(package, expected_cls)
+                if isinstance(expected_cls, str)
+                else expected_cls
+            )
+            clsname = cls.__name__
             actual_stem = cls.__module__.split(".")[-1]
             if actual_stem != module_stem:
                 violations.append(f"{clsname}: {actual_stem} != {module_stem}")
         assert not violations, "class/module ownership mismatch: " + "; ".join(
-            violations
-        )
-
-    def _check_name_fragments(self, package: types.ModuleType) -> None:
-        expected = self._spec.required_name_fragments or {}
-        violations = []
-        for clsname, fragments in expected.items():
-            getattr(package, clsname)
-            missing = [fragment for fragment in fragments if fragment not in clsname]
-            if missing:
-                violations.append(f"{clsname}: missing {missing}")
-        assert not violations, "ownership-obscuring class names: " + "; ".join(
             violations
         )
 
@@ -3114,38 +3111,8 @@ _nordsieck_history_descriptor = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.capabilities."
     "nordsieck_history_descriptor"
 )
-_RungeKuttaIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.RungeKuttaIntegrator"
-)
-_ExplicitMultistepIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.ExplicitMultistepIntegrator"
-)
-_MultistepIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.MultistepIntegrator"
-)
-_ImplicitRungeKuttaIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.ImplicitRungeKuttaIntegrator"
-)
-_AdditiveRungeKuttaIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.AdditiveRungeKuttaIntegrator"
-)
-_LawsonRungeKuttaIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.LawsonRungeKuttaIntegrator"
-)
-_SymplecticCompositionIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.SymplecticCompositionIntegrator"
-)
-_CompositionIntegrator = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.CompositionIntegrator"
-)
-_AdaptiveNordsieckController = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.AdaptiveNordsieckController"
-)
-_IntegrationDriver = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.IntegrationDriver"
-)
-_ConstraintAwareController = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.ConstraintAwareController"
+_TIME_INTEGRATOR_PACKAGE: Any = importlib.import_module(
+    "cosmic_foundry.computation.time_integrators"
 )
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
@@ -3279,7 +3246,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_rhs_evaluation_descriptor(),
             ),
-            _RungeKuttaIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3287,7 +3254,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_rhs_history_descriptor(),
             ),
-            _ExplicitMultistepIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3295,7 +3262,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_nordsieck_history_descriptor("adams"),
             ),
-            _MultistepIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3303,7 +3270,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
             ),
-            _ImplicitRungeKuttaIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3311,7 +3278,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=3,
                 descriptor=_split_map_descriptor(),
             ),
-            _AdditiveRungeKuttaIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3319,7 +3286,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_semilinear_map_descriptor(),
             ),
-            _LawsonRungeKuttaIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3327,7 +3294,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_hamiltonian_map_descriptor(),
             ),
-            _SymplecticCompositionIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3335,7 +3302,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_composite_map_descriptor(2),
             ),
-            _CompositionIntegrator,
+            _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3343,7 +3310,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
             ),
-            _AdaptiveNordsieckController,
+            _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3351,7 +3318,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=3,
                 descriptor=_rhs_evaluation_descriptor(),
             ),
-            _IntegrationDriver,
+            _TIME_INTEGRATOR_PACKAGE.IntegrationDriver,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3359,7 +3326,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
                 descriptor=_SolveRelationSchemaClaim._constraint_aware_descriptor(),
             ),
-            _ConstraintAwareController,
+            _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,
         ),
     ),
     rejected_requests=(
@@ -3399,53 +3366,48 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     descriptor_owned_capabilities=True,
     descriptor_request_property_limit=1,
     expected_class_modules={
-        "AdaptiveNordsieckController": "adaptive_nordsieck",
-        "AdditiveRungeKuttaIntegrator": "imex",
-        "AlgorithmStructureContract": "algorithm_capabilities",
-        "AutoIntegrator": "auto",
-        "BlackBoxRHS": "integrator",
-        "ComponentFlowProtocol": "splitting",
-        "ComponentFlowRHS": "splitting",
-        "CompositeRHS": "splitting",
-        "CompositionIntegrator": "splitting",
-        "ConstraintAwareController": "constraint_aware",
-        "ConstantStep": "integrator",
-        "DomainCheck": "domains",
-        "DomainViolation": "domains",
-        "ExplicitMultistepIntegrator": "explicit_multistep",
-        "FiniteDiffJacobianRHS": "implicit",
-        "HamiltonianRHS": "symplectic",
-        "ImplicitRungeKuttaIntegrator": "implicit",
-        "IntegrationDriver": "integration_driver",
-        "IntegrationSelectionResult": "integration_driver",
-        "JacobianRHS": "implicit",
-        "LawsonRungeKuttaIntegrator": "exponential",
-        "LinearReactionNetworkRHS": "reaction_network",
-        "MultistepIntegrator": "nordsieck",
-        "NonnegativeStateDomain": "domains",
-        "NordsieckHistory": "nordsieck",
-        "ODEState": "integrator",
-        "OrderDecision": "variable_order",
-        "OrderSelector": "variable_order",
-        "PhiFunction": "exponential",
-        "PIController": "integrator",
-        "ReactionNetworkRHS": "reaction_network",
-        "RungeKuttaIntegrator": "runge_kutta",
-        "SemilinearRHS": "exponential",
-        "SplitRHS": "imex",
-        "StiffnessDiagnostic": "stiffness",
-        "StiffnessSwitcher": "stiffness",
-        "SymplecticCompositionIntegrator": "symplectic",
-        "TimeIntegrationCapability": "algorithm_capabilities",
-        "TimeIntegrationRegistry": "algorithm_capabilities",
-        "UnitTransferTransitionSystemProtocol": "reaction_network",
-    },
-    required_name_fragments={
-        "AdaptiveNordsieckController": ("Adaptive", "Nordsieck", "Controller"),
-        "ConstraintAwareController": ("Constraint", "Controller"),
-        "IntegrationDriver": ("Integration", "Driver"),
-        "OrderSelector": ("Order", "Selector"),
-        "StiffnessSwitcher": ("Stiffness", "Switcher"),
+        _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController: "adaptive_nordsieck",
+        _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator: "imex",
+        _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract: "algorithm_capabilities",
+        _TIME_INTEGRATOR_PACKAGE.AutoIntegrator: "auto",
+        _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS: "integrator",
+        _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol: "splitting",
+        _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS: "splitting",
+        _TIME_INTEGRATOR_PACKAGE.CompositeRHS: "splitting",
+        _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator: "splitting",
+        _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController: "constraint_aware",
+        _TIME_INTEGRATOR_PACKAGE.ConstantStep: "integrator",
+        _TIME_INTEGRATOR_PACKAGE.DomainCheck: "domains",
+        _TIME_INTEGRATOR_PACKAGE.DomainViolation: "domains",
+        _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator: "explicit_multistep",
+        _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS: "implicit",
+        _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS: "symplectic",
+        _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator: "implicit",
+        _TIME_INTEGRATOR_PACKAGE.IntegrationDriver: "integration_driver",
+        _TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult: "integration_driver",
+        _TIME_INTEGRATOR_PACKAGE.JacobianRHS: "implicit",
+        _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator: "exponential",
+        _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS: "reaction_network",
+        _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator: "nordsieck",
+        _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain: "domains",
+        _TIME_INTEGRATOR_PACKAGE.NordsieckHistory: "nordsieck",
+        _TIME_INTEGRATOR_PACKAGE.ODEState: "integrator",
+        _TIME_INTEGRATOR_PACKAGE.OrderDecision: "variable_order",
+        _TIME_INTEGRATOR_PACKAGE.OrderSelector: "variable_order",
+        _TIME_INTEGRATOR_PACKAGE.PhiFunction: "exponential",
+        _TIME_INTEGRATOR_PACKAGE.PIController: "integrator",
+        _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS: "reaction_network",
+        _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator: "runge_kutta",
+        _TIME_INTEGRATOR_PACKAGE.SemilinearRHS: "exponential",
+        _TIME_INTEGRATOR_PACKAGE.SplitRHS: "imex",
+        _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic: "stiffness",
+        _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher: "stiffness",
+        _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator: "symplectic",
+        _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability: "algorithm_capabilities",
+        _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry: "algorithm_capabilities",
+        _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol: (
+            "reaction_network"
+        ),
     },
 )
 
@@ -3502,15 +3464,6 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
         "StationaryIterationSolver": "iterative_solver",
-    },
-    required_name_fragments={
-        "DenseCGSolver": ("Dense", "Solver"),
-        "DenseGMRESSolver": ("Dense", "Solver"),
-        "DenseGaussSeidelSolver": ("Dense", "Solver"),
-        "DenseJacobiSolver": ("Dense", "Solver"),
-        "DenseLUSolver": ("Dense", "Solver"),
-        "DenseSVDLeastSquaresSolver": ("Dense", "Solver"),
-        "DenseSVDSolver": ("Dense", "Solver"),
     },
 )
 
@@ -3597,12 +3550,6 @@ _DECOMPOSITION_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LUFactorization": "lu_factorization",
         "SVDDecomposedTensor": "svd_factorization",
         "SVDFactorization": "svd_factorization",
-    },
-    required_name_fragments={
-        "LUDecomposedTensor": ("Decomposed", "Tensor"),
-        "LUFactorization": ("Factorization",),
-        "SVDDecomposedTensor": ("Decomposed", "Tensor"),
-        "SVDFactorization": ("Factorization",),
     },
 )
 
@@ -3763,12 +3710,6 @@ _DISCRETE_OPERATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
         "VolumeField": "volume_field",
         "ZeroGhostCells": "discrete_boundary_condition",
     },
-    required_name_fragments={
-        "AdvectionDiffusionFlux": ("Advection", "Diffusion", "Flux"),
-        "AdvectiveFlux": ("Flux",),
-        "DiffusiveFlux": ("Flux",),
-        "DivergenceFormDiscretization": ("Divergence", "Discretization"),
-    },
 )
 
 _GEOMETRY_OWNERSHIP = _ArchitectureOwnershipSpec(
@@ -3890,13 +3831,6 @@ _GEOMETRY_OWNERSHIP = _ArchitectureOwnershipSpec(
         "GeometryRegistry": "algorithm_capabilities",
         "GeometryRequest": "algorithm_capabilities",
         "SchwarzschildManifold": "schwarzschild_manifold",
-    },
-    required_name_fragments={
-        "CartesianExteriorDerivative": ("Cartesian", "Derivative"),
-        "CartesianMesh": ("Cartesian", "Mesh"),
-        "CartesianRestrictionOperator": ("Cartesian", "Restriction"),
-        "EuclideanManifold": ("Manifold",),
-        "SchwarzschildManifold": ("Manifold",),
     },
 )
 

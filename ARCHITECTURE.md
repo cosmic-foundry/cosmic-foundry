@@ -794,13 +794,13 @@ Current short queue:
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
 2. Candidate next calculation: make descriptor-owned class/module ownership
-   checks take class identity as their premise, and delete name-fragment checks
-   that merely re-prove exported spelling. Ground the change in the
-   time-integration ownership spec and the existing descriptor-backed selector
-   and calculation tests. Labels may remain for human-facing exports and docs,
-   but they must not be the premise that proves selector correctness. Do not add
-   mesh, flux-form, locality, or CFL axes until a real mesh object is the
-   implementation premise being tested.
+   compare module identity rather than module-name stems, so both sides of the
+   expectation are executable objects before any human-facing labels are
+   projected. Ground the change in the time-integration ownership spec and the
+   existing descriptor-backed selector and calculation tests. Labels may remain
+   for human-facing exports and docs, but they must not be the premise that
+   proves selector correctness. Do not add mesh, flux-form, locality, or CFL
+   axes until a real mesh object is the implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
