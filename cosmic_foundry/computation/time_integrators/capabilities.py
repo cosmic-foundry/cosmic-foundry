@@ -316,25 +316,8 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
     )
 
 
-def _domain_step_margin_regions(
-    owner: type,
-    predicates: tuple[ComparisonPredicate | MembershipPredicate, ...],
-) -> tuple[CoverageRegion, CoverageRegion]:
-    field = MapStructureField
-    return (
-        CoverageRegion(
-            owner,
-            predicates + (ComparisonPredicate(field.DOMAIN_STEP_MARGIN, "<=", 0.0),),
-        ),
-        CoverageRegion(
-            owner,
-            predicates + (ComparisonPredicate(field.DOMAIN_STEP_MARGIN, ">", 0.0),),
-        ),
-    )
-
-
-def _adaptive_advance_regions(owner: type) -> tuple[CoverageRegion, CoverageRegion]:
-    return _domain_step_margin_regions(
+def _adaptive_advance_region(owner: type) -> CoverageRegion:
+    return CoverageRegion(
         owner,
         (
             MembershipPredicate(
@@ -357,11 +340,9 @@ def _rhs_evaluation_region(owner: type) -> CoverageRegion:
     )
 
 
-def _unconstrained_rhs_evaluation_regions(
-    owner: type,
-) -> tuple[CoverageRegion, CoverageRegion]:
+def _unconstrained_rhs_evaluation_region(owner: type) -> CoverageRegion:
     field = MapStructureField
-    return _domain_step_margin_regions(
+    return CoverageRegion(
         owner,
         (
             MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
@@ -582,7 +563,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        coverage_regions=_adaptive_advance_regions(AdaptiveNordsieckController),
+        coverage_regions=(_adaptive_advance_region(AdaptiveNordsieckController),),
     ),
     TimeIntegrationCapability(
         "explicit_multistep",
@@ -622,7 +603,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         ),
         1,
         6,
-        coverage_regions=_unconstrained_rhs_evaluation_regions(IntegrationDriver),
+        coverage_regions=(_unconstrained_rhs_evaluation_region(IntegrationDriver),),
     ),
     TimeIntegrationCapability(
         "constraint_aware_controller",

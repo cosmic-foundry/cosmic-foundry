@@ -665,7 +665,7 @@ class _NordsieckFamilyFromStiffnessClaim(Claim[Any]):
 
 
 class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
-    """Grounded claim that controller selection consumes domain-step margin."""
+    """Grounded claim that ordinary advance ownership does not split on margin."""
 
     @property
     def description(self) -> str:
@@ -704,7 +704,7 @@ class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
         limited_region = self._selected_region(
             generic_limited_capability, boundary_step
         )
-        assert interior_region != limited_region
+        assert interior_region == limited_region
 
         adaptive_limited_descriptor = ParameterDescriptor(
             derivative_oracle_descriptor().coordinates
@@ -723,7 +723,7 @@ class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
         assert adaptive_limited_capability.owner is _ti.AdaptiveNordsieckController
         assert self._selected_region(
             adaptive_limited_capability, adaptive_limited_descriptor
-        ) != self._selected_region(
+        ) == self._selected_region(
             adaptive_limited_capability,
             ParameterDescriptor(
                 derivative_oracle_descriptor().coordinates

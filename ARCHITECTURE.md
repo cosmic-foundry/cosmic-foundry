@@ -790,13 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: move constraint-lifecycle selection from reaction-network
-   equilibrium-count evidence to generic map algebraic-constraint evidence.
-2. Delete any advance-controller ownership region that cannot be separated from
-   another controller by descriptor predicates grounded in a calculation.
-3. Review whether the remaining `AutoIntegrator.step` reaction-network branch is
+1. Current PR: delete advance-controller ownership regions that split on
+   domain-step margin without selecting a different controller or constructing
+   different behavior.
+2. Review whether the remaining `AutoIntegrator.step` reaction-network branch is
    an execution concern that should be expressed as generic constrained-Newton
    step evidence instead of a concrete RHS type check.
+3. Review whether multi-region time-integrator ownership should always project
+   into constructor parameters or into distinct owners, with no documentation-only
+   region splits.
 
 Roadmap sketch:
 
@@ -915,13 +917,12 @@ branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle
 evidence.  Request builders may branch on structural protocols, not concrete
 implementation classes.
-Generic and adaptive advance-controller ownership consumes the same
-`DOMAIN_STEP_MARGIN` coordinate.  Interior and domain-limited advancement are
-separate coverage regions even when they currently select the same controller;
-this makes the atlas show whether a controller owns ordinary RHS advancement,
-domain-limited advancement, or both.  Adaptive Nordsieck advancement combines
-derivative-oracle evidence with domain-step evidence rather than selecting from
-a derivative oracle alone.
+Generic and adaptive advance-controller ownership does not split on
+`DOMAIN_STEP_MARGIN` unless the split selects a different controller or
+constructs different behavior.  Domain-step margin remains descriptor evidence
+used by domain-aware step calculations and by constraint-lifecycle selection,
+but ordinary `IntegrationDriver` and `AdaptiveNordsieckController` advancement
+own one region each.
 Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
 `jacobian_rhs` structure label.  They select from derivative-oracle descriptor
 evidence: an available Jacobian callback or matrix derivative is the premise

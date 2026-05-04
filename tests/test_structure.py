@@ -811,6 +811,15 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             "descriptor-owned capabilities require ad hoc structure gates: "
             f"{structure_gated}"
         )
+        unjustified_splits = [
+            cap.owner.__name__
+            for cap in capabilities
+            if len(cap.coverage_regions) > 1 and cap.constructor is None
+        ]
+        assert not unjustified_splits, (
+            "multi-region ownership must construct different implementation "
+            f"behavior from the region evidence: {unjustified_splits}"
+        )
         label_expectations = [
             expectation.request
             for expectation in self._spec.request_expectations
@@ -2070,23 +2079,6 @@ class _SolveRelationSchemaClaim(Claim[None]):
                     algebraic_constraint_count
                 ),
                 map_field.DOMAIN_STEP_MARGIN: DescriptorCoordinate(-1.0),
-            }
-        )
-
-    @staticmethod
-    def _domain_interior_derivative_descriptor() -> ParameterDescriptor:
-        state = _resolve_dotted("cosmic_foundry.computation.time_integrators.ODEState")(
-            0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND)
-        )
-        step_descriptor = _TIME_INTEGRATOR_CAPABILITIES.rhs_step_diagnostics_descriptor(
-            _AffineTestRHS(), state, 1.0
-        )
-        return ParameterDescriptor(
-            _TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor().coordinates
-            | {
-                MapStructureField.DOMAIN_STEP_MARGIN: step_descriptor.coordinate(
-                    MapStructureField.DOMAIN_STEP_MARGIN
-                )
             }
         )
 
@@ -4288,9 +4280,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=2,
-                descriptor=(
-                    _SolveRelationSchemaClaim._domain_interior_derivative_descriptor()
-                ),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
         ),
