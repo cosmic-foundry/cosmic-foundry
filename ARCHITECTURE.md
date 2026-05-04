@@ -793,14 +793,14 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: promote grouped public ownership into the
-   architecture spec itself, so descriptor-owned specs cannot provide
-   `public_categories` and `expected_class_modules` as independent projections.
-   Ground the change in the time-integration ownership spec and the existing
-   descriptor-backed selector and calculation tests. Labels may remain for
-   human-facing exports and docs, but they must not be the premise that proves
-   selector correctness. Do not add mesh, flux-form, locality, or CFL axes until
-   a real mesh object is the implementation premise being tested.
+2. Candidate next calculation: reduce grouped public ownership to category plus
+   exported object, deriving implementation modules from the objects themselves
+   rather than storing module expectations beside them. Ground the change in the
+   time-integration ownership spec and the existing descriptor-backed selector
+   and calculation tests. Labels may remain for human-facing exports and docs,
+   but they must not be the premise that proves selector correctness. Do not add
+   mesh, flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
