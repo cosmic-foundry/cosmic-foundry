@@ -64,6 +64,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     decomposition_descriptor_from_linear_operator_descriptor,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
+    linear_operator_descriptor_from_solve_relation_descriptor,
     linear_solver_parameter_schema,
     map_structure_parameter_schema,
     predicate_sets_are_disjoint,
@@ -2048,8 +2049,10 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                     ).value
                     == "matrix"
                 )
-                linear_descriptor = integrator.step_linear_operator_descriptor(
-                    _AffineTestRHS(), state, 0.25
+                linear_descriptor = (
+                    linear_operator_descriptor_from_solve_relation_descriptor(
+                        affine_descriptor
+                    )
                 )
                 linear_schema = linear_solver_parameter_schema()
                 linear_regions = self._regions(linear_schema)

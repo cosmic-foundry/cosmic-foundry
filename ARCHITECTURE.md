@@ -793,16 +793,15 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: derive the implicit-stage linear solve
-   witness directly from the solve-relation descriptor when matrix evidence is
-   available, so time integrators, linear solvers, and atlas generation consume
-   one object instead of parallel solve-relation and linear-operator
-   descriptors.
-3. Candidate following calculation: require descriptor-owned public category
+2. Candidate next calculation: require descriptor-owned public category
    classifiers to classify by exported object module and capability ownership
    only, with no object-identity special cases.  The structural test should
    encode this as a general AST premise over descriptor-owned classifiers, not
    as a ban on particular symbols.
+3. Candidate following calculation: collapse `LinearOperatorDescriptor` into a
+   view over `ParameterDescriptor` plus matrix witness, then update linear
+   solver and decomposition selection helpers so a descriptor-space projection
+   is a function, not a second descriptor-owning object.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

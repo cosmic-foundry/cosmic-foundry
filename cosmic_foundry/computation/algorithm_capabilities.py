@@ -352,6 +352,9 @@ class ParameterDescriptor:
     """Concrete problem location in descriptor coordinates."""
 
     coordinates: dict[DescriptorField, DescriptorCoordinate]
+    linear_operator: SmallLinearOperator | None = None
+    linear_rhs: Tensor | None = None
+    linear_matrix: tuple[tuple[float, ...], ...] = ()
 
     def coordinate(self, field: DescriptorField) -> DescriptorCoordinate:
         """Return the coordinate for ``field`` or an explicit unavailable value."""
@@ -1727,6 +1730,53 @@ def decomposition_descriptor_from_linear_operator_descriptor(
     )
 
 
+def linear_operator_descriptor_from_solve_relation_descriptor(
+    descriptor: ParameterDescriptor,
+) -> LinearOperatorDescriptor:
+    """Project a solve-relation descriptor with matrix evidence to linear form."""
+    if descriptor.linear_operator is None or descriptor.linear_rhs is None:
+        raise ValueError("solve-relation descriptor has no linear operator witness")
+    return linear_operator_descriptor_from_assembled_operator(
+        descriptor.linear_operator,
+        descriptor.linear_rhs,
+        requested_residual_tolerance=_required_float_coordinate(
+            descriptor, SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE
+        ),
+        requested_solution_tolerance=_required_float_coordinate(
+            descriptor, SolveRelationField.REQUESTED_SOLUTION_TOLERANCE
+        ),
+        work_budget_fmas=_required_float_coordinate(
+            descriptor, SolveRelationField.WORK_BUDGET_FMAS
+        ),
+        memory_budget_bytes=_required_float_coordinate(
+            descriptor, SolveRelationField.MEMORY_BUDGET_BYTES
+        ),
+        device_kind=_required_string_coordinate(
+            descriptor, SolveRelationField.DEVICE_KIND
+        ),
+    )
+
+
+def _required_float_coordinate(
+    descriptor: ParameterDescriptor,
+    field: DescriptorField,
+) -> float:
+    value = descriptor.coordinate(field).value
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"{_field_label(field)} must be numeric")
+    return float(value)
+
+
+def _required_string_coordinate(
+    descriptor: ParameterDescriptor,
+    field: DescriptorField,
+) -> str:
+    value = descriptor.coordinate(field).value
+    if not isinstance(value, str):
+        raise ValueError(f"{_field_label(field)} must be a string")
+    return value
+
+
 def _backend_kind(backend: object) -> str:
     name = type(backend).__name__.lower()
     if "numpy" in name:
@@ -1834,100 +1884,94 @@ def linear_operator_descriptor_from_assembled_operator(
     assembly_cost_fmas = float(n) * matvec_cost_fmas
     memory_estimate = float(8 * (n * n + n))
 
+    coordinates: dict[DescriptorField, DescriptorCoordinate] = {
+        SolveRelationField.DIM_X: DescriptorCoordinate(n),
+        SolveRelationField.DIM_Y: DescriptorCoordinate(n),
+        SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(True),
+        SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(False),
+        SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(0.0),
+        SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(True),
+        SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(True),
+        SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate("matrix"),
+        SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate("none"),
+        SolveRelationField.ACCEPTANCE_RELATION: DescriptorCoordinate(
+            "residual_below_tolerance"
+        ),
+        SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
+            requested_residual_tolerance
+        ),
+        SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
+            requested_solution_tolerance
+        ),
+        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(_backend_kind(b.backend)),
+        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(device_kind),
+        SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
+        SolveRelationField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
+            memory_budget_bytes
+        ),
+        LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: DescriptorCoordinate(True),
+        LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(assembly_cost_fmas),
+        LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(matvec_cost_fmas),
+        LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: DescriptorCoordinate(
+            memory_estimate
+        ),
+        LinearSolverField.SYMMETRY_DEFECT: DescriptorCoordinate(symmetry_defect),
+        LinearSolverField.SKEW_SYMMETRY_DEFECT: DescriptorCoordinate(
+            skew_symmetry_defect
+        ),
+        LinearSolverField.DIAGONAL_NONZERO_MARGIN: DescriptorCoordinate(
+            diagonal_nonzero_margin
+        ),
+        LinearSolverField.DIAGONAL_DOMINANCE_MARGIN: DescriptorCoordinate(
+            diagonal_dominance_margin
+        ),
+        LinearSolverField.COERCIVITY_LOWER_BOUND: DescriptorCoordinate(
+            coercivity_lower_bound, evidence="lower_bound"
+        ),
+        LinearSolverField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
+            singular_value_lower_bound, evidence="lower_bound"
+        ),
+        LinearSolverField.CONDITION_ESTIMATE: DescriptorCoordinate(
+            condition_estimate, evidence="estimate"
+        ),
+        LinearSolverField.RANK_ESTIMATE: DescriptorCoordinate(
+            rank_estimate, evidence="estimate"
+        ),
+        LinearSolverField.NULLITY_ESTIMATE: DescriptorCoordinate(
+            nullity_estimate, evidence="estimate"
+        ),
+        LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
+            rhs_consistency_defect
+        ),
+        DecompositionField.MATRIX_ROWS: DescriptorCoordinate(n),
+        DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(n),
+        DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
+            work_budget_fmas
+        ),
+        DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
+            DescriptorCoordinate(memory_budget_bytes)
+        ),
+        DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
+            singular_value_lower_bound, evidence="lower_bound"
+        ),
+        DecompositionField.CONDITION_ESTIMATE: DescriptorCoordinate(
+            condition_estimate, evidence="estimate"
+        ),
+        DecompositionField.MATRIX_RANK_ESTIMATE: DescriptorCoordinate(
+            rank_estimate, evidence="estimate"
+        ),
+        DecompositionField.MATRIX_NULLITY_ESTIMATE: DescriptorCoordinate(
+            nullity_estimate, evidence="estimate"
+        ),
+    }
     descriptor = ParameterDescriptor(
-        {
-            SolveRelationField.DIM_X: DescriptorCoordinate(n),
-            SolveRelationField.DIM_Y: DescriptorCoordinate(n),
-            SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
-            SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-            SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-            SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(True),
-            SolveRelationField.TARGET_IS_ZERO: DescriptorCoordinate(False),
-            SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(0.0),
-            SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
-                True
-            ),
-            SolveRelationField.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(
-                True
-            ),
-            SolveRelationField.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate("matrix"),
-            SolveRelationField.OBJECTIVE_RELATION: DescriptorCoordinate("none"),
-            SolveRelationField.ACCEPTANCE_RELATION: DescriptorCoordinate(
-                "residual_below_tolerance"
-            ),
-            SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
-                requested_residual_tolerance
-            ),
-            SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
-                requested_solution_tolerance
-            ),
-            SolveRelationField.BACKEND_KIND: DescriptorCoordinate(
-                _backend_kind(b.backend)
-            ),
-            SolveRelationField.DEVICE_KIND: DescriptorCoordinate(device_kind),
-            SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
-            SolveRelationField.MEMORY_BUDGET_BYTES: DescriptorCoordinate(
-                memory_budget_bytes
-            ),
-            LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE: DescriptorCoordinate(
-                True
-            ),
-            LinearSolverField.ASSEMBLY_COST_FMAS: DescriptorCoordinate(
-                assembly_cost_fmas
-            ),
-            LinearSolverField.MATVEC_COST_FMAS: DescriptorCoordinate(matvec_cost_fmas),
-            LinearSolverField.LINEAR_OPERATOR_MEMORY_BYTES: DescriptorCoordinate(
-                memory_estimate
-            ),
-            LinearSolverField.SYMMETRY_DEFECT: DescriptorCoordinate(symmetry_defect),
-            LinearSolverField.SKEW_SYMMETRY_DEFECT: DescriptorCoordinate(
-                skew_symmetry_defect
-            ),
-            LinearSolverField.DIAGONAL_NONZERO_MARGIN: DescriptorCoordinate(
-                diagonal_nonzero_margin
-            ),
-            LinearSolverField.DIAGONAL_DOMINANCE_MARGIN: DescriptorCoordinate(
-                diagonal_dominance_margin
-            ),
-            LinearSolverField.COERCIVITY_LOWER_BOUND: DescriptorCoordinate(
-                coercivity_lower_bound, evidence="lower_bound"
-            ),
-            LinearSolverField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
-                singular_value_lower_bound, evidence="lower_bound"
-            ),
-            LinearSolverField.CONDITION_ESTIMATE: DescriptorCoordinate(
-                condition_estimate, evidence="estimate"
-            ),
-            LinearSolverField.RANK_ESTIMATE: DescriptorCoordinate(
-                rank_estimate, evidence="estimate"
-            ),
-            LinearSolverField.NULLITY_ESTIMATE: DescriptorCoordinate(
-                nullity_estimate, evidence="estimate"
-            ),
-            LinearSolverField.RHS_CONSISTENCY_DEFECT: DescriptorCoordinate(
-                rhs_consistency_defect
-            ),
-            DecompositionField.MATRIX_ROWS: DescriptorCoordinate(n),
-            DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(n),
-            DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
-                work_budget_fmas
-            ),
-            DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
-                DescriptorCoordinate(memory_budget_bytes)
-            ),
-            DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
-                singular_value_lower_bound, evidence="lower_bound"
-            ),
-            DecompositionField.CONDITION_ESTIMATE: DescriptorCoordinate(
-                condition_estimate, evidence="estimate"
-            ),
-            DecompositionField.MATRIX_RANK_ESTIMATE: DescriptorCoordinate(
-                rank_estimate, evidence="estimate"
-            ),
-            DecompositionField.MATRIX_NULLITY_ESTIMATE: DescriptorCoordinate(
-                nullity_estimate, evidence="estimate"
-            ),
-        }
+        coordinates,
+        linear_operator=op,
+        linear_rhs=b,
+        linear_matrix=matrix,
     )
     return LinearOperatorDescriptor(descriptor, op, b, matrix)
 
@@ -1954,6 +1998,7 @@ __all__ = [
     "LinearOperatorDescriptor",
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",
+    "linear_operator_descriptor_from_solve_relation_descriptor",
     "MapStructureField",
     "map_structure_parameter_schema",
     "MembershipPredicate",
