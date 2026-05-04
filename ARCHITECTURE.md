@@ -793,18 +793,16 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: derive descriptor-owned public category objects
-   from the package export table plus a small symbolic classifier, then ground
-   the projection in the time-integration ownership spec and the existing
-   descriptor-backed selector and calculation tests.  The premise should be the
-   object itself and its mathematical role, not a second hand-maintained object
-   list beside `__all__`.
-3. Candidate following calculation: use the implicit-stage affine reaction
+2. Candidate next calculation: use the implicit-stage affine reaction
    network fixture to require a shared solve-relation descriptor projection for
    both time integrators and linear solvers.  The calculation should solve the
    same affine step through the time-integrator entry point and through the
    linear solve relation, then compare the residual acceptance predicate rather
    than a family label.
+3. Candidate following calculation: collapse remaining descriptor-owned public
+   category classifier exceptions for type aliases into exported symbolic
+   objects with stable modules, so type aliases do not need object-identity
+   escape hatches in structural tests.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
