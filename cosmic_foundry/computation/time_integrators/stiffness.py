@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Literal, NamedTuple
+from typing import NamedTuple
 
 from cosmic_foundry.computation.tensor import Tensor
 
-FamilyName = Literal["adams", "bdf"]
+
+class FamilyName(str):
+    """Nordsieck corrector family name."""
+
+    def __new__(cls, value: str) -> FamilyName:
+        if value not in ("adams", "bdf"):
+            raise ValueError("family must be 'adams' or 'bdf'")
+        return str.__new__(cls, value)
 
 
 class FamilySwitch(NamedTuple):
@@ -62,12 +69,13 @@ class StiffnessSwitcher:
         self.stiff_threshold = stiff_threshold
         self.nonstiff_threshold = nonstiff_threshold
 
-    def decide(self, current: FamilyName, stiffness: float) -> FamilySwitch:
+    def decide(self, current: FamilyName | str, stiffness: float) -> FamilySwitch:
         """Return the selected family for the latest stiffness estimate."""
+        current = FamilyName(current)
         if current == "adams" and stiffness > self.stiff_threshold:
-            return FamilySwitch("bdf", stiffness, True)
+            return FamilySwitch(FamilyName("bdf"), stiffness, True)
         if current == "bdf" and stiffness < self.nonstiff_threshold:
-            return FamilySwitch("adams", stiffness, True)
+            return FamilySwitch(FamilyName("adams"), stiffness, True)
         return FamilySwitch(current, stiffness, False)
 
 

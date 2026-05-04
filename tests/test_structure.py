@@ -3325,12 +3325,6 @@ def _time_integrator_public_category(obj: Any) -> str | None:
     owner_categories = _time_integrator_capability_owner_categories()
     if isinstance(obj, type) and obj in owner_categories:
         return owner_categories[obj]
-    if obj is tuple:
-        return "verification_helper"
-    if obj is _TIME_INTEGRATOR_PACKAGE.FamilyName:
-        return "policy"
-    if obj is _TIME_INTEGRATOR_PACKAGE.UnitTransferRates:
-        return "rhs"
 
     module = _object_module(obj)
     if module in _TIME_INTEGRATOR_CAPABILITY_MODULES:

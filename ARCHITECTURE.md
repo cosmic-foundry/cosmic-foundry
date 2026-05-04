@@ -793,15 +793,16 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: collapse remaining descriptor-owned public
-   category classifier exceptions for type aliases into exported symbolic
-   objects with stable modules, so type aliases do not need object-identity
-   escape hatches in structural tests.
-3. Candidate following calculation: derive the implicit-stage linear solve
+2. Candidate next calculation: derive the implicit-stage linear solve
    witness directly from the solve-relation descriptor when matrix evidence is
    available, so time integrators, linear solvers, and atlas generation consume
    one object instead of parallel solve-relation and linear-operator
    descriptors.
+3. Candidate following calculation: require descriptor-owned public category
+   classifiers to classify by exported object module and capability ownership
+   only, with no object-identity special cases.  The structural test should
+   encode this as a general AST premise over descriptor-owned classifiers, not
+   as a ban on particular symbols.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
