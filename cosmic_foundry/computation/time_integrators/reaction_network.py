@@ -16,7 +16,6 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.tensor import Tensor, einsum
 from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
-from cosmic_foundry.computation.time_integrators.integrator import ODEState
 
 _LU = LUFactorization()
 _ABUNDANCE_ROUNDOFF_TOLERANCE = 1e-8
@@ -347,37 +346,6 @@ class ReactionNetworkRHS:
                     self.n_conserved
                 ),
             }
-        )
-
-    def step_map_structure_descriptor(
-        self,
-        state: ODEState,
-        dt: float,
-        *,
-        local_error_target: float = 1.0e-8,
-        retry_budget: int = 0,
-    ) -> ParameterDescriptor:
-        """Return map evidence for one proposed reaction-network step."""
-        from cosmic_foundry.computation.time_integrators.capabilities import (
-            rhs_step_diagnostics_descriptor,
-        )
-
-        step_descriptor = rhs_step_diagnostics_descriptor(
-            self,
-            state,
-            dt,
-            local_error_target=local_error_target,
-            retry_budget=retry_budget,
-        )
-        return ParameterDescriptor(
-            self.map_structure_descriptor().coordinates | step_descriptor.coordinates
-        )
-
-    def constraint_aware_descriptor(self) -> ParameterDescriptor:
-        """Return evidence needed by constraint-aware advance selection."""
-        return ParameterDescriptor(
-            self.reaction_network_descriptor().coordinates
-            | self.map_structure_descriptor().coordinates
         )
 
     @property

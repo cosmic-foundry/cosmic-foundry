@@ -1972,7 +1972,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
 
     @staticmethod
-    def _constraint_aware_descriptor(
+    def _domain_limited_conserved_network_descriptor(
         *,
         species_count: int = 4,
         reaction_count: int = 3,
@@ -2022,6 +2022,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_solve_relation_coordinate_projections_use_transformations()
         self._assert_coordinate_map_literals_are_single_schema()
         self._assert_transformation_relations_have_explicit_spaces()
+        self._assert_implementation_methods_do_not_import_capability_modules()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -2420,6 +2421,36 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert not dimension_fields, (
             "transformation dimensions must belong to domain/codomain spaces, "
             f"not relation scalar fields: {dimension_fields}"
+        )
+
+    @staticmethod
+    def _assert_implementation_methods_do_not_import_capability_modules() -> None:
+        offenders = []
+        for path in sorted((_PACKAGE_ROOT / "computation").rglob("*.py")):
+            if path.name in {"algorithm_capabilities.py", "capabilities.py"}:
+                continue
+            tree = ast.parse(path.read_text())
+            for class_def in (
+                node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+            ):
+                for method in (
+                    child
+                    for child in class_def.body
+                    if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
+                ):
+                    if any(
+                        isinstance(node, ast.ImportFrom)
+                        and node.module is not None
+                        and node.module.endswith(".capabilities")
+                        for node in ast.walk(method)
+                    ):
+                        offenders.append(
+                            f"{path.relative_to(_PROJECT_ROOT)}:"
+                            f"{class_def.name}.{method.name}"
+                        )
+        assert not offenders, (
+            "implementation methods must expose mathematical evidence; capability "
+            f"modules project that evidence outside the class: {offenders}"
         )
 
     @staticmethod
@@ -4185,7 +4216,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=2,
-                descriptor=_SolveRelationSchemaClaim._constraint_aware_descriptor(),
+                descriptor=(
+                    _SolveRelationSchemaClaim._domain_limited_conserved_network_descriptor()
+                ),
             ),
             _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,
         ),

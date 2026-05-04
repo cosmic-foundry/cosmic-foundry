@@ -29,6 +29,7 @@ from cosmic_foundry.computation.solvers import select_linear_solver_for_descript
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
+    rhs_step_diagnostics_descriptor,
     time_integration_capabilities,
     time_integration_step_map_regions,
 )
@@ -183,8 +184,9 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         )
         constraint_descriptor = ParameterDescriptor(
             rhs.reaction_network_descriptor().coordinates
-            | rhs.step_map_structure_descriptor(
-                domain_limited_state, 2.0e-2
+            | rhs.map_structure_descriptor().coordinates
+            | rhs_step_diagnostics_descriptor(
+                rhs, domain_limited_state, 2.0e-2
             ).coordinates
         )
         assert (
