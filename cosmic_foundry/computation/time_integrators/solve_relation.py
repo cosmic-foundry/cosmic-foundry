@@ -7,6 +7,7 @@ from typing import Any, Protocol, runtime_checkable
 from cosmic_foundry.computation.algorithm_capabilities import (
     DescriptorCoordinate,
     EvidenceSource,
+    LinearOperatorEvidence,
     ParameterDescriptor,
     SolveRelationField,
 )
@@ -72,8 +73,7 @@ def time_integrator_step_solve_relation_descriptor(
     if not _stage_matrix_has_implicit_coupling(stage_matrix):
         raise ValueError("time-step solve relation has no stage-equation premise")
     affine_rhs = isinstance(rhs, AffineRHSProtocol)
-    linear_operator = None
-    linear_rhs = None
+    evidence: tuple[LinearOperatorEvidence, ...] = ()
     if affine_rhs:
         stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
         if len(stage_times) != len(stage_matrix):
@@ -81,7 +81,13 @@ def time_integrator_step_solve_relation_descriptor(
         linear_operator = _AffineStageResidualOperator(
             rhs, stage_matrix, stage_times, state.u, dt
         )
-        linear_rhs = linear_operator.rhs()
+        evidence = (
+            LinearOperatorEvidence(
+                linear_operator,
+                linear_operator.rhs(),
+                (),
+            ),
+        )
     return _descriptor(
         state.u,
         variable_count=state.u.shape[0] * len(stage_matrix),
@@ -94,8 +100,7 @@ def time_integrator_step_solve_relation_descriptor(
         work_budget_fmas=work_budget_fmas,
         memory_budget_bytes=memory_budget_bytes,
         device_kind=device_kind,
-        linear_operator=linear_operator,
-        linear_rhs=linear_rhs,
+        evidence=evidence,
     )
 
 
@@ -112,8 +117,7 @@ def _descriptor(
     work_budget_fmas: float,
     memory_budget_bytes: float,
     device_kind: str,
-    linear_operator: Any | None = None,
-    linear_rhs: Tensor | None = None,
+    evidence: tuple[LinearOperatorEvidence, ...] = (),
 ) -> ParameterDescriptor:
     field = SolveRelationField
     return ParameterDescriptor(
@@ -147,8 +151,7 @@ def _descriptor(
             field.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
             field.MEMORY_BUDGET_BYTES: DescriptorCoordinate(memory_budget_bytes),
         },
-        linear_operator=linear_operator,
-        linear_rhs=linear_rhs,
+        evidence=evidence,
     )
 
 

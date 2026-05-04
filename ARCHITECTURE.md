@@ -793,14 +793,14 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: move the linear witness fields currently
-   attached directly to `ParameterDescriptor` into a small evidence object keyed
-   by symbolic descriptor field coverage, so non-linear descriptors do not carry
-   linear-only optional attributes.
-3. Candidate following calculation: make the affine implicit-stage solve
-   calculation request the linear witness through that evidence object, then
-   require linear solver/decomposition projections to fail unless the descriptor
-   has the necessary evidence rather than merely optional attributes.
+2. Candidate next calculation: make the affine implicit-stage solve calculation
+   request the linear witness through descriptor evidence, then require linear
+   solver/decomposition projections to fail unless the descriptor has the
+   necessary evidence object.
+3. Candidate following calculation: generalize descriptor evidence so each
+   evidence object declares the symbolic fields it supports; projection helpers
+   should ask for evidence by required fields instead of by concrete evidence
+   class.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

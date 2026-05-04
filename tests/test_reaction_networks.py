@@ -227,16 +227,12 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
         )
         selected_solver = select_linear_solver_for_descriptor(linear_descriptor)
-        assert linear_descriptor.linear_operator is not None
-        assert linear_descriptor.linear_rhs is not None
+        linear_evidence = linear_descriptor.linear_operator_evidence()
         stage_solution = selected_solver().solve(
-            linear_descriptor.linear_operator,
-            linear_descriptor.linear_rhs,
+            linear_evidence.operator,
+            linear_evidence.rhs,
         )
-        residual = (
-            linear_descriptor.linear_operator.apply(stage_solution)
-            - linear_descriptor.linear_rhs
-        )
+        residual = linear_evidence.operator.apply(stage_solution) - linear_evidence.rhs
         assert (
             _residual_norm(residual)
             <= linear_descriptor.coordinate(

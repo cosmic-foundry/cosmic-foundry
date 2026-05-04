@@ -348,13 +348,20 @@ class DescriptorCoordinate:
 
 
 @dataclass(frozen=True)
+class LinearOperatorEvidence:
+    """Concrete evidence for an assembled linear solve relation."""
+
+    operator: SmallLinearOperator
+    rhs: Tensor
+    matrix: tuple[tuple[float, ...], ...]
+
+
+@dataclass(frozen=True)
 class ParameterDescriptor:
     """Concrete problem location in descriptor coordinates."""
 
     coordinates: dict[DescriptorField, DescriptorCoordinate]
-    linear_operator: SmallLinearOperator | None = None
-    linear_rhs: Tensor | None = None
-    linear_matrix: tuple[tuple[float, ...], ...] = ()
+    evidence: tuple[LinearOperatorEvidence, ...] = ()
 
     def coordinate(self, field: DescriptorField) -> DescriptorCoordinate:
         """Return the coordinate for ``field`` or an explicit unavailable value."""
@@ -365,6 +372,17 @@ class ParameterDescriptor:
                 if _field_label(candidate) == field:
                     return coordinate
         return DescriptorCoordinate(None, evidence="unavailable")
+
+    def linear_operator_evidence(self) -> LinearOperatorEvidence:
+        """Return the unique linear-operator witness for this descriptor."""
+        matches = tuple(
+            evidence
+            for evidence in self.evidence
+            if isinstance(evidence, LinearOperatorEvidence)
+        )
+        if len(matches) != 1:
+            raise ValueError("descriptor does not have unique linear operator evidence")
+        return matches[0]
 
 
 class ParameterPredicate(Protocol):
@@ -1679,13 +1697,12 @@ def decomposition_descriptor_from_linear_operator_descriptor(
     factorization_memory_budget_bytes: float = 1.0e9,
 ) -> ParameterDescriptor:
     """Project a linear-operator descriptor onto dense decomposition coordinates."""
+    evidence = descriptor.linear_operator_evidence()
     return ParameterDescriptor(
         {
-            DecompositionField.MATRIX_ROWS: DescriptorCoordinate(
-                len(descriptor.linear_matrix)
-            ),
+            DecompositionField.MATRIX_ROWS: DescriptorCoordinate(len(evidence.matrix)),
             DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(
-                len(descriptor.linear_matrix[0]) if descriptor.linear_matrix else 0
+                len(evidence.matrix[0]) if evidence.matrix else 0
             ),
             DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
                 factorization_work_budget_fmas
@@ -1713,11 +1730,10 @@ def linear_operator_descriptor_from_solve_relation_descriptor(
     descriptor: ParameterDescriptor,
 ) -> ParameterDescriptor:
     """Project a solve-relation descriptor with matrix evidence to linear form."""
-    if descriptor.linear_operator is None or descriptor.linear_rhs is None:
-        raise ValueError("solve-relation descriptor has no linear operator witness")
+    evidence = descriptor.linear_operator_evidence()
     return linear_operator_descriptor_from_assembled_operator(
-        descriptor.linear_operator,
-        descriptor.linear_rhs,
+        evidence.operator,
+        evidence.rhs,
         requested_residual_tolerance=_required_float_coordinate(
             descriptor, SolveRelationField.REQUESTED_RESIDUAL_TOLERANCE
         ),
@@ -1948,9 +1964,7 @@ def linear_operator_descriptor_from_assembled_operator(
     }
     return ParameterDescriptor(
         coordinates,
-        linear_operator=op,
-        linear_rhs=b,
-        linear_matrix=matrix,
+        evidence=(LinearOperatorEvidence(op, b, matrix),),
     )
 
 
@@ -1972,6 +1986,7 @@ __all__ = [
     "EvidencePredicate",
     "InvalidCellRule",
     "LinearSolverField",
+    "LinearOperatorEvidence",
     "LINEARITY_TOLERANCE",
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",
