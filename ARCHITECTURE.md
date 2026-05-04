@@ -742,7 +742,7 @@ algorithm ownership, selection, generated documentation, and coverage tests from
 how implementations cover that space.  The previous capability maps made
 ownership executable, but they still start from implementations and attach
 qualitative tags such as `symmetric_positive_definite`, `rank_deficient`, or
-`domain_aware_acceptance`.  This sprint should invert that hierarchy: first
+domain-limit handling.  This sprint should invert that hierarchy: first
 declare the axes of the problem space, then let algorithms claim bounded regions
 inside that space using numeric predicates, certificates with stated tolerances,
 and cost estimates.
@@ -790,14 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: expose domain-limited reaction-network step descriptors, grounded
-   by a two-species abundance calculation whose domain-step margin shows that
-   state-domain distance controls the next admissible step.
-2. Use domain-step margin in controller selection and delete any remaining
-   domain-aware request vocabulary that merely restates this coordinate.
-3. Review whether reaction-network step diagnostics and generic RHS step
+1. Current PR: use domain-step margin in constraint-aware controller selection
+   and delete the remaining parallel domain-awareness capability vocabulary.
+2. Review whether reaction-network step diagnostics and generic RHS step
    diagnostics are now the same projection; if so, keep one projection path and
    delete the duplicate name.
+3. Use domain-step margin in generic/adaptive controller selection where a
+   concrete calculation shows the selector needs to distinguish domain-limited
+   advancement from ordinary RHS advancement.
 
 Roadmap sketch:
 
@@ -900,9 +900,11 @@ identifies the limiting coordinate before a controller chooses how to shorten
 the step.
 The constraint-aware controller no longer selects from reaction-network string
 structure.  Its capability is selected by predicates over the reaction-network
-descriptor: conserved networks with independent equilibrium constraints support
-constraint lifecycle management.  This is the first time-integrator selection
-path that consumes descriptor evidence directly rather than a named RHS label.
+descriptor plus domain-step evidence: conserved networks with independent
+equilibrium constraints support constraint lifecycle management when the
+proposed step is domain-limited.  The controller no longer advertises a
+parallel domain-awareness capability label; domain awareness is a
+consequence of the `DOMAIN_STEP_MARGIN` coordinate.
 Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
 `jacobian_rhs` structure label.  They select from derivative-oracle descriptor
 evidence: an available Jacobian callback or matrix derivative is the premise
@@ -1171,8 +1173,8 @@ The sprint is complete when the following are true:
   alias such as `full_rank` must expand to a rank or singular-value interval;
   `matrix_free` must expand to operator-representation and assembly-cost axes;
   `linear_system`, `least_squares`, `nonlinear_root`, and `eigenproblem` must
-  expand to solve-relation regions; and `domain_aware_acceptance` must later
-  expand to domain-distance and retry-policy axes.
+  expand to solve-relation regions; and domain-limit handling must expand to
+  domain-step margin and retry-policy axes.
 - **Generalization path.**  After the linear solver/decomposition version is in
   place, time integrators should receive descriptors for domain distance,
   stiffness estimates, Jacobian availability, local error target, step retry
