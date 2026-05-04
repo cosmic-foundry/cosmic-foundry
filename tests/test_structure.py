@@ -1652,7 +1652,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         rhs_descriptor = _TIME_INTEGRATOR_CAPABILITIES.rhs_evaluation_descriptor()
         rhs_history_descriptor = _TIME_INTEGRATOR_CAPABILITIES.rhs_history_descriptor()
         nordsieck_history_descriptor = (
-            _TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor("adams")
+            _TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor(1.0e-2)
         )
         for descriptor in (
             rhs_descriptor,
@@ -4119,7 +4119,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
                 descriptor=_TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor(
-                    "adams"
+                    1.0e-2
                 ),
             ),
             _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,

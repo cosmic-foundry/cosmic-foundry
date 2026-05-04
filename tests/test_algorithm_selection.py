@@ -232,7 +232,7 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
     rhs = cases.scalar_decay_jacobian_rhs()
     integrator = _ti.MultistepIntegrator("adams", 4)
     state = integrator.init_state(rhs, 0.0, Tensor([1.0], backend=_TIME_BACKEND), 1e-2)
-    descriptor = nordsieck_history_descriptor("adams")
+    descriptor = nordsieck_history_descriptor(1.0e-2)
     assert isinstance(state.history, _ti.NordsieckHistory)
     assert state.history.q == 4
     return _StepSelectionCase(
@@ -249,7 +249,15 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
             map_structure_parameter_schema(),
         ),
         auto_selectable=False,
+        postcheck=lambda case, state, integrator: (
+            assert_nordsieck_family(integrator, "adams")
+        ),
     )
+
+
+def assert_nordsieck_family(integrator: object, family: str) -> None:
+    assert isinstance(integrator, _ti.MultistepIntegrator)
+    assert integrator.family == family
 
 
 def _assert_no_step_solve_relation(
@@ -437,7 +445,7 @@ class _StepSelectionRegionCoverageClaim(Claim[Any]):
         return "correctness/step_selection_region_coverage"
 
     def check(self, _calibration: Any) -> None:
-        cases_by_region = _step_selection_cases()
+        cases_by_region = _step_selection_cases() + (_nordsieck_stiff_region_case(),)
         for region in (
             *time_integration_step_map_regions(),
             *time_integration_step_solve_regions(),
@@ -448,6 +456,25 @@ class _StepSelectionRegionCoverageClaim(Claim[Any]):
                 and region.contains(case.descriptor)
                 for case in cases_by_region
             ), region.owner.__name__
+
+
+def _nordsieck_stiff_region_case() -> _StepSelectionCase:
+    descriptor = nordsieck_history_descriptor(10.0)
+    return _StepSelectionCase(
+        name="nordsieck_stiff_history",
+        descriptor=descriptor,
+        order=4,
+        state=_ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND)),
+        rhs=cases.scalar_decay_jacobian_rhs(),
+        exact=cases.exact_scalar_decay,
+        tolerance=1.0,
+        ownership=SelectionOwnership(
+            descriptor,
+            time_integration_step_map_regions(),
+            map_structure_parameter_schema(),
+        ),
+        auto_selectable=False,
+    )
 
 
 class _OscillatorInvariantComparisonClaim(Claim[Any]):
@@ -615,6 +642,25 @@ class _AutoIntegratorSelectionClaim(Claim[Any]):
             _ti.AutoIntegrator(3).select(cases.harmonic_hamiltonian_rhs())
 
 
+class _NordsieckFamilyFromStiffnessClaim(Claim[Any]):
+    """Grounded claim that stiffness evidence selects the Nordsieck family."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/nordsieck_family_from_stiffness"
+
+    def check(self, _calibration: Any) -> None:
+        for stiffness, family in ((1.0e-2, "adams"), (10.0, "bdf")):
+            request = AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=nordsieck_history_descriptor(stiffness),
+            )
+            selected = _ti.select_time_integrator(request)
+            assert selected.owner is _ti.MultistepIntegrator
+            assert_nordsieck_family(selected.construct(request), family)
+
+
 class _AffineStageLinearSolveClaim(Claim[Any]):
     """Grounded claim for affine implicit-stage solve projection."""
 
@@ -653,6 +699,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _OscillatorNegativeInvariantEvidenceClaim(),
     _DampedOscillatorSymplecticDefectClaim(),
     _StepDiagnosticStiffnessClaim(),
+    _NordsieckFamilyFromStiffnessClaim(),
 )
 
 
