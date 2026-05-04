@@ -62,6 +62,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterSpaceSchema,
     ReactionNetworkField,
     SolveRelationField,
+    assembled_linear_evidence_for,
     coverage_regions_are_disjoint,
     decomposition_descriptor_from_linear_operator_descriptor,
     decomposition_parameter_schema,
@@ -1980,13 +1981,14 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             Tensor([1.0, 0.0], backend=_JIT_BACKEND),
         )
         schema.validate_descriptor(spd)
-        linear_evidence = spd.evidence_for(
+        linear_evidence = assembled_linear_evidence_for(
+            spd,
             frozenset(
                 {
                     DecompositionField.MATRIX_ROWS,
                     DecompositionField.MATRIX_COLUMNS,
                 }
-            )
+            ),
         )
         assert isinstance(linear_evidence, AssembledLinearEvidence)
         assert linear_evidence.matrix == ((2.0, -1.0), (-1.0, 2.0))
@@ -2096,20 +2098,24 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
         if descriptor is None:
             raise AssertionError("ParameterDescriptor class not found")
-        concrete_dispatches = [
-            getattr(node, "lineno", 0)
+        evidence_field_comparisons = [
+            compare.lineno
             for evidence_scan in ast.walk(descriptor)
-            if isinstance(
-                evidence_scan,
-                ast.For | ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
-            )
+            if isinstance(evidence_scan, ast.ListComp | ast.GeneratorExp)
             and _LinearOperatorProjectionClaim._scans_descriptor_evidence(evidence_scan)
-            for node in ast.walk(evidence_scan)
-            if _LinearOperatorProjectionClaim._is_isinstance_call(node)
+            for compare in ast.walk(evidence_scan)
+            if isinstance(compare, ast.Compare)
+            and _LinearOperatorProjectionClaim._reads_scanned_evidence_attribute(
+                compare,
+                _LinearOperatorProjectionClaim._comprehension_target_names(
+                    evidence_scan
+                ),
+            )
         ]
-        assert not concrete_dispatches, (
-            "descriptor evidence selection must follow supported descriptor "
-            f"fields, not concrete evidence classes: {concrete_dispatches}"
+        assert not evidence_field_comparisons, (
+            "descriptor evidence selection must use projection-owned "
+            "transformation protocols, not field sets read from each evidence "
+            f"object: {evidence_field_comparisons}"
         )
 
     @staticmethod
@@ -2186,11 +2192,25 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
 
     @staticmethod
-    def _is_isinstance_call(node: ast.AST) -> bool:
-        return (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "isinstance"
+    def _comprehension_target_names(
+        node: ast.ListComp | ast.GeneratorExp,
+    ) -> frozenset[str]:
+        names: set[str] = set()
+        for generator in node.generators:
+            for target in ast.walk(generator.target):
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+        return frozenset(names)
+
+    @staticmethod
+    def _reads_scanned_evidence_attribute(
+        node: ast.AST, target_names: frozenset[str]
+    ) -> bool:
+        return any(
+            isinstance(child, ast.Attribute)
+            and isinstance(child.value, ast.Name)
+            and child.value.id in target_names
+            for child in ast.walk(node)
         )
 
 
