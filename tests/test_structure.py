@@ -563,10 +563,10 @@ class _ImportBoundaryClaim(Claim[None]):
 
 @dataclass(frozen=True)
 class _CapabilityRequestExpectation:
-    """Expected selected implementation for one capability request."""
+    """Expected selected owner for one capability request."""
 
     request: Any
-    selected_implementation: str
+    selected_owner: type | str
 
 
 @dataclass(frozen=True)
@@ -661,6 +661,15 @@ class _ArchitectureOwnershipClaim(Claim[None]):
                 "descriptor-owned capabilities require ad hoc structure gates: "
                 f"{structure_gated}"
             )
+            label_expectations = [
+                expectation.request
+                for expectation in self._spec.request_expectations
+                if isinstance(expectation.selected_owner, str)
+            ]
+            assert not label_expectations, (
+                "descriptor-owned request expectations must compare owner identity: "
+                f"{label_expectations}"
+            )
 
         if self._spec.request_selector is None:
             return
@@ -668,11 +677,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         self._check_descriptor_requests()
         for expectation in self._spec.request_expectations:
             selected = selector(expectation.request)
-            selected_name = self._capability_implementation_name(selected)
-            assert selected_name == expectation.selected_implementation, (
-                f"{expectation.request!r} selected {selected_name}, "
-                f"expected {expectation.selected_implementation}"
-            )
+            self._assert_selected_owner(expectation, selected)
         for expectation in self._spec.rejected_requests:
             try:
                 selected = selector(expectation.request)
@@ -702,6 +707,23 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         assert not oversized, (
             "descriptor-owned requests must not smuggle family labels through "
             f"property lists: {oversized}"
+        )
+
+    def _assert_selected_owner(
+        self,
+        expectation: _CapabilityRequestExpectation,
+        selected: Any,
+    ) -> None:
+        if isinstance(expectation.selected_owner, type):
+            assert selected.owner is expectation.selected_owner, (
+                f"{expectation.request!r} selected {selected.owner.__name__}, "
+                f"expected {expectation.selected_owner.__name__}"
+            )
+            return
+        selected_name = self._capability_implementation_name(selected)
+        assert selected_name == expectation.selected_owner, (
+            f"{expectation.request!r} selected {selected_name}, "
+            f"expected {expectation.selected_owner}"
         )
 
     @staticmethod
@@ -3060,6 +3082,39 @@ _nordsieck_history_descriptor = _resolve_dotted(
     "cosmic_foundry.computation.time_integrators.capabilities."
     "nordsieck_history_descriptor"
 )
+_RungeKuttaIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.RungeKuttaIntegrator"
+)
+_ExplicitMultistepIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.ExplicitMultistepIntegrator"
+)
+_MultistepIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.MultistepIntegrator"
+)
+_ImplicitRungeKuttaIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.ImplicitRungeKuttaIntegrator"
+)
+_AdditiveRungeKuttaIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.AdditiveRungeKuttaIntegrator"
+)
+_LawsonRungeKuttaIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.LawsonRungeKuttaIntegrator"
+)
+_SymplecticCompositionIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.SymplecticCompositionIntegrator"
+)
+_CompositionIntegrator = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.CompositionIntegrator"
+)
+_AdaptiveNordsieckController = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.AdaptiveNordsieckController"
+)
+_IntegrationDriver = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.IntegrationDriver"
+)
+_ConstraintAwareController = _resolve_dotted(
+    "cosmic_foundry.computation.time_integrators.ConstraintAwareController"
+)
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -3192,7 +3247,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_rhs_evaluation_descriptor(),
             ),
-            "RungeKuttaIntegrator",
+            _RungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3200,7 +3255,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_rhs_history_descriptor(),
             ),
-            "ExplicitMultistepIntegrator",
+            _ExplicitMultistepIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3208,7 +3263,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_nordsieck_history_descriptor("adams"),
             ),
-            "MultistepIntegrator",
+            _MultistepIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3216,7 +3271,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
             ),
-            "ImplicitRungeKuttaIntegrator",
+            _ImplicitRungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3224,7 +3279,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=3,
                 descriptor=_split_map_descriptor(),
             ),
-            "AdditiveRungeKuttaIntegrator",
+            _AdditiveRungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3232,7 +3287,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_semilinear_map_descriptor(),
             ),
-            "LawsonRungeKuttaIntegrator",
+            _LawsonRungeKuttaIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3240,7 +3295,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_hamiltonian_map_descriptor(),
             ),
-            "SymplecticCompositionIntegrator",
+            _SymplecticCompositionIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3248,7 +3303,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_composite_map_descriptor(2),
             ),
-            "CompositionIntegrator",
+            _CompositionIntegrator,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3256,7 +3311,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
                 descriptor=_derivative_oracle_descriptor(),
             ),
-            "AdaptiveNordsieckController",
+            _AdaptiveNordsieckController,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3264,7 +3319,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=3,
                 descriptor=_rhs_evaluation_descriptor(),
             ),
-            "IntegrationDriver",
+            _IntegrationDriver,
         ),
         _CapabilityRequestExpectation(
             _AlgorithmRequest(
@@ -3272,7 +3327,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=2,
                 descriptor=_SolveRelationSchemaClaim._constraint_aware_descriptor(),
             ),
-            "ConstraintAwareController",
+            _ConstraintAwareController,
         ),
     ),
     rejected_requests=(
