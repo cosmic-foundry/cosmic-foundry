@@ -1537,9 +1537,11 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
 
         map_regions = self._regions(map_structure_schema)
-        rhs_descriptor = _rhs_evaluation_descriptor()
-        rhs_history_descriptor = _rhs_history_descriptor()
-        nordsieck_history_descriptor = _nordsieck_history_descriptor("adams")
+        rhs_descriptor = _TIME_INTEGRATOR_CAPABILITIES.rhs_evaluation_descriptor()
+        rhs_history_descriptor = _TIME_INTEGRATOR_CAPABILITIES.rhs_history_descriptor()
+        nordsieck_history_descriptor = (
+            _TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor("adams")
+        )
         for descriptor in (
             rhs_descriptor,
             rhs_history_descriptor,
@@ -3166,45 +3168,16 @@ _LEAST_SQUARES_SOLVERS = _discover_concrete_least_squares_solvers(_MODULES)
 _TIME_INTEGRATORS = _discover_concrete_time_integrators(_MODULES)
 _TEST_FILES = sorted(Path(__file__).parent.glob("test_*.py"))
 
-_AlgorithmRequest = _resolve_dotted(
-    "cosmic_foundry.computation.algorithm_capabilities.AlgorithmRequest"
-)
-_derivative_oracle_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities."
-    "derivative_oracle_descriptor"
-)
-_semilinear_map_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities."
-    "semilinear_map_descriptor"
-)
-_split_map_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities.split_map_descriptor"
-)
-_hamiltonian_map_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities."
-    "hamiltonian_map_descriptor"
-)
-_composite_map_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities."
-    "composite_map_descriptor"
-)
-_rhs_evaluation_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities."
-    "rhs_evaluation_descriptor"
-)
-_rhs_history_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities." "rhs_history_descriptor"
-)
-_nordsieck_history_descriptor = _resolve_dotted(
-    "cosmic_foundry.computation.time_integrators.capabilities."
-    "nordsieck_history_descriptor"
-)
 _TIME_INTEGRATOR_PACKAGE: Any = importlib.import_module(
     "cosmic_foundry.computation.time_integrators"
+)
+_TIME_INTEGRATOR_CAPABILITIES = importlib.import_module(
+    "cosmic_foundry.computation.time_integrators.capabilities"
 )
 _ALGORITHM_CAPABILITIES_MODULE = importlib.import_module(
     "cosmic_foundry.computation.algorithm_capabilities"
 )
+_AlgorithmRequest = _ALGORITHM_CAPABILITIES_MODULE.AlgorithmRequest
 
 
 def _time_integrator_module(stem: str) -> types.ModuleType:
@@ -3345,7 +3318,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_rhs_evaluation_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.rhs_evaluation_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,
         ),
@@ -3353,7 +3326,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_rhs_history_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.rhs_history_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,
         ),
@@ -3361,7 +3334,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_nordsieck_history_descriptor("adams"),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor(
+                    "adams"
+                ),
             ),
             _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
         ),
@@ -3369,7 +3344,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=2,
-                descriptor=_derivative_oracle_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,
         ),
@@ -3377,7 +3352,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=3,
-                descriptor=_split_map_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.split_map_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,
         ),
@@ -3385,7 +3360,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_semilinear_map_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.semilinear_map_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,
         ),
@@ -3393,7 +3368,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_hamiltonian_map_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.hamiltonian_map_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,
         ),
@@ -3401,7 +3376,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=_composite_map_descriptor(2),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.composite_map_descriptor(2),
             ),
             _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,
         ),
@@ -3409,7 +3384,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=2,
-                descriptor=_derivative_oracle_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
         ),
@@ -3417,7 +3392,7 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=3,
-                descriptor=_rhs_evaluation_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.rhs_evaluation_descriptor(),
             ),
             _TIME_INTEGRATOR_PACKAGE.IntegrationDriver,
         ),
@@ -3435,14 +3410,14 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=3,
-                descriptor=_hamiltonian_map_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.hamiltonian_map_descriptor(),
             )
         ),
         _CapabilityRejectionExpectation(
             _AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=3,
-                descriptor=_composite_map_descriptor(2),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.composite_map_descriptor(2),
             )
         ),
         _CapabilityRejectionExpectation(
