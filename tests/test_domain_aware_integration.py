@@ -8,6 +8,10 @@ from typing import Any
 import pytest
 
 import cosmic_foundry.computation.time_integrators as _ti
+from cosmic_foundry.computation.algorithm_capabilities import (
+    MapStructureField,
+    map_structure_parameter_schema,
+)
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.tensor import Tensor
 from tests.claims import Claim
@@ -203,6 +207,42 @@ class _IntegrationDriverDomainLimitClaim(Claim[Any]):
         assert stepper.rejected_steps < 20
 
 
+class _ReactionNetworkStepDescriptorDomainLimitClaim(Claim[Any]):
+    @property
+    def description(self) -> str:
+        return "correctness/domain/reaction_network_step_descriptor_limit"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _two_species_decay_rhs(300.0)
+        state = _ti.ODEState(
+            0.0,
+            Tensor([1.0e-3, 1.0 - 1.0e-3], backend=_TIME_BACKEND),
+        )
+        dt = 5.0e-3
+        descriptor = rhs.step_map_structure_descriptor(
+            state,
+            dt,
+            local_error_target=1.0e-6,
+            retry_budget=5,
+        )
+        schema = map_structure_parameter_schema()
+        regions = {region.name: region for region in schema.derived_regions}
+        schema.validate_descriptor(descriptor)
+
+        limit = _ti.predict_domain_step_limit(rhs, state.t, state.u)
+        assert limit is not None
+        expected_margin = limit / dt - 1.0
+        assert expected_margin < 0.0
+        assert descriptor.coordinate(
+            MapStructureField.DOMAIN_STEP_MARGIN
+        ).value == pytest.approx(expected_margin)
+        assert regions["domain_limited_step"].contains(descriptor)
+        assert descriptor.coordinate(MapStructureField.LOCAL_ERROR_TARGET).value == (
+            pytest.approx(1.0e-6)
+        )
+        assert descriptor.coordinate(MapStructureField.RETRY_BUDGET).value == 5
+
+
 class _ConstraintAwareDomainLimitClaim(Claim[Any]):
     @property
     def description(self) -> str:
@@ -235,6 +275,7 @@ class _ConstraintAwareDomainLimitClaim(Claim[Any]):
 
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     *_state_domain_claims(),
+    _ReactionNetworkStepDescriptorDomainLimitClaim(),
     _AdaptiveNordsieckDomainLimitClaim(),
     _IntegrationDriverDomainLimitClaim(),
     _ConstraintAwareDomainLimitClaim(),

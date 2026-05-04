@@ -790,14 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: derive fixed-order Nordsieck Adams/BDF construction from
-   quantitative stiffness evidence and delete the stored Nordsieck family
-   selector coordinate.
-2. Extend the same calculation loop to domain-limited reaction-network steps:
-   the descriptor should expose when state-domain distance, not method order,
-   controls the next admissible step.
-3. Use domain-step margin in controller selection and delete any remaining
+1. Current PR: expose domain-limited reaction-network step descriptors, grounded
+   by a two-species abundance calculation whose domain-step margin shows that
+   state-domain distance controls the next admissible step.
+2. Use domain-step margin in controller selection and delete any remaining
    domain-aware request vocabulary that merely restates this coordinate.
+3. Review whether reaction-network step diagnostics and generic RHS step
+   diagnostics are now the same projection; if so, keep one projection path and
+   delete the duplicate name.
 
 Roadmap sketch:
 
@@ -892,6 +892,12 @@ independent equilibrium-constraint count are intrinsic to the RHS.  State-domain
 checks, time-step solve relations, and integrator/controller selection remain
 separate downstream evidence.  The schema enforces rank/nullity consistency and
 is included in atlas generation as a discovered parameter space.
+Reaction-network RHS objects also expose step-local map descriptors: the same
+stoichiometric map evidence composes with domain-step margin, stiffness, error
+target, retry budget, and RHS-cost coordinates for a proposed `(state, dt)`.
+For abundance networks near the nonnegative boundary, the domain-step margin
+identifies the limiting coordinate before a controller chooses how to shorten
+the step.
 The constraint-aware controller no longer selects from reaction-network string
 structure.  Its capability is selected by predicates over the reaction-network
 descriptor: conserved networks with independent equilibrium constraints support
