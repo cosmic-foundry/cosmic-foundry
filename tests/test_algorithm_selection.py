@@ -12,11 +12,18 @@ import pytest
 import cosmic_foundry.computation.time_integrators as _ti
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmRequest,
+    LinearSolverField,
     MapStructureField,
     ParameterDescriptor,
     SolveRelationField,
+    assembled_linear_evidence_for,
+    linear_operator_descriptor_from_solve_relation_descriptor,
     map_structure_parameter_schema,
     solve_relation_parameter_schema,
+)
+from cosmic_foundry.computation.solvers import DenseLUSolver
+from cosmic_foundry.computation.solvers.capabilities import (
+    select_linear_solver_for_descriptor,
 )
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
@@ -38,6 +45,14 @@ from tests.selection_ownership import SelectionOwnership
 
 _TIME_BACKEND = cases.TIME_BACKEND
 _DAMPED_OSCILLATOR_GAMMA = 0.2
+
+
+class _AffineDecayRHS:
+    def __call__(self, t: float, u: Tensor) -> Tensor:
+        return self.linear_operator(t, u) @ u
+
+    def linear_operator(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[-1.0]], backend=u.backend)
 
 
 def _exact_damped_osc(t: float) -> tuple[float, ...]:
@@ -537,8 +552,38 @@ class _AutoIntegratorSelectionClaim(Claim[Any]):
             _ti.AutoIntegrator(3).select(cases.harmonic_hamiltonian_rhs())
 
 
+class _AffineStageLinearSolveClaim(Claim[Any]):
+    """Grounded claim for affine implicit-stage solve projection."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/affine_stage_linear_solve_projection"
+
+    def check(self, _calibration: Any) -> None:
+        integrator = _ti.ImplicitRungeKuttaIntegrator(2)
+        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        dt = 1.0e-2
+        step_descriptor = integrator.step_solve_relation_descriptor(
+            _AffineDecayRHS(), state, dt
+        )
+        linear_descriptor = linear_operator_descriptor_from_solve_relation_descriptor(
+            step_descriptor
+        )
+        assert select_linear_solver_for_descriptor(linear_descriptor) is DenseLUSolver
+        evidence = assembled_linear_evidence_for(
+            linear_descriptor,
+            frozenset(LinearSolverField),
+        )
+        stage_value = DenseLUSolver().solve(evidence.operator, evidence.rhs)
+        residual = evidence.operator.apply(stage_value) - evidence.rhs
+        assert abs(float(residual[0])) < 1.0e-12
+        expected_stage = 1.0 / (1.0 + 0.5 * dt)
+        assert abs(float(stage_value[0]) - expected_stage) < 1.0e-12
+
+
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
+    _AffineStageLinearSolveClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],
     _OscillatorInvariantComparisonClaim(),

@@ -2273,26 +2273,40 @@ class _LinearOperatorProjectionClaim(Claim[None]):
 
     @staticmethod
     def _assert_solve_relation_coordinate_projections_use_transformations() -> None:
-        tree = ast.parse(
-            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
-        )
-        offenders = [
-            function.name
-            for function in ast.walk(tree)
-            if isinstance(function, ast.FunctionDef)
-            and _LinearOperatorProjectionClaim._returns_coordinate_map(function)
-            and function.name != "transformation_relation_coordinates"
-            and _LinearOperatorProjectionClaim._references_enum(
-                function, "SolveRelationField"
+        offenders = []
+        for path in sorted((_PACKAGE_ROOT / "computation").rglob("*.py")):
+            tree = ast.parse(path.read_text())
+            offenders.extend(
+                f"{path.relative_to(_PROJECT_ROOT)}:{function.name}"
+                for function in ast.walk(tree)
+                if isinstance(function, ast.FunctionDef)
+                and _LinearOperatorProjectionClaim._emits_solve_relation_coordinates(
+                    function
+                )
+                and not _LinearOperatorProjectionClaim._calls_transformation_projection(
+                    function
+                )
             )
-            and _LinearOperatorProjectionClaim._constructs_solve_relation_coordinate(
-                function
-            )
-        ]
         assert not offenders, (
             "coordinate projections that emit solve-relation fields must derive "
             f"them from transformation relations: {offenders}"
         )
+
+    @staticmethod
+    def _emits_solve_relation_coordinates(function: ast.FunctionDef) -> bool:
+        returns_coordinates = (
+            _LinearOperatorProjectionClaim._returns_coordinate_map(function)
+            and function.name != "transformation_relation_coordinates"
+            and _LinearOperatorProjectionClaim._constructs_solve_relation_coordinate(
+                function
+            )
+        )
+        returns_descriptor = (
+            _LinearOperatorProjectionClaim._constructs_solve_relation_descriptor(
+                function
+            )
+        )
+        return returns_coordinates or returns_descriptor
 
     @staticmethod
     def _assert_transformation_relations_have_explicit_spaces() -> None:
@@ -2366,9 +2380,44 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
 
     @staticmethod
-    def _references_enum(node: ast.AST, name: str) -> bool:
+    def _constructs_solve_relation_descriptor(node: ast.AST) -> bool:
         return any(
-            isinstance(child, ast.Name) and child.id == name for child in ast.walk(node)
+            isinstance(call, ast.Call)
+            and _LinearOperatorProjectionClaim._annotation_name(call.func)
+            == "ParameterDescriptor"
+            and any(
+                isinstance(child, ast.Dict)
+                and _LinearOperatorProjectionClaim._has_dimensional_solve_field_key(
+                    child
+                )
+                for child in ast.walk(call)
+            )
+            for call in ast.walk(node)
+        )
+
+    @staticmethod
+    def _has_dimensional_solve_field_key(node: ast.Dict) -> bool:
+        return any(
+            isinstance(key, ast.Attribute)
+            and key.attr in {"DIM_X", "DIM_Y"}
+            and isinstance(key.value, ast.Name)
+            and key.value.id == "SolveRelationField"
+            for key in node.keys
+        ) or any(
+            isinstance(key, ast.Attribute)
+            and isinstance(key.value, ast.Name)
+            and key.value.id == "field"
+            and key.attr in {"DIM_X", "DIM_Y"}
+            for key in node.keys
+        )
+
+    @staticmethod
+    def _calls_transformation_projection(node: ast.AST) -> bool:
+        return any(
+            isinstance(call, ast.Call)
+            and _LinearOperatorProjectionClaim._annotation_name(call.func)
+            == "transformation_relation_coordinates"
+            for call in ast.walk(node)
         )
 
     @staticmethod
@@ -2543,6 +2592,30 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                         SolveRelationField.DERIVATIVE_ORACLE_KIND
                     ).value
                     == "matrix"
+                )
+                affine_evidence = assembled_linear_evidence_for(
+                    affine_descriptor, frozenset(LinearSolverField)
+                )
+                affine_relation = assembled_linear_transformation_relation(
+                    affine_evidence
+                )
+                affine_coordinates = transformation_relation_coordinates(
+                    affine_relation, frozenset(SolveRelationField)
+                )
+                assert affine_relation.domain_dimension == (2 * len(stage_matrix))
+                assert (
+                    affine_descriptor.coordinate(SolveRelationField.DIM_X)
+                    == affine_coordinates[SolveRelationField.DIM_X]
+                )
+                assert (
+                    affine_descriptor.coordinate(SolveRelationField.DIM_Y)
+                    == affine_coordinates[SolveRelationField.DIM_Y]
+                )
+                assert (
+                    affine_descriptor.coordinate(
+                        SolveRelationField.MAP_LINEARITY_DEFECT
+                    )
+                    == affine_coordinates[SolveRelationField.MAP_LINEARITY_DEFECT]
                 )
                 linear_descriptor = (
                     linear_operator_descriptor_from_solve_relation_descriptor(

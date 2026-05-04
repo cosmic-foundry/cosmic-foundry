@@ -790,19 +790,18 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Use the decomposition descriptor-selection calculation to complete the
-   decomposition coverage-region conversion: LU owns certified full-rank square
-   dense matrices inside factorization work/memory budgets; SVD owns
-   rank-deficient dense matrices where the pseudoinverse/minimum-norm
-   calculation is the relevant solve.
-2. Move affine implicit-stage evidence toward the shared transformation API by
-   producing a transformation relation before descriptor projection, so
-   solve-relation and linear-solver coordinates are both views of the same map
-   object.
-3. Factor linear-operator and decomposition algebra coordinates behind
+1. Move affine implicit-stage evidence through the shared transformation API:
+   construct a transformation relation before descriptor projection, so
+   solve-relation and linear-solver coordinates are both views of the same
+   affine stage map object.
+2. Factor linear-operator and decomposition algebra coordinates behind
    transformation-specific projection functions, so the assembled-linear helper
    stops acting as the single mixed schema projection for solve, linear, and
    decomposition fields.
+3. Add a follow-up sprint plan for quantitative time-integrator descriptors:
+   domain distance, stiffness estimates, Jacobian availability, local error
+   target, retry budget, and RHS evaluation cost should reuse the same
+   descriptor/coverage machinery.
 
 Roadmap sketch:
 
@@ -873,11 +872,12 @@ Stage matrices with on-diagonal or upper-triangular coupling compose with RHS
 evidence: an affine RHS produces an affine stage residual over the stage
 unknowns, while an RHS without affine evidence remains a nonlinear-root solve
 relation with Jacobian-callback evidence.
-Affine implicit stage residuals also project into the shared linear-operator
-descriptor schema: the block matrix is assembled from the Butcher matrix and
-RHS linear operators, the right-hand side is derived from the affine offset,
-and the resulting descriptor carries the same rank, conditioning, cost, and
-consistency coordinates used by linear-solver selection.
+Affine implicit stage residuals first produce a transformation relation, then
+project into solve-relation and shared linear-operator descriptor schemas.  The
+block matrix is assembled from the Butcher matrix and RHS linear operators, the
+right-hand side is derived from the affine offset, and the resulting descriptor
+carries the same rank, conditioning, cost, and consistency coordinates used by
+linear-solver selection.
 Repeated finite reaction-chain fixtures now share a theory-level
 `FiniteStateTransitionSystem`: directed unit-transfer edges derive a
 state-by-transition stoichiometry matrix whose columns sum to zero, so the
