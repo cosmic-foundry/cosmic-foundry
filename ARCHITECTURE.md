@@ -793,16 +793,41 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: pull the assembled-linear evidence projection
-   behind a small transformation relation so decomposition and linear-solver
-   descriptors request the same map from evidence to coordinates, instead of
-   each projection knowing the concrete witness layout; the affine
-   implicit-stage solve should still verify the selected solver through the
-   discovered evidence.
-3. Candidate following calculation: make descriptor projections compute their
+2. Candidate next calculation: make descriptor projections compute their
    coordinate maps directly from evidence plus requested budgets/tolerances, so
    `ParameterDescriptor` becomes a passive point with evidence attached rather
    than a helper that knows how evidence should be selected.
+3. Candidate following calculation: move the assembled-linear coordinate
+   relation toward the shared transformation schema, so linear solvers,
+   decompositions, and time integrators all consume maps with explicit domains,
+   codomains, residual relations, and cost coordinates rather than
+   solver-family-specific helper APIs.
+
+Roadmap sketch:
+
+The current endpoint sketch is a single mathematical capability system for
+`computation/`.  Every implemented algorithm is a transformation between
+mathematical objects with an explicit domain, codomain, premises, evidence,
+cost model, and verification relation.  Human categories such as linear solver,
+decomposition, time integrator, reaction network, or atlas plot are projections
+of that system, not independent sources of truth.
+
+Concrete calculations produce evidence objects.  Projection relations consume
+that evidence and derive descriptor coordinates.  Schemas define valid
+parameter spaces and ownership regions over those coordinates.  Tests discover
+the implementations, evidence projections, schemas, and regions they govern;
+they encode premises and forbid meta-level antipatterns rather than pinning
+historical conclusions.  The atlas renders the resulting spaces: valid,
+invalid, owned, uncovered, and evidenced points.  Gaps should appear because a
+region of the parameter space is unowned, not because a missing capability was
+manually recorded.
+
+The main unresolved design pressure is where projection logic becomes theory.
+One grounded computation may remain local.  Repeated independent uses of the
+same premise should promote the premise into `theory/` or delete the duplicate
+computational shadow.  When a PR changes this endpoint sketch, it should update
+this section in the same PR and name the calculation or structural invariant
+that forced the change.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical

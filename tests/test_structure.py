@@ -1975,6 +1975,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_no_linear_fields_on_parameter_descriptor()
         self._assert_descriptor_evidence_storage_is_protocol_typed()
         self._assert_descriptor_evidence_selection_is_field_structural()
+        self._assert_descriptor_projections_do_not_read_evidence_layout()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -2158,6 +2159,47 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert not concrete_evidence_types, (
             "descriptor evidence storage must be typed by an evidence protocol, "
             f"not concrete evidence dataclasses: {concrete_evidence_types}"
+        )
+
+    @staticmethod
+    def _assert_descriptor_projections_do_not_read_evidence_layout() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        direct_layout_reads: list[int] = []
+        for function in (
+            node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+        ):
+            evidence_names = {
+                target.id
+                for assignment in ast.walk(function)
+                if isinstance(assignment, ast.Assign)
+                and _LinearOperatorProjectionClaim._calls_evidence_selector(
+                    assignment.value
+                )
+                for target in assignment.targets
+                if isinstance(target, ast.Name)
+            }
+            direct_layout_reads.extend(
+                attribute.lineno
+                for attribute in ast.walk(function)
+                if isinstance(attribute, ast.Attribute)
+                and isinstance(attribute.value, ast.Name)
+                and attribute.value.id in evidence_names
+            )
+        assert not direct_layout_reads, (
+            "descriptor projections must pass evidence into transformation "
+            f"relations, not read witness layout directly: {direct_layout_reads}"
+        )
+
+    @staticmethod
+    def _calls_evidence_selector(node: ast.AST) -> bool:
+        return isinstance(node, ast.Call) and (
+            (isinstance(node.func, ast.Attribute) and node.func.attr == "evidence_for")
+            or (
+                isinstance(node.func, ast.Name)
+                and node.func.id.endswith("evidence_for")
+            )
         )
 
     @staticmethod
