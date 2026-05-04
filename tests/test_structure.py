@@ -977,6 +977,39 @@ class _ExecutableCapabilityIdentityClaim(Claim[None]):
         return any(keyword.arg == "constructor" for keyword in node.keywords)
 
 
+class _AutoIntegratorConstructionClaim(Claim[None]):
+    """Claim: AutoIntegrator delegates construction to selected capabilities."""
+
+    @property
+    def description(self) -> str:
+        return "time_integrators/auto_capability_construction"
+
+    def check(self, _calibration: None) -> None:
+        path = _PACKAGE_ROOT / "computation" / "time_integrators" / "auto.py"
+        tree = ast.parse(path.read_text())
+        string_keyed_dicts = [
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Dict)
+            if any(
+                isinstance(key, ast.Constant) and isinstance(key.value, str)
+                for key in node.keys
+            )
+        ]
+        assert not string_keyed_dicts, (
+            "AutoIntegrator must not maintain implementation-label branch maps: "
+            + ", ".join(str(line) for line in string_keyed_dicts)
+        )
+        constructs = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "construct"
+        ]
+        assert constructs, "AutoIntegrator must execute selected.construct(request)"
+
+
 class _ParameterSpaceSchemaClaim(Claim[None]):
     """Claim: parameter-space coverage primitives fail closed structurally."""
 
@@ -3812,6 +3845,7 @@ _CLAIMS: list[Claim[None]] = [
     _AutoDiscoveryImportClaim(),
     _SelectorExpectationDerivationClaim(),
     _ExecutableCapabilityIdentityClaim(),
+    _AutoIntegratorConstructionClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
     _LinearOperatorDescriptorClaim(),
