@@ -17,6 +17,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterDescriptor,
     ReactionNetworkField,
     SolveRelationField,
+    assembled_linear_evidence_for,
     linear_operator_descriptor_from_solve_relation_descriptor,
     linear_solver_parameter_schema,
     map_structure_parameter_schema,
@@ -228,7 +229,9 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             ).value
         )
         selected_solver = select_linear_solver_for_descriptor(linear_descriptor)
-        linear_evidence = linear_descriptor.evidence_for(frozenset(LinearSolverField))
+        linear_evidence = assembled_linear_evidence_for(
+            linear_descriptor, frozenset(LinearSolverField)
+        )
         assert isinstance(linear_evidence, AssembledLinearEvidence)
         stage_solution = selected_solver().solve(
             linear_evidence.operator,

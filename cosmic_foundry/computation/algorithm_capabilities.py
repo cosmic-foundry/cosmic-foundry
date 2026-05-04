@@ -5,7 +5,15 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal, Protocol, TypeAlias, runtime_checkable
+from typing import (
+    Generic,
+    Literal,
+    Protocol,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    runtime_checkable,
+)
 
 import numpy as np
 
@@ -348,12 +356,7 @@ class DescriptorCoordinate:
 
 
 class DescriptorEvidence(Protocol):
-    """Evidence object that can substantiate descriptor fields."""
-
-    @property
-    def supported_fields(self) -> frozenset[DescriptorField]:
-        """Return descriptor fields supported by this evidence."""
-        ...
+    """Marker protocol for descriptor evidence objects."""
 
 
 @runtime_checkable
@@ -365,6 +368,17 @@ class AssembledLinearEvidence(DescriptorEvidence, Protocol):
     matrix: tuple[tuple[float, ...], ...]
 
 
+EvidenceT = TypeVar("EvidenceT", bound=DescriptorEvidence)
+
+
+@dataclass(frozen=True)
+class EvidenceProjection(Generic[EvidenceT]):
+    """Descriptor-coordinate projection requiring an evidence transformation."""
+
+    fields: frozenset[DescriptorField]
+    accepts: Callable[[DescriptorEvidence], TypeGuard[EvidenceT]]
+
+
 @dataclass(frozen=True)
 class LinearOperatorEvidence:
     """Concrete evidence for an assembled linear solve relation."""
@@ -372,14 +386,6 @@ class LinearOperatorEvidence:
     operator: SmallLinearOperator
     rhs: Tensor
     matrix: tuple[tuple[float, ...], ...]
-
-    @property
-    def supported_fields(self) -> frozenset[DescriptorField]:
-        """Return descriptor fields this witness can substantiate."""
-        fields: frozenset[DescriptorField] = frozenset(LinearSolverField)
-        if self.matrix:
-            return fields | frozenset(DecompositionField)
-        return fields
 
 
 @dataclass(frozen=True)
@@ -399,19 +405,15 @@ class ParameterDescriptor:
                     return coordinate
         return DescriptorCoordinate(None, evidence="unavailable")
 
-    def evidence_for(
-        self, required_fields: frozenset[DescriptorField]
-    ) -> DescriptorEvidence:
-        """Return the unique witness supporting ``required_fields``."""
+    def evidence_for(self, projection: EvidenceProjection[EvidenceT]) -> EvidenceT:
+        """Return the unique witness supporting ``projection``."""
         matches = tuple(
-            evidence
-            for evidence in self.evidence
-            if required_fields <= evidence.supported_fields
+            evidence for evidence in self.evidence if projection.accepts(evidence)
         )
         if len(matches) != 1:
             raise ValueError(
                 "descriptor does not have unique evidence for "
-                f"{tuple(_field_label(field) for field in required_fields)}"
+                f"{tuple(_field_label(field) for field in projection.fields)}"
             )
         return matches[0]
 
@@ -1791,14 +1793,34 @@ def linear_operator_descriptor_from_solve_relation_descriptor(
     )
 
 
+def assembled_linear_evidence_projection(
+    fields: frozenset[DescriptorField],
+) -> EvidenceProjection[AssembledLinearEvidence]:
+    """Return a descriptor projection requiring assembled-linear evidence."""
+    return EvidenceProjection(fields, _is_assembled_linear_evidence)
+
+
+def _is_assembled_linear_evidence(
+    evidence: DescriptorEvidence,
+) -> TypeGuard[AssembledLinearEvidence]:
+    return isinstance(evidence, AssembledLinearEvidence)
+
+
 def _assembled_linear_evidence_for(
     descriptor: ParameterDescriptor,
     required_fields: frozenset[DescriptorField],
 ) -> AssembledLinearEvidence:
-    evidence = descriptor.evidence_for(required_fields)
-    if not isinstance(evidence, AssembledLinearEvidence):
-        raise ValueError("descriptor evidence cannot assemble a linear solve")
-    return evidence
+    return descriptor.evidence_for(
+        assembled_linear_evidence_projection(required_fields)
+    )
+
+
+def assembled_linear_evidence_for(
+    descriptor: ParameterDescriptor,
+    fields: frozenset[DescriptorField],
+) -> AssembledLinearEvidence:
+    """Return assembled-linear evidence for a descriptor projection."""
+    return _assembled_linear_evidence_for(descriptor, fields)
 
 
 def _required_float_coordinate(
@@ -2024,6 +2046,8 @@ __all__ = [
     "AlgorithmRequest",
     "AlgorithmStructureContract",
     "AssembledLinearEvidence",
+    "assembled_linear_evidence_for",
+    "assembled_linear_evidence_projection",
     "ComparisonPredicate",
     "CONDITION_LIMIT",
     "coverage_regions_are_disjoint",
@@ -2035,6 +2059,7 @@ __all__ = [
     "decomposition_descriptor_from_linear_operator_descriptor",
     "decomposition_parameter_schema",
     "EvidencePredicate",
+    "EvidenceProjection",
     "InvalidCellRule",
     "LinearSolverField",
     "LinearOperatorEvidence",
