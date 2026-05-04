@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     AlgorithmCapability,
@@ -355,6 +355,27 @@ def _composite_map_region(owner: type) -> CoverageRegion:
     )
 
 
+def _requested_order(request: AlgorithmRequest) -> int:
+    assert request.order is not None
+    return request.order
+
+
+def _component_count(request: AlgorithmRequest) -> int:
+    assert request.descriptor is not None
+    count = request.descriptor.coordinate(MapStructureField.ADDITIVE_COMPONENT_COUNT)
+    assert isinstance(count.value, int)
+    return count.value
+
+
+def _nordsieck_corrector_family(request: AlgorithmRequest) -> Literal["adams", "bdf"]:
+    assert request.descriptor is not None
+    family = request.descriptor.coordinate(
+        MapStructureField.NORDSIECK_CORRECTOR_FAMILY
+    ).value
+    assert family == "adams" or family == "bdf"
+    return cast(Literal["adams", "bdf"], family)
+
+
 _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     TimeIntegrationCapability(
         "explicit_runge_kutta",
@@ -366,6 +387,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         1,
         6,
         coverage_regions=(_rhs_evaluation_region(RungeKuttaIntegrator),),
+        constructor=lambda request: RungeKuttaIntegrator(_requested_order(request)),
     ),
     TimeIntegrationCapability(
         "implicit_runge_kutta",
@@ -377,6 +399,9 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         1,
         6,
         coverage_regions=(_derivative_oracle_region(ImplicitRungeKuttaIntegrator),),
+        constructor=lambda request: ImplicitRungeKuttaIntegrator(
+            _requested_order(request)
+        ),
     ),
     TimeIntegrationCapability(
         "additive_runge_kutta",
@@ -388,6 +413,9 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         1,
         4,
         coverage_regions=(_split_map_region(AdditiveRungeKuttaIntegrator),),
+        constructor=lambda request: AdditiveRungeKuttaIntegrator(
+            _requested_order(request)
+        ),
     ),
     TimeIntegrationCapability(
         "lawson_runge_kutta",
@@ -399,6 +427,9 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         1,
         6,
         coverage_regions=(_semilinear_map_region(LawsonRungeKuttaIntegrator),),
+        constructor=lambda request: LawsonRungeKuttaIntegrator(
+            _requested_order(request)
+        ),
     ),
     TimeIntegrationCapability(
         "symplectic_composition",
@@ -411,6 +442,9 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         6,
         supported_orders=frozenset({1, 2, 4, 6}),
         coverage_regions=(_hamiltonian_map_region(SymplecticCompositionIntegrator),),
+        constructor=lambda request: SymplecticCompositionIntegrator(
+            _requested_order(request)
+        ),
     ),
     TimeIntegrationCapability(
         "operator_composition",
@@ -423,6 +457,10 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         6,
         supported_orders=frozenset({1, 2, 4, 6}),
         coverage_regions=(_composite_map_region(CompositionIntegrator),),
+        constructor=lambda request: CompositionIntegrator(
+            [RungeKuttaIntegrator(1) for _ in range(_component_count(request))],
+            order=_requested_order(request),
+        ),
     ),
     TimeIntegrationCapability(
         "adaptive_nordsieck",
@@ -452,6 +490,9 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         1,
         6,
         coverage_regions=(_rhs_history_region(ExplicitMultistepIntegrator),),
+        constructor=lambda request: ExplicitMultistepIntegrator.for_order(
+            _requested_order(request)
+        ),
     ),
     TimeIntegrationCapability(
         "fixed_order_nordsieck",
@@ -463,6 +504,10 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
         1,
         6,
         coverage_regions=(_nordsieck_history_region(MultistepIntegrator),),
+        constructor=lambda request: MultistepIntegrator(
+            _nordsieck_corrector_family(request),
+            _requested_order(request),
+        ),
     ),
     TimeIntegrationCapability(
         "generic_integration_driver",

@@ -793,16 +793,14 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: move selected implementation construction out
-   of `tests/test_algorithm_selection.py` and into the capability model, so a
-   selected capability is an executable construction relation rather than a
-   label plus a test-local factory. Ground the change in the descriptor-backed
-   step-selection cases, including Nordsieck history, composition, and
-   semi-linear scalar-decay calculations. If the capability model cannot
-   construct an implementation from the request, name the missing descriptor
-   premise or delete that selector coverage. Do not add mesh, flux-form,
-   locality, or CFL axes until a real mesh object is the implementation premise
-   being tested.
+2. Candidate next calculation: delete the parallel implementation-name string
+   from executable capabilities whose owner/constructor already determines the
+   implementation identity. A selected capability should project a human label
+   from the executable relation, not maintain a second identity field. Ground
+   the change in the descriptor-backed step-selection cases, reaction-chain
+   selection, and semi-discrete conservation selection. Do not add mesh,
+   flux-form, locality, or CFL axes until a real mesh object is the
+   implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
