@@ -17,7 +17,6 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     MapStructureField,
     MembershipPredicate,
     ParameterDescriptor,
-    ReactionNetworkField,
     SolveRelationField,
 )
 from cosmic_foundry.computation.tensor import Tensor
@@ -92,6 +91,7 @@ def _map_structure_coordinates(
         field.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND: DescriptorCoordinate(float("inf")),
         field.SYMPLECTIC_FORM_INVARIANT_AVAILABLE: DescriptorCoordinate(False),
         field.CONSERVED_LINEAR_FORM_COUNT: DescriptorCoordinate(0),
+        field.ALGEBRAIC_CONSTRAINT_COUNT: DescriptorCoordinate(0),
         field.ADDITIVE_COMPONENT_COUNT: DescriptorCoordinate(0),
         field.DOMAIN_STEP_MARGIN: DescriptorCoordinate(float("inf")),
         field.STIFFNESS_ESTIMATE: DescriptorCoordinate(0.0),
@@ -641,7 +641,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
                         MapStructureField.CONSERVED_LINEAR_FORM_COUNT, ">", 0
                     ),
                     ComparisonPredicate(
-                        ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT, ">", 0
+                        MapStructureField.ALGEBRAIC_CONSTRAINT_COUNT, ">", 0
                     ),
                     ComparisonPredicate(
                         MapStructureField.DOMAIN_STEP_MARGIN, "<=", 0.0

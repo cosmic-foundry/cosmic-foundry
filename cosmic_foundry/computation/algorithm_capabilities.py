@@ -240,6 +240,7 @@ class MapStructureField(Enum):
     """Schema-owned descriptor fields for ODE map/operator structure."""
 
     ADDITIVE_COMPONENT_COUNT = "additive_component_count"
+    ALGEBRAIC_CONSTRAINT_COUNT = "algebraic_constraint_count"
     CONSERVED_LINEAR_FORM_COUNT = "conserved_linear_form_count"
     DOMAIN_STEP_MARGIN = "domain_step_margin"
     EXACT_LINEAR_OPERATOR_AVAILABLE = "exact_linear_operator_available"
@@ -1677,6 +1678,10 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
             _nonnegative_axis(
                 field.CONSERVED_LINEAR_FORM_COUNT,
                 units="independent linear forms",
+            ),
+            _nonnegative_axis(
+                field.ALGEBRAIC_CONSTRAINT_COUNT,
+                units="independent algebraic constraints",
             ),
             _nonnegative_axis(field.ADDITIVE_COMPONENT_COUNT, units="components"),
         ),
