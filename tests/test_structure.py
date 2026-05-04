@@ -589,7 +589,7 @@ class _ArchitectureOwnershipSpec:
     rejected_requests: tuple[_CapabilityRejectionExpectation, ...] = ()
     descriptor_owned_capabilities: bool = False
     descriptor_request_property_limit: int | None = None
-    expected_class_modules: dict[type | str, str] | None = None
+    expected_class_modules: dict[type | str, types.ModuleType | str] | None = None
 
 
 def _resolve_dotted(name: str) -> Any:
@@ -778,17 +778,34 @@ class _ArchitectureOwnershipClaim(Claim[None]):
                 "descriptor-owned class/module expectations must use class identity: "
                 f"{label_keys}"
             )
+            label_values = [
+                cls.__name__
+                for cls, expected_module in expected.items()
+                if isinstance(expected_module, str)
+            ]
+            assert not label_values, (
+                "descriptor-owned class/module expectations must use module identity: "
+                f"{label_values}"
+            )
         violations = []
-        for expected_cls, module_stem in expected.items():
+        for expected_cls, expected_module in expected.items():
             cls = (
                 getattr(package, expected_cls)
                 if isinstance(expected_cls, str)
                 else expected_cls
             )
             clsname = cls.__name__
-            actual_stem = cls.__module__.split(".")[-1]
-            if actual_stem != module_stem:
-                violations.append(f"{clsname}: {actual_stem} != {module_stem}")
+            actual_module = importlib.import_module(cls.__module__)
+            if isinstance(expected_module, str):
+                actual = actual_module.__name__.split(".")[-1]
+                expected_name = expected_module
+                matches = actual == expected_name
+            else:
+                actual = actual_module.__name__
+                expected_name = expected_module.__name__
+                matches = actual_module is expected_module
+            if not matches:
+                violations.append(f"{clsname}: {actual} != {expected_name}")
         assert not violations, "class/module ownership mismatch: " + "; ".join(
             violations
         )
@@ -3114,6 +3131,21 @@ _nordsieck_history_descriptor = _resolve_dotted(
 _TIME_INTEGRATOR_PACKAGE: Any = importlib.import_module(
     "cosmic_foundry.computation.time_integrators"
 )
+_ALGORITHM_CAPABILITIES_MODULE = importlib.import_module(
+    "cosmic_foundry.computation.algorithm_capabilities"
+)
+
+
+def _time_integrator_module(stem: str) -> types.ModuleType:
+    return importlib.import_module(f"{_TIME_INTEGRATOR_PACKAGE.__name__}.{stem}")
+
+
+def _class_module_expectations(
+    *groups: tuple[types.ModuleType, tuple[type, ...]],
+) -> dict[type, types.ModuleType]:
+    return {cls: module for module, classes in groups for cls in classes}
+
+
 _DecompositionRequest = _resolve_dotted(
     "cosmic_foundry.computation.decompositions.DecompositionRequest"
 )
@@ -3365,50 +3397,128 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     ),
     descriptor_owned_capabilities=True,
     descriptor_request_property_limit=1,
-    expected_class_modules={
-        _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController: "adaptive_nordsieck",
-        _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator: "imex",
-        _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract: "algorithm_capabilities",
-        _TIME_INTEGRATOR_PACKAGE.AutoIntegrator: "auto",
-        _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS: "integrator",
-        _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol: "splitting",
-        _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS: "splitting",
-        _TIME_INTEGRATOR_PACKAGE.CompositeRHS: "splitting",
-        _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator: "splitting",
-        _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController: "constraint_aware",
-        _TIME_INTEGRATOR_PACKAGE.ConstantStep: "integrator",
-        _TIME_INTEGRATOR_PACKAGE.DomainCheck: "domains",
-        _TIME_INTEGRATOR_PACKAGE.DomainViolation: "domains",
-        _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator: "explicit_multistep",
-        _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS: "implicit",
-        _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS: "symplectic",
-        _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator: "implicit",
-        _TIME_INTEGRATOR_PACKAGE.IntegrationDriver: "integration_driver",
-        _TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult: "integration_driver",
-        _TIME_INTEGRATOR_PACKAGE.JacobianRHS: "implicit",
-        _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator: "exponential",
-        _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS: "reaction_network",
-        _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator: "nordsieck",
-        _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain: "domains",
-        _TIME_INTEGRATOR_PACKAGE.NordsieckHistory: "nordsieck",
-        _TIME_INTEGRATOR_PACKAGE.ODEState: "integrator",
-        _TIME_INTEGRATOR_PACKAGE.OrderDecision: "variable_order",
-        _TIME_INTEGRATOR_PACKAGE.OrderSelector: "variable_order",
-        _TIME_INTEGRATOR_PACKAGE.PhiFunction: "exponential",
-        _TIME_INTEGRATOR_PACKAGE.PIController: "integrator",
-        _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS: "reaction_network",
-        _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator: "runge_kutta",
-        _TIME_INTEGRATOR_PACKAGE.SemilinearRHS: "exponential",
-        _TIME_INTEGRATOR_PACKAGE.SplitRHS: "imex",
-        _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic: "stiffness",
-        _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher: "stiffness",
-        _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator: "symplectic",
-        _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability: "algorithm_capabilities",
-        _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry: "algorithm_capabilities",
-        _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol: (
-            "reaction_network"
+    expected_class_modules=_class_module_expectations(
+        (
+            _ALGORITHM_CAPABILITIES_MODULE,
+            (
+                _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry,
+            ),
         ),
-    },
+        (
+            _time_integrator_module("adaptive_nordsieck"),
+            (_TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,),
+        ),
+        (
+            _time_integrator_module("constraint_aware"),
+            (_TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,),
+        ),
+        (
+            _time_integrator_module("domains"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.DomainCheck,
+                _TIME_INTEGRATOR_PACKAGE.DomainViolation,
+                _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain,
+            ),
+        ),
+        (
+            _time_integrator_module("exponential"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.PhiFunction,
+                _TIME_INTEGRATOR_PACKAGE.SemilinearRHS,
+            ),
+        ),
+        (
+            _time_integrator_module("imex"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.SplitRHS,
+            ),
+        ),
+        (
+            _time_integrator_module("implicit"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS,
+                _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.JacobianRHS,
+            ),
+        ),
+        (
+            _time_integrator_module("integration_driver"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.IntegrationDriver,
+                _TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult,
+            ),
+        ),
+        (
+            _time_integrator_module("integrator"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS,
+                _TIME_INTEGRATOR_PACKAGE.ConstantStep,
+                _TIME_INTEGRATOR_PACKAGE.ODEState,
+                _TIME_INTEGRATOR_PACKAGE.PIController,
+            ),
+        ),
+        (
+            _time_integrator_module("nordsieck"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.NordsieckHistory,
+            ),
+        ),
+        (
+            _time_integrator_module("reaction_network"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS,
+                _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS,
+                _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol,
+            ),
+        ),
+        (
+            _time_integrator_module("runge_kutta"),
+            (_TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,),
+        ),
+        (
+            _time_integrator_module("splitting"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol,
+                _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS,
+                _TIME_INTEGRATOR_PACKAGE.CompositeRHS,
+                _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,
+            ),
+        ),
+        (
+            _time_integrator_module("stiffness"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic,
+                _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher,
+            ),
+        ),
+        (
+            _time_integrator_module("symplectic"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS,
+                _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,
+            ),
+        ),
+        (
+            _time_integrator_module("variable_order"),
+            (
+                _TIME_INTEGRATOR_PACKAGE.OrderDecision,
+                _TIME_INTEGRATOR_PACKAGE.OrderSelector,
+            ),
+        ),
+        (
+            _time_integrator_module("auto"),
+            (_TIME_INTEGRATOR_PACKAGE.AutoIntegrator,),
+        ),
+        (
+            _time_integrator_module("explicit_multistep"),
+            (_TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,),
+        ),
+    ),
 )
 
 _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
