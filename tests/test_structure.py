@@ -27,6 +27,7 @@ import importlib
 import inspect
 import pkgutil
 import sys
+import textwrap
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -893,6 +894,81 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         if self._spec.descriptor_owned_capabilities:
             return _class_module_expectations_from_categories(self._public_categories())
         return self._spec.expected_class_modules or {}
+
+
+class _DescriptorOwnedClassifierPremiseClaim(Claim[None]):
+    """Claim: descriptor-owned public classifiers use structural premises."""
+
+    @property
+    def description(self) -> str:
+        return "architecture_ownership/descriptor_owned_classifier_premises"
+
+    def check(self, _calibration: None) -> None:
+        violations = []
+        for spec in _ARCHITECTURE_OWNERSHIP_SPECS:
+            if not spec.descriptor_owned_capabilities:
+                continue
+            assert callable(spec.public_categories)
+            for fn in self._reachable_local_functions(spec.public_categories):
+                tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Compare):
+                        continue
+                    for op, comparator in zip(node.ops, node.comparators, strict=True):
+                        if not isinstance(op, ast.Is | ast.IsNot):
+                            continue
+                        if self._compares_singleton(node.left, comparator):
+                            continue
+                        violations.append(f"{fn.__name__}:{node.lineno}")
+        assert not violations, (
+            "descriptor-owned public category classifiers must classify from "
+            "module/capability structure, not object identity: " + ", ".join(violations)
+        )
+
+    @classmethod
+    def _reachable_local_functions(
+        cls,
+        root: Callable[..., Any],
+    ) -> tuple[Callable[..., Any], ...]:
+        namespace = sys.modules[__name__].__dict__
+        pending = [root]
+        seen: set[Callable[..., Any]] = set()
+        while pending:
+            fn = pending.pop()
+            if fn in seen:
+                continue
+            seen.add(fn)
+            tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call | ast.Name):
+                    continue
+                name = cls._called_name(node)
+                candidate = namespace.get(name) if name is not None else None
+                if (
+                    inspect.isfunction(candidate)
+                    and candidate.__module__ == __name__
+                    and candidate not in seen
+                ):
+                    pending.append(candidate)
+        return tuple(seen)
+
+    @staticmethod
+    def _called_name(node: ast.Call | ast.Name) -> str | None:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node.func, ast.Name):
+            return node.func.id
+        return None
+
+    @staticmethod
+    def _compares_singleton(left: ast.expr, right: ast.expr) -> bool:
+        return _DescriptorOwnedClassifierPremiseClaim._is_singleton(
+            left
+        ) or _DescriptorOwnedClassifierPremiseClaim._is_singleton(right)
+
+    @staticmethod
+    def _is_singleton(node: ast.expr) -> bool:
+        return isinstance(node, ast.Constant) and node.value in {None, True, False}
 
 
 class _AlgorithmSelectionAmbiguityClaim(Claim[None]):
@@ -3300,8 +3376,12 @@ _TIME_INTEGRATOR_RHS_MODULES = frozenset(
         ),
     }
 )
-_TIME_INTEGRATOR_SOLVE_RELATION_MODULE = importlib.import_module(
-    "cosmic_foundry.computation.time_integrators.solve_relation"
+_TIME_INTEGRATOR_SOLVE_RELATION_MODULES = frozenset(
+    {
+        importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.solve_relation"
+        )
+    }
 )
 _TIME_INTEGRATOR_VERIFICATION_MODULES = frozenset(
     {
@@ -3341,18 +3421,14 @@ def _time_integrator_public_category(obj: Any) -> str | None:
     if module in _TIME_INTEGRATOR_STATE_RESULT_MODULES:
         return "state_result"
     if module in _TIME_INTEGRATOR_RHS_MODULES:
-        if module is _TIME_INTEGRATOR_SOLVE_RELATION_MODULE and not isinstance(
+        if module in _TIME_INTEGRATOR_SOLVE_RELATION_MODULES and not isinstance(
             obj, type
         ):
             return "capability_contract"
         if not isinstance(obj, type) and callable(obj):
             return "verification_helper"
-        if obj is _TIME_INTEGRATOR_PACKAGE.PhiFunction:
-            return "state_result"
         return "rhs"
     if module in _TIME_INTEGRATOR_DRIVER_MODULES:
-        if obj is _TIME_INTEGRATOR_PACKAGE.ODEState:
-            return "state_result"
         return "driver_controller"
     return None
 
@@ -3930,6 +4006,14 @@ _GEOMETRY_OWNERSHIP = _ArchitectureOwnershipSpec(
     },
 )
 
+_ARCHITECTURE_OWNERSHIP_SPECS = (
+    _TIME_INTEGRATOR_OWNERSHIP,
+    _LINEAR_SOLVER_OWNERSHIP,
+    _DECOMPOSITION_OWNERSHIP,
+    _DISCRETE_OPERATOR_OWNERSHIP,
+    _GEOMETRY_OWNERSHIP,
+)
+
 _CLAIMS: list[Claim[None]] = [
     _AbcInstantiationClaim(),
     _HierarchyClaim(),
@@ -3946,6 +4030,7 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_DECOMPOSITION_OWNERSHIP),
     _ArchitectureOwnershipClaim(_DISCRETE_OPERATOR_OWNERSHIP),
     _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
+    _DescriptorOwnedClassifierPremiseClaim(),
     _AlgorithmSelectionAmbiguityClaim(),
     _AutoDiscoveryImportClaim(),
     _SelectorExpectationDerivationClaim(),
