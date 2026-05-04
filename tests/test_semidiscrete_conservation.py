@@ -82,8 +82,8 @@ class _PeriodicAdvectionConservationClaim(Claim[Any]):
                     order=4,
                     descriptor=descriptor,
                 )
-            ).implementation
-            == _step_map_ownership(descriptor).owner.__name__
+            ).owner
+            is _step_map_ownership(descriptor).owner
         )
         _step_map_ownership(descriptor).assert_owned_cell()
 

@@ -106,12 +106,12 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
 
         step_descriptor = integrator.step_solve_relation_descriptor(rhs, state, 2.0e-3)
         assert (
-            auto.select(rhs).implementation
-            == _time_integration_ownership(
+            auto.select(rhs).owner
+            is _time_integration_ownership(
                 derivative_oracle_descriptor(),
                 requested_properties=frozenset({"one_step"}),
                 order=2,
-            ).owner.__name__
+            ).owner
         )
 
         reaction_descriptor = rhs.reaction_network_descriptor()
@@ -159,8 +159,8 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
                     order=4,
                     descriptor=map_descriptor,
                 )
-            ).implementation
-            == _step_map_ownership(map_descriptor).owner.__name__
+            ).owner
+            is _step_map_ownership(map_descriptor).owner
         )
         _step_map_ownership(map_descriptor).assert_owned_cell()
         assert (
@@ -178,12 +178,12 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             )
         )
         assert (
-            constraint_owner.implementation
-            == _time_integration_ownership(
+            constraint_owner.owner
+            is _time_integration_ownership(
                 constraint_descriptor,
                 requested_properties=frozenset({"advance"}),
                 order=2,
-            ).owner.__name__
+            ).owner
         )
 
         descriptor = step_descriptor
