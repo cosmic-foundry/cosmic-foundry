@@ -416,17 +416,21 @@ class ParameterDescriptor:
                     return coordinate
         return DescriptorCoordinate(None, evidence="unavailable")
 
-    def evidence_for(self, projection: EvidenceProjection[EvidenceT]) -> EvidenceT:
-        """Return the unique witness supporting ``projection``."""
-        matches = tuple(
-            evidence for evidence in self.evidence if projection.accepts(evidence)
+
+def evidence_for(
+    descriptor: ParameterDescriptor,
+    projection: EvidenceProjection[EvidenceT],
+) -> EvidenceT:
+    """Return the unique descriptor witness supporting ``projection``."""
+    matches = tuple(
+        evidence for evidence in descriptor.evidence if projection.accepts(evidence)
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            "descriptor does not have unique evidence for "
+            f"{tuple(_field_label(field) for field in projection.fields)}"
         )
-        if len(matches) != 1:
-            raise ValueError(
-                "descriptor does not have unique evidence for "
-                f"{tuple(_field_label(field) for field in projection.fields)}"
-            )
-        return matches[0]
+    return matches[0]
 
 
 class ParameterPredicate(Protocol):
@@ -1806,8 +1810,8 @@ def _assembled_linear_evidence_for(
     descriptor: ParameterDescriptor,
     required_fields: frozenset[DescriptorField],
 ) -> AssembledLinearEvidence:
-    return descriptor.evidence_for(
-        assembled_linear_evidence_projection(required_fields)
+    return evidence_for(
+        descriptor, assembled_linear_evidence_projection(required_fields)
     )
 
 
@@ -2099,6 +2103,7 @@ __all__ = [
     "DescriptorCoordinate",
     "decomposition_descriptor_from_linear_operator_descriptor",
     "decomposition_parameter_schema",
+    "evidence_for",
     "EvidencePredicate",
     "EvidenceProjection",
     "InvalidCellRule",

@@ -1973,6 +1973,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         regions = _SolveRelationSchemaClaim._regions(schema)
         self._assert_no_descriptor_projection_wrappers()
         self._assert_no_linear_fields_on_parameter_descriptor()
+        self._assert_parameter_descriptor_does_not_select_evidence()
         self._assert_descriptor_evidence_storage_is_protocol_typed()
         self._assert_descriptor_evidence_selection_is_field_structural()
         self._assert_descriptor_projections_do_not_read_evidence_layout()
@@ -2117,6 +2118,39 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             "descriptor evidence selection must use projection-owned "
             "transformation protocols, not field sets read from each evidence "
             f"object: {evidence_field_comparisons}"
+        )
+
+    @staticmethod
+    def _assert_parameter_descriptor_does_not_select_evidence() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        descriptor = next(
+            (
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ClassDef) and node.name == "ParameterDescriptor"
+            ),
+            None,
+        )
+        if descriptor is None:
+            raise AssertionError("ParameterDescriptor class not found")
+        evidence_selection_methods = [
+            method.name
+            for method in descriptor.body
+            if isinstance(method, ast.FunctionDef)
+            and any(
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "self"
+                and node.attr == "evidence"
+                for node in ast.walk(method)
+            )
+        ]
+        assert not evidence_selection_methods, (
+            "ParameterDescriptor must remain a passive coordinate/evidence "
+            "point; evidence selection belongs to projections: "
+            f"{evidence_selection_methods}"
         )
 
     @staticmethod
