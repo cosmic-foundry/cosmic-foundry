@@ -74,6 +74,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     predicate_sets_are_disjoint,
     reaction_network_parameter_schema,
     solve_relation_parameter_schema,
+    transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
 from cosmic_foundry.computation.decompositions.factorization import Factorization
@@ -2004,14 +2005,17 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             relation.domain.backend_kind
             == spd.coordinate(SolveRelationField.BACKEND_KIND).value
         )
+        solve_coordinates = transformation_relation_coordinates(
+            relation, frozenset(SolveRelationField)
+        )
         assert spd.coordinate(SolveRelationField.DIM_X).value == (
-            relation.domain_dimension
+            solve_coordinates[SolveRelationField.DIM_X].value
         )
         assert spd.coordinate(SolveRelationField.DIM_Y).value == (
-            relation.codomain_dimension
+            solve_coordinates[SolveRelationField.DIM_Y].value
         )
         assert spd.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value == (
-            relation.acceptance_relation
+            solve_coordinates[SolveRelationField.ACCEPTANCE_RELATION].value
         )
         assert regions["linear_system"].contains(spd)
         assert regions["symmetric_positive_definite"].contains(spd)
@@ -2255,14 +2259,12 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             for function in ast.walk(tree)
             if isinstance(function, ast.FunctionDef)
             and _LinearOperatorProjectionClaim._returns_coordinate_map(function)
+            and function.name != "transformation_relation_coordinates"
             and _LinearOperatorProjectionClaim._references_enum(
                 function, "SolveRelationField"
             )
-            and not _LinearOperatorProjectionClaim._references_enum(
-                function, "TransformationRelation"
-            )
-            and not _LinearOperatorProjectionClaim._references_enum(
-                function, "TransformationSpace"
+            and _LinearOperatorProjectionClaim._constructs_solve_relation_coordinate(
+                function
             )
         ]
         assert not offenders, (
@@ -2323,6 +2325,22 @@ class _LinearOperatorProjectionClaim(Claim[None]):
                 == "DescriptorCoordinate"
                 for node in ast.walk(annotation)
             )
+        )
+
+    @staticmethod
+    def _constructs_solve_relation_coordinate(node: ast.AST) -> bool:
+        return any(
+            isinstance(child, ast.Dict)
+            and any(
+                isinstance(key, ast.Attribute)
+                and isinstance(key.value, ast.Name)
+                and key.value.id == "SolveRelationField"
+                and isinstance(value, ast.Call)
+                and _LinearOperatorProjectionClaim._annotation_name(value.func)
+                == "DescriptorCoordinate"
+                for key, value in zip(child.keys, child.values, strict=True)
+            )
+            for child in ast.walk(node)
         )
 
     @staticmethod
