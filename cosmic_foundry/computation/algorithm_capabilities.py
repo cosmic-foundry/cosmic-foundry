@@ -400,11 +400,20 @@ class LinearOperatorEvidence:
 
 
 @dataclass(frozen=True)
+class TransformationSpace:
+    """Finite-dimensional coordinate space inhabited by a transformation."""
+
+    dimension: int
+    backend_kind: str
+    device_kind: str
+
+
+@dataclass(frozen=True)
 class TransformationRelation:
     """Primitive map relation used to project capability coordinates."""
 
-    domain_dimension: int
-    codomain_dimension: int
+    domain: TransformationSpace
+    codomain: TransformationSpace
     residual_target_available: bool
     target_is_zero: bool
     map_linearity_defect: float | None
@@ -417,6 +426,16 @@ class TransformationRelation:
     device_kind: str
     work_budget_fmas: float
     memory_budget_bytes: float
+
+    @property
+    def domain_dimension(self) -> int:
+        """Return the domain dimension as a coordinate projection."""
+        return self.domain.dimension
+
+    @property
+    def codomain_dimension(self) -> int:
+        """Return the codomain dimension as a coordinate projection."""
+        return self.codomain.dimension
 
 
 @dataclass(frozen=True)
@@ -2055,8 +2074,12 @@ def assembled_linear_evidence_coordinates(
         SolveRelationField.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
             requested_solution_tolerance
         ),
-        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(relation.backend_kind),
-        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(relation.device_kind),
+        SolveRelationField.BACKEND_KIND: DescriptorCoordinate(
+            relation.domain.backend_kind
+        ),
+        SolveRelationField.DEVICE_KIND: DescriptorCoordinate(
+            relation.domain.device_kind
+        ),
         SolveRelationField.WORK_BUDGET_FMAS: DescriptorCoordinate(
             relation.work_budget_fmas
         ),
@@ -2140,9 +2163,14 @@ def assembled_linear_transformation_relation(
     dimension = len(rhs)
     if len(matrix) != dimension or any(len(row) != dimension for row in matrix):
         raise ValueError("assembled-linear relation requires a square matrix")
+    space = TransformationSpace(
+        dimension,
+        _backend_kind(evidence.rhs.backend),
+        device_kind,
+    )
     return TransformationRelation(
-        domain_dimension=dimension,
-        codomain_dimension=dimension,
+        domain=space,
+        codomain=space,
         residual_target_available=True,
         target_is_zero=False,
         map_linearity_defect=0.0,
@@ -2151,7 +2179,7 @@ def assembled_linear_transformation_relation(
         derivative_oracle_kind="matrix",
         objective_relation="none",
         acceptance_relation="residual_below_tolerance",
-        backend_kind=_backend_kind(evidence.rhs.backend),
+        backend_kind=space.backend_kind,
         device_kind=device_kind,
         work_budget_fmas=work_budget_fmas,
         memory_budget_bytes=memory_budget_bytes,
@@ -2205,4 +2233,5 @@ __all__ = [
     "solve_relation_parameter_schema",
     "SolveRelationField",
     "TransformationRelation",
+    "TransformationSpace",
 ]
