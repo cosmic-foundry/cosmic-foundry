@@ -2002,6 +2002,23 @@ class _SolveRelationSchemaClaim(Claim[None]):
             }
         )
 
+    @staticmethod
+    def _domain_interior_derivative_descriptor() -> ParameterDescriptor:
+        state = _resolve_dotted("cosmic_foundry.computation.time_integrators.ODEState")(
+            0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND)
+        )
+        step_descriptor = _TIME_INTEGRATOR_CAPABILITIES.rhs_step_diagnostics_descriptor(
+            _AffineTestRHS(), state, 1.0
+        )
+        return ParameterDescriptor(
+            _TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor().coordinates
+            | {
+                MapStructureField.DOMAIN_STEP_MARGIN: step_descriptor.coordinate(
+                    MapStructureField.DOMAIN_STEP_MARGIN
+                )
+            }
+        )
+
 
 class _LinearOperatorProjectionClaim(Claim[None]):
     """Claim: small assembled operators project to schema-valid descriptors."""
@@ -4200,7 +4217,9 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=2,
-                descriptor=_TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor(),
+                descriptor=(
+                    _SolveRelationSchemaClaim._domain_interior_derivative_descriptor()
+                ),
             ),
             _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
         ),

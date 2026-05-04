@@ -68,6 +68,9 @@ class _BoundaryApproachRHS:
     def __call__(self, _t: float, u: Tensor) -> Tensor:
         return Tensor([-1.0], backend=u.backend)
 
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[0.0]], backend=u.backend)
+
 
 def _exact_damped_osc(t: float) -> tuple[float, ...]:
     gamma = _DAMPED_OSCILLATOR_GAMMA
@@ -661,6 +664,88 @@ class _NordsieckFamilyFromStiffnessClaim(Claim[Any]):
             assert_nordsieck_family(selected.construct(request), family)
 
 
+class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
+    """Grounded claim that controller selection consumes domain-step margin."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/domain_margin_advance_selection"
+
+    def check(self, _calibration: Any) -> None:
+        interior_state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        interior_step = rhs_step_diagnostics_descriptor(
+            _AffineDecayRHS(0.1), interior_state, 1.0e-1
+        )
+        generic_interior = AlgorithmRequest(
+            requested_properties=frozenset({"advance"}),
+            order=3,
+            descriptor=interior_step,
+        )
+        generic_interior_capability = _ti.select_time_integrator(generic_interior)
+        assert generic_interior_capability.owner is _ti.IntegrationDriver
+
+        boundary_state = _ti.ODEState(0.0, Tensor([0.1], backend=_TIME_BACKEND))
+        boundary_step = rhs_step_diagnostics_descriptor(
+            _BoundaryApproachRHS(), boundary_state, 1.0e-1
+        )
+        assert boundary_step.coordinate(
+            MapStructureField.DOMAIN_STEP_MARGIN
+        ).value == pytest.approx(-0.1)
+        generic_limited = AlgorithmRequest(
+            requested_properties=frozenset({"advance"}),
+            order=3,
+            descriptor=boundary_step,
+        )
+        generic_limited_capability = _ti.select_time_integrator(generic_limited)
+        assert generic_limited_capability.owner is _ti.IntegrationDriver
+        interior_region = self._selected_region(
+            generic_interior_capability, interior_step
+        )
+        limited_region = self._selected_region(
+            generic_limited_capability, boundary_step
+        )
+        assert interior_region != limited_region
+
+        adaptive_limited_descriptor = ParameterDescriptor(
+            derivative_oracle_descriptor().coordinates
+            | {
+                MapStructureField.DOMAIN_STEP_MARGIN: boundary_step.coordinate(
+                    MapStructureField.DOMAIN_STEP_MARGIN
+                )
+            }
+        )
+        adaptive_limited = AlgorithmRequest(
+            requested_properties=frozenset({"advance"}),
+            order=2,
+            descriptor=adaptive_limited_descriptor,
+        )
+        adaptive_limited_capability = _ti.select_time_integrator(adaptive_limited)
+        assert adaptive_limited_capability.owner is _ti.AdaptiveNordsieckController
+        assert self._selected_region(
+            adaptive_limited_capability, adaptive_limited_descriptor
+        ) != self._selected_region(
+            adaptive_limited_capability,
+            ParameterDescriptor(
+                derivative_oracle_descriptor().coordinates
+                | {
+                    MapStructureField.DOMAIN_STEP_MARGIN: (
+                        interior_step.coordinate(MapStructureField.DOMAIN_STEP_MARGIN)
+                    )
+                }
+            ),
+        )
+
+    @staticmethod
+    def _selected_region(capability: Any, descriptor: ParameterDescriptor) -> object:
+        matches = tuple(
+            region
+            for region in capability.coverage_regions
+            if region.contains(descriptor)
+        )
+        assert len(matches) == 1
+        return matches[0]
+
+
 class _AffineStageLinearSolveClaim(Claim[Any]):
     """Grounded claim for affine implicit-stage solve projection."""
 
@@ -700,6 +785,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _DampedOscillatorSymplecticDefectClaim(),
     _StepDiagnosticStiffnessClaim(),
     _NordsieckFamilyFromStiffnessClaim(),
+    _DomainMarginAdvanceSelectionClaim(),
 )
 
 

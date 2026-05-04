@@ -790,15 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: keep generic RHS step diagnostics as the only step-local map
-   projection path, and delete reaction-network methods that merely wrap or
-   rename that projection.
-2. Use domain-step margin in generic/adaptive controller selection where a
-   concrete calculation shows the selector needs to distinguish domain-limited
-   advancement from ordinary RHS advancement.
-3. Review whether reaction-network constraint lifecycle evidence and generic map
+1. Current PR: use domain-step margin in generic/adaptive controller selection
+   where a concrete calculation shows the selector needs to distinguish
+   domain-limited advancement from ordinary RHS advancement.
+2. Review whether reaction-network constraint lifecycle evidence and generic map
    structure evidence now compose cleanly enough that any remaining
    reaction-specific selector setup can be deleted.
+3. Delete any advance-controller ownership region that cannot be separated from
+   another controller by descriptor predicates grounded in a calculation.
 
 Roadmap sketch:
 
@@ -911,6 +910,13 @@ map-structure evidence only; step-local diagnostics are projected by the
 generic RHS step descriptor and composed at the request site.  Implementation
 methods must not import capability modules to manufacture selection descriptors
 from inside the class.
+Generic and adaptive advance-controller ownership consumes the same
+`DOMAIN_STEP_MARGIN` coordinate.  Interior and domain-limited advancement are
+separate coverage regions even when they currently select the same controller;
+this makes the atlas show whether a controller owns ordinary RHS advancement,
+domain-limited advancement, or both.  Adaptive Nordsieck advancement combines
+derivative-oracle evidence with domain-step evidence rather than selecting from
+a derivative oracle alone.
 Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
 `jacobian_rhs` structure label.  They select from derivative-oracle descriptor
 evidence: an available Jacobian callback or matrix derivative is the premise
