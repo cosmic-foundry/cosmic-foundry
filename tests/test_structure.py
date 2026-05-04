@@ -581,7 +581,7 @@ class _ArchitectureOwnershipSpec:
     """Package-level ownership contract checked by _ArchitectureOwnershipClaim."""
 
     package: str
-    public_categories: dict[str, frozenset[str]]
+    public_categories: dict[str, frozenset[Any]]
     forbidden_public_symbols: frozenset[str] = frozenset()
     capability_provider: str | None = None
     request_selector: str | None = None
@@ -610,7 +610,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
     def check(self, _calibration: None) -> None:
         package = importlib.import_module(self._spec.package)
         exported = set(getattr(package, "__all__", []))
-        categorized = set().union(*self._spec.public_categories.values())
+        categorized = self._categorized_public_labels(package, exported)
         missing = exported - categorized
         extra = categorized - exported
         assert not missing, f"exports without ownership category: {sorted(missing)}"
@@ -634,6 +634,36 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         if self._spec.capability_provider is not None:
             self._check_capabilities(exported)
         self._check_class_modules(package)
+
+    def _categorized_public_labels(
+        self,
+        package: types.ModuleType,
+        exported: set[str],
+    ) -> set[str]:
+        if self._spec.descriptor_owned_capabilities:
+            label_items = [
+                item
+                for items in self._spec.public_categories.values()
+                for item in items
+                if isinstance(item, str)
+            ]
+            assert not label_items, (
+                "descriptor-owned public categories must derive labels from objects: "
+                f"{label_items}"
+            )
+        labels: set[str] = set()
+        for items in self._spec.public_categories.values():
+            for item in items:
+                if isinstance(item, str):
+                    labels.add(item)
+                    continue
+                matches = [name for name in exported if getattr(package, name) is item]
+                assert len(matches) == 1, (
+                    "public category object must project to exactly one export: "
+                    f"{item!r} -> {matches}"
+                )
+                labels.add(matches[0])
+        return labels
 
     def _check_capabilities(self, exported: set[str]) -> None:
         provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
@@ -3158,103 +3188,103 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
     public_categories={
         "capability_contract": frozenset(
             {
-                "AlgorithmStructureContract",
-                "TimeIntegrationCapability",
-                "TimeIntegrationRegistry",
-                "select_time_integrator",
-                "time_integrator_step_linear_operator_descriptor",
-                "time_integrator_step_solve_relation_descriptor",
-                "time_integration_capabilities",
+                _TIME_INTEGRATOR_PACKAGE.AlgorithmStructureContract,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationCapability,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrationRegistry,
+                _TIME_INTEGRATOR_PACKAGE.select_time_integrator,
+                _TIME_INTEGRATOR_PACKAGE.time_integrator_step_linear_operator_descriptor,
+                _TIME_INTEGRATOR_PACKAGE.time_integrator_step_solve_relation_descriptor,
+                _TIME_INTEGRATOR_PACKAGE.time_integration_capabilities,
             }
         ),
         "method_family": frozenset(
             {
-                "AdditiveRungeKuttaIntegrator",
-                "CompositionIntegrator",
-                "ExplicitMultistepIntegrator",
-                "ImplicitRungeKuttaIntegrator",
-                "LawsonRungeKuttaIntegrator",
-                "MultistepIntegrator",
-                "RungeKuttaIntegrator",
-                "SymplecticCompositionIntegrator",
+                _TIME_INTEGRATOR_PACKAGE.AdditiveRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.CompositionIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.ExplicitMultistepIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.ImplicitRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.LawsonRungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.RungeKuttaIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.SymplecticCompositionIntegrator,
             }
         ),
         "driver_controller": frozenset(
             {
-                "AdaptiveNordsieckController",
-                "AutoIntegrator",
-                "ConstantStep",
-                "ConstraintAwareController",
-                "Controller",
-                "IntegrationDriver",
-                "PIController",
-                "TimeIntegrator",
+                _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
+                _TIME_INTEGRATOR_PACKAGE.AutoIntegrator,
+                _TIME_INTEGRATOR_PACKAGE.ConstantStep,
+                _TIME_INTEGRATOR_PACKAGE.ConstraintAwareController,
+                _TIME_INTEGRATOR_PACKAGE.Controller,
+                _TIME_INTEGRATOR_PACKAGE.IntegrationDriver,
+                _TIME_INTEGRATOR_PACKAGE.PIController,
+                _TIME_INTEGRATOR_PACKAGE.TimeIntegrator,
             }
         ),
         "policy": frozenset(
             {
-                "FamilyName",
-                "FamilySwitch",
-                "OrderDecision",
-                "OrderSelector",
-                "StiffnessDiagnostic",
-                "StiffnessSwitcher",
+                _TIME_INTEGRATOR_PACKAGE.FamilyName,
+                _TIME_INTEGRATOR_PACKAGE.FamilySwitch,
+                _TIME_INTEGRATOR_PACKAGE.OrderDecision,
+                _TIME_INTEGRATOR_PACKAGE.OrderSelector,
+                _TIME_INTEGRATOR_PACKAGE.StiffnessDiagnostic,
+                _TIME_INTEGRATOR_PACKAGE.StiffnessSwitcher,
             }
         ),
         "rhs": frozenset(
             {
-                "AffineRHSProtocol",
-                "BlackBoxRHS",
-                "ComponentFlowRHS",
-                "ComponentFlowProtocol",
-                "CompositeRHS",
-                "CompositeRHSProtocol",
-                "FiniteDiffJacobianRHS",
-                "HamiltonianRHS",
-                "HamiltonianRHSProtocol",
-                "JacobianRHS",
-                "LinearReactionNetworkRHS",
-                "ReactionNetworkRHS",
-                "RHSProtocol",
-                "SemilinearRHS",
-                "SemilinearRHSProtocol",
-                "SplitRHS",
-                "SplitRHSProtocol",
-                "UnitTransferRates",
-                "UnitTransferTransitionSystemProtocol",
-                "WithJacobianRHSProtocol",
+                _TIME_INTEGRATOR_PACKAGE.AffineRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.BlackBoxRHS,
+                _TIME_INTEGRATOR_PACKAGE.ComponentFlowRHS,
+                _TIME_INTEGRATOR_PACKAGE.ComponentFlowProtocol,
+                _TIME_INTEGRATOR_PACKAGE.CompositeRHS,
+                _TIME_INTEGRATOR_PACKAGE.CompositeRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.FiniteDiffJacobianRHS,
+                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHS,
+                _TIME_INTEGRATOR_PACKAGE.HamiltonianRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.JacobianRHS,
+                _TIME_INTEGRATOR_PACKAGE.LinearReactionNetworkRHS,
+                _TIME_INTEGRATOR_PACKAGE.ReactionNetworkRHS,
+                _TIME_INTEGRATOR_PACKAGE.RHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.SemilinearRHS,
+                _TIME_INTEGRATOR_PACKAGE.SemilinearRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.SplitRHS,
+                _TIME_INTEGRATOR_PACKAGE.SplitRHSProtocol,
+                _TIME_INTEGRATOR_PACKAGE.UnitTransferRates,
+                _TIME_INTEGRATOR_PACKAGE.UnitTransferTransitionSystemProtocol,
+                _TIME_INTEGRATOR_PACKAGE.WithJacobianRHSProtocol,
             }
         ),
         "domain": frozenset(
             {
-                "check_state_domain",
-                "DomainCheck",
-                "DomainViolation",
-                "NonnegativeStateDomain",
-                "predict_domain_step_limit",
-                "StateDomain",
+                _TIME_INTEGRATOR_PACKAGE.check_state_domain,
+                _TIME_INTEGRATOR_PACKAGE.DomainCheck,
+                _TIME_INTEGRATOR_PACKAGE.DomainViolation,
+                _TIME_INTEGRATOR_PACKAGE.NonnegativeStateDomain,
+                _TIME_INTEGRATOR_PACKAGE.predict_domain_step_limit,
+                _TIME_INTEGRATOR_PACKAGE.StateDomain,
             }
         ),
         "state_result": frozenset(
             {
-                "IntegrationSelectionResult",
-                "NordsieckHistory",
-                "ODEState",
-                "PhiFunction",
+                _TIME_INTEGRATOR_PACKAGE.IntegrationSelectionResult,
+                _TIME_INTEGRATOR_PACKAGE.NordsieckHistory,
+                _TIME_INTEGRATOR_PACKAGE.ODEState,
+                _TIME_INTEGRATOR_PACKAGE.PhiFunction,
             }
         ),
         "verification_helper": frozenset(
             {
-                "elementary_weight",
-                "gamma",
-                "nonlinear_solve",
-                "order",
-                "project_conserved",
-                "sigma",
-                "solve_nse",
-                "stability_function",
-                "Tree",
-                "trees_up_to_order",
+                _TIME_INTEGRATOR_PACKAGE.elementary_weight,
+                _TIME_INTEGRATOR_PACKAGE.gamma,
+                _TIME_INTEGRATOR_PACKAGE.nonlinear_solve,
+                _TIME_INTEGRATOR_PACKAGE.order,
+                _TIME_INTEGRATOR_PACKAGE.project_conserved,
+                _TIME_INTEGRATOR_PACKAGE.sigma,
+                _TIME_INTEGRATOR_PACKAGE.solve_nse,
+                _TIME_INTEGRATOR_PACKAGE.stability_function,
+                _TIME_INTEGRATOR_PACKAGE.Tree,
+                _TIME_INTEGRATOR_PACKAGE.trees_up_to_order,
             }
         ),
     },
