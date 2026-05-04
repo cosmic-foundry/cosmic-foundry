@@ -223,19 +223,15 @@ def _nordsieck_history_selection_case() -> _StepSelectionCase:
     )
 
 
-def _assert_no_step_solve_or_linear_operator(
+def _assert_no_step_solve_relation(
     case: _StepSelectionCase,
     state: _ti.ODEState,
     integrator: object,
 ) -> None:
-    for method in (
-        "step_solve_relation_descriptor",
-        "step_linear_operator_descriptor",
-    ):
-        candidate = getattr(integrator, method, None)
-        if callable(candidate):
-            with pytest.raises(ValueError):
-                candidate(case.rhs, state, 1.0e-2)
+    candidate = getattr(integrator, "step_solve_relation_descriptor", None)
+    if callable(candidate):
+        with pytest.raises(ValueError):
+            candidate(case.rhs, state, 1.0e-2)
 
 
 def _composition_postcheck(
@@ -257,7 +253,7 @@ def _composition_postcheck(
     assert not generic_descriptor.coordinate(
         MapStructureField.SYMPLECTIC_FORM_INVARIANT_AVAILABLE
     ).value
-    _assert_no_step_solve_or_linear_operator(case, state, integrator)
+    _assert_no_step_solve_relation(case, state, integrator)
 
 
 def _uncertified_composition_postcheck(
@@ -275,7 +271,7 @@ def _uncertified_composition_postcheck(
             MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
         ).value
     )
-    _assert_no_step_solve_or_linear_operator(case, state, integrator)
+    _assert_no_step_solve_relation(case, state, integrator)
 
 
 def _damped_composition_postcheck(
@@ -291,7 +287,7 @@ def _damped_composition_postcheck(
     assert case.descriptor.coordinate(
         MapStructureField.SYMPLECTIC_FORM_DEFECT_UPPER_BOUND
     ).value == pytest.approx(math.sqrt(2.0) * _DAMPED_OSCILLATOR_GAMMA)
-    _assert_no_step_solve_or_linear_operator(case, state, integrator)
+    _assert_no_step_solve_relation(case, state, integrator)
 
 
 def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
@@ -316,7 +312,7 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_scalar_decay,
             1.0e-7,
-            lambda case, state, integrator: _assert_no_step_solve_or_linear_operator(
+            lambda case, state, integrator: _assert_no_step_solve_relation(
                 case, state, integrator
             ),
         ),
@@ -328,7 +324,7 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             Tensor([1.0], backend=_TIME_BACKEND),
             cases.exact_semilinear,
             1.0e-10,
-            lambda case, state, integrator: _assert_no_step_solve_or_linear_operator(
+            lambda case, state, integrator: _assert_no_step_solve_relation(
                 case, state, integrator
             ),
         ),
@@ -340,7 +336,7 @@ def _step_selection_cases() -> tuple[_StepSelectionCase, ...]:
             Tensor([1.0, 0.0], backend=_TIME_BACKEND),
             cases.exact_ham,
             1.0e-10,
-            lambda case, state, integrator: _assert_no_step_solve_or_linear_operator(
+            lambda case, state, integrator: _assert_no_step_solve_relation(
                 case, state, integrator
             ),
         ),

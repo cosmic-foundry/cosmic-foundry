@@ -16,6 +16,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterDescriptor,
     ReactionNetworkField,
     SolveRelationField,
+    linear_operator_descriptor_from_solve_relation_descriptor,
     linear_solver_parameter_schema,
     map_structure_parameter_schema,
     reaction_network_parameter_schema,
@@ -203,8 +204,8 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         assert (
             descriptor.coordinate(SolveRelationField.MAP_LINEARITY_DEFECT).value == 0.0
         )
-        linear_descriptor = integrator.step_linear_operator_descriptor(
-            rhs, state, 2.0e-3
+        linear_descriptor = linear_operator_descriptor_from_solve_relation_descriptor(
+            descriptor
         )
         linear_schema = linear_solver_parameter_schema()
         linear_schema.validate_descriptor(linear_descriptor.parameter_descriptor)

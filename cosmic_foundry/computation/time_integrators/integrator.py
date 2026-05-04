@@ -264,14 +264,6 @@ class TimeIntegrator(ABC):
 
         return time_integrator_step_solve_relation_descriptor(self, rhs, state, dt)
 
-    def step_linear_operator_descriptor(self, rhs: Any, state: Any, dt: float) -> Any:
-        """Return the linear-operator descriptor induced by affine stage solves."""
-        from cosmic_foundry.computation.time_integrators.solve_relation import (
-            time_integrator_step_linear_operator_descriptor,
-        )
-
-        return time_integrator_step_linear_operator_descriptor(self, rhs, state, dt)
-
 
 __all__ = [
     "BlackBoxRHS",

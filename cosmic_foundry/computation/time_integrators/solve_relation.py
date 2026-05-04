@@ -7,10 +7,8 @@ from typing import Any, Protocol, runtime_checkable
 from cosmic_foundry.computation.algorithm_capabilities import (
     DescriptorCoordinate,
     EvidenceSource,
-    LinearOperatorDescriptor,
     ParameterDescriptor,
     SolveRelationField,
-    linear_operator_descriptor_from_assembled_operator,
 )
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -74,6 +72,16 @@ def time_integrator_step_solve_relation_descriptor(
     if not _stage_matrix_has_implicit_coupling(stage_matrix):
         raise ValueError("time-step solve relation has no stage-equation premise")
     affine_rhs = isinstance(rhs, AffineRHSProtocol)
+    linear_operator = None
+    linear_rhs = None
+    if affine_rhs:
+        stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
+        if len(stage_times) != len(stage_matrix):
+            raise ValueError("stage time nodes must match the implicit stage matrix")
+        linear_operator = _AffineStageResidualOperator(
+            rhs, stage_matrix, stage_times, state.u, dt
+        )
+        linear_rhs = linear_operator.rhs()
     return _descriptor(
         state.u,
         variable_count=state.u.shape[0] * len(stage_matrix),
@@ -86,49 +94,8 @@ def time_integrator_step_solve_relation_descriptor(
         work_budget_fmas=work_budget_fmas,
         memory_budget_bytes=memory_budget_bytes,
         device_kind=device_kind,
-    )
-
-
-def time_integrator_step_linear_operator_descriptor(
-    integrator: Any,
-    rhs: AffineRHSProtocol,
-    state: Any,
-    dt: float,
-    *,
-    requested_residual_tolerance: float = 1.0e-8,
-    requested_solution_tolerance: float = 1.0e-8,
-    work_budget_fmas: float = 1.0e9,
-    memory_budget_bytes: float = 1.0e9,
-    device_kind: str = "cpu",
-) -> LinearOperatorDescriptor:
-    """Return the linear-operator descriptor induced by affine stage equations."""
-    if not isinstance(rhs, AffineRHSProtocol):
-        raise ValueError(
-            "stage linear-operator descriptors require affine RHS evidence"
-        )
-    if dt <= 0.0:
-        raise ValueError("stage linear-operator descriptors require dt > 0")
-    if len(state.u.shape) != 1 or state.u.shape[0] <= 0:
-        raise ValueError(
-            "stage linear-operator descriptors require a nonempty state vector"
-        )
-    stage_matrix = getattr(integrator, "A_sym", ())
-    if not _stage_matrix_has_implicit_coupling(stage_matrix):
-        raise ValueError(
-            "stage linear-operator descriptors require implicit stage coupling"
-        )
-    stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
-    if len(stage_times) != len(stage_matrix):
-        raise ValueError("stage time nodes must match the implicit stage matrix")
-    op = _AffineStageResidualOperator(rhs, stage_matrix, stage_times, state.u, dt)
-    return linear_operator_descriptor_from_assembled_operator(
-        op,
-        op.rhs(),
-        requested_residual_tolerance=requested_residual_tolerance,
-        requested_solution_tolerance=requested_solution_tolerance,
-        work_budget_fmas=work_budget_fmas,
-        memory_budget_bytes=memory_budget_bytes,
-        device_kind=device_kind,
+        linear_operator=linear_operator,
+        linear_rhs=linear_rhs,
     )
 
 
@@ -145,6 +112,8 @@ def _descriptor(
     work_budget_fmas: float,
     memory_budget_bytes: float,
     device_kind: str,
+    linear_operator: Any | None = None,
+    linear_rhs: Tensor | None = None,
 ) -> ParameterDescriptor:
     field = SolveRelationField
     return ParameterDescriptor(
@@ -177,7 +146,9 @@ def _descriptor(
             field.DEVICE_KIND: DescriptorCoordinate(device_kind),
             field.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
             field.MEMORY_BUDGET_BYTES: DescriptorCoordinate(memory_budget_bytes),
-        }
+        },
+        linear_operator=linear_operator,
+        linear_rhs=linear_rhs,
     )
 
 
@@ -302,6 +273,5 @@ def _backend_kind(tensor: Tensor) -> str:
 
 __all__ = [
     "AffineRHSProtocol",
-    "time_integrator_step_linear_operator_descriptor",
     "time_integrator_step_solve_relation_descriptor",
 ]
