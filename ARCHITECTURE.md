@@ -793,10 +793,9 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make time-integration descriptor factories in
-   the structure registry come from the imported capabilities module rather than
-   individually resolved dotted names, so descriptor requests are built from the
-   same module object that owns the capability atlas. Ground the change in the
+2. Candidate next calculation: derive time-integration class/module ownership
+   from grouped module objects instead of maintaining `public_categories` and
+   `expected_class_modules` as independent tables. Ground the change in the
    time-integration ownership spec and the existing descriptor-backed selector
    and calculation tests. Labels may remain for human-facing exports and docs,
    but they must not be the premise that proves selector correctness. Do not add
