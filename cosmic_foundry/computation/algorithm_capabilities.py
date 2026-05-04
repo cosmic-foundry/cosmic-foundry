@@ -419,6 +419,7 @@ class TransformationRelation:
     residual_target_available: bool
     target_is_zero: bool
     map_linearity_defect: float | None
+    map_linearity_evidence: EvidenceSource
     matrix_representation_available: bool
     operator_application_available: bool
     derivative_oracle_kind: str
@@ -2148,7 +2149,8 @@ def transformation_relation_coordinates(
             relation.target_is_zero
         ),
         SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
-            relation.map_linearity_defect
+            relation.map_linearity_defect,
+            evidence=relation.map_linearity_evidence,
         ),
         SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
             relation.matrix_representation_available
@@ -2217,6 +2219,7 @@ def assembled_linear_transformation_relation(
         residual_target_available=True,
         target_is_zero=False,
         map_linearity_defect=0.0,
+        map_linearity_evidence="exact",
         matrix_representation_available=True,
         operator_application_available=True,
         derivative_oracle_kind="matrix",

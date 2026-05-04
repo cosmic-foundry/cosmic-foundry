@@ -5,11 +5,14 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from cosmic_foundry.computation.algorithm_capabilities import (
-    DescriptorCoordinate,
     EvidenceSource,
     LinearOperatorEvidence,
     ParameterDescriptor,
     SolveRelationField,
+    TransformationRelation,
+    TransformationSpace,
+    assembled_linear_transformation_relation,
+    transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -57,23 +60,37 @@ def time_integrator_step_solve_relation_descriptor(
         raise ValueError("time-step solve relations require stage equations")
 
     if _stage_matrix_is_strictly_lower(stage_matrix):
-        return _descriptor(
+        relation = _transformation_relation(
             state.u,
             variable_count=state.u.shape[0],
             map_linearity_defect=0.0,
             map_linearity_evidence="exact",
             matrix_representation_available=True,
             derivative_oracle_kind="matrix",
-            requested_residual_tolerance=requested_residual_tolerance,
-            requested_solution_tolerance=requested_solution_tolerance,
             work_budget_fmas=work_budget_fmas,
             memory_budget_bytes=memory_budget_bytes,
             device_kind=device_kind,
+        )
+        return _descriptor_from_relation(
+            relation,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
         )
     if not _stage_matrix_has_implicit_coupling(stage_matrix):
         raise ValueError("time-step solve relation has no stage-equation premise")
     affine_rhs = isinstance(rhs, AffineRHSProtocol)
     evidence: tuple[LinearOperatorEvidence, ...] = ()
+    relation = _transformation_relation(
+        state.u,
+        variable_count=state.u.shape[0] * len(stage_matrix),
+        map_linearity_defect=None,
+        map_linearity_evidence="unavailable",
+        matrix_representation_available=False,
+        derivative_oracle_kind="jacobian_callback",
+        work_budget_fmas=work_budget_fmas,
+        memory_budget_bytes=memory_budget_bytes,
+        device_kind=device_kind,
+    )
     if affine_rhs:
         stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
         if len(stage_times) != len(stage_matrix):
@@ -88,23 +105,21 @@ def time_integrator_step_solve_relation_descriptor(
                 (),
             ),
         )
-    return _descriptor(
-        state.u,
-        variable_count=state.u.shape[0] * len(stage_matrix),
-        map_linearity_defect=0.0 if affine_rhs else None,
-        map_linearity_evidence="exact" if affine_rhs else "unavailable",
-        matrix_representation_available=affine_rhs,
-        derivative_oracle_kind="matrix" if affine_rhs else "jacobian_callback",
+        relation = assembled_linear_transformation_relation(
+            evidence[0],
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+        )
+    return _descriptor_from_relation(
+        relation,
         requested_residual_tolerance=requested_residual_tolerance,
         requested_solution_tolerance=requested_solution_tolerance,
-        work_budget_fmas=work_budget_fmas,
-        memory_budget_bytes=memory_budget_bytes,
-        device_kind=device_kind,
         evidence=evidence,
     )
 
 
-def _descriptor(
+def _transformation_relation(
     state_vector: Tensor,
     *,
     variable_count: int,
@@ -112,45 +127,48 @@ def _descriptor(
     map_linearity_evidence: EvidenceSource,
     matrix_representation_available: bool,
     derivative_oracle_kind: str,
-    requested_residual_tolerance: float,
-    requested_solution_tolerance: float,
     work_budget_fmas: float,
     memory_budget_bytes: float,
     device_kind: str,
+) -> TransformationRelation:
+    space = TransformationSpace(
+        variable_count,
+        _backend_kind(state_vector),
+        device_kind,
+    )
+    return TransformationRelation(
+        domain=space,
+        codomain=space,
+        residual_target_available=True,
+        target_is_zero=True,
+        map_linearity_defect=map_linearity_defect,
+        map_linearity_evidence=map_linearity_evidence,
+        matrix_representation_available=matrix_representation_available,
+        operator_application_available=True,
+        derivative_oracle_kind=derivative_oracle_kind,
+        objective_relation="none",
+        acceptance_relation="residual_below_tolerance",
+        backend_kind=space.backend_kind,
+        device_kind=device_kind,
+        work_budget_fmas=work_budget_fmas,
+        memory_budget_bytes=memory_budget_bytes,
+    )
+
+
+def _descriptor_from_relation(
+    relation: TransformationRelation,
+    *,
+    requested_residual_tolerance: float,
+    requested_solution_tolerance: float,
     evidence: tuple[LinearOperatorEvidence, ...] = (),
 ) -> ParameterDescriptor:
-    field = SolveRelationField
     return ParameterDescriptor(
-        {
-            field.DIM_X: DescriptorCoordinate(variable_count),
-            field.DIM_Y: DescriptorCoordinate(variable_count),
-            field.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
-            field.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-            field.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
-            field.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(True),
-            field.TARGET_IS_ZERO: DescriptorCoordinate(True),
-            field.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
-                map_linearity_defect,
-                evidence=map_linearity_evidence,
-            ),
-            field.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
-                matrix_representation_available
-            ),
-            field.OPERATOR_APPLICATION_AVAILABLE: DescriptorCoordinate(True),
-            field.DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(derivative_oracle_kind),
-            field.OBJECTIVE_RELATION: DescriptorCoordinate("none"),
-            field.ACCEPTANCE_RELATION: DescriptorCoordinate("residual_below_tolerance"),
-            field.REQUESTED_RESIDUAL_TOLERANCE: DescriptorCoordinate(
-                requested_residual_tolerance
-            ),
-            field.REQUESTED_SOLUTION_TOLERANCE: DescriptorCoordinate(
-                requested_solution_tolerance
-            ),
-            field.BACKEND_KIND: DescriptorCoordinate(_backend_kind(state_vector)),
-            field.DEVICE_KIND: DescriptorCoordinate(device_kind),
-            field.WORK_BUDGET_FMAS: DescriptorCoordinate(work_budget_fmas),
-            field.MEMORY_BUDGET_BYTES: DescriptorCoordinate(memory_budget_bytes),
-        },
+        transformation_relation_coordinates(
+            relation,
+            frozenset(SolveRelationField),
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        ),
         evidence=evidence,
     )
 
