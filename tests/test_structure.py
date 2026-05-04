@@ -640,36 +640,10 @@ class _ArchitectureOwnershipClaim(Claim[None]):
     def _check_capabilities(self, exported: set[str]) -> None:
         provider = _resolve_dotted(self._spec.capability_provider)  # type: ignore[arg-type]
         capabilities = tuple(provider())
-        implementations = [
-            self._capability_implementation_name(cap) for cap in capabilities
-        ]
-        missing_exports = set(implementations) - exported
-        assert not missing_exports, (
-            "capability implementations not exported: " f"{sorted(missing_exports)}"
-        )
-        duplicates = sorted(
-            name for name in set(implementations) if implementations.count(name) > 1
-        )
-        assert not duplicates, f"duplicate capability implementations: {duplicates}"
         if self._spec.descriptor_owned_capabilities:
-            structure_gated = [
-                self._capability_implementation_name(cap)
-                for cap in capabilities
-                if cap.contract.requires
-            ]
-            assert not structure_gated, (
-                "descriptor-owned capabilities require ad hoc structure gates: "
-                f"{structure_gated}"
-            )
-            label_expectations = [
-                expectation.request
-                for expectation in self._spec.request_expectations
-                if isinstance(expectation.selected_owner, str)
-            ]
-            assert not label_expectations, (
-                "descriptor-owned request expectations must compare owner identity: "
-                f"{label_expectations}"
-            )
+            self._check_descriptor_owned_capabilities(capabilities, exported)
+        else:
+            self._check_label_owned_capabilities(capabilities, exported)
 
         if self._spec.request_selector is None:
             return
@@ -687,6 +661,64 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             raise AssertionError(
                 f"{expectation.request!r} unexpectedly selected " f"{selected_name}"
             )
+
+    def _check_label_owned_capabilities(
+        self,
+        capabilities: tuple[Any, ...],
+        exported: set[str],
+    ) -> None:
+        implementations = tuple(
+            self._capability_implementation_name(cap) for cap in capabilities
+        )
+        missing_exports = set(implementations) - exported
+        assert not missing_exports, (
+            "capability implementations not exported: " f"{sorted(missing_exports)}"
+        )
+        duplicates = sorted(
+            name for name in set(implementations) if implementations.count(name) > 1
+        )
+        assert not duplicates, f"duplicate capability implementations: {duplicates}"
+
+    def _check_descriptor_owned_capabilities(
+        self,
+        capabilities: tuple[Any, ...],
+        exported: set[str],
+    ) -> None:
+        owners = tuple(cap.owner for cap in capabilities)
+        owner_names = tuple(owner.__name__ for owner in owners)
+        missing_exports = set(owner_names) - exported
+        assert not missing_exports, (
+            "capability owners not exported: " f"{sorted(missing_exports)}"
+        )
+        duplicate_owners = sorted(
+            owner.__name__ for owner in set(owners) if owners.count(owner) > 1
+        )
+        assert not duplicate_owners, f"duplicate capability owners: {duplicate_owners}"
+        explicit_labels = [
+            cap.owner.__name__
+            for cap in capabilities
+            if getattr(cap, "_implementation", None) is not None
+        ]
+        assert not explicit_labels, (
+            "descriptor-owned capabilities must project labels from owner identity: "
+            f"{explicit_labels}"
+        )
+        structure_gated = [
+            cap.owner.__name__ for cap in capabilities if cap.contract.requires
+        ]
+        assert not structure_gated, (
+            "descriptor-owned capabilities require ad hoc structure gates: "
+            f"{structure_gated}"
+        )
+        label_expectations = [
+            expectation.request
+            for expectation in self._spec.request_expectations
+            if isinstance(expectation.selected_owner, str)
+        ]
+        assert not label_expectations, (
+            "descriptor-owned request expectations must compare owner identity: "
+            f"{label_expectations}"
+        )
 
     def _check_descriptor_requests(self) -> None:
         limit = self._spec.descriptor_request_property_limit

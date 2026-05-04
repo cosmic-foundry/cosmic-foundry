@@ -464,7 +464,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "adaptive_nordsieck",
-        "AdaptiveNordsieckController",
+        None,
         "controller",
         _contract(
             provides=(
@@ -511,7 +511,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "generic_integration_driver",
-        "IntegrationDriver",
+        None,
         "driver",
         _contract(
             provides=("advance", "adaptive_timestep", "domain_aware_acceptance"),
@@ -522,7 +522,7 @@ _CAPABILITIES: tuple[TimeIntegrationCapability, ...] = (
     ),
     TimeIntegrationCapability(
         "constraint_aware_controller",
-        "ConstraintAwareController",
+        None,
         "controller",
         _contract(
             provides=("advance", "constraint_lifecycle", "domain_aware_acceptance"),
