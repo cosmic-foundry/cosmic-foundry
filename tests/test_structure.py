@@ -1959,26 +1959,27 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
 
 
-class _LinearOperatorDescriptorClaim(Claim[None]):
-    """Claim: small assembled operators produce schema-valid descriptors."""
+class _LinearOperatorProjectionClaim(Claim[None]):
+    """Claim: small assembled operators project to schema-valid descriptors."""
 
     @property
     def description(self) -> str:
-        return "algorithm_capabilities/linear_operator_descriptor"
+        return "algorithm_capabilities/linear_operator_projection"
 
     def check(self, _calibration: None) -> None:
         schema = linear_solver_parameter_schema()
         regions = _SolveRelationSchemaClaim._regions(schema)
+        self._assert_no_descriptor_projection_wrappers()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
             Tensor([1.0, 0.0], backend=_JIT_BACKEND),
         )
-        schema.validate_descriptor(spd.parameter_descriptor)
-        assert spd.matrix == ((2.0, -1.0), (-1.0, 2.0))
-        assert regions["linear_system"].contains(spd.parameter_descriptor)
-        assert regions["symmetric_positive_definite"].contains(spd.parameter_descriptor)
-        assert regions["full_rank"].contains(spd.parameter_descriptor)
+        schema.validate_descriptor(spd)
+        assert spd.linear_matrix == ((2.0, -1.0), (-1.0, 2.0))
+        assert regions["linear_system"].contains(spd)
+        assert regions["symmetric_positive_definite"].contains(spd)
+        assert regions["full_rank"].contains(spd)
         assert spd.coordinate("symmetry_defect").value == 0.0
         assert spd.coordinate("coercivity_lower_bound").value == 1.0
         assert spd.coordinate("coercivity_lower_bound").evidence == "lower_bound"
@@ -2001,8 +2002,8 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
             _MatrixLinearOperator(((1.0, 1.0), (1.0, 1.0))),
             Tensor([1.0, 1.0], backend=_JIT_BACKEND),
         )
-        schema.validate_descriptor(rank_deficient.parameter_descriptor)
-        assert regions["rank_deficient"].contains(rank_deficient.parameter_descriptor)
+        schema.validate_descriptor(rank_deficient)
+        assert regions["rank_deficient"].contains(rank_deficient)
         assert rank_deficient.coordinate("rank_estimate").value == 1
         assert rank_deficient.coordinate("nullity_estimate").value == 1
         assert rank_deficient.coordinate("singular_value_lower_bound").value == 0.0
@@ -2012,8 +2013,46 @@ class _LinearOperatorDescriptorClaim(Claim[None]):
             _MatrixLinearOperator(((1.0, 1.0), (1.0, 1.0))),
             Tensor([1.0, 0.0], backend=_JIT_BACKEND),
         )
-        schema.validate_descriptor(inconsistent.parameter_descriptor)
+        schema.validate_descriptor(inconsistent)
         assert float(inconsistent.coordinate("rhs_consistency_defect").value) > 0.0
+
+    @staticmethod
+    def _assert_no_descriptor_projection_wrappers() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        wrappers = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name == "ParameterDescriptor":
+                continue
+            fields = {
+                child.target.id: child.annotation
+                for child in node.body
+                if isinstance(child, ast.AnnAssign)
+                and isinstance(child.target, ast.Name)
+            }
+            if any(
+                _LinearOperatorProjectionClaim._annotation_name(annotation)
+                == "ParameterDescriptor"
+                for annotation in fields.values()
+            ):
+                wrappers.append(node.name)
+        assert not wrappers, (
+            "descriptor-space projections must be functions returning "
+            f"ParameterDescriptor, not descriptor-owning wrapper classes: {wrappers}"
+        )
+
+    @staticmethod
+    def _annotation_name(annotation: ast.expr) -> str | None:
+        if isinstance(annotation, ast.Name):
+            return annotation.id
+        if isinstance(annotation, ast.Subscript):
+            return _LinearOperatorProjectionClaim._annotation_name(annotation.value)
+        if isinstance(annotation, ast.BinOp):
+            return None
+        if isinstance(annotation, ast.Attribute):
+            return annotation.attr
+        return None
 
 
 class _FiniteStateTransitionSystemClaim(Claim[None]):
@@ -2132,24 +2171,16 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
                 )
                 linear_schema = linear_solver_parameter_schema()
                 linear_regions = self._regions(linear_schema)
-                linear_schema.validate_descriptor(
-                    linear_descriptor.parameter_descriptor
-                )
-                assert linear_regions["linear_system"].contains(
-                    linear_descriptor.parameter_descriptor
-                )
-                assert linear_regions["full_rank"].contains(
-                    linear_descriptor.parameter_descriptor
-                )
+                linear_schema.validate_descriptor(linear_descriptor)
+                assert linear_regions["linear_system"].contains(linear_descriptor)
+                assert linear_regions["full_rank"].contains(linear_descriptor)
                 assert (
                     linear_descriptor.coordinate(
                         LinearSolverField.RHS_CONSISTENCY_DEFECT
                     ).value
                     == 0.0
                 )
-                selected = select_linear_solver_for_descriptor(
-                    linear_descriptor.parameter_descriptor
-                )
+                selected = select_linear_solver_for_descriptor(linear_descriptor)
                 dense_lu_solver = _resolve_dotted(
                     "cosmic_foundry.computation.solvers.DenseLUSolver"
                 )
@@ -4038,7 +4069,7 @@ _CLAIMS: list[Claim[None]] = [
     _AutoIntegratorConstructionClaim(),
     _ParameterSpaceSchemaClaim(),
     _SolveRelationSchemaClaim(),
-    _LinearOperatorDescriptorClaim(),
+    _LinearOperatorProjectionClaim(),
     _FiniteStateTransitionSystemClaim(),
     _TimeIntegratorSolveRelationClaim(),
     _LinearSolverCoverageLocalityClaim(),

@@ -385,26 +385,6 @@ class SmallLinearOperator(Protocol):
         ...
 
 
-@dataclass(frozen=True)
-class LinearOperatorDescriptor:
-    """Small assembled linear-operator descriptor plus matrix witness.
-
-    The parameter descriptor is the schema-level object consumed by selection
-    and atlas code.  The operator, right-hand side, and assembled matrix are
-    retained as deterministic witnesses for structural tests and documentation
-    generators; they are not performance timing results.
-    """
-
-    parameter_descriptor: ParameterDescriptor
-    operator: SmallLinearOperator
-    rhs: Tensor
-    matrix: tuple[tuple[float, ...], ...]
-
-    def coordinate(self, field: DescriptorField) -> DescriptorCoordinate:
-        """Return the coordinate for ``field``."""
-        return self.parameter_descriptor.coordinate(field)
-
-
 def _compare(
     left: ScalarValue,
     operator: ComparisonOperator,
@@ -1693,20 +1673,19 @@ def _decomposition_regions() -> tuple[DerivedParameterRegion, ...]:
 
 
 def decomposition_descriptor_from_linear_operator_descriptor(
-    descriptor: LinearOperatorDescriptor,
+    descriptor: ParameterDescriptor,
     *,
     factorization_work_budget_fmas: float = 1.0e9,
     factorization_memory_budget_bytes: float = 1.0e9,
 ) -> ParameterDescriptor:
     """Project a linear-operator descriptor onto dense decomposition coordinates."""
-    source = descriptor.parameter_descriptor
     return ParameterDescriptor(
         {
             DecompositionField.MATRIX_ROWS: DescriptorCoordinate(
-                len(descriptor.matrix)
+                len(descriptor.linear_matrix)
             ),
             DecompositionField.MATRIX_COLUMNS: DescriptorCoordinate(
-                len(descriptor.matrix[0]) if descriptor.matrix else 0
+                len(descriptor.linear_matrix[0]) if descriptor.linear_matrix else 0
             ),
             DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: DescriptorCoordinate(
                 factorization_work_budget_fmas
@@ -1714,16 +1693,16 @@ def decomposition_descriptor_from_linear_operator_descriptor(
             DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: DescriptorCoordinate(
                 factorization_memory_budget_bytes
             ),
-            DecompositionField.SINGULAR_VALUE_LOWER_BOUND: source.coordinate(
+            DecompositionField.SINGULAR_VALUE_LOWER_BOUND: descriptor.coordinate(
                 LinearSolverField.SINGULAR_VALUE_LOWER_BOUND
             ),
-            DecompositionField.CONDITION_ESTIMATE: source.coordinate(
+            DecompositionField.CONDITION_ESTIMATE: descriptor.coordinate(
                 LinearSolverField.CONDITION_ESTIMATE
             ),
-            DecompositionField.MATRIX_RANK_ESTIMATE: source.coordinate(
+            DecompositionField.MATRIX_RANK_ESTIMATE: descriptor.coordinate(
                 LinearSolverField.RANK_ESTIMATE
             ),
-            DecompositionField.MATRIX_NULLITY_ESTIMATE: source.coordinate(
+            DecompositionField.MATRIX_NULLITY_ESTIMATE: descriptor.coordinate(
                 LinearSolverField.NULLITY_ESTIMATE
             ),
         }
@@ -1732,7 +1711,7 @@ def decomposition_descriptor_from_linear_operator_descriptor(
 
 def linear_operator_descriptor_from_solve_relation_descriptor(
     descriptor: ParameterDescriptor,
-) -> LinearOperatorDescriptor:
+) -> ParameterDescriptor:
     """Project a solve-relation descriptor with matrix evidence to linear form."""
     if descriptor.linear_operator is None or descriptor.linear_rhs is None:
         raise ValueError("solve-relation descriptor has no linear operator witness")
@@ -1818,7 +1797,7 @@ def linear_operator_descriptor_from_assembled_operator(
     work_budget_fmas: float = 1.0e9,
     memory_budget_bytes: float = 1.0e9,
     device_kind: str = "cpu",
-) -> LinearOperatorDescriptor:
+) -> ParameterDescriptor:
     """Assemble a small operator and return deterministic schema coordinates.
 
     The construction is for capability classification and structural fixtures,
@@ -1967,13 +1946,12 @@ def linear_operator_descriptor_from_assembled_operator(
             nullity_estimate, evidence="estimate"
         ),
     }
-    descriptor = ParameterDescriptor(
+    return ParameterDescriptor(
         coordinates,
         linear_operator=op,
         linear_rhs=b,
         linear_matrix=matrix,
     )
-    return LinearOperatorDescriptor(descriptor, op, b, matrix)
 
 
 __all__ = [
@@ -1995,7 +1973,6 @@ __all__ = [
     "InvalidCellRule",
     "LinearSolverField",
     "LINEARITY_TOLERANCE",
-    "LinearOperatorDescriptor",
     "linear_solver_parameter_schema",
     "linear_operator_descriptor_from_assembled_operator",
     "linear_operator_descriptor_from_solve_relation_descriptor",
