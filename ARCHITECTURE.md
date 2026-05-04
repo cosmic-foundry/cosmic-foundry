@@ -793,15 +793,14 @@ Current short queue:
 1. Pick the next PR by naming its target calculation first, then work backward
    to the smallest schema or implementation change needed; do not plan an
    architecture-only PR.
-2. Candidate next calculation: make `AutoIntegrator` execute the selected
-   capability construction relation instead of maintaining its own parallel
-   branch map keyed by implementation labels. Ground the change in
-   descriptor-backed auto-selection for reaction chains, split maps,
-   semi-linear maps, Hamiltonian maps, and composition maps. If user-provided
-   override branches still matter, express them as an explicit construction
-   premise rather than a private name-indexed cache. Do not add mesh,
-   flux-form, locality, or CFL axes until a real mesh object is the
-   implementation premise being tested.
+2. Candidate next calculation: make selector tests compare selected capability
+   owners directly rather than comparing rendered implementation labels. Ground
+   the change in descriptor-backed step selection, AutoIntegrator reaction-chain
+   selection, and semi-discrete conservation selection. The structural guard
+   should forbid implementation-label comparisons when owner identity is
+   available, so labels remain a human projection and not a testing premise. Do
+   not add mesh, flux-form, locality, or CFL axes until a real mesh object is
+   the implementation premise being tested.
 
 This is not just a cleaner naming scheme.  The meta-level goal is to make
 algorithm ownership an executable epistemic model: separate the mathematical
