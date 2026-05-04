@@ -64,12 +64,6 @@ def _rhs_request(rhs: RHSProtocol, order: int) -> AlgorithmRequest:
             order=order,
             descriptor=split_map_descriptor(),
         )
-    if isinstance(rhs, ReactionNetworkRHS):
-        return AlgorithmRequest(
-            requested_properties=frozenset({"one_step"}),
-            order=order,
-            descriptor=derivative_oracle_descriptor(),
-        )
     if isinstance(rhs, WithJacobianRHSProtocol):
         return AlgorithmRequest(
             requested_properties=frozenset({"one_step"}),

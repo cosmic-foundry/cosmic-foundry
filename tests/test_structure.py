@@ -1001,6 +1001,71 @@ class _AlgorithmSelectionAmbiguityClaim(Claim[None]):
             AlgorithmRegistry(capabilities).select(AlgorithmRequest())
 
 
+class _AlgorithmRequestPremiseClaim(Claim[None]):
+    """Claim: request builders branch on structural protocols."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/request_builders_use_protocol_premises"
+
+    def check(self, _calibration: None) -> None:
+        auto = importlib.import_module(
+            "cosmic_foundry.computation.time_integrators.auto"
+        )
+        request_type = _resolve_dotted(
+            "cosmic_foundry.computation.algorithm_capabilities.AlgorithmRequest"
+        )
+        offenders: list[str] = []
+        for function in (
+            value for value in vars(auto).values() if inspect.isfunction(value)
+        ):
+            tree = ast.parse(textwrap.dedent(inspect.getsource(function)))
+            if not self._constructs(tree, function.__globals__, request_type):
+                continue
+            for node in (
+                call
+                for call in ast.walk(tree)
+                if isinstance(call, ast.Call) and self._is_instance_check(call)
+            ):
+                if len(node.args) != 2:
+                    continue
+                target = self._resolve_ast_name(node.args[1], function.__globals__)
+                if not getattr(target, "_is_protocol", False):
+                    offenders.append(f"{function.__name__}:{node.lineno}")
+        assert not offenders, (
+            "AlgorithmRequest builders must branch on structural protocols, "
+            f"not concrete implementation classes: {offenders}"
+        )
+
+    @classmethod
+    def _constructs(
+        cls,
+        tree: ast.AST,
+        namespace: dict[str, Any],
+        target: object,
+    ) -> bool:
+        return any(
+            isinstance(node, ast.Call)
+            and cls._resolve_ast_name(node.func, namespace) is target
+            for node in ast.walk(tree)
+        )
+
+    @staticmethod
+    def _is_instance_check(node: ast.Call) -> bool:
+        return isinstance(node.func, ast.Name) and node.func.id == isinstance.__name__
+
+    @staticmethod
+    def _resolve_ast_name(node: ast.AST, namespace: dict[str, Any]) -> object | None:
+        if isinstance(node, ast.Name):
+            return namespace.get(node.id)
+        if isinstance(node, ast.Attribute):
+            parent = _AlgorithmRequestPremiseClaim._resolve_ast_name(
+                node.value, namespace
+            )
+            return getattr(parent, node.attr, None)
+        return None
+
+
 class _TestFileStructureClaim(Claim[None]):
     """Claim: top-level test functions are claim-dispatch verification axes."""
 
@@ -4687,6 +4752,7 @@ _CLAIMS: list[Claim[None]] = [
     _ArchitectureOwnershipClaim(_GEOMETRY_OWNERSHIP),
     _DescriptorOwnedClassifierPremiseClaim(),
     _AlgorithmSelectionAmbiguityClaim(),
+    _AlgorithmRequestPremiseClaim(),
     _AutoDiscoveryImportClaim(),
     _SelectorExpectationDerivationClaim(),
     _ExecutableCapabilityIdentityClaim(),
