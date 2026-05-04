@@ -1979,6 +1979,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_descriptor_evidence_selection_is_field_structural()
         self._assert_descriptor_projections_do_not_read_evidence_layout()
         self._assert_solve_relation_coordinate_projections_use_transformations()
+        self._assert_transformation_relations_have_explicit_spaces()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -1997,6 +1998,12 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert isinstance(linear_evidence, AssembledLinearEvidence)
         assert linear_evidence.matrix == ((2.0, -1.0), (-1.0, 2.0))
         relation = assembled_linear_transformation_relation(linear_evidence)
+        assert relation.domain == relation.codomain
+        assert relation.domain.dimension == 2
+        assert (
+            relation.domain.backend_kind
+            == spd.coordinate(SolveRelationField.BACKEND_KIND).value
+        )
         assert spd.coordinate(SolveRelationField.DIM_X).value == (
             relation.domain_dimension
         )
@@ -2254,10 +2261,54 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             and not _LinearOperatorProjectionClaim._references_enum(
                 function, "TransformationRelation"
             )
+            and not _LinearOperatorProjectionClaim._references_enum(
+                function, "TransformationSpace"
+            )
         ]
         assert not offenders, (
             "coordinate projections that emit solve-relation fields must derive "
             f"them from transformation relations: {offenders}"
+        )
+
+    @staticmethod
+    def _assert_transformation_relations_have_explicit_spaces() -> None:
+        tree = ast.parse(
+            (_PACKAGE_ROOT / "computation" / "algorithm_capabilities.py").read_text()
+        )
+        relation = next(
+            (
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ClassDef)
+                and node.name == "TransformationRelation"
+            ),
+            None,
+        )
+        if relation is None:
+            raise AssertionError("TransformationRelation class not found")
+        annotations = {
+            child.target.id: child.annotation
+            for child in relation.body
+            if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name)
+        }
+        assert (
+            _LinearOperatorProjectionClaim._annotation_name(
+                annotations.get("domain", ast.Constant(None))
+            )
+            == "TransformationSpace"
+        )
+        assert (
+            _LinearOperatorProjectionClaim._annotation_name(
+                annotations.get("codomain", ast.Constant(None))
+            )
+            == "TransformationSpace"
+        )
+        dimension_fields = sorted(
+            field for field in annotations if field.endswith("_dimension")
+        )
+        assert not dimension_fields, (
+            "transformation dimensions must belong to domain/codomain spaces, "
+            f"not relation scalar fields: {dimension_fields}"
         )
 
     @staticmethod
