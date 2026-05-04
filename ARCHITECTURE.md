@@ -790,9 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: use domain-step margin in generic/adaptive controller selection
-   where a concrete calculation shows the selector needs to distinguish
-   domain-limited advancement from ordinary RHS advancement.
+1. Current PR: delete the remaining reaction-network-specific one-step selector
+   branch now that Jacobian availability is already a structural protocol
+   premise.
 2. Review whether reaction-network constraint lifecycle evidence and generic map
    structure evidence now compose cleanly enough that any remaining
    reaction-specific selector setup can be deleted.
@@ -910,6 +910,11 @@ map-structure evidence only; step-local diagnostics are projected by the
 generic RHS step descriptor and composed at the request site.  Implementation
 methods must not import capability modules to manufacture selection descriptors
 from inside the class.
+Automatic one-step request construction no longer has a nominal reaction-network
+branch.  Reaction-network RHS objects select implicit one-step methods because
+they satisfy the same Jacobian protocol as any other RHS with derivative-oracle
+evidence.  Request builders may branch on structural protocols, not concrete
+implementation classes.
 Generic and adaptive advance-controller ownership consumes the same
 `DOMAIN_STEP_MARGIN` coordinate.  Interior and domain-limited advancement are
 separate coverage regions even when they currently select the same controller;
