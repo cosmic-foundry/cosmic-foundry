@@ -7,6 +7,7 @@ from typing import Any
 from cosmic_foundry.computation import tensor
 from cosmic_foundry.computation.algorithm_capabilities import (
     CONDITION_LIMIT,
+    AffineComparisonPredicate,
     ComparisonPredicate,
     DecompositionField,
 )
@@ -182,6 +183,14 @@ class LUFactorization(Factorization):
     """
 
     factorization_feasibility_certificate = (
+        AffineComparisonPredicate(
+            {
+                DecompositionField.MATRIX_ROWS: 1.0,
+                DecompositionField.MATRIX_COLUMNS: -1.0,
+            },
+            "==",
+            0.0,
+        ),
         ComparisonPredicate(DecompositionField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
         ComparisonPredicate(
             DecompositionField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT

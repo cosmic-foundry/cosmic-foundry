@@ -1,11 +1,9 @@
 """Matrix decomposition classes: ABCs and concrete algorithms."""
 
 from cosmic_foundry.computation.decompositions.capabilities import (
-    DecompositionCapability,
-    DecompositionRegistry,
-    DecompositionRequest,
-    decomposition_capabilities,
-    select_decomposition,
+    DECOMPOSITION_COVERAGE_REGIONS,
+    decomposition_coverage_regions,
+    select_decomposition_for_descriptor,
 )
 from cosmic_foundry.computation.decompositions.decomposition import (
     DecomposedTensor,
@@ -22,16 +20,14 @@ from cosmic_foundry.computation.decompositions.svd_factorization import (
 )
 
 __all__ = [
-    "decomposition_capabilities",
+    "decomposition_coverage_regions",
+    "DECOMPOSITION_COVERAGE_REGIONS",
     "Decomposition",
-    "DecompositionCapability",
     "DecomposedTensor",
-    "DecompositionRegistry",
-    "DecompositionRequest",
     "Factorization",
     "LUDecomposedTensor",
     "LUFactorization",
-    "select_decomposition",
+    "select_decomposition_for_descriptor",
     "SVDDecomposedTensor",
     "SVDFactorization",
 ]

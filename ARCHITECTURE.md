@@ -790,17 +790,19 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Pick the next PR by naming its target calculation first, then work backward
-   to the smallest schema or implementation change needed; do not plan an
-   architecture-only PR.
-2. Candidate next calculation: move affine implicit-stage evidence toward the
-   shared transformation API by producing a transformation relation before
-   descriptor projection, so solve-relation and linear-solver coordinates are
-   both views of the same map object.
-3. Candidate following calculation: factor linear-operator and decomposition
-   algebra coordinates behind transformation-specific projection functions, so
-   the assembled-linear helper stops acting as the single mixed schema
-   projection for solve, linear, and decomposition fields.
+1. Use the decomposition descriptor-selection calculation to complete the
+   decomposition coverage-region conversion: LU owns certified full-rank square
+   dense matrices inside factorization work/memory budgets; SVD owns
+   rank-deficient dense matrices where the pseudoinverse/minimum-norm
+   calculation is the relevant solve.
+2. Move affine implicit-stage evidence toward the shared transformation API by
+   producing a transformation relation before descriptor projection, so
+   solve-relation and linear-solver coordinates are both views of the same map
+   object.
+3. Factor linear-operator and decomposition algebra coordinates behind
+   transformation-specific projection functions, so the assembled-linear helper
+   stops acting as the single mixed schema projection for solve, linear, and
+   decomposition fields.
 
 Roadmap sketch:
 
@@ -918,13 +920,16 @@ no longer carry empty structural contracts.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
-Decomposition primitives expose structure through class-owned solve
-certificates.  Direct dense solver wrappers name their decomposition type; the
-coverage aggregator composes the decomposition certificate directly into the
-solver descriptor rather than translating decomposition coordinates into
-linear-operator coordinates.  Decomposition fields are auxiliary coordinates of
-the linear-solver schema: they participate in selection predicates and
-descriptor validation without multiplying the enumerated atlas axis product.
+Decomposition primitives expose structure through class-owned feasibility
+certificates and descriptor-space coverage regions.  Direct dense solver
+wrappers name their decomposition type; the coverage aggregator composes the
+decomposition certificate directly into the solver descriptor rather than
+translating decomposition coordinates into linear-operator coordinates.
+Decomposition fields are auxiliary coordinates of the linear-solver schema:
+they participate in selection predicates and descriptor validation without
+multiplying the enumerated atlas axis product.  Decomposition selection itself
+is a point query over the dense-matrix descriptor schema; budgets compare
+estimated factorization work and memory against explicit request budgets.
 Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not
@@ -1167,9 +1172,7 @@ The sprint is complete when the following are true:
 
 Recommended PR sequence:
 
-1. Convert decomposition capabilities to coverage regions, including
-   rank threshold, minimum-norm semantics, dense memory budget, and work budget.
-2. Add a follow-up sprint plan for quantitative time-integrator descriptors once
+1. Add a follow-up sprint plan for quantitative time-integrator descriptors once
    the solver/decomposition predicates have stabilized.
 
 ---

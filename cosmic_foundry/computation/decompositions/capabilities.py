@@ -1,75 +1,100 @@
-"""Algorithm structure contracts for decomposition selection."""
+"""Autodiscovered decomposition coverage aggregation."""
 
 from __future__ import annotations
 
+from importlib import import_module
+from pkgutil import iter_modules
+from types import ModuleType
+
 from cosmic_foundry.computation.algorithm_capabilities import (
-    AlgorithmCapability,
-    AlgorithmRegistry,
-    AlgorithmRequest,
-    AlgorithmStructureContract,
+    AffineComparisonPredicate,
+    CoverageRegion,
+    DecompositionField,
+    ParameterDescriptor,
+    StructuredPredicate,
+    decomposition_parameter_schema,
 )
-
-DecompositionCapability = AlgorithmCapability
-DecompositionRegistry = AlgorithmRegistry
-DecompositionRequest = AlgorithmRequest
+from cosmic_foundry.computation.decompositions.decomposition import Decomposition
+from cosmic_foundry.computation.decompositions.factorization import Factorization
 
 
-def _contract(
-    *,
-    requires: tuple[str, ...],
-    provides: tuple[str, ...],
-) -> AlgorithmStructureContract:
-    return AlgorithmStructureContract(frozenset(requires), frozenset(provides))
+def _decomposition_package_modules() -> tuple[ModuleType, ...]:
+    package = import_module(__package__ or "cosmic_foundry.computation.decompositions")
+    package_path = getattr(package, "__path__", ())
+    modules: list[ModuleType] = []
+    for module_info in sorted(iter_modules(package_path), key=lambda info: info.name):
+        if module_info.name.startswith("_") or module_info.name == "capabilities":
+            continue
+        modules.append(import_module(f"{package.__name__}.{module_info.name}"))
+    return tuple(modules)
 
 
-_CAPABILITIES: tuple[DecompositionCapability, ...] = (
-    DecompositionCapability(
-        "lu_factorization",
-        "LUFactorization",
-        "factorization",
-        _contract(
-            requires=("dense_matrix", "square_matrix", "full_rank"),
-            provides=("decompose", "factorize", "direct_solve", "pivoting", "exact"),
+def _budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
+    return (
+        AffineComparisonPredicate(
+            {
+                DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: 1.0,
+                DecompositionField.FACTORIZATION_WORK_FMAS: -1.0,
+            },
+            ">=",
+            0.0,
         ),
-    ),
-    DecompositionCapability(
-        "svd_factorization",
-        "SVDFactorization",
-        "factorization",
-        _contract(
-            requires=("dense_matrix",),
-            provides=(
-                "decompose",
-                "factorize",
-                "direct_solve",
-                "least_squares",
-                "minimum_norm",
-                "rank_deficient",
-                "singular_values",
-            ),
+        AffineComparisonPredicate(
+            {
+                DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: 1.0,
+                DecompositionField.FACTORIZATION_MEMORY_BYTES: -1.0,
+            },
+            ">=",
+            0.0,
         ),
-    ),
-)
+    )
 
 
-DECOMPOSITION_REGISTRY = DecompositionRegistry(_CAPABILITIES)
+def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ...]:
+    predicates: tuple[StructuredPredicate, ...] = ()
+    if issubclass(owner, Factorization):
+        predicates += _budget_predicates()
+    predicates += getattr(owner, "factorization_feasibility_certificate", ())
+    return predicates
 
 
-def decomposition_capabilities() -> tuple[DecompositionCapability, ...]:
-    """Return declared decomposition algorithm capabilities."""
-    return DECOMPOSITION_REGISTRY.capabilities
+def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
+    regions: list[CoverageRegion] = []
+    for module in _decomposition_package_modules():
+        for item in module.__dict__.values():
+            if not isinstance(item, type) or item.__module__ != module.__name__:
+                continue
+            if (
+                issubclass(item, Decomposition)
+                and not getattr(item, "__abstractmethods__", None)
+                and item is not Decomposition
+            ):
+                regions.append(
+                    CoverageRegion(item, _inherited_coverage_predicates(item))
+                )
+    return tuple(regions)
 
 
-def select_decomposition(request: DecompositionRequest) -> DecompositionCapability:
-    """Select a decomposition implementation declaration by capability."""
-    return DECOMPOSITION_REGISTRY.select(request)
+DECOMPOSITION_COVERAGE_REGIONS = _discovered_coverage_regions()
+
+
+def decomposition_coverage_regions() -> tuple[CoverageRegion, ...]:
+    """Return autodiscovered descriptor-space decomposition coverage regions."""
+    return DECOMPOSITION_COVERAGE_REGIONS
+
+
+def select_decomposition_for_descriptor(descriptor: ParameterDescriptor) -> type:
+    """Select a decomposition by parameter-space descriptor coverage."""
+    schema = decomposition_parameter_schema()
+    regions = decomposition_coverage_regions()
+    region = schema.covering_region(descriptor, regions)
+    if region is None:
+        raise ValueError(f"no decomposition covers descriptor {descriptor!r}")
+    return region.owner
 
 
 __all__ = [
-    "DecompositionCapability",
-    "decomposition_capabilities",
-    "DECOMPOSITION_REGISTRY",
-    "DecompositionRegistry",
-    "DecompositionRequest",
-    "select_decomposition",
+    "DECOMPOSITION_COVERAGE_REGIONS",
+    "decomposition_coverage_regions",
+    "select_decomposition_for_descriptor",
 ]

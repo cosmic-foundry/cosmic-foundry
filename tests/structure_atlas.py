@@ -38,6 +38,9 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
+from cosmic_foundry.computation.decompositions.capabilities import (
+    decomposition_coverage_regions,
+)
 from cosmic_foundry.computation.solvers.capabilities import (
     linear_solver_coverage_regions,
 )
@@ -190,6 +193,8 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
 
 def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
     regions: dict[type, CoverageRegion] = {}
+    for region in decomposition_coverage_regions():
+        regions[region.owner] = region
     for region in linear_solver_coverage_regions():
         regions[region.owner] = region
     for region in time_integration_step_solve_regions():

@@ -77,6 +77,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.backends.python_backend import PythonBackend
+from cosmic_foundry.computation.decompositions.capabilities import (
+    decomposition_coverage_regions,
+    select_decomposition_for_descriptor,
+)
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.capabilities import (
     linear_solver_coverage_regions,
@@ -1613,6 +1617,16 @@ class _SolveRelationSchemaClaim(Claim[None]):
         rectangular_decomp = self._decomposition_descriptor(matrix_columns=5)
         decomposition_schema.validate_descriptor(rectangular_decomp)
         assert decomposition_schema.cell_status(rectangular_decomp, ()) == "uncovered"
+        assert (
+            decomposition_schema.cell_status(
+                self._decomposition_descriptor(
+                    factorization_work_budget_fmas=10.0,
+                    factorization_work_fmas=64.0,
+                ),
+                decomposition_coverage_regions(),
+            )
+            == "uncovered"
+        )
 
         reaction_regions = self._regions(reaction_network_schema)
         reaction_descriptor = self._reaction_network_descriptor()
@@ -1877,7 +1891,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
         matrix_rows: int = 4,
         matrix_columns: int = 4,
         factorization_work_budget_fmas: float = 1.0e9,
+        factorization_work_fmas: float = 64.0,
         factorization_memory_budget_bytes: float = 1.0e9,
+        factorization_memory_bytes: float = 256.0,
         singular_value_lower_bound: float = 1.0,
         condition_estimate: float = 10.0,
         rank_estimate: int = 4,
@@ -1890,8 +1906,14 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS: (
                     DescriptorCoordinate(factorization_work_budget_fmas)
                 ),
+                DecompositionField.FACTORIZATION_WORK_FMAS: DescriptorCoordinate(
+                    factorization_work_fmas
+                ),
                 DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES: (
                     DescriptorCoordinate(factorization_memory_budget_bytes)
+                ),
+                DecompositionField.FACTORIZATION_MEMORY_BYTES: DescriptorCoordinate(
+                    factorization_memory_bytes
                 ),
                 DecompositionField.SINGULAR_VALUE_LOWER_BOUND: DescriptorCoordinate(
                     singular_value_lower_bound
@@ -2688,7 +2710,6 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             assert certificate
             for predicate in certificate:
                 assert predicate.referenced_fields <= set(DecompositionField)
-                assert isinstance(predicate, ComparisonPredicate)
                 assert predicate in region.predicates
 
     @staticmethod
@@ -3120,7 +3141,7 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         coordinates = {
             field: DescriptorCoordinate(cls._axis_witness(axis))
             for field, axis in fields.items()
-            if field in {schema_axis.field for schema_axis in schema.axes}
+            if field in schema.descriptor_fields
         }
         for predicate in region.predicates:
             if isinstance(predicate, MembershipPredicate):
@@ -3299,6 +3320,98 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
     @classmethod
     def _two(cls) -> float:
         return cls._one() + cls._one()
+
+
+class _DecompositionCoverageRegionClaim(Claim[None]):
+    """Claim: decomposition selection is driven by schema coverage regions."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/decomposition_coverage_regions"
+
+    def check(self, _calibration: None) -> None:
+        schema = decomposition_parameter_schema()
+        regions = decomposition_coverage_regions()
+        assert regions
+        self._assert_decomposition_capabilities_are_regions()
+        for region in regions:
+            schema.validate_coverage_region(region)
+            assert issubclass(region.owner, Factorization)
+            assert region.predicates
+            assert {
+                DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS,
+                DecompositionField.FACTORIZATION_WORK_FMAS,
+                DecompositionField.FACTORIZATION_MEMORY_BUDGET_BYTES,
+                DecompositionField.FACTORIZATION_MEMORY_BYTES,
+            } <= region.referenced_fields
+        assert coverage_regions_are_disjoint(regions)
+
+        full_rank = _SolveRelationSchemaClaim._decomposition_descriptor()
+        rank_deficient = _SolveRelationSchemaClaim._decomposition_descriptor(
+            singular_value_lower_bound=0.0,
+            rank_estimate=3,
+            nullity_estimate=1,
+        )
+        for descriptor in (full_rank, rank_deficient):
+            schema.validate_descriptor(descriptor)
+            assert schema.cell_status(descriptor, regions) == "owned"
+
+        lu = _resolve_dotted(
+            "cosmic_foundry.computation.decompositions.LUFactorization"
+        )
+        svd = _resolve_dotted(
+            "cosmic_foundry.computation.decompositions.SVDFactorization"
+        )
+        assert select_decomposition_for_descriptor(full_rank) is lu
+        assert select_decomposition_for_descriptor(rank_deficient) is svd
+
+        rectangular = _SolveRelationSchemaClaim._decomposition_descriptor(
+            matrix_columns=5
+        )
+        low_budget = _SolveRelationSchemaClaim._decomposition_descriptor(
+            factorization_work_budget_fmas=1.0,
+        )
+        for descriptor in (rectangular, low_budget):
+            schema.validate_descriptor(descriptor)
+            assert schema.cell_status(descriptor, regions) == "uncovered"
+            with pytest.raises(ValueError):
+                select_decomposition_for_descriptor(descriptor)
+
+    @staticmethod
+    def _assert_decomposition_capabilities_are_regions() -> None:
+        package = importlib.import_module("cosmic_foundry.computation.decompositions")
+        exported = set(package.__all__)
+        assert "DECOMPOSITION_COVERAGE_REGIONS" in exported
+        assert "decomposition_coverage_regions" in exported
+        assert "select_decomposition_for_descriptor" in exported
+        exported_objects = {name: getattr(package, name) for name in exported}
+        label_owned_exports = {
+            name
+            for name, obj in exported_objects.items()
+            if any(
+                obj is label_owned_type
+                for label_owned_type in (
+                    AlgorithmCapability,
+                    AlgorithmRegistry,
+                    AlgorithmRequest,
+                )
+            )
+        }
+        assert not label_owned_exports, (
+            "decomposition exports must expose descriptor regions, not "
+            f"label-owned capability/request/registry aliases: {label_owned_exports}"
+        )
+        tree = ast.parse(
+            (
+                _PACKAGE_ROOT / "computation" / "decompositions" / "capabilities.py"
+            ).read_text()
+        )
+        assert not any(
+            isinstance(node, ast.Call)
+            and _LinearSolverCoverageLocalityClaim._call_name(node.func)
+            == "AlgorithmCapability"
+            for node in ast.walk(tree)
+        )
 
 
 class _LinearSolverCoverageLocalityClaim(Claim[None]):
@@ -3697,9 +3810,6 @@ def _object_module(obj: Any) -> types.ModuleType | None:
     return importlib.import_module(module_name)
 
 
-_DecompositionRequest = _resolve_dotted(
-    "cosmic_foundry.computation.decompositions.DecompositionRequest"
-)
 _DiscreteOperatorRequest = _resolve_dotted(
     "cosmic_foundry.theory.discrete.DiscreteOperatorRequest"
 )
@@ -4033,11 +4143,9 @@ _DECOMPOSITION_OWNERSHIP = _ArchitectureOwnershipSpec(
     public_categories={
         "capability_contract": frozenset(
             {
-                "DecompositionCapability",
-                "decomposition_capabilities",
-                "DecompositionRegistry",
-                "DecompositionRequest",
-                "select_decomposition",
+                "DECOMPOSITION_COVERAGE_REGIONS",
+                "decomposition_coverage_regions",
+                "select_decomposition_for_descriptor",
             }
         ),
         "abstract_interface": frozenset(
@@ -4061,51 +4169,11 @@ _DECOMPOSITION_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
     },
     capability_provider=(
-        "cosmic_foundry.computation.decompositions.decomposition_capabilities"
-    ),
-    request_selector="cosmic_foundry.computation.decompositions.select_decomposition",
-    request_expectations=(
-        _CapabilityRequestExpectation(
-            _DecompositionRequest(
-                available_structure=frozenset(
-                    {"dense_matrix", "square_matrix", "full_rank"}
-                ),
-                requested_properties=frozenset(
-                    {"decompose", "factorize", "direct_solve", "exact"}
-                ),
-            ),
-            "LUFactorization",
-        ),
-        _CapabilityRequestExpectation(
-            _DecompositionRequest(
-                available_structure=frozenset({"dense_matrix"}),
-                requested_properties=frozenset(
-                    {
-                        "decompose",
-                        "factorize",
-                        "direct_solve",
-                        "minimum_norm",
-                        "rank_deficient",
-                    }
-                ),
-            ),
-            "SVDFactorization",
-        ),
-    ),
-    rejected_requests=(
-        _CapabilityRejectionExpectation(
-            _DecompositionRequest(
-                available_structure=frozenset({"dense_matrix"}),
-                requested_properties=frozenset({"decompose", "factorize", "exact"}),
-            )
-        ),
+        "cosmic_foundry.computation.decompositions.decomposition_coverage_regions"
     ),
     expected_class_modules={
         "DecomposedTensor": "decomposition",
         "Decomposition": "decomposition",
-        "DecompositionCapability": "algorithm_capabilities",
-        "DecompositionRegistry": "algorithm_capabilities",
-        "DecompositionRequest": "algorithm_capabilities",
         "Factorization": "factorization",
         "LUDecomposedTensor": "lu_factorization",
         "LUFactorization": "lu_factorization",
@@ -4432,6 +4500,7 @@ _CLAIMS: list[Claim[None]] = [
     _TimeIntegratorSolveRelationClaim(),
     _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoverageRegionClaim(),
+    _DecompositionCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),
 ]
 
