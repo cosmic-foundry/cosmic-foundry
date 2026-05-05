@@ -160,6 +160,26 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             _residual_norm(NewtonRootSolver().solve(root_problem) - constrained_state.u)
             < 1.0e-12
         )
+        unconstrained_root = RootSolveProblem(
+            lambda u: u - state.u,
+            lambda u: Tensor.eye(u.shape[0], backend=u.backend),
+            state.u,
+        )
+        unconstrained_descriptor = unconstrained_root.solve_relation_descriptor()
+        assert (
+            unconstrained_descriptor.coordinate(
+                SolveRelationField.EQUALITY_CONSTRAINT_COUNT
+            ).value
+            == 0
+        )
+        assert (
+            unconstrained_descriptor.coordinate(SolveRelationField.DIM_X).value
+            == root_descriptor.coordinate(SolveRelationField.DIM_X).value
+        )
+        assert (
+            select_root_solver_for_descriptor(unconstrained_descriptor)
+            is NewtonRootSolver
+        )
         direct_constrained = integrator.step(
             rhs,
             constrained_state,

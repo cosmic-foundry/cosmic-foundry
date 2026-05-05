@@ -15,7 +15,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
-from cosmic_foundry.computation.solvers.coverage import nonlinear_root_predicates
+from cosmic_foundry.computation.solvers.coverage import (
+    constrained_root_predicates,
+    unconstrained_root_predicates,
+)
 from cosmic_foundry.computation.tensor import Tensor, einsum, norm
 
 
@@ -89,7 +92,7 @@ class NewtonRootSolver:
     """Solve ``F(x) = 0`` by Newton iteration."""
 
     root_solver_coverage: tuple[tuple[StructuredPredicate, ...], ...] = (
-        nonlinear_root_predicates()
+        unconstrained_root_predicates() + constrained_root_predicates()
     )
 
     def __init__(

@@ -790,15 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: let `RootSolveProblem` project primitive solve-relation
-   descriptors, so nonlinear-root ownership can be selected from construction
-   evidence at stage and NSE call sites.
-2. Review whether constrained root coverage should become a distinct
-   constrained-root relation with equality-constraint evidence rather than an
-   undifferentiated nonlinear-root region.
-3. Review whether root-problem descriptors should replace time-integrator
+1. Current PR: split `NewtonRootSolver` coverage into unconstrained and
+   equality-constrained nonlinear-root regions over `EQUALITY_CONSTRAINT_COUNT`.
+2. Review whether root-problem descriptors should replace time-integrator
    stage solve descriptors for implicit stage construction, leaving the
    integrator descriptor as a projection of the same root relation.
+3. Review whether constrained root coverage should become a separate
+   human-facing atlas slice or remain a distinct region inside primitive
+   nonlinear-root solve space.
 
 Roadmap sketch:
 
@@ -944,6 +943,10 @@ the relation itself reports its equality-constraint count.
 lets both implicit stage construction and direct NSE construction select
 `NewtonRootSolver` from the same descriptor-space evidence instead of relying on
 time-integrator-local knowledge about which solver will be called.
+Newton root coverage is split by equality-constraint evidence: one region owns
+unconstrained nonlinear roots, and a separate region owns constrained nonlinear
+roots.  Both are still primitive nonlinear-root solve relations; the distinction
+is the exact constraint count, not a method-family label.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence
