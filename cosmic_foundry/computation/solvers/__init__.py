@@ -2,8 +2,11 @@
 
 from cosmic_foundry.computation.solvers.capabilities import (
     LINEAR_SOLVER_COVERAGE_REGIONS,
+    ROOT_SOLVER_COVERAGE_REGIONS,
     linear_solver_coverage_regions,
+    root_solver_coverage_regions,
     select_linear_solver_for_descriptor,
+    select_root_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
@@ -47,5 +50,8 @@ __all__ = [
     "linear_solver_coverage_regions",
     "LinearSolver",
     "NewtonRootSolver",
+    "ROOT_SOLVER_COVERAGE_REGIONS",
+    "root_solver_coverage_regions",
     "select_linear_solver_for_descriptor",
+    "select_root_solver_for_descriptor",
 ]

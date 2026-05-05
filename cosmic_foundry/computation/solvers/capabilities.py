@@ -13,6 +13,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     ParameterDescriptor,
     StructuredPredicate,
     linear_solver_parameter_schema,
+    solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
 from cosmic_foundry.computation.solvers.coverage import (
@@ -74,6 +75,10 @@ def _owns_coverage(owner: type) -> bool:
     )
 
 
+def _owns_root_coverage(owner: type) -> bool:
+    return "root_solver_coverage" in owner.__dict__
+
+
 def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
     regions: list[CoverageRegion] = []
     for module in _solver_package_modules():
@@ -91,12 +96,32 @@ def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
     return tuple(regions)
 
 
+def _discovered_root_coverage_regions() -> tuple[CoverageRegion, ...]:
+    regions: list[CoverageRegion] = []
+    for module in _solver_package_modules():
+        for item in module.__dict__.values():
+            if not isinstance(item, type) or item.__module__ != module.__name__:
+                continue
+            if _owns_root_coverage(item):
+                regions.extend(
+                    coverage(item, coverage_predicates=predicates)
+                    for predicates in getattr(item, "root_solver_coverage", ())
+                )
+    return tuple(regions)
+
+
 LINEAR_SOLVER_COVERAGE_REGIONS = _discovered_coverage_regions()
+ROOT_SOLVER_COVERAGE_REGIONS = _discovered_root_coverage_regions()
 
 
 def linear_solver_coverage_regions() -> tuple[CoverageRegion, ...]:
     """Return autodiscovered descriptor-space coverage regions."""
     return LINEAR_SOLVER_COVERAGE_REGIONS
+
+
+def root_solver_coverage_regions() -> tuple[CoverageRegion, ...]:
+    """Return autodiscovered nonlinear-root coverage regions."""
+    return ROOT_SOLVER_COVERAGE_REGIONS
 
 
 def select_linear_solver_for_descriptor(
@@ -112,8 +137,24 @@ def select_linear_solver_for_descriptor(
     return region.owner
 
 
+def select_root_solver_for_descriptor(
+    descriptor: ParameterDescriptor,
+) -> type:
+    """Select a root solver by primitive solve-relation descriptor coverage."""
+    schema = solve_relation_parameter_schema()
+    regions = root_solver_coverage_regions()
+    region = schema.covering_region(descriptor, regions)
+    if region is None:
+        raise ValueError(f"no root solver covers descriptor {descriptor!r}")
+
+    return region.owner
+
+
 __all__ = [
     "linear_solver_coverage_regions",
     "LINEAR_SOLVER_COVERAGE_REGIONS",
+    "root_solver_coverage_regions",
+    "ROOT_SOLVER_COVERAGE_REGIONS",
     "select_linear_solver_for_descriptor",
+    "select_root_solver_for_descriptor",
 ]

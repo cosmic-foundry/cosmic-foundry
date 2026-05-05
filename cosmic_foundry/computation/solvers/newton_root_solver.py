@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from cosmic_foundry.computation.algorithm_capabilities import StructuredPredicate
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
+from cosmic_foundry.computation.solvers.coverage import nonlinear_root_predicates
 from cosmic_foundry.computation.tensor import Tensor, einsum, norm
 
 
 class NewtonRootSolver:
     """Solve ``F(x) = 0`` by Newton iteration."""
+
+    root_solver_coverage: tuple[tuple[StructuredPredicate, ...], ...] = (
+        nonlinear_root_predicates()
+    )
 
     def __init__(
         self,

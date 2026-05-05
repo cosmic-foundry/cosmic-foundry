@@ -12,6 +12,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     CoverageRegion,
+    EvidencePredicate,
     LinearSolverField,
     MembershipPredicate,
     SolveRelationField,
@@ -121,6 +122,46 @@ def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
     )
 
 
+def nonlinear_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
+    """Return primitive predicate sets for nonlinear residual roots."""
+    common: tuple[StructuredPredicate, ...] = (
+        MembershipPredicate(
+            SolveRelationField.TARGET_IS_ZERO,
+            frozenset({True}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.ACCEPTANCE_RELATION,
+            frozenset({"residual_below_tolerance"}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.DERIVATIVE_ORACLE_KIND,
+            frozenset({"jacobian_callback"}),
+        ),
+        AffineComparisonPredicate(
+            {SolveRelationField.DIM_X: 1.0, SolveRelationField.DIM_Y: -1.0},
+            "==",
+            0.0,
+        ),
+    )
+    return (
+        (
+            ComparisonPredicate(
+                SolveRelationField.MAP_LINEARITY_DEFECT,
+                ">",
+                LINEARITY_TOLERANCE,
+            ),
+            *common,
+        ),
+        (
+            EvidencePredicate(
+                SolveRelationField.MAP_LINEARITY_DEFECT,
+                frozenset({"unavailable"}),
+            ),
+            *common,
+        ),
+    )
+
+
 __all__ = [
     "CONDITION_LIMIT",
     "LINEARITY_TOLERANCE",
@@ -129,4 +170,5 @@ __all__ = [
     "dense_matrix_predicates",
     "linear_system_predicates",
     "matrix_free_operator_predicates",
+    "nonlinear_root_predicates",
 ]
