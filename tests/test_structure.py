@@ -1728,7 +1728,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
             solve_schema.cell_status(
                 nonlinear_root_with_jvp, root_solver_coverage_regions()
             )
-            == "uncovered"
+            == "owned"
         )
         assert solve_regions["nonlinear_root"].contains(implicit_stage_solve)
         assert solve_regions["eigenproblem"].contains(eigenproblem)
@@ -3863,6 +3863,9 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         root_solver = _resolve_dotted(
             "cosmic_foundry.computation.solvers.NewtonRootSolver"
         )
+        matrix_free_root_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.MatrixFreeNewtonKrylovRootSolver"
+        )
         root_relation = _resolve_dotted(
             "cosmic_foundry.computation.solvers.RootRelation"
         )
@@ -3870,7 +3873,10 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
             "cosmic_foundry.computation.solvers.FiniteDimensionalResidualRelation"
         )
         assert issubclass(root_relation, residual_relation)
-        assert {region.owner for region in regions} == {root_solver}
+        assert {region.owner for region in regions} == {
+            root_solver,
+            matrix_free_root_solver,
+        }
 
     @staticmethod
     def _regions(
@@ -4677,9 +4683,14 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LinearOperator",
                 "LinearResidualRelation",
                 "LinearSolver",
-                "NewtonRootSolver",
                 "RootRelation",
                 "StationaryIterationSolver",
+            }
+        ),
+        "root_solver": frozenset(
+            {
+                "MatrixFreeNewtonKrylovRootSolver",
+                "NewtonRootSolver",
             }
         ),
         "direct_solver": frozenset(
@@ -4717,6 +4728,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LinearOperator": "linear_solver",
         "LinearResidualRelation": "relations",
         "LinearSolver": "linear_solver",
+        "MatrixFreeNewtonKrylovRootSolver": "newton_root_solver",
         "NewtonRootSolver": "newton_root_solver",
         "RootRelation": "newton_root_solver",
         "StationaryIterationSolver": "iterative_solver",

@@ -26,6 +26,7 @@ from cosmic_foundry.computation.solvers import (
     DirectionalDerivativeRootRelation,
     FiniteDimensionalResidualRelation,
     LinearResidualRelation,
+    MatrixFreeNewtonKrylovRootSolver,
     NewtonRootSolver,
 )
 from cosmic_foundry.computation.solvers.capabilities import (
@@ -829,12 +830,12 @@ class _ImexImplicitStageRootClaim(Claim[Any]):
         assert cases.err(stepped.u, cases.exact_scalar_decay, stepped.t) < 1.0e-7
 
 
-class _DirectionalDerivativeRootGapClaim(Claim[Any]):
-    """Grounded claim for nonlinear root relations with only JVP evidence."""
+class _DirectionalDerivativeRootSolveClaim(Claim[Any]):
+    """Grounded claim for nonlinear root solving with only JVP evidence."""
 
     @property
     def description(self) -> str:
-        return "correctness/directional_derivative_root_gap"
+        return "correctness/directional_derivative_root_solve"
 
     def check(self, _calibration: Any) -> None:
         def residual(x: Tensor) -> Tensor:
@@ -858,20 +859,19 @@ class _DirectionalDerivativeRootGapClaim(Claim[Any]):
             descriptor.coordinate(SolveRelationField.DERIVATIVE_ORACLE_KIND).value
             == "jvp"
         )
-        assert schema.cell_status(descriptor, ()) == "uncovered"
-        try:
-            select_root_solver_for_descriptor(descriptor)
-        except ValueError:
-            pass
-        else:  # pragma: no cover - assertion branch
-            raise AssertionError("JVP-only nonlinear roots must remain unowned")
+        assert select_root_solver_for_descriptor(descriptor) is (
+            MatrixFreeNewtonKrylovRootSolver
+        )
+
+        root = MatrixFreeNewtonKrylovRootSolver().solve(relation)
+        assert abs(float(root[0]) ** 2 - 2.0) < 1e-10
 
 
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
     _AffineStageLinearSolveClaim(),
     _ImexImplicitStageRootClaim(),
-    _DirectionalDerivativeRootGapClaim(),
+    _DirectionalDerivativeRootSolveClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],
     _OscillatorInvariantComparisonClaim(),

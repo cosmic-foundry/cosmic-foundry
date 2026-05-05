@@ -790,13 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make SVD decomposition ownership cover non-square matrices as
-   disjoint row-deficient and column-deficient regions, grounding the change in
-   the rectangular least-squares calculation whose relation-projected
-   decomposition descriptor now selects SVD.
-2. Review whether the next grounding calculation should be a matrix-free
-   Newton/Krylov root solve or a real-ish implicit physics step whose only
-   derivative evidence is a JVP.
+1. Current PR: close the JVP-only nonlinear-root gap with a matrix-free
+   Newton-Krylov solver, grounding the change in a scalar nonlinear root
+   calculation that supplies residual and JVP evidence but no assembled
+   Jacobian.
+2. Review whether the next grounding calculation should be a real-ish implicit
+   physics step whose only derivative evidence is a JVP, so the new root
+   solver is exercised through a time-integrator construction rather than a
+   direct scalar root relation.
 3. Review whether factorization execution should consume a relation object
    instead of a bare matrix when the downstream solve semantics are
    objective-dependent.
@@ -1001,9 +1002,11 @@ application-specific adapters that construct root relations; they are not
 separate mathematical problem types.
 JVP-backed nonlinear target-zero residuals are represented by
 `DirectionalDerivativeRootRelation`.  They carry a directional derivative
-oracle and project to the nonlinear-root solve space, but they remain a
-computed uncovered atlas gap until an implementation can solve that premise
-without silently requiring an assembled Jacobian.
+oracle and project to the nonlinear-root solve space.  `MatrixFreeNewtonKrylovRootSolver`
+owns the unconstrained JVP region by solving each Newton correction with a
+matrix-free Krylov operator built from the relation's JVP; no assembled
+Jacobian is required.  Nonlinear target-zero residuals with no derivative
+evidence remain computed uncovered atlas gaps.
 The capability atlas begins with a generated parameter-space hierarchy before
 showing projection plots.  The hierarchy is schema → primitive coordinates →
 derived regions → current ownership and uncovered cells, so readers can see

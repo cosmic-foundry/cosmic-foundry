@@ -44,13 +44,13 @@ from cosmic_foundry.computation.decompositions.capabilities import (
 from cosmic_foundry.computation.solvers.capabilities import (
     least_squares_solver_coverage_regions,
     linear_solver_coverage_regions,
+    root_solver_coverage_regions,
 )
 from cosmic_foundry.computation.time_integrators.capabilities import (
     nordsieck_history_descriptor,
     rhs_evaluation_descriptor,
     rhs_history_descriptor,
     time_integration_step_map_regions,
-    time_integration_step_solve_regions,
 )
 from tests import test_structure as structure
 from tests.claims import Claim
@@ -205,18 +205,13 @@ def _capability_atlas_schemas() -> tuple[ParameterSpaceSchema, ...]:
 
 
 def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
-    regions: dict[type, CoverageRegion] = {}
-    for region in decomposition_coverage_regions():
-        regions[region.owner] = region
-    for region in linear_solver_coverage_regions():
-        regions[region.owner] = region
-    for region in least_squares_solver_coverage_regions():
-        regions[region.owner] = region
-    for region in time_integration_step_solve_regions():
-        regions[region.owner] = region
-    for region in time_integration_step_map_regions():
-        regions[region.owner] = region
-    return tuple(regions.values())
+    return (
+        *decomposition_coverage_regions(),
+        *linear_solver_coverage_regions(),
+        *least_squares_solver_coverage_regions(),
+        *root_solver_coverage_regions(),
+        *time_integration_step_map_regions(),
+    )
 
 
 def _atlas_schema_for_descriptor(
@@ -1032,6 +1027,12 @@ def _region_inhabits_schema(
     return True
 
 
+def _region_is_value_partitioned(region: CoverageRegion) -> bool:
+    return not any(
+        isinstance(predicate, EvidencePredicate) for predicate in region.predicates
+    )
+
+
 def _coverage_region_name(region: CoverageRegion) -> str:
     return region.owner.__name__
 
@@ -1140,7 +1141,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
         self._assert_nonlinear_root_without_jacobian_is_visible_gap()
-        self._assert_directional_derivative_root_is_visible_gap()
+        self._assert_directional_derivative_root_is_owned()
         for group in _capability_atlas_descriptor_groups():
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
@@ -1192,7 +1193,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
 
     @staticmethod
-    def _assert_directional_derivative_root_is_visible_gap() -> None:
+    def _assert_directional_derivative_root_is_owned() -> None:
         schema = solve_relation_parameter_schema()
         regions = _atlas_regions_for_schema(schema)
         descriptor = _SolveRelationSchemaClaim._solve_descriptor(
@@ -1202,11 +1203,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             derivative_oracle_kind="jvp",
         )
         schema.validate_descriptor(descriptor)
-        assert schema.cell_status(descriptor, regions) == "uncovered"
-        assert any(
-            uncovered.contains(descriptor)
-            for uncovered in _capability_atlas_uncovered_cells(schema, regions)
-        )
+        assert schema.cell_status(descriptor, regions) == "owned"
 
     @staticmethod
     def _assert_no_atlas_dataclass_stores_presentation_text() -> None:
@@ -1324,7 +1321,9 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             )
             assert all(source.kind is not type for source in sources)
             assert {source for source in sources if source.kind is CoverageRegion} == {
-                _atlas_cell_source(region) for region in regions
+                _atlas_cell_source(region)
+                for region in regions
+                if _region_is_value_partitioned(region)
             }
             assert {
                 source for source in sources if source.kind is InvalidCellRule

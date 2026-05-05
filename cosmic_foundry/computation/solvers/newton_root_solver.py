@@ -12,8 +12,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.solvers.coverage import (
     constrained_root_predicates,
+    directional_derivative_root_predicates,
     unconstrained_root_predicates,
 )
+from cosmic_foundry.computation.solvers.dense_gmres_solver import DenseGMRESSolver
 from cosmic_foundry.computation.solvers.relations import (
     FiniteDimensionalResidualRelation,
 )
@@ -156,4 +158,68 @@ class NewtonRootSolver:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
 
 
-__all__ = ["DirectionalDerivativeRootRelation", "NewtonRootSolver", "RootRelation"]
+class _DirectionalDerivativeLinearization:
+    def __init__(self, relation: DirectionalDerivativeRootRelation, point: Tensor):
+        self._relation = relation
+        self._point = point
+
+    def apply(self, direction: Tensor) -> Tensor:
+        return self._relation.jvp(self._point, direction)
+
+    def diagonal(self, _backend: object) -> Tensor:
+        raise NotImplementedError("JVP linearizations are matrix-free")
+
+    def row_abs_sums(self, _backend: object) -> Tensor:
+        raise NotImplementedError("JVP linearizations are matrix-free")
+
+
+class MatrixFreeNewtonKrylovRootSolver:
+    """Solve nonlinear roots by Newton iteration with JVP-only linear solves."""
+
+    root_solver_coverage = directional_derivative_root_predicates()
+
+    def __init__(
+        self,
+        *,
+        max_iterations: int = 50,
+        tolerance: float = 1e-12,
+        krylov_tolerance: float = 1e-12,
+        krylov_max_iterations: int = 50,
+    ) -> None:
+        self._max_iterations = max_iterations
+        self._tolerance = tolerance
+        self._krylov_tolerance = krylov_tolerance
+        self._krylov_max_iterations = krylov_max_iterations
+
+    def solve(self, relation: DirectionalDerivativeRootRelation) -> Tensor:
+        """Return a root using only residual and Jacobian-vector products."""
+        x = relation.initial
+        for _ in range(self._max_iterations):
+            Fx = relation.residual(x)
+            if self._small(Fx, x):
+                break
+            linearization = _DirectionalDerivativeLinearization(relation, x)
+            linear_solver = DenseGMRESSolver(
+                tol=self._krylov_tolerance,
+                max_iter=self._krylov_max_iterations,
+                restart=x.shape[0],
+            )
+            delta = linear_solver.solve(
+                linearization,
+                Tensor.zeros(x.shape[0], backend=x.backend) - Fx,
+            )
+            x = x + delta
+            if self._small(delta, x):
+                break
+        return x
+
+    def _small(self, vector: Tensor, scale: Tensor) -> bool:
+        return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
+
+
+__all__ = [
+    "DirectionalDerivativeRootRelation",
+    "MatrixFreeNewtonKrylovRootSolver",
+    "NewtonRootSolver",
+    "RootRelation",
+]
