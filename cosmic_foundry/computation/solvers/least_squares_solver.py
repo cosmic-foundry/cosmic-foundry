@@ -25,9 +25,7 @@ class DenseSVDLeastSquaresSolver(LeastSquaresSolver):
 
     def solve(self, relation: LeastSquaresRelation) -> Tensor:
         """Return x minimizing ||A x - b||_2."""
-        evidence = relation.linear_operator_evidence
-        a: Tensor = Tensor(evidence.matrix, backend=evidence.rhs.backend)
-        return self._factorization.factorize(a).solve(evidence.rhs)
+        return self._factorization.solve_relation(relation)
 
 
 __all__ = ["DenseSVDLeastSquaresSolver", "LeastSquaresSolver"]

@@ -2720,6 +2720,10 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert issubclass(linear_relation, residual_relation)
         assert "decomposition_descriptor" in linear_relation.__dict__
         assert "decomposition_descriptor" not in least_squares_relation.__dict__
+        svd_factorization = _resolve_dotted(
+            "cosmic_foundry.computation.decompositions.SVDFactorization"
+        )
+        assert "solve_relation" in svd_factorization.__dict__
 
     @staticmethod
     def _callable_tensor_map_count(function: ast.FunctionDef) -> int:

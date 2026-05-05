@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from cosmic_foundry.computation.algorithm_capabilities import (
     AffineComparisonPredicate,
     ComparisonPredicate,
     DecompositionField,
+    LinearOperatorEvidence,
 )
 from cosmic_foundry.computation.decompositions.decomposition import DecomposedTensor
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.tensor import Tensor, einsum, where
+
+
+class _AssembledLinearRelation(Protocol):
+    linear_operator_evidence: LinearOperatorEvidence
 
 
 class SVDDecomposedTensor(DecomposedTensor):
@@ -171,6 +178,12 @@ class SVDFactorization(Factorization):
         s = Tensor._wrap(s_raw, backend)
         vt = Tensor._wrap(vt_raw, backend)
         return SVDDecomposedTensor(u, s, vt, self._rcond)
+
+    def solve_relation(self, relation: _AssembledLinearRelation) -> Tensor:
+        """Solve an assembled linear residual relation by pseudoinverse."""
+        evidence = relation.linear_operator_evidence
+        a: Tensor = Tensor(evidence.matrix, backend=evidence.rhs.backend)
+        return self.factorize(a).solve(evidence.rhs)
 
 
 __all__ = ["SVDDecomposedTensor", "SVDFactorization"]
