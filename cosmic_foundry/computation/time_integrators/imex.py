@@ -26,8 +26,8 @@ from typing import Protocol, runtime_checkable
 
 import sympy
 
+from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
 from cosmic_foundry.computation.tensor import Tensor
-from cosmic_foundry.computation.time_integrators._newton import newton_solve
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
     RHSProtocol,
@@ -230,6 +230,7 @@ def _build_imex_tableaux() -> dict:
 
 
 _IMEX_TABLEAUX = _build_imex_tableaux()
+_NEWTON = NewtonRootSolver()
 
 
 class AdditiveRungeKuttaIntegrator(TimeIntegrator):
@@ -314,11 +315,31 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
             if abs(gamma_i) < 1e-14:
                 y = y_exp
             else:
-                y = newton_solve(
+                gamma_dt = gamma_i * dt
+
+                def residual(
+                    y: Tensor,
+                    *,
+                    _t_i: float = t_I_i,
+                    _gamma_dt: float = gamma_dt,
+                    _y_exp: Tensor = y_exp,
+                ) -> Tensor:
+                    return y - _gamma_dt * rhs.implicit(_t_i, y) - _y_exp
+
+                def jacobian(
+                    y: Tensor,
+                    *,
+                    _t_i: float = t_I_i,
+                    _gamma_dt: float = gamma_dt,
+                ) -> Tensor:
+                    return Tensor.eye(
+                        u.shape[0], backend=u.backend
+                    ) - _gamma_dt * rhs.jacobian_implicit(_t_i, y)
+
+                y = _NEWTON.solve(
+                    residual,
+                    jacobian,
                     y_exp,
-                    gamma_i * dt,
-                    f=lambda y, _t=t_I_i: rhs.implicit(_t, y),  # type: ignore[misc]
-                    jac=lambda y, _t=t_I_i: rhs.jacobian_implicit(_t, y),  # type: ignore[misc]
                 )
 
             k_E.append(rhs.explicit(t_E_i, y))

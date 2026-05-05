@@ -16,8 +16,8 @@ manages that lifecycle between accepted steps:
 
 from __future__ import annotations
 
+from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
 from cosmic_foundry.computation.tensor import Tensor
-from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
 from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
     check_state_domain,
@@ -38,6 +38,7 @@ from cosmic_foundry.computation.time_integrators.reaction_network import (
 
 _RATE_FLOOR = 1e-100  # avoids 0/0 when both rates are zero
 _RATE_THRESHOLD = 1e-10  # pair is considered absent; ratio = inf → no activation
+_NEWTON = NewtonRootSolver()
 
 
 def build_constraint_gradients(
@@ -235,7 +236,7 @@ def solve_nse(
                 rows.append([float(cg[r, s]) for s in range(n_species)])
         return Tensor(rows, backend=backend)
 
-    return nonlinear_solve(F, J, u)
+    return _NEWTON.solve(F, J, u)
 
 
 class ConstraintAwareController:
