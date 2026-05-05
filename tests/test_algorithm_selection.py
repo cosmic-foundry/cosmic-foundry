@@ -914,6 +914,9 @@ class _JvpImplicitStageRootSolveClaim(Claim[Any]):
         assert abs(float(root[0]) - expected) < 1.0e-10
         assert abs(float(relation.residual(root)[0])) < 1.0e-10
 
+        stepped = integrator.step(rhs, state, dt)
+        assert abs(float(stepped.u[0]) - expected) < 1.0e-10
+
 
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
