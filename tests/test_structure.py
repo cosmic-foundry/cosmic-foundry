@@ -3724,13 +3724,13 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         root_solver = _resolve_dotted(
             "cosmic_foundry.computation.solvers.NewtonRootSolver"
         )
-        root_problem = _resolve_dotted(
-            "cosmic_foundry.computation.solvers.RootSolveProblem"
+        root_relation = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.RootRelation"
         )
         residual_relation = _resolve_dotted(
             "cosmic_foundry.computation.solvers.FiniteDimensionalResidualRelation"
         )
-        assert issubclass(root_problem, residual_relation)
+        assert issubclass(root_relation, residual_relation)
         assert {region.owner for region in regions} == {root_solver}
 
     @staticmethod
@@ -4535,7 +4535,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LinearResidualRelation",
                 "LinearSolver",
                 "NewtonRootSolver",
-                "RootSolveProblem",
+                "RootRelation",
                 "StationaryIterationSolver",
             }
         ),
@@ -4573,7 +4573,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LinearResidualRelation": "relations",
         "LinearSolver": "linear_solver",
         "NewtonRootSolver": "newton_root_solver",
-        "RootSolveProblem": "newton_root_solver",
+        "RootRelation": "newton_root_solver",
         "StationaryIterationSolver": "iterative_solver",
     },
 )

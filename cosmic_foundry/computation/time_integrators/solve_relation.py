@@ -13,7 +13,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     TransformationSpace,
     transformation_relation_coordinates,
 )
-from cosmic_foundry.computation.solvers.newton_root_solver import RootSolveProblem
+from cosmic_foundry.computation.solvers.newton_root_solver import RootRelation
 from cosmic_foundry.computation.solvers.relations import LinearResidualRelation
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -111,9 +111,9 @@ def time_integrator_step_solve_relation_descriptor(
             device_kind=device_kind,
         )
     if not isinstance(rhs, JacobianRHSProtocol):
-        raise ValueError("implicit stage root problems require Jacobian evidence")
-    problem = implicit_stage_root_problem(integrator, rhs, state, dt)
-    return problem.solve_relation_descriptor(
+        raise ValueError("implicit stage root relations require Jacobian evidence")
+    root_relation = implicit_stage_root_relation(integrator, rhs, state, dt)
+    return root_relation.solve_relation_descriptor(
         requested_residual_tolerance=requested_residual_tolerance,
         requested_solution_tolerance=requested_solution_tolerance,
         work_budget_fmas=work_budget_fmas,
@@ -148,15 +148,15 @@ def affine_stage_residual_relation(
     )
 
 
-def dirk_stage_root_problem(
+def dirk_stage_root_relation(
     rhs: JacobianRHSProtocol,
     y_exp: Tensor,
     t_i: float,
     gamma_dt: float,
     *,
     equality_constraint_gradients: Tensor | None = None,
-) -> RootSolveProblem:
-    """Return the root problem for one DIRK stage value."""
+) -> RootRelation:
+    """Return the root relation for one DIRK stage value."""
     n = y_exp.shape[0]
     backend = y_exp.backend
 
@@ -166,7 +166,7 @@ def dirk_stage_root_problem(
     def jacobian(y: Tensor) -> Tensor:
         return Tensor.eye(n, backend=backend) - gamma_dt * rhs.jacobian(t_i, y)
 
-    return RootSolveProblem(
+    return RootRelation(
         residual,
         jacobian,
         y_exp,
@@ -174,13 +174,13 @@ def dirk_stage_root_problem(
     )
 
 
-def implicit_stage_root_problem(
+def implicit_stage_root_relation(
     integrator: Any,
     rhs: JacobianRHSProtocol,
     state: Any,
     dt: float,
-) -> RootSolveProblem:
-    """Return the coupled root problem induced by an implicit RK stage system."""
+) -> RootRelation:
+    """Return the coupled root relation induced by an implicit RK stage system."""
     stage_matrix = tuple(
         tuple(float(entry) for entry in row) for row in getattr(integrator, "A_sym", ())
     )
@@ -226,7 +226,7 @@ def implicit_stage_root_problem(
                 rows.append(row)
         return Tensor(rows, backend=backend)
 
-    return RootSolveProblem(residual, jacobian, initial)
+    return RootRelation(residual, jacobian, initial)
 
 
 def _flatten_blocks(blocks: tuple[Tensor, ...]) -> Tensor:
@@ -440,7 +440,7 @@ __all__ = [
     "AffineRHSProtocol",
     "JacobianRHSProtocol",
     "affine_stage_residual_relation",
-    "dirk_stage_root_problem",
-    "implicit_stage_root_problem",
+    "dirk_stage_root_relation",
+    "implicit_stage_root_relation",
     "time_integrator_step_solve_relation_descriptor",
 ]

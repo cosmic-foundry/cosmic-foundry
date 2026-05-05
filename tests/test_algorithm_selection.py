@@ -182,14 +182,14 @@ def _solve_selection_case() -> _StepSelectionCase:
     state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
     dt = 1.0e-2
     descriptor = descriptor_integrator.step_solve_relation_descriptor(rhs, state, dt)
-    root_problem = _ti.implicit_stage_root_problem(
+    root_relation = _ti.implicit_stage_root_relation(
         descriptor_integrator,
         rhs,
         state,
         dt,
     )
-    assert isinstance(root_problem, FiniteDimensionalResidualRelation)
-    root_descriptor = root_problem.solve_relation_descriptor()
+    assert isinstance(root_relation, FiniteDimensionalResidualRelation)
+    root_descriptor = root_relation.solve_relation_descriptor()
 
     def postcheck(
         case: _StepSelectionCase,
@@ -814,12 +814,12 @@ class _ImexImplicitStageRootClaim(Claim[Any]):
         rhs = cases.split_decay_rhs()
         y_exp = Tensor([1.0], backend=_TIME_BACKEND)
         gamma_dt = 0.25
-        problem = _ti.imex_implicit_stage_root_problem(rhs, y_exp, 0.0, gamma_dt)
-        assert isinstance(problem, FiniteDimensionalResidualRelation)
-        descriptor = problem.solve_relation_descriptor()
+        relation = _ti.imex_implicit_stage_root_relation(rhs, y_exp, 0.0, gamma_dt)
+        assert isinstance(relation, FiniteDimensionalResidualRelation)
+        descriptor = relation.solve_relation_descriptor()
         assert select_root_solver_for_descriptor(descriptor) is NewtonRootSolver
-        stage_value = NewtonRootSolver().solve(problem)
-        residual = problem.residual(stage_value)
+        stage_value = NewtonRootSolver().solve(relation)
+        residual = relation.residual(stage_value)
         assert abs(float(residual[0])) < 1.0e-12
         assert abs(float(stage_value[0]) - (1.0 / (1.0 + 0.8 * gamma_dt))) < 1.0e-12
 

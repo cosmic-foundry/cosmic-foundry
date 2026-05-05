@@ -44,8 +44,8 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     TimeIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.solve_relation import (
-    dirk_stage_root_problem,
-    implicit_stage_root_problem,
+    dirk_stage_root_relation,
+    implicit_stage_root_relation,
 )
 
 
@@ -345,7 +345,7 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
             gamma_dt = gamma_i * dt
 
             y = _NEWTON.solve(
-                dirk_stage_root_problem(
+                dirk_stage_root_relation(
                     rhs,
                     y_exp,
                     t_i,
@@ -372,7 +372,7 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         s = self._s
         backend = u.backend
         stages = _unflatten_blocks(
-            _NEWTON.solve(implicit_stage_root_problem(self, rhs, state, dt)),
+            _NEWTON.solve(implicit_stage_root_relation(self, rhs, state, dt)),
             s,
             n,
             backend=backend,

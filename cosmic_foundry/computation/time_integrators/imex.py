@@ -28,7 +28,7 @@ import sympy
 
 from cosmic_foundry.computation.solvers.newton_root_solver import (
     NewtonRootSolver,
-    RootSolveProblem,
+    RootRelation,
 )
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
@@ -37,7 +37,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     TimeIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.solve_relation import (
-    dirk_stage_root_problem,
+    dirk_stage_root_relation,
 )
 
 
@@ -112,14 +112,14 @@ class _ImplicitComponentJacobianRHS:
         return self._rhs.jacobian_implicit(t, u)
 
 
-def imex_implicit_stage_root_problem(
+def imex_implicit_stage_root_relation(
     rhs: SplitRHSProtocol,
     y_exp: Tensor,
     t_i: float,
     gamma_dt: float,
-) -> RootSolveProblem:
-    """Return the root problem for one IMEX implicit component stage."""
-    return dirk_stage_root_problem(
+) -> RootRelation:
+    """Return the root relation for one IMEX implicit component stage."""
+    return dirk_stage_root_relation(
         _ImplicitComponentJacobianRHS(rhs),
         y_exp,
         t_i,
@@ -351,7 +351,7 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
             else:
                 gamma_dt = gamma_i * dt
                 y = _NEWTON.solve(
-                    imex_implicit_stage_root_problem(rhs, y_exp, t_I_i, gamma_dt)
+                    imex_implicit_stage_root_relation(rhs, y_exp, t_I_i, gamma_dt)
                 )
 
             k_E.append(rhs.explicit(t_E_i, y))
@@ -369,5 +369,5 @@ __all__ = [
     "AdditiveRungeKuttaIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
-    "imex_implicit_stage_root_problem",
+    "imex_implicit_stage_root_relation",
 ]
