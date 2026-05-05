@@ -312,6 +312,83 @@ def _axis_cell_label(cell: atlas.ParameterBin | atlas.NumericInterval) -> str:
     return f"{cell.label} {lower}{cell.lower}, {cell.upper}{upper}"
 
 
+def _predicate_list(predicates: tuple[atlas.StructuredPredicate, ...]) -> str:
+    return "; ".join(atlas._predicate_label(predicate) for predicate in predicates)
+
+
+def _derived_region_summary(region: atlas.DerivedParameterRegion) -> str:
+    alternatives = tuple(
+        _predicate_list(alternative) for alternative in region.alternatives
+    )
+    return " OR ".join(alternatives)
+
+
+def _schema_descriptor_count(schema: atlas.ParameterSpaceSchema) -> int:
+    return sum(
+        1
+        for descriptor in atlas._capability_atlas_descriptors()
+        if atlas._atlas_schema_for_descriptor(descriptor) == schema
+    )
+
+
+def _schema_hierarchy_lines(schema: atlas.ParameterSpaceSchema) -> list[str]:
+    regions = atlas._atlas_regions_for_schema(schema)
+    uncovered = atlas._capability_atlas_uncovered_cells(schema, regions)
+    lines = [
+        f"### {schema.name}",
+        "",
+        f"- Evidence descriptors: `{_schema_descriptor_count(schema)}`",
+        f"- Owned regions: `{len(regions)}`",
+        f"- Computed uncovered cells: `{len(uncovered)}`",
+        "- Primitive axes:",
+    ]
+    lines.extend(
+        f"  - `{atlas._field_label(axis.field)}`: {_axis_partition_summary(axis)}"
+        for axis in schema.axes
+    )
+    if schema.auxiliary_fields:
+        lines.append("- Auxiliary coordinates:")
+        lines.extend(
+            f"  - `{atlas._field_label(field)}`"
+            for field in sorted(schema.auxiliary_fields, key=atlas._field_label)
+        )
+    if schema.derived_regions:
+        lines.append("- Derived regions:")
+        lines.extend(
+            f"  - `{region.name}`: {_derived_region_summary(region)}"
+            for region in schema.derived_regions
+        )
+    if schema.invalid_cells:
+        lines.append("- Invalid subregions:")
+        lines.extend(
+            f"  - `{rule.name}`: {rule.reason}" for rule in schema.invalid_cells
+        )
+    if regions:
+        owners = ", ".join(
+            f"`{_coverage_region_name(region)}`"
+            for region in sorted(regions, key=_coverage_region_name)
+        )
+        lines.append(f"- Ownership projections: {owners}")
+    lines.append("")
+    return lines
+
+
+def _render_parameter_space_hierarchy() -> str:
+    lines = [
+        "## Parameter Space Hierarchy",
+        "",
+        "Each entry below is generated from `ParameterSpaceSchema`.  The hierarchy",
+        "is schema → primitive coordinates → derived regions → current",
+        "implementation ownership and uncovered cells.  Human labels such as",
+        "`linear_system` or `nonlinear_root` appear only as derived regions over",
+        "primitive coordinates; they are not independent sources of truth.",
+        "",
+    ]
+    for schema in atlas._capability_atlas_schemas():
+        lines.extend(_schema_hierarchy_lines(schema))
+    return "\n".join(lines)
+
+
 def _shape_evidence_labels(
     schema: atlas.ParameterSpaceSchema,
     source: atlas._AtlasRegionSource,
@@ -631,6 +708,8 @@ def render_capability_atlas() -> str:
         "- `uncovered`: the descriptor is valid but no coverage region owns it.",
         "",
         _ATLAS_STYLE_AND_SCRIPT,
+        "",
+        _render_parameter_space_hierarchy(),
         "",
         "## Projection Plots",
         "",

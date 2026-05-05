@@ -790,10 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make the target-zero residual child and its public construction
-   helpers consistently use root-relation terminology, so application-specific
-   constructors are visibly adapters into the relation hierarchy rather than
-   separate problem types.
+1. Current PR: render the parameter-space hierarchy in the generated capability
+   atlas page, derived from schemas, primitive axes, derived regions, ownership
+   regions, and computed uncovered cells.
 2. Review whether nonlinear residuals without Jacobian evidence should be made
    an explicit uncovered atlas region before adding any non-Newton nonlinear
    solver.
@@ -975,6 +974,10 @@ The concrete nonlinear target-zero child is named `RootRelation`.  Direct NSE
 construction, implicit RK stages, and IMEX implicit-component stages are
 application-specific adapters that construct root relations; they are not
 separate mathematical problem types.
+The capability atlas begins with a generated parameter-space hierarchy before
+showing projection plots.  The hierarchy is schema → primitive coordinates →
+derived regions → current ownership and uncovered cells, so readers can see
+which human labels are derived views over primitive coordinates.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence
