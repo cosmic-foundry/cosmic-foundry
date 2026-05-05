@@ -116,17 +116,20 @@ class FixedPointRootRelation(FiniteDimensionalResidualRelation):
     """Finite-dimensional root relation with fixed-point iteration evidence."""
 
     fixed_point: Callable[[Tensor], Tensor]
+    contraction_bound: float | None
 
     def __init__(
         self,
         residual: Callable[[Tensor], Tensor],
         fixed_point: Callable[[Tensor], Tensor],
         initial: Tensor,
+        contraction_bound: float | None = None,
     ) -> None:
         object.__setattr__(self, "residual", residual)
         object.__setattr__(self, "initial", initial)
         object.__setattr__(self, "equality_constraint_gradients", None)
         object.__setattr__(self, "fixed_point", fixed_point)
+        object.__setattr__(self, "contraction_bound", contraction_bound)
 
     def solve_relation_descriptor(
         self,
@@ -145,6 +148,7 @@ class FixedPointRootRelation(FiniteDimensionalResidualRelation):
             derivative_oracle_kind="fixed_point_map",
             map_linearity_defect=map_linearity_defect,
             map_linearity_evidence=map_linearity_evidence,
+            fixed_point_contraction_bound=self.contraction_bound,
             matrix_representation_available=False,
             work_budget_fmas=work_budget_fmas,
             memory_budget_bytes=memory_budget_bytes,

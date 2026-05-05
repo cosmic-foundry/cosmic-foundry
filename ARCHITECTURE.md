@@ -790,15 +790,14 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: expose the Adams Nordsieck corrector as a fixed-point root
-   relation and route Adams correction through relation-selected root execution,
-   grounding the change in a scalar non-stiff decay Adams/Nordsieck calculation.
-2. Review whether fixed-point root coverage needs an explicit contraction
-   certificate coordinate rather than relying only on derivative-oracle absence
-   and residual evidence.
-3. Review whether decomposition results should remain bare reusable matrix
+1. Current PR: require fixed-point root coverage to carry an explicit
+   contraction-bound coordinate, grounding the ownership split in the scalar
+   non-stiff Adams/Nordsieck decay calculation.
+2. Review whether decomposition results should remain bare reusable matrix
    objects, or whether solve semantics should move entirely to relation-aware
    execution paths.
+3. Add a follow-up sprint plan for quantitative time-integrator descriptors
+   once the solver/decomposition predicates have stabilized.
 
 Roadmap sketch:
 
@@ -1082,6 +1081,11 @@ Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not
 selection coverage.
+Fixed-point root iteration follows the same rule.  A fixed-point map is only
+derivative-oracle evidence; `FixedPointRootSolver` ownership additionally
+requires a contraction-bound coordinate below one.  The contraction certificate
+is auxiliary solve-relation evidence rather than a full atlas axis because it is
+meaningful only inside the fixed-point-map branch.
 Projection artifacts are render outputs, not semantic atlas models: projecting
 a source region through a plot produces predicate/coordinate tuples consumed at
 the rendering boundary.  Names, conditions, statuses, geometry labels, SVG

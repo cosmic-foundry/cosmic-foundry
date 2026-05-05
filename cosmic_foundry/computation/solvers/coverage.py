@@ -230,6 +230,11 @@ def fixed_point_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]
         derivative_oracle_kind="fixed_point_map",
         equality_constraint_predicates=(
             ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, "==", 0),
+            ComparisonPredicate(
+                SolveRelationField.FIXED_POINT_CONTRACTION_BOUND,
+                "<",
+                1.0,
+            ),
         ),
     )
 
