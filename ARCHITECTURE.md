@@ -790,14 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: replace the remaining `AutoIntegrator.step` reaction-network
-   branch with generic constrained-Newton gradient evidence.
-2. Review whether multi-region time-integrator ownership should always project
-   into constructor parameters or into distinct owners, with no documentation-only
-   region splits.
-3. Review whether active algebraic-constraint evidence should become a
+1. Current PR: require multi-region time-integrator ownership to be witnessed by
+   executable selector requests, so region splits cannot exist only for
+   documentation.
+2. Review whether active algebraic-constraint evidence should become a
    descriptor coordinate for step-solve relations rather than an execution-only
    protocol.
+3. Keep nonlinear solver extraction in view: implicit stage residuals should
+   continue moving toward a generic nonlinear-root solve interface once a second
+   caller needs the same Newton machinery.
 
 Roadmap sketch:
 
@@ -927,6 +928,11 @@ constructs different behavior.  Domain-step margin remains descriptor evidence
 used by domain-aware step calculations and by constraint-lifecycle selection,
 but ordinary `IntegrationDriver` and `AdaptiveNordsieckController` advancement
 own one region each.
+Any remaining multi-region time-integrator ownership must be executable:
+each region needs a request witness, and region evidence must either select a
+distinct owner or feed construction of different behavior.  The current example
+is fixed-order Nordsieck history, where stiffness evidence constructs Adams or
+BDF correctors.
 Implicit Runge-Kutta and adaptive Nordsieck selection no longer require a
 `jacobian_rhs` structure label.  They select from derivative-oracle descriptor
 evidence: an available Jacobian callback or matrix derivative is the premise
