@@ -13,7 +13,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     TransformationSpace,
     transformation_relation_coordinates,
 )
-from cosmic_foundry.computation.solvers.newton_root_solver import RootRelation
+from cosmic_foundry.computation.solvers.newton_root_solver import (
+    DirectionalDerivativeRootRelation,
+    RootRelation,
+)
 from cosmic_foundry.computation.solvers.relations import LinearResidualRelation
 from cosmic_foundry.computation.tensor import Tensor
 
@@ -41,6 +44,19 @@ class JacobianRHSProtocol(Protocol):
 
     def jacobian(self, t: float, u: Tensor) -> Tensor:
         """Return the Jacobian matrix at ``(t, u)``."""
+        ...
+
+
+@runtime_checkable
+class DirectionalDerivativeRHSProtocol(Protocol):
+    """ODE RHS that exposes Jacobian-vector products."""
+
+    def __call__(self, t: float, u: Tensor) -> Tensor:
+        """Evaluate ``f(t, u)``."""
+        ...
+
+    def jvp(self, t: float, u: Tensor, v: Tensor) -> Tensor:
+        """Return ``J(t, u) v`` without assembling ``J(t, u)``."""
         ...
 
 
@@ -110,10 +126,21 @@ def time_integrator_step_solve_relation_descriptor(
             memory_budget_bytes=memory_budget_bytes,
             device_kind=device_kind,
         )
+    if isinstance(rhs, DirectionalDerivativeRHSProtocol):
+        jvp_relation = implicit_stage_directional_derivative_root_relation(
+            integrator, rhs, state, dt
+        )
+        return jvp_relation.solve_relation_descriptor(
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+        )
     if not isinstance(rhs, JacobianRHSProtocol):
         raise ValueError("implicit stage root relations require Jacobian evidence")
-    root_relation = implicit_stage_root_relation(integrator, rhs, state, dt)
-    return root_relation.solve_relation_descriptor(
+    jacobian_relation = implicit_stage_root_relation(integrator, rhs, state, dt)
+    return jacobian_relation.solve_relation_descriptor(
         requested_residual_tolerance=requested_residual_tolerance,
         requested_solution_tolerance=requested_solution_tolerance,
         work_budget_fmas=work_budget_fmas,
@@ -227,6 +254,56 @@ def implicit_stage_root_relation(
         return Tensor(rows, backend=backend)
 
     return RootRelation(residual, jacobian, initial)
+
+
+def implicit_stage_directional_derivative_root_relation(
+    integrator: Any,
+    rhs: DirectionalDerivativeRHSProtocol,
+    state: Any,
+    dt: float,
+) -> DirectionalDerivativeRootRelation:
+    """Return the implicit RK stage relation using only JVP evidence."""
+    stage_matrix = tuple(
+        tuple(float(entry) for entry in row) for row in getattr(integrator, "A_sym", ())
+    )
+    stage_count = len(stage_matrix)
+    state_dimension = state.u.shape[0]
+    stage_times = _stage_times(integrator, state.t, dt, stage_count)
+    initial = _flatten_blocks((state.u,) * stage_count)
+
+    def residual(values: Tensor) -> Tensor:
+        stages = _split_blocks(values, stage_count, state_dimension)
+        blocks: list[Tensor] = []
+        for row_index in range(stage_count):
+            block = stages[row_index] - state.u
+            for column_index in range(stage_count):
+                coefficient = stage_matrix[row_index][column_index]
+                if coefficient != 0.0:
+                    block = block - dt * coefficient * rhs(
+                        stage_times[column_index],
+                        stages[column_index],
+                    )
+            blocks.append(block)
+        return _flatten_blocks(tuple(blocks))
+
+    def jvp(values: Tensor, direction: Tensor) -> Tensor:
+        stages = _split_blocks(values, stage_count, state_dimension)
+        directions = _split_blocks(direction, stage_count, state_dimension)
+        blocks: list[Tensor] = []
+        for row_index in range(stage_count):
+            block = directions[row_index]
+            for column_index in range(stage_count):
+                coefficient = stage_matrix[row_index][column_index]
+                if coefficient != 0.0:
+                    block = block - dt * coefficient * rhs.jvp(
+                        stage_times[column_index],
+                        stages[column_index],
+                        directions[column_index],
+                    )
+            blocks.append(block)
+        return _flatten_blocks(tuple(blocks))
+
+    return DirectionalDerivativeRootRelation(residual, jvp, initial)
 
 
 def _flatten_blocks(blocks: tuple[Tensor, ...]) -> Tensor:
@@ -441,6 +518,8 @@ __all__ = [
     "JacobianRHSProtocol",
     "affine_stage_residual_relation",
     "dirk_stage_root_relation",
+    "DirectionalDerivativeRHSProtocol",
     "implicit_stage_root_relation",
+    "implicit_stage_directional_derivative_root_relation",
     "time_integrator_step_solve_relation_descriptor",
 ]
