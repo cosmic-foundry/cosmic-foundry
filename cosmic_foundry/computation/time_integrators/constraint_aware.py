@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from cosmic_foundry.computation.solvers.newton_root_solver import (
     NewtonRootSolver,
-    RootSolveProblem,
+    RootRelation,
 )
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.domains import (
@@ -166,14 +166,14 @@ def _update_active_set(
     return frozenset(new_active)
 
 
-def nse_root_problem(
+def nse_root_relation(
     rhs: ReactionNetworkRHS,
     u: Tensor,
     t: float = 0.0,
     *,
     eps: float = 1e-7,
-) -> RootSolveProblem:
-    """Return the root problem defining the Nuclear Statistical Equilibrium state.
+) -> RootRelation:
+    """Return the root relation defining the Nuclear Statistical Equilibrium state.
 
     At NSE every independent reaction pair satisfies r⁺_j = r⁻_j.  The
     equilibrium state is determined by the combined system:
@@ -235,7 +235,7 @@ def nse_root_problem(
                 rows.append([float(cg[r, s]) for s in range(n_species)])
         return Tensor(rows, backend=backend)
 
-    return RootSolveProblem(F, J, u)
+    return RootRelation(F, J, u)
 
 
 def solve_nse(
@@ -246,7 +246,7 @@ def solve_nse(
     eps: float = 1e-7,
 ) -> Tensor:
     """Solve for the Nuclear Statistical Equilibrium state."""
-    return _NEWTON.solve(nse_root_problem(rhs, u, t, eps=eps))
+    return _NEWTON.solve(nse_root_relation(rhs, u, t, eps=eps))
 
 
 class ConstraintAwareController:
@@ -443,6 +443,6 @@ class ConstraintAwareController:
 __all__ = [
     "ConstraintAwareController",
     "build_constraint_gradients",
-    "nse_root_problem",
+    "nse_root_relation",
     "solve_nse",
 ]

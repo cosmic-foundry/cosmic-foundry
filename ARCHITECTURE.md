@@ -790,16 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: keep constrained root coverage as a distinct ownership region
-   inside primitive nonlinear-root solve space, not a separate human-facing
-   atlas slice, because the grounded constrained/unconstrained calculation
-   differs only by equality-constraint count.
-2. Review whether direct NSE root construction and IMEX/IRK stage construction
-   expose a common application-to-residual adapter shape worth naming, or
-   whether the current constructors are already the minimal readable boundary.
-3. Review whether nonlinear residuals without Jacobian evidence should be made
+1. Current PR: make the target-zero residual child and its public construction
+   helpers consistently use root-relation terminology, so application-specific
+   constructors are visibly adapters into the relation hierarchy rather than
+   separate problem types.
+2. Review whether nonlinear residuals without Jacobian evidence should be made
    an explicit uncovered atlas region before adding any non-Newton nonlinear
    solver.
+3. Review whether least-squares and overdetermined residual calculations now
+   provide enough evidence to add an objective/least-squares relation sibling
+   under the finite-dimensional relation spine.
 
 Roadmap sketch:
 
@@ -937,11 +937,11 @@ nonlinear-root solve descriptors: square target-zero residual relations with a
 Jacobian callback and non-affine or unknown linearity evidence.  The selector
 therefore sees Newton as a solver for a region of solve-relation space, not as
 an implementation detail of an integrator family.
-Newton execution now consumes a `RootSolveProblem`: residual, Jacobian, initial
+Newton execution now consumes a `RootRelation`: residual, Jacobian, initial
 state, and optional equality-constraint gradients form one explicit relation
 object.  Projected Newton is no longer an optional side argument to the solver;
 the relation itself reports its equality-constraint count.
-`RootSolveProblem` also projects to a primitive solve-relation descriptor.  That
+`RootRelation` also projects to a primitive solve-relation descriptor.  That
 lets both implicit stage construction and direct NSE construction select
 `NewtonRootSolver` from the same descriptor-space evidence instead of relying on
 time-integrator-local knowledge about which solver will be called.
@@ -955,7 +955,7 @@ premise, and the primitive solve descriptor is only its coordinate view;
 duplicated descriptor construction is therefore a sign that execution and
 capability ownership have diverged.
 The shared finite-dimensional residual relation is now visible in the solver
-type hierarchy.  `RootSolveProblem` specializes that parent by adding Jacobian
+type hierarchy.  `RootRelation` specializes that parent by adding Jacobian
 evidence and the target-zero acceptance semantics needed by Newton; descriptor
 schemas should project that hierarchy instead of replacing it.
 Affine implicit stage equations now project through `LinearResidualRelation`.
@@ -971,6 +971,10 @@ solve space.  The grounded reaction-chain calculation shows constrained and
 unconstrained root descriptors can be identical except for
 `EQUALITY_CONSTRAINT_COUNT`; that coordinate is enough to expose the ownership
 split without minting a separate atlas slice.
+The concrete nonlinear target-zero child is named `RootRelation`.  Direct NSE
+construction, implicit RK stages, and IMEX implicit-component stages are
+application-specific adapters that construct root relations; they are not
+separate mathematical problem types.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

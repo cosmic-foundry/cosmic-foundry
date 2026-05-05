@@ -20,7 +20,7 @@ from cosmic_foundry.computation.solvers.relations import (
 from cosmic_foundry.computation.tensor import Tensor, einsum, norm
 
 
-class RootSolveProblem(FiniteDimensionalResidualRelation):
+class RootRelation(FiniteDimensionalResidualRelation):
     """Finite-dimensional residual relation ``F(x) = 0``."""
 
     jacobian: Callable[[Tensor], Tensor]
@@ -52,7 +52,7 @@ class RootSolveProblem(FiniteDimensionalResidualRelation):
         memory_budget_bytes: float = 1.0e9,
         device_kind: str = "cpu",
     ) -> ParameterDescriptor:
-        """Project this root problem to primitive solve-relation coordinates."""
+        """Project this root relation to primitive solve-relation coordinates."""
         return super().residual_relation_descriptor(
             target_is_zero=True,
             derivative_oracle_kind="jacobian_callback",
@@ -86,23 +86,23 @@ class NewtonRootSolver:
 
     def solve(
         self,
-        problem: RootSolveProblem,
+        relation: RootRelation,
     ) -> Tensor:
         """Return a root of the supplied residual relation."""
-        x = problem.initial
+        x = relation.initial
         gram: Tensor | None = None
-        if problem.equality_constraint_gradients is not None:
-            gradients = problem.equality_constraint_gradients
+        if relation.equality_constraint_gradients is not None:
+            gradients = relation.equality_constraint_gradients
             gram = einsum("ij,kj->ik", gradients, gradients)
         for _ in range(self._max_iterations):
-            Fx = problem.residual(x)
+            Fx = relation.residual(x)
             if self._small(Fx, x):
                 break
-            delta = self._lu.factorize(problem.jacobian(x)).solve(
+            delta = self._lu.factorize(relation.jacobian(x)).solve(
                 Tensor.zeros(x.shape[0], backend=x.backend) - Fx
             )
-            if problem.equality_constraint_gradients is not None and gram is not None:
-                gradients = problem.equality_constraint_gradients
+            if relation.equality_constraint_gradients is not None and gram is not None:
+                gradients = relation.equality_constraint_gradients
                 xi = self._lu.factorize(gram).solve(gradients @ delta)
                 delta = delta - einsum("ij,i->j", gradients, xi)
             x = x + delta
@@ -114,4 +114,4 @@ class NewtonRootSolver:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
 
 
-__all__ = ["NewtonRootSolver", "RootSolveProblem"]
+__all__ = ["NewtonRootSolver", "RootRelation"]

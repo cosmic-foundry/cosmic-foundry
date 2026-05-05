@@ -21,7 +21,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
-    nse_root_problem,
+    nse_root_relation,
     solve_nse,
 )
 from cosmic_foundry.computation.time_integrators.domains import (
@@ -45,7 +45,7 @@ from cosmic_foundry.computation.time_integrators.imex import (
     AdditiveRungeKuttaIntegrator,
     SplitRHS,
     SplitRHSProtocol,
-    imex_implicit_stage_root_problem,
+    imex_implicit_stage_root_relation,
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
     FiniteDiffJacobianRHS,
@@ -85,8 +85,8 @@ from cosmic_foundry.computation.time_integrators.solve_relation import (
     AffineRHSProtocol,
     JacobianRHSProtocol,
     affine_stage_residual_relation,
-    dirk_stage_root_problem,
-    implicit_stage_root_problem,
+    dirk_stage_root_relation,
+    implicit_stage_root_relation,
     time_integrator_step_solve_relation_descriptor,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
@@ -124,7 +124,7 @@ __all__ = [
     "DomainCheck",
     "DomainViolation",
     "NonnegativeStateDomain",
-    "nse_root_problem",
+    "nse_root_relation",
     "predict_domain_step_limit",
     "solve_nse",
     "StateDomain",
@@ -143,8 +143,8 @@ __all__ = [
     "select_time_integrator",
     "TimeIntegrator",
     "affine_stage_residual_relation",
-    "dirk_stage_root_problem",
-    "implicit_stage_root_problem",
+    "dirk_stage_root_relation",
+    "implicit_stage_root_relation",
     "time_integrator_step_solve_relation_descriptor",
     "IntegrationDriver",
     "TimeIntegrationCapability",
@@ -175,7 +175,7 @@ __all__ = [
     "AdditiveRungeKuttaIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
-    "imex_implicit_stage_root_problem",
+    "imex_implicit_stage_root_relation",
     "ExplicitMultistepIntegrator",
     "MultistepIntegrator",
     "NordsieckHistory",

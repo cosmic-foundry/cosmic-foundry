@@ -27,7 +27,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.solvers import (
     NewtonRootSolver,
-    RootSolveProblem,
+    RootRelation,
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
 )
@@ -138,34 +138,36 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             constrained_state.u,
         )
         assert constraint_gradients is not None
-        root_problem = RootSolveProblem(
+        root_relation = RootRelation(
             lambda u: u - constrained_state.u,
             lambda u: Tensor.eye(u.shape[0], backend=u.backend),
             constrained_state.u,
             equality_constraint_gradients=constraint_gradients,
         )
-        assert root_problem.equality_constraint_count == (
+        assert root_relation.equality_constraint_count == (
             len(constrained_state.active_constraints or frozenset())
         )
-        root_descriptor = root_problem.solve_relation_descriptor()
+        root_descriptor = root_relation.solve_relation_descriptor()
         solve_relation_parameter_schema().validate_descriptor(root_descriptor)
         assert (
             root_descriptor.coordinate(
                 SolveRelationField.EQUALITY_CONSTRAINT_COUNT
             ).value
-            == root_problem.equality_constraint_count
+            == root_relation.equality_constraint_count
         )
         assert select_root_solver_for_descriptor(root_descriptor) is NewtonRootSolver
         assert (
-            _residual_norm(NewtonRootSolver().solve(root_problem) - constrained_state.u)
+            _residual_norm(
+                NewtonRootSolver().solve(root_relation) - constrained_state.u
+            )
             < 1.0e-12
         )
-        unconstrained_root = RootSolveProblem(
+        unconstrained_relation = RootRelation(
             lambda u: u - state.u,
             lambda u: Tensor.eye(u.shape[0], backend=u.backend),
             state.u,
         )
-        unconstrained_descriptor = unconstrained_root.solve_relation_descriptor()
+        unconstrained_descriptor = unconstrained_relation.solve_relation_descriptor()
         assert (
             unconstrained_descriptor.coordinate(
                 SolveRelationField.EQUALITY_CONSTRAINT_COUNT
@@ -649,8 +651,8 @@ class _EquilibriumNetworkTargetClaim(Claim[Any]):
 
         expected = 1.0 / self._spec.n
         if self._spec.topo != "chain":
-            nse_problem = _ti.nse_root_problem(rhs, state.u, state.t)
-            nse_descriptor = nse_problem.solve_relation_descriptor()
+            nse_relation = _ti.nse_root_relation(rhs, state.u, state.t)
+            nse_descriptor = nse_relation.solve_relation_descriptor()
             solve_relation_parameter_schema().validate_descriptor(nse_descriptor)
             assert select_root_solver_for_descriptor(nse_descriptor) is NewtonRootSolver
         for i in range(self._spec.n):
