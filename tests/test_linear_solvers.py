@@ -19,6 +19,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     LinearOperatorEvidence,
     SolveRelationField,
     decomposition_descriptor_from_linear_operator_descriptor,
+    decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
 )
 from cosmic_foundry.computation.backends import NumpyBackend
@@ -307,6 +308,53 @@ class _DenseSVDLeastSquaresSolverClaim(Claim[ExecutionPlan]):
             execution_plan,
             lambda a, b: solver.solve(_least_squares_relation(a, b)),
         )
+        self._assert_relation_projects_rectangular_decomposition_evidence(
+            execution_plan.backend
+        )
+
+    @staticmethod
+    def _assert_relation_projects_rectangular_decomposition_evidence(
+        backend: Any,
+    ) -> None:
+        relation = _least_squares_relation(
+            Tensor(
+                (
+                    (1.0, 0.0),
+                    (0.0, 1.0),
+                    (1.0, 1.0),
+                ),
+                backend=backend,
+            ),
+            Tensor((1.0, 2.0, 4.0), backend=backend),
+        )
+        solve_descriptor = relation.solve_relation_descriptor()
+        selected = select_least_squares_solver_for_descriptor(solve_descriptor)
+        assert selected is DenseSVDLeastSquaresSolver
+
+        decomposition_descriptor = relation.decomposition_descriptor()
+        decomposition_parameter_schema().validate_descriptor(decomposition_descriptor)
+        assert (
+            decomposition_descriptor.coordinate(DecompositionField.MATRIX_ROWS).value
+            == 3
+        )
+        assert (
+            decomposition_descriptor.coordinate(DecompositionField.MATRIX_COLUMNS).value
+            == 2
+        )
+        assert (
+            decomposition_descriptor.coordinate(
+                DecompositionField.MATRIX_RANK_ESTIMATE
+            ).value
+            == 2
+        )
+        assert (
+            decomposition_descriptor.coordinate(
+                DecompositionField.MATRIX_NULLITY_ESTIMATE
+            ).value
+            == 0
+        )
+        with pytest.raises(ValueError):
+            select_decomposition_for_descriptor(decomposition_descriptor)
 
 
 def _assert_rectangular_least_squares_solution(
