@@ -1,10 +1,13 @@
 """Linear solver classes: ABCs and concrete algorithms."""
 
 from cosmic_foundry.computation.solvers.capabilities import (
+    LEAST_SQUARES_SOLVER_COVERAGE_REGIONS,
     LINEAR_SOLVER_COVERAGE_REGIONS,
     ROOT_SOLVER_COVERAGE_REGIONS,
+    least_squares_solver_coverage_regions,
     linear_solver_coverage_regions,
     root_solver_coverage_regions,
+    select_least_squares_solver_for_descriptor,
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
 )
@@ -54,6 +57,8 @@ __all__ = [
     "KrylovSolver",
     "LeastSquaresSolver",
     "LeastSquaresRelation",
+    "LEAST_SQUARES_SOLVER_COVERAGE_REGIONS",
+    "least_squares_solver_coverage_regions",
     "StationaryIterationSolver",
     "LINEAR_SOLVER_COVERAGE_REGIONS",
     "LinearOperator",
@@ -64,6 +69,7 @@ __all__ = [
     "ROOT_SOLVER_COVERAGE_REGIONS",
     "RootRelation",
     "root_solver_coverage_regions",
+    "select_least_squares_solver_for_descriptor",
     "select_linear_solver_for_descriptor",
     "select_root_solver_for_descriptor",
 ]

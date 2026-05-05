@@ -60,6 +60,33 @@ def linear_system_predicates() -> tuple[StructuredPredicate, ...]:
     )
 
 
+def least_squares_predicates() -> tuple[StructuredPredicate, ...]:
+    """Return primitive predicates for a linear least-squares objective."""
+    return (
+        ComparisonPredicate(
+            SolveRelationField.MAP_LINEARITY_DEFECT,
+            "<=",
+            LINEARITY_TOLERANCE,
+        ),
+        MembershipPredicate(
+            SolveRelationField.RESIDUAL_TARGET_AVAILABLE,
+            frozenset({True}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.OBJECTIVE_RELATION,
+            frozenset({"least_squares"}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.ACCEPTANCE_RELATION,
+            frozenset({"objective_minimum"}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE,
+            frozenset({True}),
+        ),
+    )
+
+
 def dense_matrix_predicates() -> tuple[MembershipPredicate, ...]:
     """Return predicates for an available dense assembled matrix."""
     return (
@@ -190,6 +217,7 @@ __all__ = [
     "budget_predicates",
     "coverage",
     "dense_matrix_predicates",
+    "least_squares_predicates",
     "linear_system_predicates",
     "matrix_free_operator_predicates",
     "constrained_root_predicates",
