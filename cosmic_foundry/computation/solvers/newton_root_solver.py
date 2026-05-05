@@ -3,40 +3,43 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     EvidenceSource,
     ParameterDescriptor,
-    SolveRelationField,
     StructuredPredicate,
-    TransformationRelation,
-    TransformationSpace,
-    transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.solvers.coverage import (
     constrained_root_predicates,
     unconstrained_root_predicates,
 )
+from cosmic_foundry.computation.solvers.relations import (
+    FiniteDimensionalResidualRelation,
+)
 from cosmic_foundry.computation.tensor import Tensor, einsum, norm
 
 
-@dataclass(frozen=True)
-class RootSolveProblem:
+class RootSolveProblem(FiniteDimensionalResidualRelation):
     """Finite-dimensional residual relation ``F(x) = 0``."""
 
-    residual: Callable[[Tensor], Tensor]
     jacobian: Callable[[Tensor], Tensor]
-    initial: Tensor
-    equality_constraint_gradients: Tensor | None = None
 
-    @property
-    def equality_constraint_count(self) -> int:
-        """Return the number of equality constraints active in the relation."""
-        if self.equality_constraint_gradients is None:
-            return 0
-        return self.equality_constraint_gradients.shape[0]
+    def __init__(
+        self,
+        residual: Callable[[Tensor], Tensor],
+        jacobian: Callable[[Tensor], Tensor],
+        initial: Tensor,
+        equality_constraint_gradients: Tensor | None = None,
+    ) -> None:
+        object.__setattr__(self, "residual", residual)
+        object.__setattr__(self, "initial", initial)
+        object.__setattr__(
+            self,
+            "equality_constraint_gradients",
+            equality_constraint_gradients,
+        )
+        object.__setattr__(self, "jacobian", jacobian)
 
     def solve_relation_descriptor(
         self,
@@ -50,41 +53,17 @@ class RootSolveProblem:
         device_kind: str = "cpu",
     ) -> ParameterDescriptor:
         """Project this root problem to primitive solve-relation coordinates."""
-        domain = TransformationSpace(
-            self.initial.shape[0],
-            _backend_kind(self.initial),
-            device_kind,
-        )
-        codomain = TransformationSpace(
-            self.residual(self.initial).shape[0],
-            domain.backend_kind,
-            device_kind,
-        )
-        relation = TransformationRelation(
-            domain=domain,
-            codomain=codomain,
-            residual_target_available=True,
+        return super().residual_relation_descriptor(
             target_is_zero=True,
+            derivative_oracle_kind="jacobian_callback",
             map_linearity_defect=map_linearity_defect,
             map_linearity_evidence=map_linearity_evidence,
             matrix_representation_available=False,
-            operator_application_available=True,
-            derivative_oracle_kind="jacobian_callback",
-            equality_constraint_count=self.equality_constraint_count,
-            objective_relation="none",
-            acceptance_relation="residual_below_tolerance",
-            backend_kind=domain.backend_kind,
-            device_kind=device_kind,
             work_budget_fmas=work_budget_fmas,
             memory_budget_bytes=memory_budget_bytes,
-        )
-        return ParameterDescriptor(
-            transformation_relation_coordinates(
-                relation,
-                frozenset(SolveRelationField),
-                requested_residual_tolerance=requested_residual_tolerance,
-                requested_solution_tolerance=requested_solution_tolerance,
-            )
+            device_kind=device_kind,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
         )
 
 
@@ -133,17 +112,6 @@ class NewtonRootSolver:
 
     def _small(self, vector: Tensor, scale: Tensor) -> bool:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
-
-
-def _backend_kind(tensor: Tensor) -> str:
-    name = type(tensor.backend).__name__.lower()
-    if "numpy" in name:
-        return "numpy"
-    if "jax" in name:
-        return "jax"
-    if "python" in name:
-        return "python"
-    return "unknown"
 
 
 __all__ = ["NewtonRootSolver", "RootSolveProblem"]

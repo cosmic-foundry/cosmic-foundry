@@ -225,7 +225,13 @@ The required loop is:
    harder for a human to read.
 3. **Encode the premise.** Improve schemas, ownership models, descriptor
    construction, theory objects, or capability projections by representing
-   the fact from which the desired behavior follows.
+   the fact from which the desired behavior follows.  When two independent
+   grounded calculations share the same premise, ask whether the premise is a
+   type relationship: if objects share structural facts, descriptor
+   projections, or admissible algorithms, prefer making that relationship
+   explicit in the class or protocol hierarchy.  Helpers may construct
+   instances, but they must not hide the ontology that the calculations have
+   earned.
 4. **Make discovery do the work.** New implementations, claims, and atlas
    regions should become subject to the relevant requirements by inheritance,
    structure, schema registration, or implemented methods; editing a list by
@@ -289,7 +295,11 @@ When changing computation capabilities, apply these constraints in order:
 7. **Keep the human projection subordinate.** Human-facing categories, atlas
    titles, filenames, captions, and package names are projections of the
    mathematical model. They must not become parallel sources of truth.
-8. **Keep the code readable.** Mathematical precision is not permission to hide
+8. **Make earned hierarchy visible.** Descriptor schemas should project type
+   relationships, not compensate for their absence. Do not invent a grand base
+   class speculatively, but once repeated calculations expose a shared premise,
+   failing to represent it in the type system is a code smell.
+9. **Keep the code readable.** Mathematical precision is not permission to hide
    intent. Prefer small enums, predicates, dataclasses, and helper functions
    whose names expose the underlying relation.
 

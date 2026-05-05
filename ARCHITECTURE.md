@@ -790,10 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make implicit time-integrator stage solve descriptors and
-   coupled collocation execution consume the `RootSolveProblem` induced by the
-   RK stage equations, so descriptor ownership and Newton execution follow from
-   the same root relation.
+1. Current PR: make the finite-dimensional residual-relation premise explicit
+   in the solver type hierarchy, with `RootSolveProblem` specializing that
+   parent rather than carrying domain/codomain/constraint projection alone.
 2. Review whether affine implicit stage evidence can also project through the
    root-relation construction while preserving assembled linear-operator
    evidence for linear solver selection.
@@ -954,6 +953,10 @@ collapsed onto the same root-relation projection.  The stage equation is the
 premise, and the primitive solve descriptor is only its coordinate view;
 duplicated descriptor construction is therefore a sign that execution and
 capability ownership have diverged.
+The shared finite-dimensional residual relation is now visible in the solver
+type hierarchy.  `RootSolveProblem` specializes that parent by adding Jacobian
+evidence and the target-zero acceptance semantics needed by Newton; descriptor
+schemas should project that hierarchy instead of replacing it.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence
