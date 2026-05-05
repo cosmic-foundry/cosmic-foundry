@@ -45,8 +45,11 @@ from math import comb, factorial  # comb used in _pascal_predict
 import sympy
 
 from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
-from cosmic_foundry.computation.solvers.newton_root_solver import RootRelation
-from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.computation.solvers.newton_root_solver import (
+    FixedPointRootRelation,
+    RootRelation,
+)
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -58,9 +61,6 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
 from cosmic_foundry.computation.time_integrators.stiffness import FamilyName
 
 _bootstrap_rk = _RungeKuttaIntegrator(6)
-
-_FP_MAX_ITER = 50
-_FP_TOL = 1e-12
 
 
 class NordsieckHistory:
@@ -172,6 +172,25 @@ def bdf_corrector_root_relation(
         return Tensor.eye(n, backend=backend) - (beta0 * h) * rhs.jacobian(t_new, y)
 
     return RootRelation(residual, jacobian, y_initial)
+
+
+def adams_corrector_root_relation(
+    rhs: RHSProtocol,
+    z_pred: tuple[Tensor, ...],
+    t_new: float,
+    h: float,
+    beta0: float,
+) -> FixedPointRootRelation:
+    """Return the Adams corrector relation with fixed-point-map evidence."""
+    rhs_adams = z_pred[0] - beta0 * z_pred[1]
+
+    def residual(y: Tensor) -> Tensor:
+        return y - (beta0 * h) * rhs(t_new, y) - rhs_adams
+
+    def fixed_point(y: Tensor) -> Tensor:
+        return z_pred[0] + beta0 * (h * rhs(t_new, y) - z_pred[1])
+
+    return FixedPointRootRelation(residual, fixed_point, z_pred[0])
 
 
 class _BDFFamily:
@@ -594,14 +613,9 @@ class MultistepIntegrator:
         t_new = t + h
         beta0 = self._beta0
 
-        y = z_pred[0]
-        for _ in range(_FP_MAX_ITER):
-            fy = rhs(t_new, y)
-            y_new = z_pred[0] + beta0 * (h * fy - z_pred[1])
-            delta_norm = float(norm(y_new - y))
-            y = y_new
-            if delta_norm < _FP_TOL * (1.0 + float(norm(y))):
-                break
+        y = solve_root_relation(
+            adams_corrector_root_relation(rhs, z_pred, t_new, h, beta0)
+        )
 
         fy = rhs(t_new, y)
         f_delta = h * fy - z_pred[1]
@@ -613,5 +627,6 @@ class MultistepIntegrator:
 __all__ = [
     "MultistepIntegrator",
     "NordsieckHistory",
+    "adams_corrector_root_relation",
     "bdf_corrector_root_relation",
 ]

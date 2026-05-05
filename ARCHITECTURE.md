@@ -790,12 +790,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: expose the BDF Nordsieck corrector as a root relation and route
-   BDF correction through relation-selected root execution, grounding the change
-   in a scalar stiff-decay backward-Euler/Nordsieck calculation.
-2. Review whether Adams fixed-point correction should remain a local
-   contraction update or become a solve-relation object with different oracle
-   evidence.
+1. Current PR: expose the Adams Nordsieck corrector as a fixed-point root
+   relation and route Adams correction through relation-selected root execution,
+   grounding the change in a scalar non-stiff decay Adams/Nordsieck calculation.
+2. Review whether fixed-point root coverage needs an explicit contraction
+   certificate coordinate rather than relying only on derivative-oracle absence
+   and residual evidence.
 3. Review whether decomposition results should remain bare reusable matrix
    objects, or whether solve semantics should move entirely to relation-aware
    execution paths.

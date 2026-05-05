@@ -3870,6 +3870,9 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         matrix_free_root_solver = _resolve_dotted(
             "cosmic_foundry.computation.solvers.MatrixFreeNewtonKrylovRootSolver"
         )
+        fixed_point_root_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.FixedPointRootSolver"
+        )
         root_relation = _resolve_dotted(
             "cosmic_foundry.computation.solvers.RootRelation"
         )
@@ -3878,6 +3881,7 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         )
         assert issubclass(root_relation, residual_relation)
         assert {region.owner for region in regions} == {
+            fixed_point_root_solver,
             root_solver,
             matrix_free_root_solver,
         }
@@ -4706,6 +4710,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             {
                 "DirectSolver",
                 "DirectionalDerivativeRootRelation",
+                "FixedPointRootRelation",
                 "FiniteDimensionalResidualRelation",
                 "IterativeSolver",
                 "KrylovSolver",
@@ -4720,6 +4725,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         ),
         "root_solver": frozenset(
             {
+                "FixedPointRootSolver",
                 "MatrixFreeNewtonKrylovRootSolver",
                 "NewtonRootSolver",
             }
@@ -4751,6 +4757,8 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
         "DirectionalDerivativeRootRelation": "newton_root_solver",
+        "FixedPointRootRelation": "newton_root_solver",
+        "FixedPointRootSolver": "newton_root_solver",
         "FiniteDimensionalResidualRelation": "relations",
         "IterativeSolver": "iterative_solver",
         "KrylovSolver": "iterative_solver",

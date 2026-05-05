@@ -31,9 +31,10 @@ def pytest_configure(config: pytest.Config) -> None:
                        + FIXED_SESSION_OVERHEAD_S) * BUDGET_TOLERANCE.
     Each suite contributes its own term so adjusting one does not affect the
     other.  FIXED_SESSION_OVERHEAD_S covers costs that don't scale with either
-    convergence budget: performance calibration, structure/tensor tests, and
-    solver calibration probes.  Changes to tests/claims.py update the timeout
-    automatically without requiring command-line flags.
+    convergence budget: capability atlas structure tests, tensor tests,
+    performance calibration, and solver calibration probes.  Changes to
+    tests/claims.py update the timeout automatically without requiring
+    command-line flags.
     """
     timeout = (
         SOLVER_CONVERGENCE_BUDGET_S

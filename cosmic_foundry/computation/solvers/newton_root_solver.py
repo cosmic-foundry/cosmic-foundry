@@ -13,6 +13,7 @@ from cosmic_foundry.computation.decompositions.lu_factorization import LUFactori
 from cosmic_foundry.computation.solvers.coverage import (
     constrained_root_predicates,
     directional_derivative_root_predicates,
+    fixed_point_root_predicates,
     unconstrained_root_predicates,
 )
 from cosmic_foundry.computation.solvers.dense_gmres_solver import DenseGMRESSolver
@@ -100,6 +101,48 @@ class DirectionalDerivativeRootRelation(FiniteDimensionalResidualRelation):
         return super().residual_relation_descriptor(
             target_is_zero=True,
             derivative_oracle_kind="jvp",
+            map_linearity_defect=map_linearity_defect,
+            map_linearity_evidence=map_linearity_evidence,
+            matrix_representation_available=False,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        )
+
+
+class FixedPointRootRelation(FiniteDimensionalResidualRelation):
+    """Finite-dimensional root relation with fixed-point iteration evidence."""
+
+    fixed_point: Callable[[Tensor], Tensor]
+
+    def __init__(
+        self,
+        residual: Callable[[Tensor], Tensor],
+        fixed_point: Callable[[Tensor], Tensor],
+        initial: Tensor,
+    ) -> None:
+        object.__setattr__(self, "residual", residual)
+        object.__setattr__(self, "initial", initial)
+        object.__setattr__(self, "equality_constraint_gradients", None)
+        object.__setattr__(self, "fixed_point", fixed_point)
+
+    def solve_relation_descriptor(
+        self,
+        *,
+        map_linearity_defect: float | None = None,
+        map_linearity_evidence: EvidenceSource = "unavailable",
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        device_kind: str = "cpu",
+    ) -> ParameterDescriptor:
+        """Project this fixed-point relation to primitive solve coordinates."""
+        return super().residual_relation_descriptor(
+            target_is_zero=True,
+            derivative_oracle_kind="fixed_point_map",
             map_linearity_defect=map_linearity_defect,
             map_linearity_evidence=map_linearity_evidence,
             matrix_representation_available=False,
@@ -217,8 +260,41 @@ class MatrixFreeNewtonKrylovRootSolver:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
 
 
+class FixedPointRootSolver:
+    """Solve roots by iterating a relation-provided fixed-point map."""
+
+    root_solver_coverage = fixed_point_root_predicates()
+
+    def __init__(
+        self,
+        *,
+        max_iterations: int = 50,
+        tolerance: float = 1e-12,
+    ) -> None:
+        self._max_iterations = max_iterations
+        self._tolerance = tolerance
+
+    def solve(self, relation: FixedPointRootRelation) -> Tensor:
+        """Return a root using only a fixed-point map."""
+        x = relation.initial
+        for _ in range(self._max_iterations):
+            x_next = relation.fixed_point(x)
+            if self._small(x_next - x, x_next):
+                x = x_next
+                break
+            x = x_next
+            if self._small(relation.residual(x), x):
+                break
+        return x
+
+    def _small(self, vector: Tensor, scale: Tensor) -> bool:
+        return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
+
+
 __all__ = [
     "DirectionalDerivativeRootRelation",
+    "FixedPointRootRelation",
+    "FixedPointRootSolver",
     "MatrixFreeNewtonKrylovRootSolver",
     "NewtonRootSolver",
     "RootRelation",
