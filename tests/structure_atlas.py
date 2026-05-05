@@ -962,6 +962,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_evidence_is_descriptors()
         self._assert_coverage_regions_are_schema_discovered()
         self._assert_descriptor_groups_are_schema_equivalence_classes()
+        self._assert_docs_render_schema_hierarchy()
         for group in _capability_atlas_descriptor_groups():
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
@@ -976,6 +977,24 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             for source, _predicates, points in shapes:
                 assert _atlas_source_label(source)
                 assert points
+
+    @staticmethod
+    def _assert_docs_render_schema_hierarchy() -> None:
+        from scripts.gen_capability_atlas_docs import render_capability_atlas
+
+        rendered = render_capability_atlas()
+        assert "## Parameter Space Hierarchy" in rendered
+        assert "## Projection Plots" in rendered
+        assert rendered.index("## Parameter Space Hierarchy") < rendered.index(
+            "## Projection Plots"
+        )
+        for schema in _capability_atlas_schemas():
+            assert f"### {schema.name}" in rendered
+            assert "- Primitive axes:" in rendered
+            for axis in schema.axes:
+                assert f"`{_field_label(axis.field)}`" in rendered
+            for region in schema.derived_regions:
+                assert f"`{region.name}`" in rendered
 
     @staticmethod
     def _assert_no_atlas_dataclass_stores_presentation_text() -> None:
