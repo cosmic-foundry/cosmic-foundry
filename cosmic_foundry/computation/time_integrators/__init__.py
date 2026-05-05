@@ -45,6 +45,7 @@ from cosmic_foundry.computation.time_integrators.imex import (
     AdditiveRungeKuttaIntegrator,
     SplitRHS,
     SplitRHSProtocol,
+    imex_implicit_stage_root_problem,
 )
 from cosmic_foundry.computation.time_integrators.implicit import (
     FiniteDiffJacobianRHS,
@@ -174,6 +175,7 @@ __all__ = [
     "AdditiveRungeKuttaIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
+    "imex_implicit_stage_root_problem",
     "ExplicitMultistepIntegrator",
     "MultistepIntegrator",
     "NordsieckHistory",

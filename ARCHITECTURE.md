@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make affine implicit stage evidence project through a
-   `LinearResidualRelation`, preserving assembled linear-operator evidence for
-   linear solver selection while keeping the residual relation as the premise.
+1. Current PR: make IMEX implicit-component stage solves consume the same
+   residual-relation constructor path as DIRK stage solves, deleting local
+   root-problem assembly when no distinct premise remains.
 2. Review whether constrained root coverage should become a separate
    human-facing atlas slice or remain a distinct region inside primitive
    nonlinear-root solve space.
-3. Review whether IMEX implicit-component stage solves should consume the same
-   residual-relation constructors as implicit RK, deleting local root-problem
-   assembly if no distinct premise remains.
+3. Review whether direct NSE root construction and IMEX/IRK stage construction
+   expose a common application-to-residual adapter shape worth naming, or
+   whether the current constructors are already the minimal readable boundary.
 
 Roadmap sketch:
 
@@ -961,6 +961,10 @@ Affine implicit stage equations now project through `LinearResidualRelation`.
 They preserve assembled linear-operator evidence for direct linear solver
 selection, but the evidence is attached to a residual relation rather than
 being a parallel descriptor-only construction.
+IMEX implicit-component stage solves reuse the DIRK stage root constructor via
+a Jacobian-RHS view of the implicit split component.  The split is application
+structure; the stage solve remains the same residual-relation premise as an
+ordinary implicit RK stage.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence
