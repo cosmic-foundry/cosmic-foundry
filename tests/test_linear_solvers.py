@@ -16,6 +16,8 @@ import sympy
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     DecompositionField,
+    LinearOperatorEvidence,
+    SolveRelationField,
     decomposition_descriptor_from_linear_operator_descriptor,
     linear_operator_descriptor_from_assembled_operator,
 )
@@ -37,6 +39,7 @@ from cosmic_foundry.computation.solvers.direct_solver import DirectSolver
 from cosmic_foundry.computation.solvers.least_squares_solver import (
     DenseSVDLeastSquaresSolver,
 )
+from cosmic_foundry.computation.solvers.relations import LeastSquaresRelation
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
@@ -119,6 +122,25 @@ class _DiscreteLinearOperator:
                 for i in range(self._n)
             ],
             backend=backend,
+        )
+
+
+class _RectangularLinearOperator:
+    def __init__(self, matrix: tuple[tuple[float, ...], ...]) -> None:
+        self._matrix = matrix
+        self._rows = len(matrix)
+        self._columns = len(matrix[0])
+
+    def apply(self, u: Tensor) -> Tensor:
+        return Tensor(
+            [
+                sum(
+                    self._matrix[row][column] * float(u[column])
+                    for column in range(self._columns)
+                )
+                for row in range(self._rows)
+            ],
+            backend=u.backend,
         )
 
 
@@ -280,7 +302,7 @@ class _DenseSVDLeastSquaresSolverClaim(Claim[ExecutionPlan]):
             self.description,
             type(solver).__name__,
             execution_plan,
-            solver.solve,
+            lambda a, b: solver.solve(_least_squares_relation(a, b)),
         )
 
 
@@ -299,6 +321,18 @@ def _assert_rectangular_least_squares_solution(
         backend=_NP_BACKEND,
     )
     b = Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND)
+    relation = _least_squares_relation(a, b)
+    descriptor = relation.solve_relation_descriptor()
+    assert descriptor.coordinate(SolveRelationField.DIM_X).value == 2
+    assert descriptor.coordinate(SolveRelationField.DIM_Y).value == 3
+    assert (
+        descriptor.coordinate(SolveRelationField.OBJECTIVE_RELATION).value
+        == "least_squares"
+    )
+    assert (
+        descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value
+        == "objective_minimum"
+    )
     x = solve(a, b)
     expected = (4.0 / 3.0, 7.0 / 3.0)
     error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(2)))
@@ -320,6 +354,16 @@ def _assert_rectangular_least_squares_solution(
         error=max(error, normal_error),
         tolerance=tolerance,
     ).format()
+
+
+def _least_squares_relation(a: Tensor, b: Tensor) -> LeastSquaresRelation:
+    matrix = tuple(
+        tuple(float(a[row, column]) for column in range(a.shape[1]))
+        for row in range(a.shape[0])
+    )
+    return LeastSquaresRelation(
+        LinearOperatorEvidence(_RectangularLinearOperator(matrix), b, matrix)
+    )
 
 
 def _transpose_matvec(matrix: Tensor, vector: Tensor) -> Tensor:

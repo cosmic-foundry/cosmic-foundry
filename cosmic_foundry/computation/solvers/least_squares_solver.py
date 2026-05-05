@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
+from cosmic_foundry.computation.solvers.relations import LeastSquaresRelation
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -12,8 +13,8 @@ class LeastSquaresSolver(ABC):
     """Abstract interface for solving min_x ||A x - b||_2."""
 
     @abstractmethod
-    def solve(self, a: Tensor, b: Tensor) -> Tensor:
-        """Return the least-squares solution for a matrix A and target b."""
+    def solve(self, relation: LeastSquaresRelation) -> Tensor:
+        """Return the least-squares solution for a residual relation."""
 
 
 class DenseSVDLeastSquaresSolver(LeastSquaresSolver):
@@ -22,11 +23,11 @@ class DenseSVDLeastSquaresSolver(LeastSquaresSolver):
     def __init__(self, rcond: float = 1e-10) -> None:
         self._factorization = SVDFactorization(rcond)
 
-    def solve(self, a: Tensor, b: Tensor) -> Tensor:
+    def solve(self, relation: LeastSquaresRelation) -> Tensor:
         """Return x minimizing ||A x - b||_2."""
-        if len(a.shape) != 2 or len(b.shape) != 1 or a.shape[0] != b.shape[0]:
-            raise ValueError("least-squares solve requires A shape (m,n), b shape (m,)")
-        return self._factorization.factorize(a).solve(b)
+        evidence = relation.linear_operator_evidence
+        a: Tensor = Tensor(evidence.matrix, backend=evidence.rhs.backend)
+        return self._factorization.factorize(a).solve(evidence.rhs)
 
 
 __all__ = ["DenseSVDLeastSquaresSolver", "LeastSquaresSolver"]

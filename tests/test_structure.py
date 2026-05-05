@@ -2182,6 +2182,8 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_transformation_relations_have_explicit_spaces()
         self._assert_implementation_methods_do_not_import_capability_modules()
         self._assert_residual_jacobian_solvers_consume_relation_objects()
+        self._assert_relation_solvers_do_not_consume_parallel_tensors()
+        self._assert_least_squares_relation_is_linear_residual_objective()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -2645,6 +2647,52 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
 
     @staticmethod
+    def _assert_relation_solvers_do_not_consume_parallel_tensors() -> None:
+        offenders = []
+        for path in sorted((_PACKAGE_ROOT / "computation" / "solvers").glob("*.py")):
+            tree = ast.parse(path.read_text())
+            for class_def in (
+                node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+            ):
+                for method in (
+                    child
+                    for child in class_def.body
+                    if isinstance(child, ast.FunctionDef) and child.name == "solve"
+                ):
+                    if (
+                        _LinearOperatorProjectionClaim._annotation_name(
+                            method.returns or ast.Constant(None)
+                        )
+                        == "Tensor"
+                        and _LinearOperatorProjectionClaim._tensor_parameter_count(
+                            method
+                        )
+                        >= 2
+                    ):
+                        offenders.append(
+                            f"{path.relative_to(_PROJECT_ROOT)}:"
+                            f"{class_def.name}.{method.name}"
+                        )
+        assert not offenders, (
+            "solver methods must consume one relation/operator object, "
+            f"not parallel tensor coordinates: {offenders}"
+        )
+
+    @staticmethod
+    def _assert_least_squares_relation_is_linear_residual_objective() -> None:
+        least_squares_relation = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.LeastSquaresRelation"
+        )
+        linear_relation = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.LinearResidualRelation"
+        )
+        residual_relation = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.FiniteDimensionalResidualRelation"
+        )
+        assert issubclass(least_squares_relation, linear_relation)
+        assert issubclass(linear_relation, residual_relation)
+
+    @staticmethod
     def _callable_tensor_map_count(function: ast.FunctionDef) -> int:
         return sum(
             1
@@ -2652,6 +2700,16 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             if parameter.annotation is not None
             and {"Callable", "Tensor"}
             <= _LinearOperatorProjectionClaim._annotation_names(parameter.annotation)
+        )
+
+    @staticmethod
+    def _tensor_parameter_count(function: ast.FunctionDef) -> int:
+        return sum(
+            1
+            for parameter in function.args.args
+            if parameter.annotation is not None
+            and _LinearOperatorProjectionClaim._annotation_name(parameter.annotation)
+            == "Tensor"
         )
 
     @staticmethod
@@ -4545,6 +4603,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "IterativeSolver",
                 "KrylovSolver",
                 "LeastSquaresSolver",
+                "LeastSquaresRelation",
                 "LinearOperator",
                 "LinearResidualRelation",
                 "LinearSolver",
@@ -4583,6 +4642,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "IterativeSolver": "iterative_solver",
         "KrylovSolver": "iterative_solver",
         "LeastSquaresSolver": "least_squares_solver",
+        "LeastSquaresRelation": "relations",
         "LinearOperator": "linear_solver",
         "LinearResidualRelation": "relations",
         "LinearSolver": "linear_solver",
