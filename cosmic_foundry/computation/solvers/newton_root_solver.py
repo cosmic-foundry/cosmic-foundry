@@ -67,6 +67,48 @@ class RootRelation(FiniteDimensionalResidualRelation):
         )
 
 
+class DirectionalDerivativeRootRelation(FiniteDimensionalResidualRelation):
+    """Finite-dimensional root relation with Jacobian-vector product evidence."""
+
+    jvp: Callable[[Tensor, Tensor], Tensor]
+
+    def __init__(
+        self,
+        residual: Callable[[Tensor], Tensor],
+        jvp: Callable[[Tensor, Tensor], Tensor],
+        initial: Tensor,
+    ) -> None:
+        object.__setattr__(self, "residual", residual)
+        object.__setattr__(self, "initial", initial)
+        object.__setattr__(self, "equality_constraint_gradients", None)
+        object.__setattr__(self, "jvp", jvp)
+
+    def solve_relation_descriptor(
+        self,
+        *,
+        map_linearity_defect: float | None = None,
+        map_linearity_evidence: EvidenceSource = "unavailable",
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        device_kind: str = "cpu",
+    ) -> ParameterDescriptor:
+        """Project this matrix-free root relation to primitive solve coordinates."""
+        return super().residual_relation_descriptor(
+            target_is_zero=True,
+            derivative_oracle_kind="jvp",
+            map_linearity_defect=map_linearity_defect,
+            map_linearity_evidence=map_linearity_evidence,
+            matrix_representation_available=False,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        )
+
+
 class NewtonRootSolver:
     """Solve ``F(x) = 0`` by Newton iteration."""
 
@@ -114,4 +156,4 @@ class NewtonRootSolver:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
 
 
-__all__ = ["NewtonRootSolver", "RootRelation"]
+__all__ = ["DirectionalDerivativeRootRelation", "NewtonRootSolver", "RootRelation"]

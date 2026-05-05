@@ -156,6 +156,12 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             derivative_oracle_kind="none",
         ),
         _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="jvp",
+        ),
+        _SolveRelationSchemaClaim._solve_descriptor(
             auxiliary_scalar_count=1,
             normalization_constraint_count=1,
             acceptance_relation="eigenpair_residual",
@@ -1134,6 +1140,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
         self._assert_nonlinear_root_without_jacobian_is_visible_gap()
+        self._assert_directional_derivative_root_is_visible_gap()
         for group in _capability_atlas_descriptor_groups():
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
@@ -1176,6 +1183,23 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             map_linearity_defect=1.0,
             matrix_representation_available=False,
             derivative_oracle_kind="none",
+        )
+        schema.validate_descriptor(descriptor)
+        assert schema.cell_status(descriptor, regions) == "uncovered"
+        assert any(
+            uncovered.contains(descriptor)
+            for uncovered in _capability_atlas_uncovered_cells(schema, regions)
+        )
+
+    @staticmethod
+    def _assert_directional_derivative_root_is_visible_gap() -> None:
+        schema = solve_relation_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        descriptor = _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="jvp",
         )
         schema.validate_descriptor(descriptor)
         assert schema.cell_status(descriptor, regions) == "uncovered"

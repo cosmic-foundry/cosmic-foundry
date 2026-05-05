@@ -1675,6 +1675,12 @@ class _SolveRelationSchemaClaim(Claim[None]):
             matrix_representation_available=False,
             derivative_oracle_kind="none",
         )
+        nonlinear_root_with_jvp = self._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="jvp",
+        )
         eigenproblem = self._solve_descriptor(
             auxiliary_scalar_count=1,
             normalization_constraint_count=1,
@@ -1689,6 +1695,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
             least_squares,
             nonlinear_root,
             nonlinear_root_without_jacobian,
+            nonlinear_root_with_jvp,
             eigenproblem,
             explicit_time_step,
             implicit_stage_solve,
@@ -1699,9 +1706,16 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert solve_regions["least_squares"].contains(least_squares)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root_without_jacobian)
+        assert solve_regions["nonlinear_root"].contains(nonlinear_root_with_jvp)
         assert (
             solve_schema.cell_status(
                 nonlinear_root_without_jacobian, root_solver_coverage_regions()
+            )
+            == "uncovered"
+        )
+        assert (
+            solve_schema.cell_status(
+                nonlinear_root_with_jvp, root_solver_coverage_regions()
             )
             == "uncovered"
         )
@@ -4639,6 +4653,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "abstract_interface": frozenset(
             {
                 "DirectSolver",
+                "DirectionalDerivativeRootRelation",
                 "FiniteDimensionalResidualRelation",
                 "IterativeSolver",
                 "KrylovSolver",
@@ -4678,6 +4693,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseSVDLeastSquaresSolver": "least_squares_solver",
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
+        "DirectionalDerivativeRootRelation": "newton_root_solver",
         "FiniteDimensionalResidualRelation": "relations",
         "IterativeSolver": "iterative_solver",
         "KrylovSolver": "iterative_solver",

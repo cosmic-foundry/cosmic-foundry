@@ -23,6 +23,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 )
 from cosmic_foundry.computation.solvers import (
     DenseLUSolver,
+    DirectionalDerivativeRootRelation,
     FiniteDimensionalResidualRelation,
     LinearResidualRelation,
     NewtonRootSolver,
@@ -828,10 +829,49 @@ class _ImexImplicitStageRootClaim(Claim[Any]):
         assert cases.err(stepped.u, cases.exact_scalar_decay, stepped.t) < 1.0e-7
 
 
+class _DirectionalDerivativeRootGapClaim(Claim[Any]):
+    """Grounded claim for nonlinear root relations with only JVP evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/directional_derivative_root_gap"
+
+    def check(self, _calibration: Any) -> None:
+        def residual(x: Tensor) -> Tensor:
+            return Tensor([float(x[0]) ** 2 - 2.0], backend=x.backend)
+
+        def jvp(x: Tensor, v: Tensor) -> Tensor:
+            return Tensor([2.0 * float(x[0]) * float(v[0])], backend=x.backend)
+
+        relation = DirectionalDerivativeRootRelation(
+            residual,
+            jvp,
+            Tensor([3.0], backend=_TIME_BACKEND),
+        )
+        direction = Tensor([0.25], backend=_TIME_BACKEND)
+        assert abs(float(relation.jvp(relation.initial, direction)[0]) - 1.5) < 1e-12
+
+        descriptor = relation.solve_relation_descriptor(map_linearity_defect=1.0)
+        schema = solve_relation_parameter_schema()
+        schema.validate_descriptor(descriptor)
+        assert (
+            descriptor.coordinate(SolveRelationField.DERIVATIVE_ORACLE_KIND).value
+            == "jvp"
+        )
+        assert schema.cell_status(descriptor, ()) == "uncovered"
+        try:
+            select_root_solver_for_descriptor(descriptor)
+        except ValueError:
+            pass
+        else:  # pragma: no cover - assertion branch
+            raise AssertionError("JVP-only nonlinear roots must remain unowned")
+
+
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
     _AffineStageLinearSolveClaim(),
     _ImexImplicitStageRootClaim(),
+    _DirectionalDerivativeRootGapClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],
     _OscillatorInvariantComparisonClaim(),
