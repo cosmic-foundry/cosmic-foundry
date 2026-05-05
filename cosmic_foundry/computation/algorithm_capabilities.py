@@ -428,6 +428,7 @@ class TransformationRelation:
     matrix_representation_available: bool
     operator_application_available: bool
     derivative_oracle_kind: str
+    equality_constraint_count: int
     objective_relation: str
     acceptance_relation: str
     backend_kind: str
@@ -2215,7 +2216,9 @@ def transformation_relation_coordinates(
         SolveRelationField.DIM_X: DescriptorCoordinate(relation.domain_dimension),
         SolveRelationField.DIM_Y: DescriptorCoordinate(relation.codomain_dimension),
         SolveRelationField.AUXILIARY_SCALAR_COUNT: DescriptorCoordinate(0),
-        SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(0),
+        SolveRelationField.EQUALITY_CONSTRAINT_COUNT: DescriptorCoordinate(
+            relation.equality_constraint_count
+        ),
         SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT: DescriptorCoordinate(0),
         SolveRelationField.RESIDUAL_TARGET_AVAILABLE: DescriptorCoordinate(
             relation.residual_target_available
@@ -2273,6 +2276,7 @@ def transformation_relation_coordinates(
 def assembled_linear_transformation_relation(
     evidence: AssembledLinearEvidence,
     *,
+    equality_constraint_count: int = 0,
     work_budget_fmas: float = 1.0e9,
     memory_budget_bytes: float = 1.0e9,
     device_kind: str = "cpu",
@@ -2298,6 +2302,7 @@ def assembled_linear_transformation_relation(
         matrix_representation_available=True,
         operator_application_available=True,
         derivative_oracle_kind="matrix",
+        equality_constraint_count=equality_constraint_count,
         objective_relation="none",
         acceptance_relation="residual_below_tolerance",
         backend_kind=space.backend_kind,

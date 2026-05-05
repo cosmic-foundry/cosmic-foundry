@@ -141,6 +141,12 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         )
         auto_constrained = auto.step(rhs, constrained_state, 2.0e-3)
         assert _residual_norm(auto_constrained.u - direct_constrained.u) < 1.0e-12
+        constrained_step_descriptor = integrator.step_solve_relation_descriptor(
+            rhs, constrained_state, 2.0e-3
+        )
+        assert constrained_step_descriptor.coordinate(
+            SolveRelationField.EQUALITY_CONSTRAINT_COUNT
+        ).value == len(constrained_state.active_constraints or frozenset())
 
         reaction_descriptor = rhs.reaction_network_descriptor()
         map_descriptor = rhs.map_structure_descriptor()
@@ -238,9 +244,21 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         descriptor = step_descriptor
         schema = solve_relation_parameter_schema()
         schema.validate_descriptor(descriptor)
+        schema.validate_descriptor(constrained_step_descriptor)
         regions = {region.name: region for region in schema.derived_regions}
 
         assert regions["linear_system"].contains(descriptor)
+        assert regions["linear_system"].contains(constrained_step_descriptor)
+        assert (
+            descriptor.coordinate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT).value
+            == 0
+        )
+        assert (
+            constrained_step_descriptor.coordinate(
+                SolveRelationField.EQUALITY_CONSTRAINT_COUNT
+            ).value
+            == 1
+        )
         assert descriptor.coordinate(SolveRelationField.DIM_X).value == (
             state.u.shape[0] * len(integrator.A_sym)
         )
