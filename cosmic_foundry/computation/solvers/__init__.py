@@ -34,6 +34,9 @@ from cosmic_foundry.computation.solvers.newton_root_solver import (
     NewtonRootSolver,
     RootSolveProblem,
 )
+from cosmic_foundry.computation.solvers.relations import (
+    FiniteDimensionalResidualRelation,
+)
 
 __all__ = [
     "DenseCGSolver",
@@ -44,6 +47,7 @@ __all__ = [
     "DenseSVDLeastSquaresSolver",
     "DenseSVDSolver",
     "DirectSolver",
+    "FiniteDimensionalResidualRelation",
     "IterativeSolver",
     "KrylovSolver",
     "LeastSquaresSolver",

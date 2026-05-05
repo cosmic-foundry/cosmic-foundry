@@ -3721,9 +3721,17 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
                 constrained.append(region)
         assert constrained
         assert unconstrained
-        assert {region.owner for region in regions} == {
-            _resolve_dotted("cosmic_foundry.computation.solvers.NewtonRootSolver")
-        }
+        root_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.NewtonRootSolver"
+        )
+        root_problem = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.RootSolveProblem"
+        )
+        residual_relation = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.FiniteDimensionalResidualRelation"
+        )
+        assert issubclass(root_problem, residual_relation)
+        assert {region.owner for region in regions} == {root_solver}
 
     @staticmethod
     def _regions(
@@ -4519,6 +4527,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "abstract_interface": frozenset(
             {
                 "DirectSolver",
+                "FiniteDimensionalResidualRelation",
                 "IterativeSolver",
                 "KrylovSolver",
                 "LeastSquaresSolver",
@@ -4555,6 +4564,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseSVDLeastSquaresSolver": "least_squares_solver",
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
+        "FiniteDimensionalResidualRelation": "relations",
         "IterativeSolver": "iterative_solver",
         "KrylovSolver": "iterative_solver",
         "LeastSquaresSolver": "least_squares_solver",

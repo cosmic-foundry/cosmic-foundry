@@ -21,7 +21,11 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     map_structure_parameter_schema,
     solve_relation_parameter_schema,
 )
-from cosmic_foundry.computation.solvers import DenseLUSolver, NewtonRootSolver
+from cosmic_foundry.computation.solvers import (
+    DenseLUSolver,
+    FiniteDimensionalResidualRelation,
+    NewtonRootSolver,
+)
 from cosmic_foundry.computation.solvers.capabilities import (
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
@@ -177,12 +181,14 @@ def _solve_selection_case() -> _StepSelectionCase:
     state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
     dt = 1.0e-2
     descriptor = descriptor_integrator.step_solve_relation_descriptor(rhs, state, dt)
-    root_descriptor = _ti.implicit_stage_root_problem(
+    root_problem = _ti.implicit_stage_root_problem(
         descriptor_integrator,
         rhs,
         state,
         dt,
-    ).solve_relation_descriptor()
+    )
+    assert isinstance(root_problem, FiniteDimensionalResidualRelation)
+    root_descriptor = root_problem.solve_relation_descriptor()
 
     def postcheck(
         case: _StepSelectionCase,
