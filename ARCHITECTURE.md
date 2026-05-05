@@ -790,12 +790,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: route IMEX implicit-stage execution and direct NSE solves through
-   the shared relation-selected root-solver execution path, grounding the change
-   in the split scalar decay IMEX stage calculation and the finite
-   reaction-network equilibrium calculation.
-2. Review whether remaining local Newton loops should become explicit
-   solve-relation objects or stay as method-internal nonlinear updates.
+1. Current PR: expose the BDF Nordsieck corrector as a root relation and route
+   BDF correction through relation-selected root execution, grounding the change
+   in a scalar stiff-decay backward-Euler/Nordsieck calculation.
+2. Review whether Adams fixed-point correction should remain a local
+   contraction update or become a solve-relation object with different oracle
+   evidence.
 3. Review whether decomposition results should remain bare reusable matrix
    objects, or whether solve semantics should move entirely to relation-aware
    execution paths.

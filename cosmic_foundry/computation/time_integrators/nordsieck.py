@@ -44,7 +44,8 @@ from math import comb, factorial  # comb used in _pascal_predict
 
 import sympy
 
-from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
+from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
+from cosmic_foundry.computation.solvers.newton_root_solver import RootRelation
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import (
@@ -58,9 +59,6 @@ from cosmic_foundry.computation.time_integrators.stiffness import FamilyName
 
 _bootstrap_rk = _RungeKuttaIntegrator(6)
 
-_LU = LUFactorization()
-_NEWTON_MAX_ITER = 50
-_NEWTON_TOL = 1e-12
 _FP_MAX_ITER = 50
 _FP_TOL = 1e-12
 
@@ -152,6 +150,28 @@ def _pascal_predict(z: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
             acc = acc + comb(j, i) * z[j]
         z_pred.append(acc)
     return tuple(z_pred)
+
+
+def bdf_corrector_root_relation(
+    rhs: WithJacobianRHSProtocol,
+    z_pred: tuple[Tensor, ...],
+    t_new: float,
+    h: float,
+    beta0: float,
+) -> RootRelation:
+    """Return the BDF corrector root relation for one Nordsieck step."""
+    y_initial = z_pred[0]
+    n = y_initial.shape[0]
+    backend = y_initial.backend
+    rhs_bdf = z_pred[0] - beta0 * z_pred[1]
+
+    def residual(y: Tensor) -> Tensor:
+        return y - (beta0 * h) * rhs(t_new, y) - rhs_bdf
+
+    def jacobian(y: Tensor) -> Tensor:
+        return Tensor.eye(n, backend=backend) - (beta0 * h) * rhs.jacobian(t_new, y)
+
+    return RootRelation(residual, jacobian, y_initial)
 
 
 class _BDFFamily:
@@ -540,26 +560,13 @@ class MultistepIntegrator:
         nh = nh.rescale_step(dt)
         t, h, z = state.t, nh.h, nh.z
         q = nh.q
-        n = z[0].shape[0]
-        backend = z[0].backend
 
         z_pred = _pascal_predict(z)
         t_new = t + h
         beta0 = self._beta0
-        rhs_bdf = z_pred[0] - beta0 * z_pred[1]
-
-        y = z_pred[0]
-        for _ in range(_NEWTON_MAX_ITER):
-            fy = rhs(t_new, y)
-            F = y - (beta0 * h) * fy - rhs_bdf
-            if float(norm(F)) < _NEWTON_TOL * (1.0 + float(norm(y))):
-                break
-            J = rhs.jacobian(t_new, y)
-            M = Tensor.eye(n, backend=backend) - (beta0 * h) * J
-            delta = _LU.factorize(M).solve(Tensor.zeros(n, backend=backend) - F)
-            y = y + delta
-            if float(norm(delta)) < _NEWTON_TOL * (1.0 + float(norm(y))):
-                break
+        y = solve_root_relation(
+            bdf_corrector_root_relation(rhs, z_pred, t_new, h, beta0)
+        )
 
         fy = rhs(t_new, y)
         f_delta = h * fy - z_pred[1]
@@ -606,4 +613,5 @@ class MultistepIntegrator:
 __all__ = [
     "MultistepIntegrator",
     "NordsieckHistory",
+    "bdf_corrector_root_relation",
 ]
