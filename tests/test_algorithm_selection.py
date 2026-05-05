@@ -867,11 +867,60 @@ class _DirectionalDerivativeRootSolveClaim(Claim[Any]):
         assert abs(float(root[0]) ** 2 - 2.0) < 1e-10
 
 
+class _JvpImplicitStageRootSolveClaim(Claim[Any]):
+    """Grounded nonlinear implicit step with only JVP derivative evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/jvp_implicit_stage_root_solve"
+
+    def check(self, _calibration: Any) -> None:
+        class QuadraticDecayJVP:
+            def __call__(self, _t: float, u: Tensor) -> Tensor:
+                return Tensor([-float(u[0]) ** 2], backend=u.backend)
+
+            def jvp(self, _t: float, u: Tensor, v: Tensor) -> Tensor:
+                return Tensor(
+                    [-2.0 * float(u[0]) * float(v[0])],
+                    backend=u.backend,
+                )
+
+        rhs = QuadraticDecayJVP()
+        integrator = _ti.ImplicitRungeKuttaIntegrator(1)
+        state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        dt = 0.2
+
+        descriptor = integrator.step_solve_relation_descriptor(rhs, state, dt)
+        assert (
+            descriptor.coordinate(SolveRelationField.DERIVATIVE_ORACLE_KIND).value
+            == "jvp"
+        )
+        assert select_root_solver_for_descriptor(descriptor) is (
+            MatrixFreeNewtonKrylovRootSolver
+        )
+
+        relation = _ti.implicit_stage_directional_derivative_root_relation(
+            integrator,
+            rhs,
+            state,
+            dt,
+        )
+        for field in SolveRelationField:
+            assert descriptor.coordinate(field) == relation.solve_relation_descriptor(
+                map_linearity_defect=None
+            ).coordinate(field)
+        root = MatrixFreeNewtonKrylovRootSolver().solve(relation)
+        expected = (math.sqrt(1.0 + 4.0 * dt) - 1.0) / (2.0 * dt)
+        assert abs(float(root[0]) - expected) < 1.0e-10
+        assert abs(float(relation.residual(root)[0])) < 1.0e-10
+
+
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
     _AffineStageLinearSolveClaim(),
     _ImexImplicitStageRootClaim(),
     _DirectionalDerivativeRootSolveClaim(),
+    _JvpImplicitStageRootSolveClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],
     _OscillatorInvariantComparisonClaim(),

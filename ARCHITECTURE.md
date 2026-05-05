@@ -790,17 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: close the JVP-only nonlinear-root gap with a matrix-free
-   Newton-Krylov solver, grounding the change in a scalar nonlinear root
-   calculation that supplies residual and JVP evidence but no assembled
-   Jacobian.
-2. Review whether the next grounding calculation should be a real-ish implicit
-   physics step whose only derivative evidence is a JVP, so the new root
-   solver is exercised through a time-integrator construction rather than a
-   direct scalar root relation.
-3. Review whether factorization execution should consume a relation object
+1. Current PR: construct a JVP-backed implicit-stage root relation from a
+   backward-Euler nonlinear decay step and solve it through the matrix-free
+   root solver selected from the time-step descriptor.
+2. Review whether factorization execution should consume a relation object
    instead of a bare matrix when the downstream solve semantics are
    objective-dependent.
+3. Review whether implicit time-integrator execution should select root solvers
+   from stage-relation descriptors instead of closing over one Newton instance
+   per module.
 
 Roadmap sketch:
 
@@ -1007,6 +1005,13 @@ owns the unconstrained JVP region by solving each Newton correction with a
 matrix-free Krylov operator built from the relation's JVP; no assembled
 Jacobian is required.  Nonlinear target-zero residuals with no derivative
 evidence remain computed uncovered atlas gaps.
+Implicit RK stage construction now admits RHS objects that expose
+Jacobian-vector products instead of assembled Jacobians.  Such stages construct
+`DirectionalDerivativeRootRelation` objects; the time-step solve descriptor
+therefore selects the matrix-free root solver from the same primitive
+solve-relation schema used by direct nonlinear root calculations.  The current
+grounding calculation is backward Euler on nonlinear decay `u' = -u^2`, whose
+implicit stage has a closed-form positive root.
 The capability atlas begins with a generated parameter-space hierarchy before
 showing projection plots.  The hierarchy is schema → primitive coordinates →
 derived regions → current ownership and uncovered cells, so readers can see
