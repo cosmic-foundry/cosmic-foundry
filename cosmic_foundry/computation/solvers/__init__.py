@@ -36,6 +36,7 @@ from cosmic_foundry.computation.solvers.newton_root_solver import (
 )
 from cosmic_foundry.computation.solvers.relations import (
     FiniteDimensionalResidualRelation,
+    LeastSquaresRelation,
     LinearResidualRelation,
 )
 
@@ -52,6 +53,7 @@ __all__ = [
     "IterativeSolver",
     "KrylovSolver",
     "LeastSquaresSolver",
+    "LeastSquaresRelation",
     "StationaryIterationSolver",
     "LINEAR_SOLVER_COVERAGE_REGIONS",
     "LinearOperator",

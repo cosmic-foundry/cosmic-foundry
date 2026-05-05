@@ -790,17 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: distinguish derivative-oracle evidence in solve-relation
-   parameter space and treat partially invalid/owned atlas cells as still
-   having an uncovered remainder, so nonlinear target-zero residuals with no
-   derivative oracle are a visible computed gap before adding any non-Newton
-   nonlinear solver.
-2. Review whether least-squares and overdetermined residual calculations now
-   provide enough evidence to add an objective/least-squares relation sibling
-   under the finite-dimensional relation spine.
-3. Review whether directional derivative evidence (`jvp`/`vjp`) should be
+1. Current PR: project overdetermined least-squares calculations through an
+   explicit relation object under the finite-dimensional residual spine, so the
+   solver consumes the objective relation rather than parallel matrix/RHS
+   tensors.
+2. Review whether directional derivative evidence (`jvp`/`vjp`) should be
    represented as a separate nonlinear solver gap or should wait for a
    concrete matrix-free Newton/Krylov calculation.
+3. Review whether the least-squares relation now has enough ownership evidence
+   for autodiscovered least-squares solver coverage, or whether coverage should
+   wait for a rank-deficient/inconsistent calculation pair.
 
 Roadmap sketch:
 
@@ -963,6 +962,11 @@ Affine implicit stage equations now project through `LinearResidualRelation`.
 They preserve assembled linear-operator evidence for direct linear solver
 selection, but the evidence is attached to a residual relation rather than
 being a parallel descriptor-only construction.
+Overdetermined least-squares calculations now project through
+`LeastSquaresRelation`, a linear residual relation whose solve descriptor
+records the least-squares objective and objective-minimum acceptance semantics.
+Dense SVD least-squares execution consumes that relation object rather than
+parallel matrix and right-hand-side tensors.
 IMEX implicit-component stage solves reuse the DIRK stage root constructor via
 a Jacobian-RHS view of the implicit split component.  The split is application
 structure; the stage solve remains the same residual-relation premise as an

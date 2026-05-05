@@ -97,7 +97,8 @@ class LinearResidualRelation(FiniteDimensionalResidualRelation):
     ) -> None:
         self.linear_operator_evidence = evidence
         self._equality_constraint_count = equality_constraint_count
-        initial = Tensor.zeros(evidence.rhs.shape[0], backend=evidence.rhs.backend)
+        _rows, columns = _linear_evidence_shape(evidence)
+        initial = Tensor.zeros(columns, backend=evidence.rhs.backend)
 
         def residual(x: Tensor) -> Tensor:
             return evidence.operator.apply(x) - evidence.rhs
@@ -137,6 +138,59 @@ class LinearResidualRelation(FiniteDimensionalResidualRelation):
         )
 
 
+class LeastSquaresRelation(LinearResidualRelation):
+    """Linear residual relation solved by minimizing the residual norm."""
+
+    def solve_relation_descriptor(
+        self,
+        *,
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        device_kind: str = "cpu",
+    ) -> ParameterDescriptor:
+        """Project this least-squares relation to primitive solve coordinates."""
+        rows, columns = _linear_evidence_shape(self.linear_operator_evidence)
+        backend_kind = _backend_kind(self.linear_operator_evidence.rhs)
+        relation = TransformationRelation(
+            domain=TransformationSpace(columns, backend_kind, device_kind),
+            codomain=TransformationSpace(rows, backend_kind, device_kind),
+            residual_target_available=True,
+            target_is_zero=False,
+            map_linearity_defect=0.0,
+            map_linearity_evidence="exact",
+            matrix_representation_available=True,
+            operator_application_available=True,
+            derivative_oracle_kind="matrix",
+            equality_constraint_count=self.equality_constraint_count,
+            objective_relation="least_squares",
+            acceptance_relation="objective_minimum",
+            backend_kind=backend_kind,
+            device_kind=device_kind,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+        )
+        return ParameterDescriptor(
+            transformation_relation_coordinates(
+                relation,
+                frozenset(SolveRelationField),
+                requested_residual_tolerance=requested_residual_tolerance,
+                requested_solution_tolerance=requested_solution_tolerance,
+            ),
+            evidence=(self.linear_operator_evidence,),
+        )
+
+
+def _linear_evidence_shape(evidence: LinearOperatorEvidence) -> tuple[int, int]:
+    matrix = evidence.matrix
+    rows = len(matrix) if matrix else evidence.rhs.shape[0]
+    columns = len(matrix[0]) if matrix else evidence.rhs.shape[0]
+    if evidence.rhs.shape[0] != rows or any(len(row) != columns for row in matrix):
+        raise ValueError("linear residual evidence has inconsistent matrix/RHS shape")
+    return rows, columns
+
+
 def _backend_kind(tensor: Tensor) -> str:
     name = type(tensor.backend).__name__.lower()
     if "numpy" in name:
@@ -148,4 +202,8 @@ def _backend_kind(tensor: Tensor) -> str:
     return "unknown"
 
 
-__all__ = ["FiniteDimensionalResidualRelation", "LinearResidualRelation"]
+__all__ = [
+    "FiniteDimensionalResidualRelation",
+    "LeastSquaresRelation",
+    "LinearResidualRelation",
+]
