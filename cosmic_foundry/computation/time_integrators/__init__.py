@@ -82,6 +82,9 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
 )
 from cosmic_foundry.computation.time_integrators.solve_relation import (
     AffineRHSProtocol,
+    JacobianRHSProtocol,
+    dirk_stage_root_problem,
+    implicit_stage_root_problem,
     time_integrator_step_solve_relation_descriptor,
 )
 from cosmic_foundry.computation.time_integrators.splitting import (
@@ -110,6 +113,7 @@ from cosmic_foundry.computation.time_integrators.variable_order import (
 __all__ = [
     "AlgorithmStructureContract",
     "AffineRHSProtocol",
+    "JacobianRHSProtocol",
     "Tree",
     "AutoIntegrator",
     "BlackBoxRHS",
@@ -136,6 +140,8 @@ __all__ = [
     "RungeKuttaIntegrator",
     "select_time_integrator",
     "TimeIntegrator",
+    "dirk_stage_root_problem",
+    "implicit_stage_root_problem",
     "time_integrator_step_solve_relation_descriptor",
     "IntegrationDriver",
     "TimeIntegrationCapability",

@@ -189,6 +189,16 @@ class _AffineTestRHS:
         return self.linear_operator(_t, u)
 
 
+class _JacobianTestRHS:
+    """Tiny nonlinear RHS with Jacobian evidence for implicit stage claims."""
+
+    def __call__(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([float(u[0]) ** 2, float(u[1])], backend=u.backend)
+
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[2.0 * float(u[0]), 0.0], [0.0, 1.0]], backend=u.backend)
+
+
 def _unknown_test_rhs(_t: float, u: Tensor) -> Tensor:
     return u
 
@@ -1973,7 +1983,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         )
         state = state_cls(0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND))
         return implicit_runge_kutta(1).step_solve_relation_descriptor(
-            _unknown_test_rhs, state, 0.125
+            _JacobianTestRHS(), state, 0.125
         )
 
     @classmethod
@@ -2818,9 +2828,12 @@ class _TimeIntegratorSolveRelationClaim(Claim[None]):
             stage_matrix = getattr(integrator, "A_sym", ())
             if not stage_matrix:
                 continue
-            descriptor = integrator.step_solve_relation_descriptor(
-                _unknown_test_rhs, state, 0.25
+            rhs = (
+                _unknown_test_rhs
+                if self._stage_matrix_is_strictly_lower(stage_matrix)
+                else _JacobianTestRHS()
             )
+            descriptor = integrator.step_solve_relation_descriptor(rhs, state, 0.25)
             schema.validate_descriptor(descriptor)
             if self._stage_matrix_is_strictly_lower(stage_matrix):
                 assert self._regions(schema)["linear_system"].contains(descriptor)

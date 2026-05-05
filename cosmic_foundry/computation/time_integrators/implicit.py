@@ -36,16 +36,16 @@ from typing import Any, Protocol, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
-from cosmic_foundry.computation.solvers.newton_root_solver import (
-    NewtonRootSolver,
-    RootSolveProblem,
-)
-from cosmic_foundry.computation.tensor import Tensor, norm
+from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
     RHSProtocol,
     TimeIntegrator,
+)
+from cosmic_foundry.computation.time_integrators.solve_relation import (
+    dirk_stage_root_problem,
+    implicit_stage_root_problem,
 )
 
 
@@ -164,7 +164,6 @@ def _build_dirk_tableaux() -> dict:
 
 
 _DIRK_TABLEAUX = _build_dirk_tableaux()
-_LU = LUFactorization()
 _NEWTON = NewtonRootSolver()
 
 
@@ -333,8 +332,6 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
             return self._step_coupled(rhs, state, dt)
 
         t, u = state.t, state.u
-        n = u.shape[0]
-        backend = u.backend
         k: list[Tensor] = []
 
         for i in range(self._s):
@@ -347,30 +344,12 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
 
             gamma_dt = gamma_i * dt
 
-            def residual(
-                y: Tensor,
-                *,
-                _t_i: float = t_i,
-                _gamma_dt: float = gamma_dt,
-                _y_exp: Tensor = y_exp,
-            ) -> Tensor:
-                return y - _gamma_dt * rhs(_t_i, y) - _y_exp
-
-            def jacobian(
-                y: Tensor,
-                *,
-                _t_i: float = t_i,
-                _gamma_dt: float = gamma_dt,
-            ) -> Tensor:
-                return Tensor.eye(n, backend=backend) - _gamma_dt * rhs.jacobian(
-                    _t_i, y
-                )
-
             y = _NEWTON.solve(
-                RootSolveProblem(
-                    residual,
-                    jacobian,
+                dirk_stage_root_problem(
+                    rhs,
                     y_exp,
+                    t_i,
+                    gamma_dt,
                     equality_constraint_gradients=constraint_gradients,
                 )
             )
@@ -392,65 +371,18 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         n = u.shape[0]
         s = self._s
         backend = u.backend
-        f0 = rhs(t, u)
-        stages = [u + (self._c_f[i] * dt) * f0 for i in range(s)]
+        stages = _unflatten_blocks(
+            _NEWTON.solve(implicit_stage_root_problem(self, rhs, state, dt)),
+            s,
+            n,
+            backend=backend,
+        )
         stage_times = [t + c_i * dt for c_i in self._c_f]
-
-        for _ in range(50):
-            f_vals = [rhs(stage_times[i], stages[i]) for i in range(s)]
-            jac_vals = [rhs.jacobian(stage_times[i], stages[i]) for i in range(s)]
-
-            residual_blocks: list[Tensor] = []
-            for i in range(s):
-                residual = stages[i] - u
-                for j in range(s):
-                    residual = residual - (self._A_f[i][j] * dt) * f_vals[j]
-                residual_blocks.append(residual)
-            residual_vec = _flatten_blocks(residual_blocks)
-            if float(norm(residual_vec)) < 1e-12 * (
-                1.0 + sum(float(norm(stage)) for stage in stages)
-            ):
-                break
-
-            matrix_rows: list[list[float]] = []
-            for i in range(s):
-                for row in range(n):
-                    matrix_row: list[float] = []
-                    for j in range(s):
-                        a_ij = self._A_f[i][j]
-                        J_j = jac_vals[j]
-                        for col in range(n):
-                            identity = 1.0 if i == j and row == col else 0.0
-                            matrix_row.append(
-                                identity - dt * a_ij * float(J_j[row, col])
-                            )
-                    matrix_rows.append(matrix_row)
-
-            delta_vec = _LU.factorize(Tensor(matrix_rows, backend=backend)).solve(
-                Tensor.zeros(s * n, backend=backend) - residual_vec
-            )
-            deltas = _unflatten_blocks(delta_vec, s, n, backend=backend)
-            stages = [
-                stage + delta for stage, delta in zip(stages, deltas, strict=True)
-            ]
-            if float(norm(delta_vec)) < 1e-12 * (
-                1.0 + sum(float(norm(stage)) for stage in stages)
-            ):
-                break
-
         f_vals = [rhs(stage_times[i], stages[i]) for i in range(s)]
         u_new = u
         for i in range(s):
             u_new = u_new + (self._b_f[i] * dt) * f_vals[i]
         return state._replace(t=t + dt, u=u_new, dt=dt, err=0.0, history=None)
-
-
-def _flatten_blocks(blocks: list[Tensor]) -> Tensor:
-    backend = blocks[0].backend
-    return Tensor(
-        [float(block[i]) for block in blocks for i in range(block.shape[0])],
-        backend=backend,
-    )
 
 
 def _unflatten_blocks(

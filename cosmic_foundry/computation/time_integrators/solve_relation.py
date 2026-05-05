@@ -14,6 +14,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     assembled_linear_transformation_relation,
     transformation_relation_coordinates,
 )
+from cosmic_foundry.computation.solvers.newton_root_solver import RootSolveProblem
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -27,6 +28,19 @@ class AffineRHSProtocol(Protocol):
 
     def linear_operator(self, t: float, u: Tensor) -> Tensor:
         """Return the matrix A in ``f(t, u) = A u + b``."""
+        ...
+
+
+@runtime_checkable
+class JacobianRHSProtocol(Protocol):
+    """ODE RHS that exposes a Jacobian oracle."""
+
+    def __call__(self, t: float, u: Tensor) -> Tensor:
+        """Evaluate ``f(t, u)``."""
+        ...
+
+    def jacobian(self, t: float, u: Tensor) -> Tensor:
+        """Return the Jacobian matrix at ``(t, u)``."""
         ...
 
 
@@ -82,18 +96,6 @@ def time_integrator_step_solve_relation_descriptor(
         raise ValueError("time-step solve relation has no stage-equation premise")
     affine_rhs = isinstance(rhs, AffineRHSProtocol)
     evidence: tuple[LinearOperatorEvidence, ...] = ()
-    relation = _transformation_relation(
-        state.u,
-        variable_count=state.u.shape[0] * len(stage_matrix),
-        equality_constraint_count=equality_constraint_count,
-        map_linearity_defect=None,
-        map_linearity_evidence="unavailable",
-        matrix_representation_available=False,
-        derivative_oracle_kind="jacobian_callback",
-        work_budget_fmas=work_budget_fmas,
-        memory_budget_bytes=memory_budget_bytes,
-        device_kind=device_kind,
-    )
     if affine_rhs:
         stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
         if len(stage_times) != len(stage_matrix):
@@ -115,11 +117,121 @@ def time_integrator_step_solve_relation_descriptor(
             memory_budget_bytes=memory_budget_bytes,
             device_kind=device_kind,
         )
-    return _descriptor_from_relation(
-        relation,
+        return _descriptor_from_relation(
+            relation,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+            evidence=evidence,
+        )
+    if not isinstance(rhs, JacobianRHSProtocol):
+        raise ValueError("implicit stage root problems require Jacobian evidence")
+    problem = implicit_stage_root_problem(integrator, rhs, state, dt)
+    return problem.solve_relation_descriptor(
         requested_residual_tolerance=requested_residual_tolerance,
         requested_solution_tolerance=requested_solution_tolerance,
-        evidence=evidence,
+        work_budget_fmas=work_budget_fmas,
+        memory_budget_bytes=memory_budget_bytes,
+        device_kind=device_kind,
+    )
+
+
+def dirk_stage_root_problem(
+    rhs: JacobianRHSProtocol,
+    y_exp: Tensor,
+    t_i: float,
+    gamma_dt: float,
+    *,
+    equality_constraint_gradients: Tensor | None = None,
+) -> RootSolveProblem:
+    """Return the root problem for one DIRK stage value."""
+    n = y_exp.shape[0]
+    backend = y_exp.backend
+
+    def residual(y: Tensor) -> Tensor:
+        return y - gamma_dt * rhs(t_i, y) - y_exp
+
+    def jacobian(y: Tensor) -> Tensor:
+        return Tensor.eye(n, backend=backend) - gamma_dt * rhs.jacobian(t_i, y)
+
+    return RootSolveProblem(
+        residual,
+        jacobian,
+        y_exp,
+        equality_constraint_gradients=equality_constraint_gradients,
+    )
+
+
+def implicit_stage_root_problem(
+    integrator: Any,
+    rhs: JacobianRHSProtocol,
+    state: Any,
+    dt: float,
+) -> RootSolveProblem:
+    """Return the coupled root problem induced by an implicit RK stage system."""
+    stage_matrix = tuple(
+        tuple(float(entry) for entry in row) for row in getattr(integrator, "A_sym", ())
+    )
+    stage_count = len(stage_matrix)
+    state_dimension = state.u.shape[0]
+    backend = state.u.backend
+    stage_times = _stage_times(integrator, state.t, dt, stage_count)
+    initial = _flatten_blocks((state.u,) * stage_count)
+
+    def residual(values: Tensor) -> Tensor:
+        stages = _split_blocks(values, stage_count, state_dimension)
+        blocks: list[Tensor] = []
+        for row_index in range(stage_count):
+            block = stages[row_index] - state.u
+            for column_index in range(stage_count):
+                coefficient = stage_matrix[row_index][column_index]
+                if coefficient != 0.0:
+                    block = block - dt * coefficient * rhs(
+                        stage_times[column_index],
+                        stages[column_index],
+                    )
+            blocks.append(block)
+        return _flatten_blocks(tuple(blocks))
+
+    def jacobian(values: Tensor) -> Tensor:
+        stages = _split_blocks(values, stage_count, state_dimension)
+        rows: list[list[float]] = []
+        for row_index in range(stage_count):
+            for component_row in range(state_dimension):
+                row: list[float] = []
+                for column_index in range(stage_count):
+                    coefficient = stage_matrix[row_index][column_index]
+                    jac = rhs.jacobian(stage_times[column_index], stages[column_index])
+                    for component_column in range(state_dimension):
+                        identity = (
+                            1.0
+                            if row_index == column_index
+                            and component_row == component_column
+                            else 0.0
+                        )
+                        value = float(jac[component_row, component_column])
+                        row.append(identity - dt * coefficient * value)
+                rows.append(row)
+        return Tensor(rows, backend=backend)
+
+    return RootSolveProblem(residual, jacobian, initial)
+
+
+def _flatten_blocks(blocks: tuple[Tensor, ...]) -> Tensor:
+    backend = blocks[0].backend
+    return Tensor(
+        [float(block[index]) for block in blocks for index in range(block.shape[0])],
+        backend=backend,
+    )
+
+
+def _split_blocks(
+    values: Tensor,
+    block_count: int,
+    block_size: int,
+) -> tuple[Tensor, ...]:
+    return tuple(
+        values[index * block_size : (index + 1) * block_size]
+        for index in range(block_count)
     )
 
 
@@ -313,5 +425,8 @@ def _backend_kind(tensor: Tensor) -> str:
 
 __all__ = [
     "AffineRHSProtocol",
+    "JacobianRHSProtocol",
+    "dirk_stage_root_problem",
+    "implicit_stage_root_problem",
     "time_integrator_step_solve_relation_descriptor",
 ]
