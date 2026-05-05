@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: ground least-squares ownership on full-rank, rank-deficient, and
-   inconsistent rectangular calculations, checking that the same SVD ownership
-   premise selects the solver and yields Moore-Penrose minimum-norm solutions.
-2. Review whether directional derivative evidence (`jvp`/`vjp`) should be
-   represented as a separate nonlinear solver gap or should wait for a
-   concrete matrix-free Newton/Krylov calculation.
-3. Review whether least-squares relation evidence should also project
+1. Current PR: represent JVP-backed nonlinear root evidence as an explicit
+   directional-derivative root relation and keep it as a computed uncovered
+   atlas gap until a matrix-free nonlinear solver calculation exists.
+2. Review whether least-squares relation evidence should also project
    decomposition coordinates when rank/nullity or conditioning become selector
    premises, rather than duplicating rectangular matrix analysis elsewhere.
+3. Review whether the next grounding calculation should be a matrix-free
+   Newton/Krylov root solve or a real-ish implicit physics step whose only
+   derivative evidence is a JVP.
 
 Roadmap sketch:
 
@@ -988,6 +988,11 @@ The concrete nonlinear target-zero child is named `RootRelation`.  Direct NSE
 construction, implicit RK stages, and IMEX implicit-component stages are
 application-specific adapters that construct root relations; they are not
 separate mathematical problem types.
+JVP-backed nonlinear target-zero residuals are represented by
+`DirectionalDerivativeRootRelation`.  They carry a directional derivative
+oracle and project to the nonlinear-root solve space, but they remain a
+computed uncovered atlas gap until an implementation can solve that premise
+without silently requiring an assembled Jacobian.
 The capability atlas begins with a generated parameter-space hierarchy before
 showing projection plots.  The hierarchy is schema → primitive coordinates →
 derived regions → current ownership and uncovered cells, so readers can see
