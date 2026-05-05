@@ -122,7 +122,10 @@ def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
     )
 
 
-def nonlinear_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
+def nonlinear_root_predicates(
+    *,
+    equality_constraint_predicates: tuple[StructuredPredicate, ...] = (),
+) -> tuple[tuple[StructuredPredicate, ...], ...]:
     """Return primitive predicate sets for nonlinear residual roots."""
     common: tuple[StructuredPredicate, ...] = (
         MembershipPredicate(
@@ -142,6 +145,7 @@ def nonlinear_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
             "==",
             0.0,
         ),
+        *equality_constraint_predicates,
     )
     return (
         (
@@ -162,6 +166,24 @@ def nonlinear_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
     )
 
 
+def unconstrained_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
+    """Return predicate sets for nonlinear roots without equality constraints."""
+    return nonlinear_root_predicates(
+        equality_constraint_predicates=(
+            ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, "==", 0),
+        )
+    )
+
+
+def constrained_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
+    """Return predicate sets for nonlinear roots with equality constraints."""
+    return nonlinear_root_predicates(
+        equality_constraint_predicates=(
+            ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, ">", 0),
+        )
+    )
+
+
 __all__ = [
     "CONDITION_LIMIT",
     "LINEARITY_TOLERANCE",
@@ -170,5 +192,7 @@ __all__ = [
     "dense_matrix_predicates",
     "linear_system_predicates",
     "matrix_free_operator_predicates",
+    "constrained_root_predicates",
     "nonlinear_root_predicates",
+    "unconstrained_root_predicates",
 ]

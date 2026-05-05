@@ -3687,6 +3687,8 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         schema = solve_relation_parameter_schema()
         regions = root_solver_coverage_regions()
         assert regions
+        constrained = []
+        unconstrained = []
         for region in regions:
             schema.validate_coverage_region(region)
             descriptor = (
@@ -3697,6 +3699,15 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
             assert schema.cell_status(descriptor, regions) == "owned"
             assert select_root_solver_for_descriptor(descriptor) is region.owner
             assert self._regions(schema)["nonlinear_root"].contains(descriptor)
+            constraint_count = descriptor.coordinate(
+                SolveRelationField.EQUALITY_CONSTRAINT_COUNT
+            ).value
+            if constraint_count == 0:
+                unconstrained.append(region)
+            else:
+                constrained.append(region)
+        assert constrained
+        assert unconstrained
         assert {region.owner for region in regions} == {
             _resolve_dotted("cosmic_foundry.computation.solvers.NewtonRootSolver")
         }
