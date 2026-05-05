@@ -85,8 +85,10 @@ from cosmic_foundry.computation.decompositions.capabilities import (
 )
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.capabilities import (
+    least_squares_solver_coverage_regions,
     linear_solver_coverage_regions,
     root_solver_coverage_regions,
+    select_least_squares_solver_for_descriptor,
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
 )
@@ -3761,6 +3763,41 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         return cls._one() + cls._one()
 
 
+class _LeastSquaresSolverCoverageRegionClaim(Claim[None]):
+    """Claim: least-squares selection is driven by solve-relation coverage."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/least_squares_solver_coverage_regions"
+
+    def check(self, _calibration: None) -> None:
+        schema = solve_relation_parameter_schema()
+        regions = least_squares_solver_coverage_regions()
+        assert regions
+        least_squares_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.LeastSquaresSolver"
+        )
+        for region in regions:
+            schema.validate_coverage_region(region)
+            assert issubclass(region.owner, least_squares_solver)
+        descriptor = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=3,
+            objective_relation="least_squares",
+            acceptance_relation="objective_minimum",
+            matrix_representation_available=True,
+        )
+        schema.validate_descriptor(descriptor)
+        assert schema.cell_status(descriptor, regions) == "owned"
+        assert select_least_squares_solver_for_descriptor(
+            descriptor
+        ) is _resolve_dotted(
+            "cosmic_foundry.computation.solvers.DenseSVDLeastSquaresSolver"
+        )
+        non_objective_residual = _SolveRelationSchemaClaim._solve_descriptor()
+        assert schema.cell_status(non_objective_residual, regions) == "uncovered"
+
+
 class _RootSolverCoverageRegionClaim(Claim[None]):
     """Claim: nonlinear-root selection is driven by solve-relation coverage."""
 
@@ -4588,10 +4625,13 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
     public_categories={
         "capability_contract": frozenset(
             {
+                "LEAST_SQUARES_SOLVER_COVERAGE_REGIONS",
                 "LINEAR_SOLVER_COVERAGE_REGIONS",
                 "ROOT_SOLVER_COVERAGE_REGIONS",
+                "least_squares_solver_coverage_regions",
                 "linear_solver_coverage_regions",
                 "root_solver_coverage_regions",
+                "select_least_squares_solver_for_descriptor",
                 "select_linear_solver_for_descriptor",
                 "select_root_solver_for_descriptor",
             }
@@ -5015,6 +5055,7 @@ _CLAIMS: list[Claim[None]] = [
     _TimeIntegratorSolveRelationClaim(),
     _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoverageRegionClaim(),
+    _LeastSquaresSolverCoverageRegionClaim(),
     _RootSolverCoverageRegionClaim(),
     _DecompositionCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),

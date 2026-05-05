@@ -790,16 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: project overdetermined least-squares calculations through an
-   explicit relation object under the finite-dimensional residual spine, so the
-   solver consumes the objective relation rather than parallel matrix/RHS
-   tensors.
+1. Current PR: add autodiscovered least-squares solver ownership over primitive
+   solve-relation descriptors whose objective is least-squares minimization, so
+   rectangular least-squares execution is selected from relation evidence.
 2. Review whether directional derivative evidence (`jvp`/`vjp`) should be
    represented as a separate nonlinear solver gap or should wait for a
    concrete matrix-free Newton/Krylov calculation.
-3. Review whether the least-squares relation now has enough ownership evidence
-   for autodiscovered least-squares solver coverage, or whether coverage should
-   wait for a rank-deficient/inconsistent calculation pair.
+3. Review whether rank-deficient and inconsistent least-squares calculations
+   imply additional objective-space regions or are already covered by the same
+   SVD ownership premise.
 
 Roadmap sketch:
 
@@ -967,6 +966,10 @@ Overdetermined least-squares calculations now project through
 records the least-squares objective and objective-minimum acceptance semantics.
 Dense SVD least-squares execution consumes that relation object rather than
 parallel matrix and right-hand-side tensors.
+Least-squares solver ownership is separate from square linear-system ownership:
+it is autodiscovered over primitive solve-relation descriptors with a
+least-squares objective, objective-minimum acceptance, linear residual evidence,
+and an assembled matrix representation.
 IMEX implicit-component stage solves reuse the DIRK stage root constructor via
 a Jacobian-RHS view of the implicit split component.  The split is application
 structure; the stage solve remains the same residual-relation premise as an

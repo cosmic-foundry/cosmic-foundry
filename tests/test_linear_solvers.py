@@ -27,6 +27,9 @@ from cosmic_foundry.computation.decompositions import (
 )
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
+from cosmic_foundry.computation.solvers.capabilities import (
+    select_least_squares_solver_for_descriptor,
+)
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
     DenseGaussSeidelSolver,
@@ -333,6 +336,11 @@ def _assert_rectangular_least_squares_solution(
         descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value
         == "objective_minimum"
     )
+    if method != "SVDFactorization":
+        assert (
+            select_least_squares_solver_for_descriptor(descriptor)
+            is DenseSVDLeastSquaresSolver
+        )
     x = solve(a, b)
     expected = (4.0 / 3.0, 7.0 / 3.0)
     error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(2)))

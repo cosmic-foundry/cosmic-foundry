@@ -42,6 +42,7 @@ from cosmic_foundry.computation.decompositions.capabilities import (
     decomposition_coverage_regions,
 )
 from cosmic_foundry.computation.solvers.capabilities import (
+    least_squares_solver_coverage_regions,
     linear_solver_coverage_regions,
 )
 from cosmic_foundry.computation.time_integrators.capabilities import (
@@ -202,6 +203,8 @@ def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
     for region in decomposition_coverage_regions():
         regions[region.owner] = region
     for region in linear_solver_coverage_regions():
+        regions[region.owner] = region
+    for region in least_squares_solver_coverage_regions():
         regions[region.owner] = region
     for region in time_integration_step_solve_regions():
         regions[region.owner] = region
