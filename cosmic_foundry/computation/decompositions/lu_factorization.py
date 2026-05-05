@@ -182,18 +182,22 @@ class LUFactorization(Factorization):
     with JAX tracing (no Python bool over traced values).
     """
 
-    factorization_feasibility_certificate = (
-        AffineComparisonPredicate(
-            {
-                DecompositionField.MATRIX_ROWS: 1.0,
-                DecompositionField.MATRIX_COLUMNS: -1.0,
-            },
-            "==",
-            0.0,
-        ),
-        ComparisonPredicate(DecompositionField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0),
-        ComparisonPredicate(
-            DecompositionField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
+    factorization_feasibility_regions = (
+        (
+            AffineComparisonPredicate(
+                {
+                    DecompositionField.MATRIX_ROWS: 1.0,
+                    DecompositionField.MATRIX_COLUMNS: -1.0,
+                },
+                "==",
+                0.0,
+            ),
+            ComparisonPredicate(
+                DecompositionField.SINGULAR_VALUE_LOWER_BOUND, ">", 0.0
+            ),
+            ComparisonPredicate(
+                DecompositionField.CONDITION_ESTIMATE, "<=", CONDITION_LIMIT
+            ),
         ),
     )
 

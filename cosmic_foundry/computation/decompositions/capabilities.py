@@ -50,12 +50,14 @@ def _budget_predicates() -> tuple[AffineComparisonPredicate, ...]:
     )
 
 
-def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ...]:
-    predicates: tuple[StructuredPredicate, ...] = ()
+def _inherited_coverage_regions(
+    owner: type,
+) -> tuple[tuple[StructuredPredicate, ...], ...]:
+    prefixes: tuple[StructuredPredicate, ...] = ()
     if issubclass(owner, Factorization):
-        predicates += _budget_predicates()
-    predicates += getattr(owner, "factorization_feasibility_certificate", ())
-    return predicates
+        prefixes += _budget_predicates()
+    regions = getattr(owner, "factorization_feasibility_regions", ())
+    return tuple(prefixes + region for region in regions)
 
 
 def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
@@ -69,8 +71,9 @@ def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
                 and not getattr(item, "__abstractmethods__", None)
                 and item is not Decomposition
             ):
-                regions.append(
-                    CoverageRegion(item, _inherited_coverage_predicates(item))
+                regions.extend(
+                    CoverageRegion(item, predicates)
+                    for predicates in _inherited_coverage_regions(item)
                 )
     return tuple(regions)
 

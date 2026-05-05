@@ -790,16 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make assembled linear residual relations project decomposition
-   descriptors directly, grounding the change in a rectangular least-squares
-   calculation whose solve and rank/nullity evidence come from the same
-   relation.
-2. Review whether SVD decomposition ownership should own non-square matrices
-   as a disjoint region from LU's square full-rank region, so rectangular
-   least-squares execution no longer bypasses decomposition selection.
-3. Review whether the next grounding calculation should be a matrix-free
+1. Current PR: make SVD decomposition ownership cover non-square matrices as
+   disjoint row-deficient and column-deficient regions, grounding the change in
+   the rectangular least-squares calculation whose relation-projected
+   decomposition descriptor now selects SVD.
+2. Review whether the next grounding calculation should be a matrix-free
    Newton/Krylov root solve or a real-ish implicit physics step whose only
    derivative evidence is a JVP.
+3. Review whether factorization execution should consume a relation object
+   instead of a bare matrix when the downstream solve semantics are
+   objective-dependent.
 
 Roadmap sketch:
 
@@ -972,6 +972,11 @@ directly from the same matrix evidence.  Least-squares relations inherit that
 projection, so rectangular least-squares calculations expose rank, nullity,
 conditioning, and shape evidence without a separate descriptor construction
 path.
+Factorization feasibility is a descriptor region with disjoint alternatives,
+not a single conjunction.  LU owns the square, full-rank, well-conditioned
+matrix region.  SVD owns non-square matrices and square rank-deficient/singular
+matrices, so rectangular least-squares execution selects the same SVD
+factorization through decomposition coverage rather than bypassing selection.
 Least-squares solver ownership is separate from square linear-system ownership:
 it is autodiscovered over primitive solve-relation descriptors with a
 least-squares objective, objective-minimum acceptance, linear residual evidence,

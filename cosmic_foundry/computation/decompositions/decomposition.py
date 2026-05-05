@@ -47,8 +47,8 @@ class Decomposition(ABC):
         decompose — decompose A and return a DecomposedTensor
     """
 
-    factorization_feasibility_certificate: ClassVar[
-        tuple[StructuredPredicate, ...]
+    factorization_feasibility_regions: ClassVar[
+        tuple[tuple[StructuredPredicate, ...], ...]
     ] = ()
 
     @abstractmethod
