@@ -39,10 +39,10 @@ INTEGRATOR_SESSION_BUDGET_S: float = float(
 )
 
 # ── Shared fixed overhead ─────────────────────────────────────────────────────
-# Per-session overhead not covered by either convergence budget: performance-
-# test calibration, structure/tensor tests, solver calibration (one probe per
-# solver type per session), and GPU benchmark variability.
-FIXED_SESSION_OVERHEAD_S: float = 40.0
+# Per-session overhead not covered by either convergence budget: capability
+# atlas structure tests, tensor tests, performance calibration, solver
+# calibration probes, and GPU benchmark variability.
+FIXED_SESSION_OVERHEAD_S: float = 80.0
 
 # Tolerance multiplier on the total expected session time.
 BUDGET_TOLERANCE: float = 1.1
