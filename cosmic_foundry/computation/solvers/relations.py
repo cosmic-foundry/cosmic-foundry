@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from cosmic_foundry.computation.algorithm_capabilities import (
+    DecompositionField,
     EvidenceSource,
     LinearOperatorEvidence,
     ParameterDescriptor,
@@ -13,6 +14,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     TransformationRelation,
     TransformationSpace,
     assembled_linear_transformation_relation,
+    decomposition_coordinates,
     transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.tensor import Tensor
@@ -109,6 +111,23 @@ class LinearResidualRelation(FiniteDimensionalResidualRelation):
     def equality_constraint_count(self) -> int:
         """Return the number of equality constraints active in the relation."""
         return self._equality_constraint_count
+
+    def decomposition_descriptor(
+        self,
+        *,
+        factorization_work_budget_fmas: float = 1.0e9,
+        factorization_memory_budget_bytes: float = 1.0e9,
+    ) -> ParameterDescriptor:
+        """Project this relation's assembled matrix evidence to decomposition space."""
+        return ParameterDescriptor(
+            decomposition_coordinates(
+                self.linear_operator_evidence,
+                frozenset(DecompositionField),
+                factorization_work_budget_fmas=factorization_work_budget_fmas,
+                factorization_memory_budget_bytes=factorization_memory_budget_bytes,
+            ),
+            evidence=(self.linear_operator_evidence,),
+        )
 
     def solve_relation_descriptor(
         self,

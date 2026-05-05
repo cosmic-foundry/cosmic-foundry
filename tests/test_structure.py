@@ -2707,6 +2707,8 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
         assert issubclass(least_squares_relation, linear_relation)
         assert issubclass(linear_relation, residual_relation)
+        assert "decomposition_descriptor" in linear_relation.__dict__
+        assert "decomposition_descriptor" not in least_squares_relation.__dict__
 
     @staticmethod
     def _callable_tensor_map_count(function: ast.FunctionDef) -> int:

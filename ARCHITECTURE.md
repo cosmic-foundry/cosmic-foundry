@@ -790,12 +790,13 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: represent JVP-backed nonlinear root evidence as an explicit
-   directional-derivative root relation and keep it as a computed uncovered
-   atlas gap until a matrix-free nonlinear solver calculation exists.
-2. Review whether least-squares relation evidence should also project
-   decomposition coordinates when rank/nullity or conditioning become selector
-   premises, rather than duplicating rectangular matrix analysis elsewhere.
+1. Current PR: make assembled linear residual relations project decomposition
+   descriptors directly, grounding the change in a rectangular least-squares
+   calculation whose solve and rank/nullity evidence come from the same
+   relation.
+2. Review whether SVD decomposition ownership should own non-square matrices
+   as a disjoint region from LU's square full-rank region, so rectangular
+   least-squares execution no longer bypasses decomposition selection.
 3. Review whether the next grounding calculation should be a matrix-free
    Newton/Krylov root solve or a real-ish implicit physics step whose only
    derivative evidence is a JVP.
@@ -966,6 +967,11 @@ Overdetermined least-squares calculations now project through
 records the least-squares objective and objective-minimum acceptance semantics.
 Dense SVD least-squares execution consumes that relation object rather than
 parallel matrix and right-hand-side tensors.
+Assembled linear residual relations also project decomposition descriptors
+directly from the same matrix evidence.  Least-squares relations inherit that
+projection, so rectangular least-squares calculations expose rank, nullity,
+conditioning, and shape evidence without a separate descriptor construction
+path.
 Least-squares solver ownership is separate from square linear-system ownership:
 it is autodiscovered over primitive solve-relation descriptors with a
 least-squares objective, objective-minimum acceptance, linear residual evidence,
