@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: require multi-region time-integrator ownership to be witnessed by
-   executable selector requests, so region splits cannot exist only for
-   documentation.
-2. Review whether active algebraic-constraint evidence should become a
-   descriptor coordinate for step-solve relations rather than an execution-only
-   protocol.
-3. Keep nonlinear solver extraction in view: implicit stage residuals should
+1. Current PR: project active algebraic constraints into primitive step-solve
+   relation coordinates, so projected Newton is described by the same equality
+   constraint axis as other solve relations.
+2. Keep nonlinear solver extraction in view: implicit stage residuals should
    continue moving toward a generic nonlinear-root solve interface once a second
    caller needs the same Newton machinery.
+3. Review whether constrained Newton, implicit stage Newton, and any future
+   nonlinear solve caller can share one root-solve relation without preserving a
+   time-integrator-specific Newton concept.
 
 Roadmap sketch:
 
@@ -922,6 +922,11 @@ projects active algebraic constraints through a structural constrained-Newton
 gradient protocol instead of checking for reaction-network RHS classes.
 Reaction networks provide that protocol by returning gradient rows for active
 equilibrium constraints.
+Active constraints are now also primitive solve-relation evidence.  A time-step
+solve descriptor records the count of active equality constraints when state
+constraint markers are backed by RHS gradient evidence; projected Newton is
+therefore a constrained root/linear solve in the same schema, not an execution
+side channel.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

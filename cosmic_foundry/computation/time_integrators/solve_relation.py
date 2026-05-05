@@ -58,11 +58,13 @@ def time_integrator_step_solve_relation_descriptor(
     stage_matrix = getattr(integrator, "A_sym", ())
     if not stage_matrix:
         raise ValueError("time-step solve relations require stage equations")
+    equality_constraint_count = _active_equality_constraint_count(rhs, state)
 
     if _stage_matrix_is_strictly_lower(stage_matrix):
         relation = _transformation_relation(
             state.u,
             variable_count=state.u.shape[0],
+            equality_constraint_count=equality_constraint_count,
             map_linearity_defect=0.0,
             map_linearity_evidence="exact",
             matrix_representation_available=True,
@@ -83,6 +85,7 @@ def time_integrator_step_solve_relation_descriptor(
     relation = _transformation_relation(
         state.u,
         variable_count=state.u.shape[0] * len(stage_matrix),
+        equality_constraint_count=equality_constraint_count,
         map_linearity_defect=None,
         map_linearity_evidence="unavailable",
         matrix_representation_available=False,
@@ -107,6 +110,7 @@ def time_integrator_step_solve_relation_descriptor(
         )
         relation = assembled_linear_transformation_relation(
             evidence[0],
+            equality_constraint_count=equality_constraint_count,
             work_budget_fmas=work_budget_fmas,
             memory_budget_bytes=memory_budget_bytes,
             device_kind=device_kind,
@@ -123,6 +127,7 @@ def _transformation_relation(
     state_vector: Tensor,
     *,
     variable_count: int,
+    equality_constraint_count: int,
     map_linearity_defect: float | None,
     map_linearity_evidence: EvidenceSource,
     matrix_representation_available: bool,
@@ -146,6 +151,7 @@ def _transformation_relation(
         matrix_representation_available=matrix_representation_available,
         operator_application_available=True,
         derivative_oracle_kind=derivative_oracle_kind,
+        equality_constraint_count=equality_constraint_count,
         objective_relation="none",
         acceptance_relation="residual_below_tolerance",
         backend_kind=space.backend_kind,
@@ -171,6 +177,19 @@ def _descriptor_from_relation(
         ),
         evidence=evidence,
     )
+
+
+def _active_equality_constraint_count(rhs: Any, state: Any) -> int:
+    active = getattr(state, "active_constraints", None) or frozenset()
+    count = len(active)
+    if count == 0:
+        return 0
+    gradients = getattr(rhs, "constraint_gradients", None)
+    if not callable(gradients):
+        raise ValueError(
+            "active equality constraints require RHS constraint-gradient evidence"
+        )
+    return count
 
 
 class _AffineStageResidualOperator:
