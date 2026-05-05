@@ -790,15 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: construct a JVP-backed implicit-stage root relation from a
-   backward-Euler nonlinear decay step and solve it through the matrix-free
-   root solver selected from the time-step descriptor.
-2. Review whether factorization execution should consume a relation object
-   instead of a bare matrix when the downstream solve semantics are
-   objective-dependent.
-3. Review whether implicit time-integrator execution should select root solvers
+1. Current PR: make SVD factorization consume assembled linear residual
+   relations directly for least-squares solves, grounding the change in the
+   rectangular least-squares calculation that no longer splits the relation
+   back into a bare matrix and right-hand side.
+2. Review whether implicit time-integrator execution should select root solvers
    from stage-relation descriptors instead of closing over one Newton instance
    per module.
+3. Review whether decomposition results should remain bare reusable matrix
+   objects, or whether solve semantics should move entirely to relation-aware
+   execution paths.
 
 Roadmap sketch:
 
@@ -971,6 +972,11 @@ directly from the same matrix evidence.  Least-squares relations inherit that
 projection, so rectangular least-squares calculations expose rank, nullity,
 conditioning, and shape evidence without a separate descriptor construction
 path.
+SVD factorization now exposes a relation-aware solve path for assembled linear
+residual relations.  The rectangular least-squares calculation therefore routes
+through the same relation object for solve-relation selection, decomposition
+selection, and pseudoinverse execution; tests no longer split that calculation
+back into parallel `A` and `b` coordinates to call the factorization.
 Factorization feasibility is a descriptor region with disjoint alternatives,
 not a single conjunction.  LU owns the square, full-rank, well-conditioned
 matrix region.  SVD owns non-square matrices and square rank-deficient/singular

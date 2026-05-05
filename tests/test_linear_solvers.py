@@ -289,7 +289,9 @@ class _SVDLeastSquaresClaim(Claim[ExecutionPlan]):
             self.description,
             "SVDFactorization",
             execution_plan,
-            lambda a, b: SVDFactorization().factorize(a).solve(b),
+            lambda a, b: SVDFactorization().solve_relation(
+                _least_squares_relation(a, b)
+            ),
         )
 
 
