@@ -21,6 +21,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
+    nse_root_problem,
     solve_nse,
 )
 from cosmic_foundry.computation.time_integrators.domains import (
@@ -117,6 +118,7 @@ __all__ = [
     "DomainCheck",
     "DomainViolation",
     "NonnegativeStateDomain",
+    "nse_root_problem",
     "predict_domain_step_limit",
     "solve_nse",
     "StateDomain",

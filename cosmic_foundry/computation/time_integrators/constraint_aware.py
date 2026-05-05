@@ -166,14 +166,14 @@ def _update_active_set(
     return frozenset(new_active)
 
 
-def solve_nse(
+def nse_root_problem(
     rhs: ReactionNetworkRHS,
     u: Tensor,
     t: float = 0.0,
     *,
     eps: float = 1e-7,
-) -> Tensor:
-    """Solve for the Nuclear Statistical Equilibrium state.
+) -> RootSolveProblem:
+    """Return the root problem defining the Nuclear Statistical Equilibrium state.
 
     At NSE every independent reaction pair satisfies r⁺_j = r⁻_j.  The
     equilibrium state is determined by the combined system:
@@ -182,8 +182,8 @@ def solve_nse(
     - Equilibrium: r⁺_j(u) − r⁻_j(u) = 0 for all j in constraint_basis
 
     When all independent constraints are active, this is a square
-    n_species × n_species system solved by Newton iteration.  The supplied
-    ``u`` is used as the initial guess.
+    n_species × n_species system; the supplied ``u`` is the Newton initial
+    guess.
 
     Parameters
     ----------
@@ -196,10 +196,6 @@ def solve_nse(
     eps:
         Finite-difference step size for Jacobian assembly.
 
-    Returns
-    -------
-    Tensor
-        Converged NSE state, shape (n_species,).
     """
     n_species = u.shape[0]
     backend = u.backend
@@ -239,7 +235,18 @@ def solve_nse(
                 rows.append([float(cg[r, s]) for s in range(n_species)])
         return Tensor(rows, backend=backend)
 
-    return _NEWTON.solve(RootSolveProblem(F, J, u))
+    return RootSolveProblem(F, J, u)
+
+
+def solve_nse(
+    rhs: ReactionNetworkRHS,
+    u: Tensor,
+    t: float = 0.0,
+    *,
+    eps: float = 1e-7,
+) -> Tensor:
+    """Solve for the Nuclear Statistical Equilibrium state."""
+    return _NEWTON.solve(nse_root_problem(rhs, u, t, eps=eps))
 
 
 class ConstraintAwareController:
@@ -433,4 +440,9 @@ class ConstraintAwareController:
         return limit
 
 
-__all__ = ["ConstraintAwareController", "build_constraint_gradients", "solve_nse"]
+__all__ = [
+    "ConstraintAwareController",
+    "build_constraint_gradients",
+    "nse_root_problem",
+    "solve_nse",
+]
