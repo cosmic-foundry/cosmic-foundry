@@ -790,18 +790,17 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Next PR: add a follow-up sprint plan for quantitative time-integrator
-   descriptors.  Anchor the plan in one concrete adaptive Nordsieck
-   calculation whose descriptor already exposes domain-step margin, stiffness
-   estimate, local error target, retry budget, and RHS evaluation cost.
-2. First implementation candidate after the plan: make adaptive Nordsieck
+1. Make adaptive Nordsieck
    ownership consume that quantitative step descriptor directly, deriving
    nonstiff, stiff, and domain-limited labels from schema regions rather than
    request vocabulary.
-3. Horizon-scan fixed-order Nordsieck selection after adaptive ownership
+2. Horizon-scan fixed-order Nordsieck selection after adaptive ownership
    stabilizes: history availability and stiffness evidence already select
    Adams/BDF construction, but local error and RHS-cost coordinates are not yet
    part of that ownership predicate.
+3. After adaptive and fixed-order ownership share quantitative map evidence,
+   add atlas documentation that renders the time-integrator descriptor regions
+   and overlays the adaptive Nordsieck evidence points.
 
 Roadmap sketch:
 
@@ -1332,10 +1331,44 @@ The sprint is complete when the following are true:
   the same bound and descriptor machinery rather than introducing package-local
   predicate systems.
 
+### Quantitative time-integrator descriptor sprint
+
+The next sprint moves time-integrator ownership from structural map labels to
+quantitative map evidence.  The anchor calculation is the adaptive Nordsieck
+step descriptor already exercised by `correctness/step_diagnostics_stiffness`:
+a scalar decay RHS distinguishes a nonstiff step from a stiff step by the
+Gershgorin estimate of `hJ`, while a boundary-approach RHS produces a
+domain-limited step through `DOMAIN_STEP_MARGIN <= 0`.  The descriptor also
+records the local error target, retry budget, and RHS evaluation cost, so the
+same evidence can drive controller ownership and future cost-aware selection.
+
+The sprint contract is:
+
+1. Adaptive Nordsieck ownership consumes `rhs_step_diagnostics_descriptor`
+   directly.  `nonstiff_step`, `stiff_step`, and `domain_limited_step` remain
+   derived regions over `MapStructureField` coordinates; they are not request
+   strings or method-family contracts.
+2. Region splits must construct different behavior or select different owners.
+   A region that only renames the same adaptive controller is removed or left as
+   documentation-only evidence, not as a dispatch predicate.
+3. Fixed-order Nordsieck ownership is reviewed after adaptive ownership
+   stabilizes.  Its current Adams/BDF split is justified by stiffness evidence,
+   but it does not yet account for local error target, retry budget, or RHS
+   evaluation cost.
+4. Atlas documentation follows the schema.  The generated page should show the
+   primitive quantitative fields, derived nonstiff/stiff/domain-limited regions,
+   adaptive Nordsieck ownership, and evidence points from the scalar decay and
+   boundary-approach calculations.
+
 Recommended PR sequence:
 
-1. Add a follow-up sprint plan for quantitative time-integrator descriptors once
-   the solver/decomposition predicates have stabilized.
+1. Make adaptive Nordsieck selection consume `rhs_step_diagnostics_descriptor`
+   and remove any parallel structural request vocabulary that duplicates
+   descriptor coordinates.
+2. Review fixed-order Nordsieck selection against the same quantitative
+   descriptor fields, keeping only splits that construct different behavior.
+3. Extend atlas generation to render quantitative time-integrator regions and
+   the grounded evidence points from the adaptive Nordsieck calculations.
 
 ---
 
