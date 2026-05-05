@@ -255,7 +255,7 @@ def _rhs_history_selection_case() -> _StepSelectionCase:
 
 
 def _nordsieck_history_selection_case() -> _StepSelectionCase:
-    rhs = cases.scalar_decay_jacobian_rhs()
+    rhs = _AffineDecayRHS()
     integrator = _ti.MultistepIntegrator("adams", 4)
     state = integrator.init_state(rhs, 0.0, Tensor([1.0], backend=_TIME_BACKEND), 1e-2)
     descriptor = nordsieck_history_descriptor(1.0e-2)
@@ -759,6 +759,12 @@ class _AdamsNordsieckCorrectorFixedPointClaim(Claim[Any]):
         )
         relation = _ti.adams_corrector_root_relation(rhs, z_pred, h, h, 1.0)
         descriptor = relation.solve_relation_descriptor()
+        assert (
+            descriptor.coordinate(
+                SolveRelationField.FIXED_POINT_CONTRACTION_BOUND
+            ).value
+            == rate * h
+        )
         assert select_root_solver_for_descriptor(descriptor) is FixedPointRootSolver
 
         expected = 1.0 / (1.0 + rate * h)

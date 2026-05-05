@@ -1634,12 +1634,11 @@ class _SolveRelationSchemaClaim(Claim[None]):
             )
         )
         assert solve_schema.descriptor_fields == set(SolveRelationField)
-        assert {axis.field for axis in linear_schema.axes} == set(
-            SolveRelationField
-        ) | set(LinearSolverField)
-        assert linear_schema.auxiliary_fields == set(DecompositionField)
         assert linear_schema.descriptor_fields == (
             set(SolveRelationField) | set(LinearSolverField) | set(DecompositionField)
+        )
+        assert linear_schema.auxiliary_fields == (
+            set(DecompositionField) | {SolveRelationField.FIXED_POINT_CONTRACTION_BOUND}
         )
         assert reaction_network_schema.descriptor_fields == set(ReactionNetworkField)
         assert map_structure_schema.descriptor_fields == set(MapStructureField)
@@ -1943,6 +1942,8 @@ class _SolveRelationSchemaClaim(Claim[None]):
         target_is_zero: bool = False,
         map_linearity_defect: float | None = 0.0,
         map_linearity_evidence: str = "exact",
+        fixed_point_contraction_bound: float | None = None,
+        fixed_point_contraction_evidence: str = "unavailable",
         matrix_representation_available: bool = True,
         operator_application_available: bool = True,
         derivative_oracle_kind: str = "matrix",
@@ -1976,6 +1977,10 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 field.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
                     map_linearity_defect,
                     evidence=map_linearity_evidence,  # type: ignore[arg-type]
+                ),
+                field.FIXED_POINT_CONTRACTION_BOUND: DescriptorCoordinate(
+                    fixed_point_contraction_bound,
+                    evidence=fixed_point_contraction_evidence,  # type: ignore[arg-type]
                 ),
                 field.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
                     matrix_representation_available
@@ -3624,12 +3629,17 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
                     cls._membership_witness(fields[predicate.field], predicate)
                 )
             elif isinstance(predicate, ComparisonPredicate):
-                coordinates[predicate.field] = DescriptorCoordinate(
-                    cls._comparison_witness(fields[predicate.field], predicate)
-                )
+                if predicate.field in fields:
+                    value = cls._comparison_witness(fields[predicate.field], predicate)
+                else:
+                    value = cls._nudged_value(predicate)
+                coordinates[predicate.field] = DescriptorCoordinate(value)
             elif isinstance(predicate, EvidencePredicate):
                 evidence = next(iter(sorted(predicate.evidence)))
-                value = coordinates[predicate.field].value
+                value = coordinates.get(
+                    predicate.field,
+                    DescriptorCoordinate(None),
+                ).value
                 coordinates[predicate.field] = DescriptorCoordinate(
                     value,
                     evidence=evidence,  # type: ignore[arg-type]
@@ -3885,6 +3895,22 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
             root_solver,
             matrix_free_root_solver,
         }
+        uncertified_fixed_point = _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="fixed_point_map",
+        )
+        noncontractive_fixed_point = _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="fixed_point_map",
+            fixed_point_contraction_bound=1.0,
+            fixed_point_contraction_evidence="upper_bound",
+        )
+        assert schema.cell_status(uncertified_fixed_point, regions) == "uncovered"
+        assert schema.cell_status(noncontractive_fixed_point, regions) == "uncovered"
 
     @staticmethod
     def _regions(

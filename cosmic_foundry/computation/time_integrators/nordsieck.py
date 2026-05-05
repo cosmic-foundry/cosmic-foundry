@@ -49,7 +49,7 @@ from cosmic_foundry.computation.solvers.newton_root_solver import (
     FixedPointRootRelation,
     RootRelation,
 )
-from cosmic_foundry.computation.tensor import Tensor
+from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.implicit import WithJacobianRHSProtocol
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -183,6 +183,12 @@ def adams_corrector_root_relation(
 ) -> FixedPointRootRelation:
     """Return the Adams corrector relation with fixed-point-map evidence."""
     rhs_adams = z_pred[0] - beta0 * z_pred[1]
+    linear_operator = getattr(rhs, "linear_operator", None)
+    contraction_bound = (
+        abs(beta0 * h) * float(norm(linear_operator(t_new, z_pred[0])))
+        if callable(linear_operator)
+        else None
+    )
 
     def residual(y: Tensor) -> Tensor:
         return y - (beta0 * h) * rhs(t_new, y) - rhs_adams
@@ -190,7 +196,12 @@ def adams_corrector_root_relation(
     def fixed_point(y: Tensor) -> Tensor:
         return z_pred[0] + beta0 * (h * rhs(t_new, y) - z_pred[1])
 
-    return FixedPointRootRelation(residual, fixed_point, z_pred[0])
+    return FixedPointRootRelation(
+        residual,
+        fixed_point,
+        z_pred[0],
+        contraction_bound=contraction_bound,
+    )
 
 
 class _BDFFamily:

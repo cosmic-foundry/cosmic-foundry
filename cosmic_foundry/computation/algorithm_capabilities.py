@@ -179,6 +179,7 @@ class SolveRelationField(Enum):
     DIM_X = "dim_x"
     DIM_Y = "dim_y"
     EQUALITY_CONSTRAINT_COUNT = "equality_constraint_count"
+    FIXED_POINT_CONTRACTION_BOUND = "fixed_point_contraction_bound"
     MAP_LINEARITY_DEFECT = "map_linearity_defect"
     MATRIX_REPRESENTATION_AVAILABLE = "matrix_representation_available"
     MEMORY_BUDGET_BYTES = "memory_budget_bytes"
@@ -435,6 +436,7 @@ class TransformationRelation:
     device_kind: str
     work_budget_fmas: float
     memory_budget_bytes: float
+    fixed_point_contraction_bound: float | None = None
 
     @property
     def domain_dimension(self) -> int:
@@ -1399,6 +1401,7 @@ def solve_relation_parameter_schema() -> ParameterSpaceSchema:
     return ParameterSpaceSchema(
         name="solve_relation",
         axes=_solve_relation_axes(),
+        auxiliary_fields=frozenset({field.FIXED_POINT_CONTRACTION_BOUND}),
         derived_regions=_solve_relation_regions(),
         invalid_cells=(
             InvalidCellRule(
@@ -1434,7 +1437,8 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
     return ParameterSpaceSchema(
         name="linear_solver",
         axes=_solve_relation_axes() + _linear_operator_axes(),
-        auxiliary_fields=frozenset(DecompositionField),
+        auxiliary_fields=frozenset(DecompositionField)
+        | frozenset({solve_field.FIXED_POINT_CONTRACTION_BOUND}),
         derived_regions=_solve_relation_regions()
         + (
             DerivedParameterRegion(
@@ -2241,6 +2245,14 @@ def transformation_relation_coordinates(
         SolveRelationField.MAP_LINEARITY_DEFECT: DescriptorCoordinate(
             relation.map_linearity_defect,
             evidence=relation.map_linearity_evidence,
+        ),
+        SolveRelationField.FIXED_POINT_CONTRACTION_BOUND: DescriptorCoordinate(
+            relation.fixed_point_contraction_bound,
+            evidence=(
+                "upper_bound"
+                if relation.fixed_point_contraction_bound is not None
+                else "unavailable"
+            ),
         ),
         SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
             relation.matrix_representation_available
