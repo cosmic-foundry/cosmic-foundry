@@ -11,10 +11,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     SolveRelationField,
     TransformationRelation,
     TransformationSpace,
-    assembled_linear_transformation_relation,
     transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.solvers.newton_root_solver import RootSolveProblem
+from cosmic_foundry.computation.solvers.relations import LinearResidualRelation
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -95,33 +95,20 @@ def time_integrator_step_solve_relation_descriptor(
     if not _stage_matrix_has_implicit_coupling(stage_matrix):
         raise ValueError("time-step solve relation has no stage-equation premise")
     affine_rhs = isinstance(rhs, AffineRHSProtocol)
-    evidence: tuple[LinearOperatorEvidence, ...] = ()
     if affine_rhs:
-        stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
-        if len(stage_times) != len(stage_matrix):
-            raise ValueError("stage time nodes must match the implicit stage matrix")
-        linear_operator = _AffineStageResidualOperator(
-            rhs, stage_matrix, stage_times, state.u, dt
-        )
-        evidence = (
-            LinearOperatorEvidence(
-                linear_operator,
-                linear_operator.rhs(),
-                (),
-            ),
-        )
-        relation = assembled_linear_transformation_relation(
-            evidence[0],
+        affine_relation = affine_stage_residual_relation(
+            integrator,
+            rhs,
+            state,
+            dt,
             equality_constraint_count=equality_constraint_count,
+        )
+        return affine_relation.solve_relation_descriptor(
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
             work_budget_fmas=work_budget_fmas,
             memory_budget_bytes=memory_budget_bytes,
             device_kind=device_kind,
-        )
-        return _descriptor_from_relation(
-            relation,
-            requested_residual_tolerance=requested_residual_tolerance,
-            requested_solution_tolerance=requested_solution_tolerance,
-            evidence=evidence,
         )
     if not isinstance(rhs, JacobianRHSProtocol):
         raise ValueError("implicit stage root problems require Jacobian evidence")
@@ -132,6 +119,32 @@ def time_integrator_step_solve_relation_descriptor(
         work_budget_fmas=work_budget_fmas,
         memory_budget_bytes=memory_budget_bytes,
         device_kind=device_kind,
+    )
+
+
+def affine_stage_residual_relation(
+    integrator: Any,
+    rhs: AffineRHSProtocol,
+    state: Any,
+    dt: float,
+    *,
+    equality_constraint_count: int = 0,
+) -> LinearResidualRelation:
+    """Return the linear residual relation induced by affine implicit RK stages."""
+    stage_matrix = getattr(integrator, "A_sym", ())
+    stage_times = _stage_times(integrator, state.t, dt, len(stage_matrix))
+    if len(stage_times) != len(stage_matrix):
+        raise ValueError("stage time nodes must match the implicit stage matrix")
+    linear_operator = _AffineStageResidualOperator(
+        rhs, stage_matrix, stage_times, state.u, dt
+    )
+    return LinearResidualRelation(
+        LinearOperatorEvidence(
+            linear_operator,
+            linear_operator.rhs(),
+            (),
+        ),
+        equality_constraint_count=equality_constraint_count,
     )
 
 
@@ -426,6 +439,7 @@ def _backend_kind(tensor: Tensor) -> str:
 __all__ = [
     "AffineRHSProtocol",
     "JacobianRHSProtocol",
+    "affine_stage_residual_relation",
     "dirk_stage_root_problem",
     "implicit_stage_root_problem",
     "time_integrator_step_solve_relation_descriptor",

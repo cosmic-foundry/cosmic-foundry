@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make the finite-dimensional residual-relation premise explicit
-   in the solver type hierarchy, with `RootSolveProblem` specializing that
-   parent rather than carrying domain/codomain/constraint projection alone.
-2. Review whether affine implicit stage evidence can also project through the
-   root-relation construction while preserving assembled linear-operator
-   evidence for linear solver selection.
-3. Review whether constrained root coverage should become a separate
+1. Current PR: make affine implicit stage evidence project through a
+   `LinearResidualRelation`, preserving assembled linear-operator evidence for
+   linear solver selection while keeping the residual relation as the premise.
+2. Review whether constrained root coverage should become a separate
    human-facing atlas slice or remain a distinct region inside primitive
    nonlinear-root solve space.
+3. Review whether IMEX implicit-component stage solves should consume the same
+   residual-relation constructors as implicit RK, deleting local root-problem
+   assembly if no distinct premise remains.
 
 Roadmap sketch:
 
@@ -957,6 +957,10 @@ The shared finite-dimensional residual relation is now visible in the solver
 type hierarchy.  `RootSolveProblem` specializes that parent by adding Jacobian
 evidence and the target-zero acceptance semantics needed by Newton; descriptor
 schemas should project that hierarchy instead of replacing it.
+Affine implicit stage equations now project through `LinearResidualRelation`.
+They preserve assembled linear-operator evidence for direct linear solver
+selection, but the evidence is attached to a residual relation rather than
+being a parallel descriptor-only construction.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

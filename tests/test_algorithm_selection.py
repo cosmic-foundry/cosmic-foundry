@@ -24,6 +24,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 from cosmic_foundry.computation.solvers import (
     DenseLUSolver,
     FiniteDimensionalResidualRelation,
+    LinearResidualRelation,
     NewtonRootSolver,
 )
 from cosmic_foundry.computation.solvers.capabilities import (
@@ -778,6 +779,15 @@ class _AffineStageLinearSolveClaim(Claim[Any]):
         step_descriptor = integrator.step_solve_relation_descriptor(
             _AffineDecayRHS(), state, dt
         )
+        affine_relation = _ti.affine_stage_residual_relation(
+            integrator, _AffineDecayRHS(), state, dt
+        )
+        assert isinstance(affine_relation, LinearResidualRelation)
+        relation_descriptor = affine_relation.solve_relation_descriptor()
+        for field in SolveRelationField:
+            assert step_descriptor.coordinate(field) == relation_descriptor.coordinate(
+                field
+            )
         linear_descriptor = linear_operator_descriptor_from_solve_relation_descriptor(
             step_descriptor
         )

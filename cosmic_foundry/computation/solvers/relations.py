@@ -7,10 +7,12 @@ from dataclasses import dataclass
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     EvidenceSource,
+    LinearOperatorEvidence,
     ParameterDescriptor,
     SolveRelationField,
     TransformationRelation,
     TransformationSpace,
+    assembled_linear_transformation_relation,
     transformation_relation_coordinates,
 )
 from cosmic_foundry.computation.tensor import Tensor
@@ -84,6 +86,57 @@ class FiniteDimensionalResidualRelation:
         )
 
 
+class LinearResidualRelation(FiniteDimensionalResidualRelation):
+    """Finite-dimensional residual relation with assembled linear evidence."""
+
+    def __init__(
+        self,
+        evidence: LinearOperatorEvidence,
+        *,
+        equality_constraint_count: int = 0,
+    ) -> None:
+        self.linear_operator_evidence = evidence
+        self._equality_constraint_count = equality_constraint_count
+        initial = Tensor.zeros(evidence.rhs.shape[0], backend=evidence.rhs.backend)
+
+        def residual(x: Tensor) -> Tensor:
+            return evidence.operator.apply(x) - evidence.rhs
+
+        super().__init__(residual, initial)
+
+    @property
+    def equality_constraint_count(self) -> int:
+        """Return the number of equality constraints active in the relation."""
+        return self._equality_constraint_count
+
+    def solve_relation_descriptor(
+        self,
+        *,
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        device_kind: str = "cpu",
+    ) -> ParameterDescriptor:
+        """Project this linear residual relation to primitive solve coordinates."""
+        relation = assembled_linear_transformation_relation(
+            self.linear_operator_evidence,
+            equality_constraint_count=self.equality_constraint_count,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+        )
+        return ParameterDescriptor(
+            transformation_relation_coordinates(
+                relation,
+                frozenset(SolveRelationField),
+                requested_residual_tolerance=requested_residual_tolerance,
+                requested_solution_tolerance=requested_solution_tolerance,
+            ),
+            evidence=(self.linear_operator_evidence,),
+        )
+
+
 def _backend_kind(tensor: Tensor) -> str:
     name = type(tensor.backend).__name__.lower()
     if "numpy" in name:
@@ -95,4 +148,4 @@ def _backend_kind(tensor: Tensor) -> str:
     return "unknown"
 
 
-__all__ = ["FiniteDimensionalResidualRelation"]
+__all__ = ["FiniteDimensionalResidualRelation", "LinearResidualRelation"]
