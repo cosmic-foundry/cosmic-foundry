@@ -26,7 +26,10 @@ from typing import Protocol, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
+from cosmic_foundry.computation.solvers.newton_root_solver import (
+    NewtonRootSolver,
+    RootSolveProblem,
+)
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -337,9 +340,7 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
                     ) - _gamma_dt * rhs.jacobian_implicit(_t_i, y)
 
                 y = _NEWTON.solve(
-                    residual,
-                    jacobian,
-                    y_exp,
+                    RootSolveProblem(residual, jacobian, y_exp),
                 )
 
             k_E.append(rhs.explicit(t_E_i, y))

@@ -2157,7 +2157,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_coordinate_map_literals_are_single_schema()
         self._assert_transformation_relations_have_explicit_spaces()
         self._assert_implementation_methods_do_not_import_capability_modules()
-        self._assert_residual_jacobian_solvers_are_solver_infrastructure()
+        self._assert_residual_jacobian_solvers_consume_relation_objects()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -2589,8 +2589,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         )
 
     @staticmethod
-    def _assert_residual_jacobian_solvers_are_solver_infrastructure() -> None:
-        solvers_root = _PACKAGE_ROOT / "computation" / "solvers"
+    def _assert_residual_jacobian_solvers_consume_relation_objects() -> None:
         offenders = []
         for path in sorted((_PACKAGE_ROOT / "computation").rglob("*.py")):
             tree = ast.parse(path.read_text())
@@ -2611,15 +2610,14 @@ class _LinearOperatorProjectionClaim(Claim[None]):
                             method
                         )
                         >= 2
-                        and not path.is_relative_to(solvers_root)
                     ):
                         offenders.append(
                             f"{path.relative_to(_PROJECT_ROOT)}:"
                             f"{class_def.name}.{method.name}"
                         )
         assert not offenders, (
-            "classes that solve residual/Jacobian relations belong to solver "
-            f"infrastructure, not domain-specific packages: {offenders}"
+            "residual/Jacobian solve methods must consume a relation object, "
+            f"not parallel callable coordinates: {offenders}"
         )
 
     @staticmethod
@@ -4503,6 +4501,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LinearOperator",
                 "LinearSolver",
                 "NewtonRootSolver",
+                "RootSolveProblem",
                 "StationaryIterationSolver",
             }
         ),
@@ -4538,6 +4537,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
         "NewtonRootSolver": "newton_root_solver",
+        "RootSolveProblem": "newton_root_solver",
         "StationaryIterationSolver": "iterative_solver",
     },
 )

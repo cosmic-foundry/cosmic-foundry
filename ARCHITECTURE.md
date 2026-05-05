@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: advertise `NewtonRootSolver` ownership over nonlinear-root
-   solve descriptors, using the same autodiscovered coverage machinery as
-   linear solver ownership.
-2. Review whether constrained Newton projection should become an explicit
-   constrained-root relation with equality-constraint evidence rather than an
-   optional execution argument.
-3. Review whether nonlinear-root ownership should be selected by construction
+1. Current PR: make constrained Newton execution consume an explicit
+   `RootSolveProblem` relation, so equality-constraint evidence is part of the
+   root problem instead of an optional solver side argument.
+2. Review whether nonlinear-root ownership should be selected by construction
    evidence at each call site, so direct NSE solves expose the same descriptor
    evidence as implicit stage equations.
+3. Review whether constrained root coverage should become a distinct
+   constrained-root relation with equality-constraint evidence rather than an
+   undifferentiated nonlinear-root region.
 
 Roadmap sketch:
 
@@ -936,6 +936,10 @@ nonlinear-root solve descriptors: square target-zero residual relations with a
 Jacobian callback and non-affine or unknown linearity evidence.  The selector
 therefore sees Newton as a solver for a region of solve-relation space, not as
 an implementation detail of an integrator family.
+Newton execution now consumes a `RootSolveProblem`: residual, Jacobian, initial
+state, and optional equality-constraint gradients form one explicit relation
+object.  Projected Newton is no longer an optional side argument to the solver;
+the relation itself reports its equality-constraint count.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

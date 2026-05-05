@@ -37,7 +37,10 @@ from typing import Any, Protocol, runtime_checkable
 import sympy
 
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
-from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
+from cosmic_foundry.computation.solvers.newton_root_solver import (
+    NewtonRootSolver,
+    RootSolveProblem,
+)
 from cosmic_foundry.computation.tensor import Tensor, norm
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -364,10 +367,12 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
                 )
 
             y = _NEWTON.solve(
-                residual,
-                jacobian,
-                y_exp,
-                constraint_gradients=constraint_gradients,
+                RootSolveProblem(
+                    residual,
+                    jacobian,
+                    y_exp,
+                    equality_constraint_gradients=constraint_gradients,
+                )
             )
             k.append(rhs(t_i, y))
 
