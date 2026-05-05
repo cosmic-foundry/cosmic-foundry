@@ -36,6 +36,9 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     RHSProtocol,
     TimeIntegrator,
 )
+from cosmic_foundry.computation.time_integrators.solve_relation import (
+    dirk_stage_root_problem,
+)
 
 
 @runtime_checkable
@@ -94,6 +97,34 @@ class SplitRHS:
     def jacobian_implicit(self, t: float, u: Tensor) -> Tensor:
         result: Tensor = self._jac_I(t, u)
         return result
+
+
+class _ImplicitComponentJacobianRHS:
+    """Jacobian RHS view of the implicit component of a split RHS."""
+
+    def __init__(self, rhs: SplitRHSProtocol) -> None:
+        self._rhs = rhs
+
+    def __call__(self, t: float, u: Tensor) -> Tensor:
+        return self._rhs.implicit(t, u)
+
+    def jacobian(self, t: float, u: Tensor) -> Tensor:
+        return self._rhs.jacobian_implicit(t, u)
+
+
+def imex_implicit_stage_root_problem(
+    rhs: SplitRHSProtocol,
+    y_exp: Tensor,
+    t_i: float,
+    gamma_dt: float,
+) -> RootSolveProblem:
+    """Return the root problem for one IMEX implicit component stage."""
+    return dirk_stage_root_problem(
+        _ImplicitComponentJacobianRHS(rhs),
+        y_exp,
+        t_i,
+        gamma_dt,
+    )
 
 
 def _build_imex_tableaux() -> dict:
@@ -319,28 +350,8 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
                 y = y_exp
             else:
                 gamma_dt = gamma_i * dt
-
-                def residual(
-                    y: Tensor,
-                    *,
-                    _t_i: float = t_I_i,
-                    _gamma_dt: float = gamma_dt,
-                    _y_exp: Tensor = y_exp,
-                ) -> Tensor:
-                    return y - _gamma_dt * rhs.implicit(_t_i, y) - _y_exp
-
-                def jacobian(
-                    y: Tensor,
-                    *,
-                    _t_i: float = t_I_i,
-                    _gamma_dt: float = gamma_dt,
-                ) -> Tensor:
-                    return Tensor.eye(
-                        u.shape[0], backend=u.backend
-                    ) - _gamma_dt * rhs.jacobian_implicit(_t_i, y)
-
                 y = _NEWTON.solve(
-                    RootSolveProblem(residual, jacobian, y_exp),
+                    imex_implicit_stage_root_problem(rhs, y_exp, t_I_i, gamma_dt)
                 )
 
             k_E.append(rhs.explicit(t_E_i, y))
@@ -358,4 +369,5 @@ __all__ = [
     "AdditiveRungeKuttaIntegrator",
     "SplitRHS",
     "SplitRHSProtocol",
+    "imex_implicit_stage_root_problem",
 ]

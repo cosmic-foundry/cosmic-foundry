@@ -803,9 +803,35 @@ class _AffineStageLinearSolveClaim(Claim[Any]):
         assert abs(float(stage_value[0]) - expected_stage) < 1.0e-12
 
 
+class _ImexImplicitStageRootClaim(Claim[Any]):
+    """Grounded claim for IMEX implicit-component root construction."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/imex_implicit_stage_root_relation"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = cases.split_decay_rhs()
+        y_exp = Tensor([1.0], backend=_TIME_BACKEND)
+        gamma_dt = 0.25
+        problem = _ti.imex_implicit_stage_root_problem(rhs, y_exp, 0.0, gamma_dt)
+        assert isinstance(problem, FiniteDimensionalResidualRelation)
+        descriptor = problem.solve_relation_descriptor()
+        assert select_root_solver_for_descriptor(descriptor) is NewtonRootSolver
+        stage_value = NewtonRootSolver().solve(problem)
+        residual = problem.residual(stage_value)
+        assert abs(float(residual[0])) < 1.0e-12
+        assert abs(float(stage_value[0]) - (1.0 / (1.0 + 0.8 * gamma_dt))) < 1.0e-12
+
+        state = _ti.ODEState(0.0, y_exp)
+        stepped = _ti.AdditiveRungeKuttaIntegrator(2).step(rhs, state, 1.0e-2)
+        assert cases.err(stepped.u, cases.exact_scalar_decay, stepped.t) < 1.0e-7
+
+
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AutoIntegratorSelectionClaim(),
     _AffineStageLinearSolveClaim(),
+    _ImexImplicitStageRootClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],
     _OscillatorInvariantComparisonClaim(),
