@@ -789,10 +789,21 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         assert not missing_exports, (
             "capability implementations not exported: " f"{sorted(missing_exports)}"
         )
-        duplicates = sorted(
-            name for name in set(implementations) if implementations.count(name) > 1
+        identities = tuple(
+            (
+                (
+                    self._capability_implementation_name(capability),
+                    _coverage_region_predicate_key(capability),
+                )
+                if isinstance(capability, CoverageRegion)
+                else (self._capability_implementation_name(capability), ())
+            )
+            for capability in capabilities
         )
-        assert not duplicates, f"duplicate capability implementations: {duplicates}"
+        duplicates = sorted(
+            name for name in set(identities) if identities.count(name) > 1
+        )
+        assert not duplicates, f"duplicate capability regions: {duplicates}"
 
     def _check_descriptor_owned_capabilities(
         self,
@@ -3162,12 +3173,16 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
             assert "linear_solver_coverage" not in region.owner.__dict__
             decomposition_type = region.owner.decomposition_type
             assert decomposition_type is not None
-            assert "linear_solve_certificate" not in decomposition_type.__dict__
-            certificate = decomposition_type.factorization_feasibility_certificate
-            assert certificate
-            for predicate in certificate:
-                assert predicate.referenced_fields <= set(DecompositionField)
-                assert predicate in region.predicates
+            assert "linear_solve_regions" not in decomposition_type.__dict__
+            feasibility_regions = decomposition_type.factorization_feasibility_regions
+            assert feasibility_regions
+            assert any(
+                all(predicate in region.predicates for predicate in feasibility_region)
+                for feasibility_region in feasibility_regions
+            )
+            for feasibility_region in feasibility_regions:
+                for predicate in feasibility_region:
+                    assert predicate.referenced_fields <= set(DecompositionField)
 
     @staticmethod
     def _assert_stationary_iterations_do_not_own_final_solve_regions(
@@ -3181,7 +3196,6 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
     def _assert_final_solve_owners_are_schema_separated(
         regions: tuple[CoverageRegion, ...],
     ) -> None:
-        assert len({region.owner for region in regions}) == len(regions)
         assert len(
             {_coverage_region_predicate_key(region) for region in regions}
         ) == len(regions)
@@ -3895,7 +3909,10 @@ class _DecompositionCoverageRegionClaim(Claim[None]):
             rank_estimate=3,
             nullity_estimate=1,
         )
-        for descriptor in (full_rank, rank_deficient):
+        rectangular = _SolveRelationSchemaClaim._decomposition_descriptor(
+            matrix_columns=5
+        )
+        for descriptor in (full_rank, rank_deficient, rectangular):
             schema.validate_descriptor(descriptor)
             assert schema.cell_status(descriptor, regions) == "owned"
 
@@ -3907,18 +3924,14 @@ class _DecompositionCoverageRegionClaim(Claim[None]):
         )
         assert select_decomposition_for_descriptor(full_rank) is lu
         assert select_decomposition_for_descriptor(rank_deficient) is svd
-
-        rectangular = _SolveRelationSchemaClaim._decomposition_descriptor(
-            matrix_columns=5
-        )
+        assert select_decomposition_for_descriptor(rectangular) is svd
         low_budget = _SolveRelationSchemaClaim._decomposition_descriptor(
             factorization_work_budget_fmas=1.0,
         )
-        for descriptor in (rectangular, low_budget):
-            schema.validate_descriptor(descriptor)
-            assert schema.cell_status(descriptor, regions) == "uncovered"
-            with pytest.raises(ValueError):
-                select_decomposition_for_descriptor(descriptor)
+        schema.validate_descriptor(low_budget)
+        assert schema.cell_status(low_budget, regions) == "uncovered"
+        with pytest.raises(ValueError):
+            select_decomposition_for_descriptor(low_budget)
 
     @staticmethod
     def _assert_decomposition_capabilities_are_regions() -> None:

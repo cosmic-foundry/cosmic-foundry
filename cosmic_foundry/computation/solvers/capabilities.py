@@ -31,10 +31,10 @@ from cosmic_foundry.computation.solvers.least_squares_solver import LeastSquares
 from cosmic_foundry.computation.solvers.linear_solver import LinearSolver
 
 
-def _linear_solve_predicates_from_decomposition(
+def _linear_solve_regions_from_decomposition(
     decomposition_type: type[Decomposition],
-) -> tuple[StructuredPredicate, ...]:
-    return decomposition_type.factorization_feasibility_certificate
+) -> tuple[tuple[StructuredPredicate, ...], ...]:
+    return decomposition_type.factorization_feasibility_regions
 
 
 def _solver_package_modules() -> tuple[ModuleType, ...]:
@@ -48,7 +48,9 @@ def _solver_package_modules() -> tuple[ModuleType, ...]:
     return tuple(modules)
 
 
-def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ...]:
+def _inherited_coverage_regions(
+    owner: type,
+) -> tuple[tuple[StructuredPredicate, ...], ...]:
     predicates: tuple[StructuredPredicate, ...] = ()
     if issubclass(owner, LinearSolver):
         predicates += linear_system_predicates() + budget_predicates()
@@ -62,12 +64,15 @@ def _inherited_coverage_predicates(owner: type) -> tuple[StructuredPredicate, ..
             ),
         )
         if decomposition_type is not None:
-            predicates += _linear_solve_predicates_from_decomposition(
-                decomposition_type
+            return tuple(
+                predicates + region
+                for region in _linear_solve_regions_from_decomposition(
+                    decomposition_type
+                )
             )
     if issubclass(owner, KrylovSolver):
         predicates += matrix_free_operator_predicates()
-    return predicates
+    return (predicates,)
 
 
 def _owns_coverage(owner: type) -> bool:
@@ -92,12 +97,13 @@ def _discovered_coverage_regions() -> tuple[CoverageRegion, ...]:
             if not isinstance(item, type) or item.__module__ != module.__name__:
                 continue
             if _owns_coverage(item):
-                regions.append(
+                regions.extend(
                     coverage(
                         item,
-                        coverage_predicates=_inherited_coverage_predicates(item)
+                        coverage_predicates=predicates
                         + getattr(item, "linear_solver_coverage", ()),
                     )
+                    for predicates in _inherited_coverage_regions(item)
                 )
     return tuple(regions)
 

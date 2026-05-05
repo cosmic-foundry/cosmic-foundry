@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cosmic_foundry.computation.algorithm_capabilities import (
+    AffineComparisonPredicate,
     ComparisonPredicate,
     DecompositionField,
 )
@@ -122,9 +123,41 @@ class SVDFactorization(Factorization):
         pseudoinverse.  Default 1e-10.
     """
 
-    factorization_feasibility_certificate = (
-        ComparisonPredicate(DecompositionField.MATRIX_NULLITY_ESTIMATE, ">", 0),
-        ComparisonPredicate(DecompositionField.SINGULAR_VALUE_LOWER_BOUND, "<=", 0.0),
+    factorization_feasibility_regions = (
+        (
+            AffineComparisonPredicate(
+                {
+                    DecompositionField.MATRIX_ROWS: 1.0,
+                    DecompositionField.MATRIX_COLUMNS: -1.0,
+                },
+                "<",
+                0.0,
+            ),
+        ),
+        (
+            AffineComparisonPredicate(
+                {
+                    DecompositionField.MATRIX_ROWS: 1.0,
+                    DecompositionField.MATRIX_COLUMNS: -1.0,
+                },
+                ">",
+                0.0,
+            ),
+        ),
+        (
+            AffineComparisonPredicate(
+                {
+                    DecompositionField.MATRIX_ROWS: 1.0,
+                    DecompositionField.MATRIX_COLUMNS: -1.0,
+                },
+                "==",
+                0.0,
+            ),
+            ComparisonPredicate(DecompositionField.MATRIX_NULLITY_ESTIMATE, ">", 0),
+            ComparisonPredicate(
+                DecompositionField.SINGULAR_VALUE_LOWER_BOUND, "<=", 0.0
+            ),
+        ),
     )
 
     def __init__(self, rcond: float = 1e-10) -> None:

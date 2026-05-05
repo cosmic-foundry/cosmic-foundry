@@ -825,6 +825,17 @@ def _affine_predicates_are_disjoint(
 def _affine_group_is_disjoint(
     predicates: tuple[AffineComparisonPredicate, ...],
 ) -> bool:
+    equal_values = {
+        predicate.value for predicate in predicates if predicate.operator == "=="
+    }
+    if len(equal_values) > 1:
+        return True
+    if equal_values:
+        value = next(iter(equal_values))
+        return not all(
+            _compare(value, predicate.operator, predicate.value)
+            for predicate in predicates
+        )
     lower_bound = _strongest_affine_lower_bound(predicates)
     upper_bound = _strongest_affine_upper_bound(predicates)
     if lower_bound is None or upper_bound is None:

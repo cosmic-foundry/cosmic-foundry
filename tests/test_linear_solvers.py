@@ -353,8 +353,10 @@ class _DenseSVDLeastSquaresSolverClaim(Claim[ExecutionPlan]):
             ).value
             == 0
         )
-        with pytest.raises(ValueError):
+        assert (
             select_decomposition_for_descriptor(decomposition_descriptor)
+            is SVDFactorization
+        )
 
 
 def _assert_rectangular_least_squares_solution(
