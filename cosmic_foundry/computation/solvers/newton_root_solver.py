@@ -3,11 +3,29 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from cosmic_foundry.computation.algorithm_capabilities import StructuredPredicate
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.solvers.coverage import nonlinear_root_predicates
 from cosmic_foundry.computation.tensor import Tensor, einsum, norm
+
+
+@dataclass(frozen=True)
+class RootSolveProblem:
+    """Finite-dimensional residual relation ``F(x) = 0``."""
+
+    residual: Callable[[Tensor], Tensor]
+    jacobian: Callable[[Tensor], Tensor]
+    initial: Tensor
+    equality_constraint_gradients: Tensor | None = None
+
+    @property
+    def equality_constraint_count(self) -> int:
+        """Return the number of equality constraints active in the relation."""
+        if self.equality_constraint_gradients is None:
+            return 0
+        return self.equality_constraint_gradients.shape[0]
 
 
 class NewtonRootSolver:
@@ -29,27 +47,25 @@ class NewtonRootSolver:
 
     def solve(
         self,
-        residual: Callable[[Tensor], Tensor],
-        jacobian: Callable[[Tensor], Tensor],
-        initial: Tensor,
-        *,
-        constraint_gradients: Tensor | None = None,
+        problem: RootSolveProblem,
     ) -> Tensor:
-        """Return a root, optionally projecting Newton steps into ``null(C)``."""
-        x = initial
+        """Return a root of the supplied residual relation."""
+        x = problem.initial
         gram: Tensor | None = None
-        if constraint_gradients is not None:
-            gram = einsum("ij,kj->ik", constraint_gradients, constraint_gradients)
+        if problem.equality_constraint_gradients is not None:
+            gradients = problem.equality_constraint_gradients
+            gram = einsum("ij,kj->ik", gradients, gradients)
         for _ in range(self._max_iterations):
-            Fx = residual(x)
+            Fx = problem.residual(x)
             if self._small(Fx, x):
                 break
-            delta = self._lu.factorize(jacobian(x)).solve(
+            delta = self._lu.factorize(problem.jacobian(x)).solve(
                 Tensor.zeros(x.shape[0], backend=x.backend) - Fx
             )
-            if constraint_gradients is not None and gram is not None:
-                xi = self._lu.factorize(gram).solve(constraint_gradients @ delta)
-                delta = delta - einsum("ij,i->j", constraint_gradients, xi)
+            if problem.equality_constraint_gradients is not None and gram is not None:
+                gradients = problem.equality_constraint_gradients
+                xi = self._lu.factorize(gram).solve(gradients @ delta)
+                delta = delta - einsum("ij,i->j", gradients, xi)
             x = x + delta
             if self._small(delta, x):
                 break
@@ -59,4 +75,4 @@ class NewtonRootSolver:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
 
 
-__all__ = ["NewtonRootSolver"]
+__all__ = ["NewtonRootSolver", "RootSolveProblem"]

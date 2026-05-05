@@ -16,7 +16,10 @@ manages that lifecycle between accepted steps:
 
 from __future__ import annotations
 
-from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
+from cosmic_foundry.computation.solvers.newton_root_solver import (
+    NewtonRootSolver,
+    RootSolveProblem,
+)
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.domains import (
     DomainViolation,
@@ -236,7 +239,7 @@ def solve_nse(
                 rows.append([float(cg[r, s]) for s in range(n_species)])
         return Tensor(rows, backend=backend)
 
-    return _NEWTON.solve(F, J, u)
+    return _NEWTON.solve(RootSolveProblem(F, J, u))
 
 
 class ConstraintAwareController:

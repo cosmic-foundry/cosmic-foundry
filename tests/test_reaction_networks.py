@@ -25,7 +25,11 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.backends import NumpyBackend
-from cosmic_foundry.computation.solvers import select_linear_solver_for_descriptor
+from cosmic_foundry.computation.solvers import (
+    NewtonRootSolver,
+    RootSolveProblem,
+    select_linear_solver_for_descriptor,
+)
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
@@ -133,6 +137,19 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             constrained_state.u,
         )
         assert constraint_gradients is not None
+        root_problem = RootSolveProblem(
+            lambda u: u - constrained_state.u,
+            lambda u: Tensor.eye(u.shape[0], backend=u.backend),
+            constrained_state.u,
+            equality_constraint_gradients=constraint_gradients,
+        )
+        assert root_problem.equality_constraint_count == (
+            len(constrained_state.active_constraints or frozenset())
+        )
+        assert (
+            _residual_norm(NewtonRootSolver().solve(root_problem) - constrained_state.u)
+            < 1.0e-12
+        )
         direct_constrained = integrator.step(
             rhs,
             constrained_state,
