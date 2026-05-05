@@ -932,7 +932,7 @@ class _AffineStageLinearSolveClaim(Claim[Any]):
             linear_descriptor,
             frozenset(LinearSolverField),
         )
-        stage_value = DenseLUSolver().solve(evidence.operator, evidence.rhs)
+        stage_value = DenseLUSolver().solve_relation(LinearResidualRelation(evidence))
         residual = evidence.operator.apply(stage_value) - evidence.rhs
         assert abs(float(residual[0])) < 1.0e-12
         expected_stage = 1.0 / (1.0 + 0.5 * dt)

@@ -2729,6 +2729,10 @@ class _LinearOperatorProjectionClaim(Claim[None]):
             "cosmic_foundry.computation.decompositions.SVDFactorization"
         )
         assert "solve_relation" in svd_factorization.__dict__
+        direct_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.DirectSolver"
+        )
+        assert "solve_relation" in direct_solver.__dict__
 
     @staticmethod
     def _callable_tensor_map_count(function: ast.FunctionDef) -> int:

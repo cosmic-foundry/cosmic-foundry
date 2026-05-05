@@ -790,14 +790,18 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: require fixed-point root coverage to carry an explicit
-   contraction-bound coordinate, grounding the ownership split in the scalar
-   non-stiff Adams/Nordsieck decay calculation.
-2. Review whether decomposition results should remain bare reusable matrix
-   objects, or whether solve semantics should move entirely to relation-aware
-   execution paths.
-3. Add a follow-up sprint plan for quantitative time-integrator descriptors
-   once the solver/decomposition predicates have stabilized.
+1. Next PR: add a follow-up sprint plan for quantitative time-integrator
+   descriptors.  Anchor the plan in one concrete adaptive Nordsieck
+   calculation whose descriptor already exposes domain-step margin, stiffness
+   estimate, local error target, retry budget, and RHS evaluation cost.
+2. First implementation candidate after the plan: make adaptive Nordsieck
+   ownership consume that quantitative step descriptor directly, deriving
+   nonstiff, stiff, and domain-limited labels from schema regions rather than
+   request vocabulary.
+3. Horizon-scan fixed-order Nordsieck selection after adaptive ownership
+   stabilizes: history availability and stiffness evidence already select
+   Adams/BDF construction, but local error and RHS-cost coordinates are not yet
+   part of that ownership predicate.
 
 Roadmap sketch:
 
@@ -975,6 +979,12 @@ residual relations.  The rectangular least-squares calculation therefore routes
 through the same relation object for solve-relation selection, decomposition
 selection, and pseudoinverse execution; tests no longer split that calculation
 back into parallel `A` and `b` coordinates to call the factorization.
+Direct dense solver wrappers follow the same execution boundary:
+`DirectSolver.solve_relation` consumes a `LinearResidualRelation`, assembles or
+reuses its matrix evidence, and delegates only the reusable matrix object to the
+chosen decomposition.  `DecomposedTensor` remains the cached factorization/SVD
+result for repeated right-hand sides; solve semantics live on relation-aware
+execution paths.
 Factorization feasibility is a descriptor region with disjoint alternatives,
 not a single conjunction.  LU owns the square, full-rank, well-conditioned
 matrix region.  SVD owns non-square matrices and square rank-deficient/singular
