@@ -83,6 +83,7 @@ from cosmic_foundry.computation.time_integrators.runge_kutta import (
 from cosmic_foundry.computation.time_integrators.solve_relation import (
     AffineRHSProtocol,
     JacobianRHSProtocol,
+    affine_stage_residual_relation,
     dirk_stage_root_problem,
     implicit_stage_root_problem,
     time_integrator_step_solve_relation_descriptor,
@@ -140,6 +141,7 @@ __all__ = [
     "RungeKuttaIntegrator",
     "select_time_integrator",
     "TimeIntegrator",
+    "affine_stage_residual_relation",
     "dirk_stage_root_problem",
     "implicit_stage_root_problem",
     "time_integrator_step_solve_relation_descriptor",
