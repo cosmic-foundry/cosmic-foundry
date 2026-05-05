@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from cosmic_foundry.computation.algorithm_capabilities import (
+    LinearOperatorEvidence,
+    SmallLinearOperator,
+)
 from cosmic_foundry.computation.decompositions.decomposition import Decomposition
 from cosmic_foundry.computation.solvers.linear_solver import (
     LinearOperator,
     LinearSolver,
 )
+from cosmic_foundry.computation.solvers.relations import LinearResidualRelation
 from cosmic_foundry.computation.tensor import Tensor
 
 
@@ -37,7 +42,9 @@ class DirectSolver(LinearSolver):
             decomposition = self.decomposition_type()
         self._decomposition = decomposition
 
-    def _assemble(self, op: LinearOperator, b: Tensor) -> Tensor:
+    def _assembled_matrix(
+        self, op: SmallLinearOperator, b: Tensor
+    ) -> tuple[tuple[float, ...], ...]:
         """Build the N×N matrix by applying op to each basis vector."""
         n = b.shape[0]
         backend = b.backend
@@ -47,12 +54,29 @@ class DirectSolver(LinearSolver):
             e_j = e_j.set(j, Tensor(1.0, backend=backend))
             columns.append(backend.flatten(op.apply(e_j)._value))
         # columns[j][i] = A[i, j]; transpose to rows[i][j]
-        rows = [[columns[j][i] for j in range(n)] for i in range(n)]
-        return Tensor(rows, backend=backend)
+        return tuple(tuple(columns[j][i] for j in range(n)) for i in range(n))
+
+    def _assembled_relation(
+        self, op: LinearOperator, b: Tensor
+    ) -> LinearResidualRelation:
+        matrix = self._assembled_matrix(op, b)
+        return LinearResidualRelation(LinearOperatorEvidence(op, b, matrix))
+
+    def _assemble(self, op: LinearOperator, b: Tensor) -> Tensor:
+        """Return the dense matrix assembled from a linear operator."""
+        return Tensor(self._assembled_matrix(op, b), backend=b.backend)
+
+    def solve_relation(self, relation: LinearResidualRelation) -> Tensor:
+        """Solve an assembled linear residual relation."""
+        evidence = relation.linear_operator_evidence
+        matrix = evidence.matrix or self._assembled_matrix(
+            evidence.operator, evidence.rhs
+        )
+        a: Tensor = Tensor(matrix, backend=evidence.rhs.backend)
+        return self._decomposition.decompose(a).solve(evidence.rhs)
 
     def solve(self, op: LinearOperator, b: Tensor) -> Tensor:
-        a = self._assemble(op, b)
-        return self._decomposition.decompose(a).solve(b)
+        return self.solve_relation(self._assembled_relation(op, b))
 
 
 __all__ = ["DirectSolver"]
