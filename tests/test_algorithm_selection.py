@@ -21,9 +21,10 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     map_structure_parameter_schema,
     solve_relation_parameter_schema,
 )
-from cosmic_foundry.computation.solvers import DenseLUSolver
+from cosmic_foundry.computation.solvers import DenseLUSolver, NewtonRootSolver
 from cosmic_foundry.computation.solvers.capabilities import (
     select_linear_solver_for_descriptor,
+    select_root_solver_for_descriptor,
 )
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
@@ -187,6 +188,7 @@ def _solve_selection_case() -> _StepSelectionCase:
         ) == derivative_oracle_descriptor().coordinate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND
         )
+        assert select_root_solver_for_descriptor(case.descriptor) is NewtonRootSolver
 
     return _StepSelectionCase(
         name="implicit_stage_solve",

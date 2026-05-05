@@ -86,7 +86,9 @@ from cosmic_foundry.computation.decompositions.capabilities import (
 from cosmic_foundry.computation.decompositions.factorization import Factorization
 from cosmic_foundry.computation.solvers.capabilities import (
     linear_solver_coverage_regions,
+    root_solver_coverage_regions,
     select_linear_solver_for_descriptor,
+    select_root_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import (
     IterativeSolver,
@@ -3676,6 +3678,38 @@ class _LinearSolverCoverageRegionClaim(Claim[None]):
         return cls._one() + cls._one()
 
 
+class _RootSolverCoverageRegionClaim(Claim[None]):
+    """Claim: nonlinear-root selection is driven by solve-relation coverage."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/root_solver_coverage_regions"
+
+    def check(self, _calibration: None) -> None:
+        schema = solve_relation_parameter_schema()
+        regions = root_solver_coverage_regions()
+        assert regions
+        for region in regions:
+            schema.validate_coverage_region(region)
+            descriptor = (
+                _LinearSolverCoverageRegionClaim._descriptor_witness_for_region(
+                    schema, region
+                )
+            )
+            assert schema.cell_status(descriptor, regions) == "owned"
+            assert select_root_solver_for_descriptor(descriptor) is region.owner
+            assert self._regions(schema)["nonlinear_root"].contains(descriptor)
+        assert {region.owner for region in regions} == {
+            _resolve_dotted("cosmic_foundry.computation.solvers.NewtonRootSolver")
+        }
+
+    @staticmethod
+    def _regions(
+        schema: ParameterSpaceSchema,
+    ) -> dict[str, DerivedParameterRegion]:
+        return {region.name: region for region in schema.derived_regions}
+
+
 class _DecompositionCoverageRegionClaim(Claim[None]):
     """Claim: decomposition selection is driven by schema coverage regions."""
 
@@ -4453,8 +4487,11 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "capability_contract": frozenset(
             {
                 "LINEAR_SOLVER_COVERAGE_REGIONS",
+                "ROOT_SOLVER_COVERAGE_REGIONS",
                 "linear_solver_coverage_regions",
+                "root_solver_coverage_regions",
                 "select_linear_solver_for_descriptor",
+                "select_root_solver_for_descriptor",
             }
         ),
         "abstract_interface": frozenset(
@@ -4868,6 +4905,7 @@ _CLAIMS: list[Claim[None]] = [
     _TimeIntegratorSolveRelationClaim(),
     _LinearSolverCoverageLocalityClaim(),
     _LinearSolverCoverageRegionClaim(),
+    _RootSolverCoverageRegionClaim(),
     _DecompositionCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),
 ]

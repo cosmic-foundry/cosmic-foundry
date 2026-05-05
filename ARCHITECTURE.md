@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: move Newton iteration behind one generic root solver, so implicit
-   stage equations and direct NSE solves share the same residual/Jacobian
-   primitive instead of separate time-integrator Newton functions.
-2. Review whether the generic root solver should advertise capability ownership
-   over nonlinear-root solve descriptors once selection has a second concrete
-   nonlinear solver or a second root-solve construction path.
-3. Review whether constrained Newton projection should become an explicit
+1. Current PR: advertise `NewtonRootSolver` ownership over nonlinear-root
+   solve descriptors, using the same autodiscovered coverage machinery as
+   linear solver ownership.
+2. Review whether constrained Newton projection should become an explicit
    constrained-root relation with equality-constraint evidence rather than an
    optional execution argument.
+3. Review whether nonlinear-root ownership should be selected by construction
+   evidence at each call site, so direct NSE solves expose the same descriptor
+   evidence as implicit stage equations.
 
 Roadmap sketch:
 
@@ -931,6 +931,11 @@ Newton iteration is no longer owned by the time-integration package.  Implicit
 RK stages, IMEX implicit stages, and direct NSE solves all present residual and
 Jacobian callables to `NewtonRootSolver`; stage equations are just one source of
 root relations, not a separate Newton concept.
+`NewtonRootSolver` now advertises autodiscovered coverage over primitive
+nonlinear-root solve descriptors: square target-zero residual relations with a
+Jacobian callback and non-affine or unknown linearity evidence.  The selector
+therefore sees Newton as a solver for a region of solve-relation space, not as
+an implementation detail of an integrator family.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence
