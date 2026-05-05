@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: add autodiscovered least-squares solver ownership over primitive
-   solve-relation descriptors whose objective is least-squares minimization, so
-   rectangular least-squares execution is selected from relation evidence.
+1. Current PR: ground least-squares ownership on full-rank, rank-deficient, and
+   inconsistent rectangular calculations, checking that the same SVD ownership
+   premise selects the solver and yields Moore-Penrose minimum-norm solutions.
 2. Review whether directional derivative evidence (`jvp`/`vjp`) should be
    represented as a separate nonlinear solver gap or should wait for a
    concrete matrix-free Newton/Krylov calculation.
-3. Review whether rank-deficient and inconsistent least-squares calculations
-   imply additional objective-space regions or are already covered by the same
-   SVD ownership premise.
+3. Review whether least-squares relation evidence should also project
+   decomposition coordinates when rank/nullity or conditioning become selector
+   premises, rather than duplicating rectangular matrix analysis elsewhere.
 
 Roadmap sketch:
 
@@ -970,6 +970,11 @@ Least-squares solver ownership is separate from square linear-system ownership:
 it is autodiscovered over primitive solve-relation descriptors with a
 least-squares objective, objective-minimum acceptance, linear residual evidence,
 and an assembled matrix representation.
+The same SVD least-squares ownership premise covers full-rank, rank-deficient,
+and inconsistent rectangular residuals.  Rank deficiency changes the
+Moore-Penrose solution selected inside the solver; it does not by itself create
+a distinct objective-space ownership region unless a different implementation
+or mathematical promise is selected from rank/nullity evidence.
 IMEX implicit-component stage solves reuse the DIRK stage root constructor via
 a Jacobian-RHS view of the implicit split component.  The split is application
 structure; the stage solve remains the same residual-relation premise as an

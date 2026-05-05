@@ -315,19 +315,65 @@ def _assert_rectangular_least_squares_solution(
     execution_plan: ExecutionPlan,
     solve: Any,
 ) -> None:
-    a = Tensor(
+    for batch_index, (a, b, expected) in enumerate(
         (
-            (1.0, 0.0),
-            (0.0, 1.0),
-            (1.0, 1.0),
-        ),
-        backend=_NP_BACKEND,
-    )
-    b = Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND)
+            (
+                Tensor(
+                    (
+                        (1.0, 0.0),
+                        (0.0, 1.0),
+                        (1.0, 1.0),
+                    ),
+                    backend=_NP_BACKEND,
+                ),
+                Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND),
+                (4.0 / 3.0, 7.0 / 3.0),
+            ),
+            (
+                Tensor(
+                    (
+                        (1.0, 0.0),
+                        (0.0, 0.0),
+                        (0.0, 0.0),
+                    ),
+                    backend=_NP_BACKEND,
+                ),
+                Tensor((1.0, 2.0, 3.0), backend=_NP_BACKEND),
+                (1.0, 0.0),
+            ),
+            (
+                Tensor(
+                    (
+                        (1.0, 1.0),
+                        (2.0, 2.0),
+                        (3.0, 3.0),
+                    ),
+                    backend=_NP_BACKEND,
+                ),
+                Tensor((1.0, 2.0, 4.0), backend=_NP_BACKEND),
+                (17.0 / 28.0, 17.0 / 28.0),
+            ),
+        )
+    ):
+        _assert_least_squares_case(
+            claim, method, execution_plan, solve, batch_index, a, b, expected
+        )
+
+
+def _assert_least_squares_case(
+    claim: str,
+    method: str,
+    execution_plan: ExecutionPlan,
+    solve: Any,
+    batch_index: int,
+    a: Tensor,
+    b: Tensor,
+    expected: tuple[float, ...],
+) -> None:
     relation = _least_squares_relation(a, b)
     descriptor = relation.solve_relation_descriptor()
-    assert descriptor.coordinate(SolveRelationField.DIM_X).value == 2
-    assert descriptor.coordinate(SolveRelationField.DIM_Y).value == 3
+    assert descriptor.coordinate(SolveRelationField.DIM_X).value == a.shape[1]
+    assert descriptor.coordinate(SolveRelationField.DIM_Y).value == a.shape[0]
     assert (
         descriptor.coordinate(SolveRelationField.OBJECTIVE_RELATION).value
         == "least_squares"
@@ -342,21 +388,22 @@ def _assert_rectangular_least_squares_solution(
             is DenseSVDLeastSquaresSolver
         )
     x = solve(a, b)
-    expected = (4.0 / 3.0, 7.0 / 3.0)
-    error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(2)))
+    error = math.sqrt(sum((float(x[i]) - expected[i]) ** 2 for i in range(x.shape[0])))
     residual = a @ x - b
     normal_residual = _transpose_matvec(a, residual)
-    normal_error = math.sqrt(sum(float(normal_residual[i]) ** 2 for i in range(2)))
+    normal_error = math.sqrt(
+        sum(float(normal_residual[i]) ** 2 for i in range(x.shape[0]))
+    )
     tolerance = 1.0e-10
     assert error < tolerance and normal_error < tolerance, BatchedFailure(
         claim=claim,
         device_kind=execution_plan.device_kind,
-        batch_size=1,
-        batch_index=0,
+        batch_size=3,
+        batch_index=batch_index,
         method=method,
         order=0,
         problem="least_squares",
-        parameters={"rows": 3, "columns": 2},
+        parameters={"rows": a.shape[0], "columns": a.shape[1]},
         actual=max(error, normal_error),
         expected=0.0,
         error=max(error, normal_error),
