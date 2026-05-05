@@ -820,6 +820,7 @@ class _ArchitectureOwnershipClaim(Claim[None]):
             "multi-region ownership must construct different implementation "
             f"behavior from the region evidence: {unjustified_splits}"
         )
+        self._check_multi_region_capabilities_are_witnessed(capabilities)
         label_expectations = [
             expectation.request
             for expectation in self._spec.request_expectations
@@ -828,6 +829,32 @@ class _ArchitectureOwnershipClaim(Claim[None]):
         assert not label_expectations, (
             "descriptor-owned request expectations must compare owner identity: "
             f"{label_expectations}"
+        )
+
+    def _check_multi_region_capabilities_are_witnessed(
+        self,
+        capabilities: tuple[Any, ...],
+    ) -> None:
+        missing = []
+        for cap in capabilities:
+            if len(cap.coverage_regions) <= 1:
+                continue
+            witnessed_regions = {
+                region
+                for expectation in self._spec.request_expectations
+                if expectation.request.descriptor is not None
+                and cap.supports(expectation.request)
+                for region in cap.coverage_regions
+                if region.contains(expectation.request.descriptor)
+            }
+            for region in cap.coverage_regions:
+                if region not in witnessed_regions:
+                    missing.append(
+                        f"{cap.owner.__name__}:{_coverage_region_name(region)}"
+                    )
+        assert not missing, (
+            "multi-region ownership must have executable request witnesses for "
+            f"each region: {missing}"
         )
 
     def _check_descriptor_requests(self) -> None:
@@ -4257,6 +4284,16 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
                 order=4,
                 descriptor=_TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor(
                     1.0e-2
+                ),
+            ),
+            _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
+        ),
+        _CapabilityRequestExpectation(
+            _AlgorithmRequest(
+                requested_properties=frozenset({"one_step"}),
+                order=4,
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.nordsieck_history_descriptor(
+                    10.0
                 ),
             ),
             _TIME_INTEGRATOR_PACKAGE.MultistepIntegrator,
