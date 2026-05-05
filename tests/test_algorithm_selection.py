@@ -177,12 +177,22 @@ def _solve_selection_case() -> _StepSelectionCase:
     state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
     dt = 1.0e-2
     descriptor = descriptor_integrator.step_solve_relation_descriptor(rhs, state, dt)
+    root_descriptor = _ti.implicit_stage_root_problem(
+        descriptor_integrator,
+        rhs,
+        state,
+        dt,
+    ).solve_relation_descriptor()
 
     def postcheck(
         case: _StepSelectionCase,
         state: _ti.ODEState,
         _integrator: object,
     ) -> None:
+        for field in SolveRelationField:
+            assert case.descriptor.coordinate(field) == root_descriptor.coordinate(
+                field
+            )
         assert case.descriptor.coordinate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND
         ) == derivative_oracle_descriptor().coordinate(
