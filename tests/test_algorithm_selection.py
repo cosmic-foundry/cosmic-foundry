@@ -686,6 +686,47 @@ class _NordsieckFamilyFromStiffnessClaim(Claim[Any]):
             assert_nordsieck_family(selected.construct(request), family)
 
 
+class _BDFNordsieckCorrectorRootClaim(Claim[Any]):
+    """Grounded claim that BDF correction is a root-relation solve."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/bdf_nordsieck_corrector_root_relation"
+
+    def check(self, _calibration: Any) -> None:
+        rhs = _AffineDecayRHS(4.0)
+        h = 0.1
+        state = _ti.ODEState(
+            0.0,
+            Tensor([1.0], backend=_TIME_BACKEND),
+            h,
+            0.0,
+            _ti.NordsieckHistory(
+                h,
+                (
+                    Tensor([1.0], backend=_TIME_BACKEND),
+                    Tensor([-4.0 * h], backend=_TIME_BACKEND),
+                ),
+            ),
+        )
+        integrator = _ti.MultistepIntegrator("bdf", 1)
+        z_pred = (
+            Tensor([1.0 - 4.0 * h], backend=_TIME_BACKEND),
+            Tensor([-4.0 * h], backend=_TIME_BACKEND),
+        )
+        relation = _ti.bdf_corrector_root_relation(rhs, z_pred, h, h, 1.0)
+        descriptor = relation.solve_relation_descriptor()
+        assert select_root_solver_for_descriptor(descriptor) is NewtonRootSolver
+
+        expected = 1.0 / (1.0 + 4.0 * h)
+        root = solve_root_relation(relation)
+        assert abs(float(root[0]) - expected) < 1.0e-12
+        assert abs(float(relation.residual(root)[0])) < 1.0e-12
+
+        stepped = integrator.step(rhs, state, h)
+        assert abs(float(stepped.u[0]) - expected) < 1.0e-12
+
+
 class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
     """Grounded claim that ordinary advance ownership does not split on margin."""
 
@@ -932,6 +973,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _DampedOscillatorSymplecticDefectClaim(),
     _StepDiagnosticStiffnessClaim(),
     _NordsieckFamilyFromStiffnessClaim(),
+    _BDFNordsieckCorrectorRootClaim(),
     _DomainMarginAdvanceSelectionClaim(),
 )
 

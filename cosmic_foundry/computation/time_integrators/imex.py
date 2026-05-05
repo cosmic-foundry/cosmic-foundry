@@ -8,8 +8,8 @@ at the same stage value yᵢ:
     yᵢ − γᵢ·h·f_I(tᵢ, yᵢ) = y_exp,i
 
 where γᵢ = Aᴵ[i,i] and y_exp,i accumulates the explicit contributions from
-Ã and the lower-triangular implicit contributions from Aᴵ.  Newton iteration
-via LUFactorization resolves each stage using the Jacobian of f_I.
+Ã and the lower-triangular implicit contributions from Aᴵ.  Each implicit
+stage is exposed as a root relation and solved through root-solver coverage.
 
 The canonical tableau for each order is:
     1 — IMEX Euler
