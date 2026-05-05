@@ -29,6 +29,7 @@ from cosmic_foundry.computation.solvers import (
     MatrixFreeNewtonKrylovRootSolver,
     NewtonRootSolver,
 )
+from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
 from cosmic_foundry.computation.solvers.capabilities import (
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
@@ -820,7 +821,7 @@ class _ImexImplicitStageRootClaim(Claim[Any]):
         assert isinstance(relation, FiniteDimensionalResidualRelation)
         descriptor = relation.solve_relation_descriptor()
         assert select_root_solver_for_descriptor(descriptor) is NewtonRootSolver
-        stage_value = NewtonRootSolver().solve(relation)
+        stage_value = solve_root_relation(relation)
         residual = relation.residual(stage_value)
         assert abs(float(residual[0])) < 1.0e-12
         assert abs(float(stage_value[0]) - (1.0 / (1.0 + 0.8 * gamma_dt))) < 1.0e-12

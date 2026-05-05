@@ -26,10 +26,8 @@ from typing import Protocol, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.solvers.newton_root_solver import (
-    NewtonRootSolver,
-    RootRelation,
-)
+from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
+from cosmic_foundry.computation.solvers.newton_root_solver import RootRelation
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -264,7 +262,6 @@ def _build_imex_tableaux() -> dict:
 
 
 _IMEX_TABLEAUX = _build_imex_tableaux()
-_NEWTON = NewtonRootSolver()
 
 
 class AdditiveRungeKuttaIntegrator(TimeIntegrator):
@@ -350,8 +347,13 @@ class AdditiveRungeKuttaIntegrator(TimeIntegrator):
                 y = y_exp
             else:
                 gamma_dt = gamma_i * dt
-                y = _NEWTON.solve(
-                    imex_implicit_stage_root_relation(rhs, y_exp, t_I_i, gamma_dt)
+                y = solve_root_relation(
+                    imex_implicit_stage_root_relation(
+                        rhs,
+                        y_exp,
+                        t_I_i,
+                        gamma_dt,
+                    )
                 )
 
             k_E.append(rhs.explicit(t_E_i, y))

@@ -3889,6 +3889,33 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         return {region.name: region for region in schema.derived_regions}
 
 
+class _RootSolverExecutionOwnershipClaim(Claim[None]):
+    """Claim: time integrators expose root relations instead of owning solvers."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/root_solver_execution_ownership"
+
+    def check(self, _calibration: None) -> None:
+        root_solver_types = tuple(
+            {region.owner for region in root_solver_coverage_regions()}
+        )
+        package = importlib.import_module("cosmic_foundry.computation.time_integrators")
+        offenders: list[str] = []
+        for module_info in sorted(
+            pkgutil.iter_modules(package.__path__),
+            key=lambda info: info.name,
+        ):
+            module = importlib.import_module(f"{package.__name__}.{module_info.name}")
+            for name, value in module.__dict__.items():
+                if isinstance(value, root_solver_types):
+                    offenders.append(f"{module.__name__}.{name}")
+        assert not offenders, (
+            "time-integration modules must construct root relations and query "
+            f"root-solver coverage at execution time: {offenders}"
+        )
+
+
 class _DecompositionCoverageRegionClaim(Claim[None]):
     """Claim: decomposition selection is driven by schema coverage regions."""
 
@@ -5104,6 +5131,7 @@ _CLAIMS: list[Claim[None]] = [
     _LinearSolverCoverageRegionClaim(),
     _LeastSquaresSolverCoverageRegionClaim(),
     _RootSolverCoverageRegionClaim(),
+    _RootSolverExecutionOwnershipClaim(),
     _DecompositionCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),
 ]

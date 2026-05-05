@@ -31,6 +31,7 @@ from cosmic_foundry.computation.solvers import (
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
 )
+from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
     derivative_oracle_descriptor,
@@ -157,9 +158,7 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         )
         assert select_root_solver_for_descriptor(root_descriptor) is NewtonRootSolver
         assert (
-            _residual_norm(
-                NewtonRootSolver().solve(root_relation) - constrained_state.u
-            )
+            _residual_norm(solve_root_relation(root_relation) - constrained_state.u)
             < 1.0e-12
         )
         unconstrained_relation = RootRelation(
@@ -655,6 +654,10 @@ class _EquilibriumNetworkTargetClaim(Claim[Any]):
             nse_descriptor = nse_relation.solve_relation_descriptor()
             solve_relation_parameter_schema().validate_descriptor(nse_descriptor)
             assert select_root_solver_for_descriptor(nse_descriptor) is NewtonRootSolver
+            assert (
+                _residual_norm(nse_relation.residual(solve_root_relation(nse_relation)))
+                < 1e-10
+            )
         for i in range(self._spec.n):
             assert abs(float(state.u[i]) - expected) < 1e-6
         assert abs(sum(float(state.u[i]) for i in range(self._spec.n)) - 1.0) < 1e-10
