@@ -790,10 +790,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: remove Sphinx external linkcheck from docs CI while retaining
-   working-tree markdown link validation for local and own-repository links.
-2. Review whether IMEX implicit-stage execution and constrained direct solves
-   should use the same relation-selected root-solver execution path.
+1. Current PR: route IMEX implicit-stage execution and direct NSE solves through
+   the shared relation-selected root-solver execution path, grounding the change
+   in the split scalar decay IMEX stage calculation and the finite
+   reaction-network equilibrium calculation.
+2. Review whether remaining local Newton loops should become explicit
+   solve-relation objects or stay as method-internal nonlinear updates.
 3. Review whether decomposition results should remain bare reusable matrix
    objects, or whether solve semantics should move entirely to relation-aware
    execution paths.
