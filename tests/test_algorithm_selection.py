@@ -72,6 +72,17 @@ class _AffineDecayRHS:
         return self.linear_operator(_t, u)
 
 
+class _JacobianOnlyDecayRHS:
+    def __init__(self, rate: float = 1.0) -> None:
+        self._rate = rate
+
+    def __call__(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([-self._rate * float(u[0])], backend=u.backend)
+
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[-self._rate]], backend=u.backend)
+
+
 class _BoundaryApproachRHS:
     state_domain = _ti.NonnegativeStateDomain(1)
 
@@ -776,6 +787,38 @@ class _AdamsNordsieckCorrectorFixedPointClaim(Claim[Any]):
         assert abs(float(stepped.u[0]) - expected) < 1.0e-12
 
 
+class _AdamsNordsieckCorrectorNewtonFallbackClaim(Claim[Any]):
+    """Grounded claim that unevidenced Adams correction uses Newton evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/adams_nordsieck_corrector_newton_fallback_relation"
+
+    def check(self, _calibration: Any) -> None:
+        rate = 0.5
+        rhs = _JacobianOnlyDecayRHS(rate)
+        h = 0.1
+        z_pred = (
+            Tensor([1.0 - rate * h], backend=_TIME_BACKEND),
+            Tensor([-rate * h], backend=_TIME_BACKEND),
+        )
+        relation = _ti.adams_corrector_root_relation(rhs, z_pred, h, h, 1.0)
+        descriptor = relation.solve_relation_descriptor()
+
+        assert (
+            descriptor.coordinate(
+                SolveRelationField.FIXED_POINT_CONTRACTION_BOUND
+            ).value
+            is None
+        )
+        assert select_root_solver_for_descriptor(descriptor) is NewtonRootSolver
+
+        expected = 1.0 / (1.0 + rate * h)
+        root = solve_root_relation(relation)
+        assert abs(float(root[0]) - expected) < 1.0e-12
+        assert abs(float(relation.residual(root)[0])) < 1.0e-12
+
+
 class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
     """Grounded claim that ordinary advance ownership does not split on margin."""
 
@@ -1024,6 +1067,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _NordsieckFamilyFromStiffnessClaim(),
     _BDFNordsieckCorrectorRootClaim(),
     _AdamsNordsieckCorrectorFixedPointClaim(),
+    _AdamsNordsieckCorrectorNewtonFallbackClaim(),
     _DomainMarginAdvanceSelectionClaim(),
 )
 

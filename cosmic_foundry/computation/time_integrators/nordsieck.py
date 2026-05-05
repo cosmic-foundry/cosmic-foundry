@@ -180,8 +180,8 @@ def adams_corrector_root_relation(
     t_new: float,
     h: float,
     beta0: float,
-) -> FixedPointRootRelation:
-    """Return the Adams corrector relation with fixed-point-map evidence."""
+) -> RootRelation | FixedPointRootRelation:
+    """Return the Adams corrector relation with available solver evidence."""
     rhs_adams = z_pred[0] - beta0 * z_pred[1]
     linear_operator = getattr(rhs, "linear_operator", None)
     contraction_bound = (
@@ -195,6 +195,17 @@ def adams_corrector_root_relation(
 
     def fixed_point(y: Tensor) -> Tensor:
         return z_pred[0] + beta0 * (h * rhs(t_new, y) - z_pred[1])
+
+    if (contraction_bound is None or contraction_bound >= 1.0) and isinstance(
+        rhs, WithJacobianRHSProtocol
+    ):
+        n = z_pred[0].shape[0]
+        backend = z_pred[0].backend
+
+        def root_jacobian(y: Tensor) -> Tensor:
+            return Tensor.eye(n, backend=backend) - (beta0 * h) * rhs.jacobian(t_new, y)
+
+        return RootRelation(residual, root_jacobian, z_pred[0])
 
     return FixedPointRootRelation(
         residual,
