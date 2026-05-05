@@ -4,11 +4,9 @@
 Also validates own-repo GitHub URLs (``https://github.com/cosmic-foundry/
 cosmic-foundry/{blob,tree,raw}/main/…``) against the working tree. These
 links appear in docs that live inside ``docs/`` but point at files outside
-the docs tree (ADRs, CONTRIBUTING.md, AI.md, …). Letting ``sphinx-build
--b linkcheck`` validate them over HTTP would 404 pre-merge whenever a PR
-adds both the target file and the link to it in the same change. Validating
-here — against the tree that is about to become ``main`` — avoids that
-bootstrap problem and still catches path typos and stale links.
+the docs tree (ADRs, CONTRIBUTING.md, AI.md, …). Validating them here against
+the tree that is about to become ``main`` catches path typos and stale links
+without requiring external HTTP link checks in CI.
 
 Other external URLs (http, https, mailto) and pure in-page fragments
 (#anchor) are skipped. Fragments on relative links (path#section) are

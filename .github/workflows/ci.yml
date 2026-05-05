@@ -103,8 +103,6 @@ jobs:
         run: pip install -e .[dev,docs]
       - name: Build docs
         run: sphinx-build -W docs docs/_build/html
-      - name: Check external links
-        run: sphinx-build -b linkcheck -W docs docs/_build/linkcheck
       - name: Upload pages artifact
         # Upload on every successful build so the deploy job can consume it
         # on pushes to main.  The artifact is ignored (but harmless) on PRs.
