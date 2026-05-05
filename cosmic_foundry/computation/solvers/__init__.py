@@ -27,6 +27,7 @@ from cosmic_foundry.computation.solvers.linear_solver import (
     LinearOperator,
     LinearSolver,
 )
+from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
 
 __all__ = [
     "DenseCGSolver",
@@ -45,5 +46,6 @@ __all__ = [
     "LinearOperator",
     "linear_solver_coverage_regions",
     "LinearSolver",
+    "NewtonRootSolver",
     "select_linear_solver_for_descriptor",
 ]

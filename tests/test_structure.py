@@ -2155,6 +2155,7 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         self._assert_coordinate_map_literals_are_single_schema()
         self._assert_transformation_relations_have_explicit_spaces()
         self._assert_implementation_methods_do_not_import_capability_modules()
+        self._assert_residual_jacobian_solvers_are_solver_infrastructure()
 
         spd = linear_operator_descriptor_from_assembled_operator(
             _MatrixLinearOperator(((2.0, -1.0), (-1.0, 2.0))),
@@ -2583,6 +2584,50 @@ class _LinearOperatorProjectionClaim(Claim[None]):
         assert not offenders, (
             "implementation methods must expose mathematical evidence; capability "
             f"modules project that evidence outside the class: {offenders}"
+        )
+
+    @staticmethod
+    def _assert_residual_jacobian_solvers_are_solver_infrastructure() -> None:
+        solvers_root = _PACKAGE_ROOT / "computation" / "solvers"
+        offenders = []
+        for path in sorted((_PACKAGE_ROOT / "computation").rglob("*.py")):
+            tree = ast.parse(path.read_text())
+            for class_def in (
+                node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+            ):
+                for method in (
+                    child
+                    for child in class_def.body
+                    if isinstance(child, ast.FunctionDef)
+                ):
+                    if (
+                        _LinearOperatorProjectionClaim._annotation_name(
+                            method.returns or ast.Constant(None)
+                        )
+                        == "Tensor"
+                        and _LinearOperatorProjectionClaim._callable_tensor_map_count(
+                            method
+                        )
+                        >= 2
+                        and not path.is_relative_to(solvers_root)
+                    ):
+                        offenders.append(
+                            f"{path.relative_to(_PROJECT_ROOT)}:"
+                            f"{class_def.name}.{method.name}"
+                        )
+        assert not offenders, (
+            "classes that solve residual/Jacobian relations belong to solver "
+            f"infrastructure, not domain-specific packages: {offenders}"
+        )
+
+    @staticmethod
+    def _callable_tensor_map_count(function: ast.FunctionDef) -> int:
+        return sum(
+            1
+            for parameter in function.args.args
+            if parameter.annotation is not None
+            and {"Callable", "Tensor"}
+            <= _LinearOperatorProjectionClaim._annotation_names(parameter.annotation)
         )
 
     @staticmethod
@@ -4193,7 +4238,6 @@ _TIME_INTEGRATOR_SOLVE_RELATION_MODULES = frozenset(
 )
 _TIME_INTEGRATOR_VERIFICATION_MODULES = frozenset(
     {
-        importlib.import_module("cosmic_foundry.computation.time_integrators._newton"),
         importlib.import_module("cosmic_foundry.computation.time_integrators.bseries"),
         importlib.import_module(
             "cosmic_foundry.computation.time_integrators.constraint_aware"
@@ -4421,6 +4465,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LeastSquaresSolver",
                 "LinearOperator",
                 "LinearSolver",
+                "NewtonRootSolver",
                 "StationaryIterationSolver",
             }
         ),
@@ -4455,6 +4500,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "LeastSquaresSolver": "least_squares_solver",
         "LinearOperator": "linear_solver",
         "LinearSolver": "linear_solver",
+        "NewtonRootSolver": "newton_root_solver",
         "StationaryIterationSolver": "iterative_solver",
     },
 )

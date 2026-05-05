@@ -37,8 +37,8 @@ from typing import Any, Protocol, runtime_checkable
 import sympy
 
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
+from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
 from cosmic_foundry.computation.tensor import Tensor, norm
-from cosmic_foundry.computation.time_integrators._newton import newton_solve
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
     RHSProtocol,
@@ -162,6 +162,7 @@ def _build_dirk_tableaux() -> dict:
 
 _DIRK_TABLEAUX = _build_dirk_tableaux()
 _LU = LUFactorization()
+_NEWTON = NewtonRootSolver()
 
 
 def _build_collocation_tableaux() -> dict:
@@ -329,6 +330,8 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
             return self._step_coupled(rhs, state, dt)
 
         t, u = state.t, state.u
+        n = u.shape[0]
+        backend = u.backend
         k: list[Tensor] = []
 
         for i in range(self._s):
@@ -339,11 +342,31 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
             for j in range(i):
                 y_exp = y_exp + (self._A_f[i][j] * dt) * k[j]
 
-            y = newton_solve(
+            gamma_dt = gamma_i * dt
+
+            def residual(
+                y: Tensor,
+                *,
+                _t_i: float = t_i,
+                _gamma_dt: float = gamma_dt,
+                _y_exp: Tensor = y_exp,
+            ) -> Tensor:
+                return y - _gamma_dt * rhs(_t_i, y) - _y_exp
+
+            def jacobian(
+                y: Tensor,
+                *,
+                _t_i: float = t_i,
+                _gamma_dt: float = gamma_dt,
+            ) -> Tensor:
+                return Tensor.eye(n, backend=backend) - _gamma_dt * rhs.jacobian(
+                    _t_i, y
+                )
+
+            y = _NEWTON.solve(
+                residual,
+                jacobian,
                 y_exp,
-                gamma_i * dt,
-                f=lambda y, _t=t_i: rhs(_t, y),  # type: ignore[misc]
-                jac=lambda y, _t=t_i: rhs.jacobian(_t, y),  # type: ignore[misc]
                 constraint_gradients=constraint_gradients,
             )
             k.append(rhs(t_i, y))

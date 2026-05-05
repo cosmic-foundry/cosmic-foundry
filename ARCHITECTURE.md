@@ -644,8 +644,8 @@ A frozenset of reaction-pair indices means those pairs are currently treated
 as algebraic constraints.  The integrator passes this field through without
 interpreting it; the controller and RHS read and write it.
 
-**Projected Newton iteration** (introduced in F3).  `newton_solve` gains
-an optional `constraint_gradients: Tensor | None` argument (shape
+**Projected Newton iteration** (introduced in F3).  `NewtonRootSolver.solve`
+accepts an optional `constraint_gradients: Tensor | None` argument (shape
 k × n_species, the gradients of the k active algebraic constraints).
 When provided, each Newton step δX is projected onto the null space of the
 active constraint gradients before being applied:
@@ -680,7 +680,7 @@ All tests register in `tests/test_time_integrators.py`.
 | F2 ✓ | Two-body fusion A + A → B (quadratic; `BlackBoxRHS`) | `project_conserved` | 3-species toy: orthogonal projection onto Σxᵢ = 1; idempotence; minimum-norm property; round-trip error ≤ ε_machine |
 | F3 ✓ | Robertson problem (k₁=0.04, k₂=3×10⁷, k₃=10⁴; `JacobianRHS`) | Projected Newton iteration | 2D system with one hard algebraic constraint: Newton steps stay on constraint manifold; result agrees with exact reduced 1D Newton to integration tolerance |
 | F4 ✓ | 5-isotope α-chain at fixed T (`ReactionNetworkRHS`) | Constraint activation state in `ODEState`; `ConstraintAwareController` | A⇌B toy: constraint activates when r⁺/r⁻→1; consistent initialization lands on manifold; hysteresis prevents chattering; deactivation restores ODE trajectory |
-| F5 ✓ | 3-species A⇌B⇌C symmetric network (`ReactionNetworkRHS`) | `nonlinear_solve` in `_newton.py`; `solve_nse` in `constraint_aware.py`; NSE limit detection and direct NSE solve in `ConstraintAwareController`; absent-species rate-threshold guard in `_equilibrium_ratios` | A⇌B⇌C toy: both constraints activate simultaneously, `solve_nse` recovers A=B=C=1/3 to machine precision; 11-species hub-and-spoke: fast and slow spoke groups activate at distinct times (staggered activation), `nse_events` logged at full NSE, final Aᵢ=1/11; rate-threshold guard prevents spurious activation of absent-species pairs in chain topology |
+| F5 ✓ | 3-species A⇌B⇌C symmetric network (`ReactionNetworkRHS`) | `NewtonRootSolver` in `solvers/`; `solve_nse` in `constraint_aware.py`; NSE limit detection and direct NSE solve in `ConstraintAwareController`; absent-species rate-threshold guard in `_equilibrium_ratios` | A⇌B⇌C toy: both constraints activate simultaneously, `solve_nse` recovers A=B=C=1/3 to machine precision; 11-species hub-and-spoke: fast and slow spoke groups activate at distinct times (staggered activation), `nse_events` logged at full NSE, final Aᵢ=1/11; rate-threshold guard prevents spurious activation of absent-species pairs in chain topology |
 
 #### Invariants upheld by this layer
 
@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: project active algebraic constraints into primitive step-solve
-   relation coordinates, so projected Newton is described by the same equality
-   constraint axis as other solve relations.
-2. Keep nonlinear solver extraction in view: implicit stage residuals should
-   continue moving toward a generic nonlinear-root solve interface once a second
-   caller needs the same Newton machinery.
-3. Review whether constrained Newton, implicit stage Newton, and any future
-   nonlinear solve caller can share one root-solve relation without preserving a
-   time-integrator-specific Newton concept.
+1. Current PR: move Newton iteration behind one generic root solver, so implicit
+   stage equations and direct NSE solves share the same residual/Jacobian
+   primitive instead of separate time-integrator Newton functions.
+2. Review whether the generic root solver should advertise capability ownership
+   over nonlinear-root solve descriptors once selection has a second concrete
+   nonlinear solver or a second root-solve construction path.
+3. Review whether constrained Newton projection should become an explicit
+   constrained-root relation with equality-constraint evidence rather than an
+   optional execution argument.
 
 Roadmap sketch:
 
@@ -927,6 +927,10 @@ solve descriptor records the count of active equality constraints when state
 constraint markers are backed by RHS gradient evidence; projected Newton is
 therefore a constrained root/linear solve in the same schema, not an execution
 side channel.
+Newton iteration is no longer owned by the time-integration package.  Implicit
+RK stages, IMEX implicit stages, and direct NSE solves all present residual and
+Jacobian callables to `NewtonRootSolver`; stage equations are just one source of
+root relations, not a separate Newton concept.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

@@ -1,6 +1,5 @@
 """Time-integration layer: integrators, steppers, controllers, B-series, symplectic."""
 
-from cosmic_foundry.computation.time_integrators._newton import nonlinear_solve
 from cosmic_foundry.computation.time_integrators.adaptive_nordsieck import (
     AdaptiveNordsieckController,
 )
@@ -117,7 +116,6 @@ __all__ = [
     "ConstraintAwareController",
     "DomainCheck",
     "DomainViolation",
-    "nonlinear_solve",
     "NonnegativeStateDomain",
     "predict_domain_step_limit",
     "solve_nse",
