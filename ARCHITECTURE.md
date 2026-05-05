@@ -790,15 +790,15 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make constrained Newton execution consume an explicit
-   `RootSolveProblem` relation, so equality-constraint evidence is part of the
-   root problem instead of an optional solver side argument.
-2. Review whether nonlinear-root ownership should be selected by construction
-   evidence at each call site, so direct NSE solves expose the same descriptor
-   evidence as implicit stage equations.
-3. Review whether constrained root coverage should become a distinct
+1. Current PR: let `RootSolveProblem` project primitive solve-relation
+   descriptors, so nonlinear-root ownership can be selected from construction
+   evidence at stage and NSE call sites.
+2. Review whether constrained root coverage should become a distinct
    constrained-root relation with equality-constraint evidence rather than an
    undifferentiated nonlinear-root region.
+3. Review whether root-problem descriptors should replace time-integrator
+   stage solve descriptors for implicit stage construction, leaving the
+   integrator descriptor as a projection of the same root relation.
 
 Roadmap sketch:
 
@@ -940,6 +940,10 @@ Newton execution now consumes a `RootSolveProblem`: residual, Jacobian, initial
 state, and optional equality-constraint gradients form one explicit relation
 object.  Projected Newton is no longer an optional side argument to the solver;
 the relation itself reports its equality-constraint count.
+`RootSolveProblem` also projects to a primitive solve-relation descriptor.  That
+lets both implicit stage construction and direct NSE construction select
+`NewtonRootSolver` from the same descriptor-space evidence instead of relying on
+time-integrator-local knowledge about which solver will be called.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

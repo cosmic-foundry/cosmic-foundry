@@ -29,6 +29,7 @@ from cosmic_foundry.computation.solvers import (
     NewtonRootSolver,
     RootSolveProblem,
     select_linear_solver_for_descriptor,
+    select_root_solver_for_descriptor,
 )
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
@@ -146,6 +147,15 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
         assert root_problem.equality_constraint_count == (
             len(constrained_state.active_constraints or frozenset())
         )
+        root_descriptor = root_problem.solve_relation_descriptor()
+        solve_relation_parameter_schema().validate_descriptor(root_descriptor)
+        assert (
+            root_descriptor.coordinate(
+                SolveRelationField.EQUALITY_CONSTRAINT_COUNT
+            ).value
+            == root_problem.equality_constraint_count
+        )
+        assert select_root_solver_for_descriptor(root_descriptor) is NewtonRootSolver
         assert (
             _residual_norm(NewtonRootSolver().solve(root_problem) - constrained_state.u)
             < 1.0e-12
@@ -611,6 +621,11 @@ class _EquilibriumNetworkTargetClaim(Claim[Any]):
             )
 
         expected = 1.0 / self._spec.n
+        if self._spec.topo != "chain":
+            nse_problem = _ti.nse_root_problem(rhs, state.u, state.t)
+            nse_descriptor = nse_problem.solve_relation_descriptor()
+            solve_relation_parameter_schema().validate_descriptor(nse_descriptor)
+            assert select_root_solver_for_descriptor(nse_descriptor) is NewtonRootSolver
         for i in range(self._spec.n):
             assert abs(float(state.u[i]) - expected) < 1e-6
         assert abs(sum(float(state.u[i]) for i in range(self._spec.n)) - 1.0) < 1e-10
