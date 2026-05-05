@@ -151,6 +151,7 @@ def matrix_free_operator_predicates() -> tuple[MembershipPredicate, ...]:
 
 def nonlinear_root_predicates(
     *,
+    derivative_oracle_kind: str = "jacobian_callback",
     equality_constraint_predicates: tuple[StructuredPredicate, ...] = (),
 ) -> tuple[tuple[StructuredPredicate, ...], ...]:
     """Return primitive predicate sets for nonlinear residual roots."""
@@ -165,7 +166,7 @@ def nonlinear_root_predicates(
         ),
         MembershipPredicate(
             SolveRelationField.DERIVATIVE_ORACLE_KIND,
-            frozenset({"jacobian_callback"}),
+            frozenset({derivative_oracle_kind}),
         ),
         AffineComparisonPredicate(
             {SolveRelationField.DIM_X: 1.0, SolveRelationField.DIM_Y: -1.0},
@@ -211,12 +212,25 @@ def constrained_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]
     )
 
 
+def directional_derivative_root_predicates() -> (
+    tuple[tuple[StructuredPredicate, ...], ...]
+):
+    """Return predicate sets for unconstrained nonlinear roots with JVP evidence."""
+    return nonlinear_root_predicates(
+        derivative_oracle_kind="jvp",
+        equality_constraint_predicates=(
+            ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, "==", 0),
+        ),
+    )
+
+
 __all__ = [
     "CONDITION_LIMIT",
     "LINEARITY_TOLERANCE",
     "budget_predicates",
     "coverage",
     "dense_matrix_predicates",
+    "directional_derivative_root_predicates",
     "least_squares_predicates",
     "linear_system_predicates",
     "matrix_free_operator_predicates",
