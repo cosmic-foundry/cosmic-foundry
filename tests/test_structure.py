@@ -1667,6 +1667,12 @@ class _SolveRelationSchemaClaim(Claim[None]):
             map_linearity_evidence="unavailable",
             residual_target_available=False,
         )
+        nonlinear_root_without_jacobian = self._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
         eigenproblem = self._solve_descriptor(
             auxiliary_scalar_count=1,
             normalization_constraint_count=1,
@@ -1680,6 +1686,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
             linear_system,
             least_squares,
             nonlinear_root,
+            nonlinear_root_without_jacobian,
             eigenproblem,
             explicit_time_step,
             implicit_stage_solve,
@@ -1689,6 +1696,13 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert solve_regions["linear_system"].contains(explicit_time_step)
         assert solve_regions["least_squares"].contains(least_squares)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root)
+        assert solve_regions["nonlinear_root"].contains(nonlinear_root_without_jacobian)
+        assert (
+            solve_schema.cell_status(
+                nonlinear_root_without_jacobian, root_solver_coverage_regions()
+            )
+            == "uncovered"
+        )
         assert solve_regions["nonlinear_root"].contains(implicit_stage_solve)
         assert solve_regions["eigenproblem"].contains(eigenproblem)
 

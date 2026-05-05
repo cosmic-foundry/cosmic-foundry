@@ -1151,10 +1151,10 @@ def _solve_relation_axes() -> tuple[ParameterAxis, ...]:
         _axis(
             field.DERIVATIVE_ORACLE_KIND,
             (
-                ParameterBin(
-                    "oracle_kind",
-                    frozenset({"none", "matrix", "jvp", "vjp", "jacobian_callback"}),
-                ),
+                ParameterBin("none", frozenset({"none"})),
+                ParameterBin("matrix", frozenset({"matrix"})),
+                ParameterBin("directional", frozenset({"jvp", "vjp"})),
+                ParameterBin("jacobian_callback", frozenset({"jacobian_callback"})),
             ),
         ),
         _axis(

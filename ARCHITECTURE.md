@@ -790,15 +790,17 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: render the parameter-space hierarchy in the generated capability
-   atlas page, derived from schemas, primitive axes, derived regions, ownership
-   regions, and computed uncovered cells.
-2. Review whether nonlinear residuals without Jacobian evidence should be made
-   an explicit uncovered atlas region before adding any non-Newton nonlinear
-   solver.
-3. Review whether least-squares and overdetermined residual calculations now
+1. Current PR: distinguish derivative-oracle evidence in solve-relation
+   parameter space and treat partially invalid/owned atlas cells as still
+   having an uncovered remainder, so nonlinear target-zero residuals with no
+   derivative oracle are a visible computed gap before adding any non-Newton
+   nonlinear solver.
+2. Review whether least-squares and overdetermined residual calculations now
    provide enough evidence to add an objective/least-squares relation sibling
    under the finite-dimensional relation spine.
+3. Review whether directional derivative evidence (`jvp`/`vjp`) should be
+   represented as a separate nonlinear solver gap or should wait for a
+   concrete matrix-free Newton/Krylov calculation.
 
 Roadmap sketch:
 
@@ -978,6 +980,13 @@ The capability atlas begins with a generated parameter-space hierarchy before
 showing projection plots.  The hierarchy is schema → primitive coordinates →
 derived regions → current ownership and uncovered cells, so readers can see
 which human labels are derived views over primitive coordinates.
+The solve-relation derivative-oracle axis separates no derivative evidence,
+assembled matrices, directional derivative products, and Jacobian callbacks.
+This makes nonlinear target-zero residuals without Jacobian evidence a visible
+computed gap in the atlas rather than a hidden member of the same categorical
+cell as Newton-owned residuals. Atlas uncovered cells are not erased by a source
+that only partially overlaps a schema cell; a cell stops being a gap only when
+the cell predicates imply an invalid or owned source.
 Generic and adaptive advance-controller ownership does not split on
 `DOMAIN_STEP_MARGIN` unless the split selects a different controller or
 constructs different behavior.  Domain-step margin remains descriptor evidence

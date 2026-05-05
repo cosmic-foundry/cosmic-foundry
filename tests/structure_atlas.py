@@ -149,6 +149,12 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             residual_target_available=False,
         ),
         _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        ),
+        _SolveRelationSchemaClaim._solve_descriptor(
             auxiliary_scalar_count=1,
             normalization_constraint_count=1,
             acceptance_relation="eigenpair_residual",
@@ -442,17 +448,15 @@ def _schema_cell_signature(
     cell: tuple[StructuredPredicate, ...],
 ) -> _AtlasCellSignature:
     sources: set[_AtlasCellSource] = set()
-    sources.update(
-        _atlas_cell_source(rule)
-        for rule in schema.invalid_cells
-        if not _predicate_sets_are_disjoint(cell, rule.predicates)
+    overlapping_sources = tuple(
+        source
+        for source in (*schema.invalid_cells, *regions)
+        if not _cell_is_provably_disjoint_from_source(cell, source.predicates)
     )
-    sources.update(
-        _atlas_cell_source(region)
-        for region in regions
-        if not _predicate_sets_are_disjoint(cell, region.predicates)
-    )
-    return frozenset(sources or {_atlas_uncovered_cell_source(coordinates)})
+    sources.update(_atlas_cell_source(source) for source in overlapping_sources)
+    if not _cell_has_covering_source(cell, overlapping_sources):
+        sources.add(_atlas_uncovered_cell_source(coordinates))
+    return frozenset(sources)
 
 
 def _atlas_group_x_range(group: _AtlasDescriptorGroup) -> tuple[float, float]:
@@ -640,6 +644,122 @@ def _source_alternatives(
     return (source.predicates,)
 
 
+def _cell_has_covering_source(
+    cell: tuple[StructuredPredicate, ...],
+    sources: tuple[InvalidCellRule | CoverageRegion, ...],
+) -> bool:
+    """Return whether one source is known to contain the whole schema cell."""
+    return any(_predicate_set_implies(cell, source.predicates) for source in sources)
+
+
+def _predicate_set_implies(
+    premises: tuple[StructuredPredicate, ...],
+    conclusions: tuple[StructuredPredicate, ...],
+) -> bool:
+    return all(
+        _predicate_set_implies_predicate(premises, conclusion)
+        for conclusion in conclusions
+    )
+
+
+def _predicate_set_implies_predicate(
+    premises: tuple[StructuredPredicate, ...],
+    conclusion: StructuredPredicate,
+) -> bool:
+    if isinstance(conclusion, MembershipPredicate):
+        return any(
+            isinstance(premise, MembershipPredicate)
+            and premise.field == conclusion.field
+            and premise.values <= conclusion.values
+            for premise in premises
+        )
+    if isinstance(conclusion, EvidencePredicate):
+        return any(
+            isinstance(premise, EvidencePredicate)
+            and premise.field == conclusion.field
+            and premise.evidence <= conclusion.evidence
+            for premise in premises
+        )
+    if isinstance(conclusion, ComparisonPredicate):
+        comparisons = tuple(
+            premise
+            for premise in premises
+            if isinstance(premise, ComparisonPredicate)
+            and premise.field == conclusion.field
+        )
+        memberships = tuple(
+            premise
+            for premise in premises
+            if isinstance(premise, MembershipPredicate)
+            and premise.field == conclusion.field
+        )
+        return _comparison_predicates_imply(
+            comparisons,
+            memberships,
+            conclusion,
+        )
+    return conclusion in premises
+
+
+def _comparison_predicates_imply(
+    comparisons: tuple[ComparisonPredicate, ...],
+    memberships: tuple[MembershipPredicate, ...],
+    conclusion: ComparisonPredicate,
+) -> bool:
+    if memberships:
+        values = frozenset.intersection(
+            *(membership.values for membership in memberships)
+        )
+        return bool(values) and all(
+            conclusion.evaluate(
+                ParameterDescriptor({conclusion.field: DescriptorCoordinate(value)})
+            )
+            for value in values
+        )
+    lower = max(
+        (
+            (
+                comparison.value,
+                comparison.operator in {">", "=="},
+            )
+            for comparison in comparisons
+            if comparison.operator in {">", ">=", "=="}
+        ),
+        default=None,
+    )
+    upper = min(
+        (
+            (
+                comparison.value,
+                comparison.operator in {"<", "=="},
+            )
+            for comparison in comparisons
+            if comparison.operator in {"<", "<=", "=="}
+        ),
+        default=None,
+    )
+    if conclusion.operator == ">":
+        return lower is not None and (
+            lower[0] > conclusion.value or (lower[0] == conclusion.value and lower[1])
+        )
+    if conclusion.operator == ">=":
+        return lower is not None and lower[0] >= conclusion.value
+    if conclusion.operator == "<":
+        return upper is not None and (
+            upper[0] < conclusion.value or (upper[0] == conclusion.value and upper[1])
+        )
+    if conclusion.operator == "<=":
+        return upper is not None and upper[0] <= conclusion.value
+    if conclusion.operator == "==":
+        return (
+            lower is not None
+            and upper is not None
+            and lower[0] == conclusion.value
+            and upper[0] == conclusion.value
+        )
+    raise ValueError(f"unsupported comparison operator {conclusion.operator!r}")
+
+
 def _schema_atlas_regions(
     schema: ParameterSpaceSchema,
     regions: tuple[CoverageRegion, ...] = (),
@@ -823,16 +943,63 @@ def _predicate_sets_are_disjoint(
     return _PREDICATE_SET_DISJOINTNESS[key]
 
 
-def _cell_is_disjoint_from_predicate(
+def _cell_is_provably_disjoint_from_predicate(
     cell: tuple[StructuredPredicate, ...],
     predicate: StructuredPredicate,
 ) -> bool:
     key = (tuple(id(cell_predicate) for cell_predicate in cell), id(predicate))
     if key not in _CELL_PREDICATE_DISJOINTNESS:
-        _CELL_PREDICATE_DISJOINTNESS[key] = predicate_sets_are_disjoint(
-            cell, (predicate,)
+        _CELL_PREDICATE_DISJOINTNESS[key] = any(
+            _predicates_are_disjoint(cell_predicate, predicate)
+            for cell_predicate in cell
+            if cell_predicate.referenced_fields & predicate.referenced_fields
         )
     return _CELL_PREDICATE_DISJOINTNESS[key]
+
+
+def _predicates_are_disjoint(
+    left: StructuredPredicate,
+    right: StructuredPredicate,
+) -> bool:
+    if isinstance(left, MembershipPredicate) and isinstance(right, MembershipPredicate):
+        return not left.values & right.values
+    if isinstance(left, EvidencePredicate) and isinstance(right, EvidencePredicate):
+        return not left.evidence & right.evidence
+    if isinstance(left, EvidencePredicate) and isinstance(right, ComparisonPredicate):
+        return not left.evidence & right.accepted_evidence
+    if isinstance(left, ComparisonPredicate) and isinstance(right, EvidencePredicate):
+        return not left.accepted_evidence & right.evidence
+    if isinstance(left, MembershipPredicate) and isinstance(right, ComparisonPredicate):
+        return not any(_predicate_accepts_value(right, value) for value in left.values)
+    if isinstance(left, ComparisonPredicate) and isinstance(right, MembershipPredicate):
+        return not any(_predicate_accepts_value(left, value) for value in right.values)
+    if isinstance(left, ComparisonPredicate) and isinstance(right, ComparisonPredicate):
+        return predicate_sets_are_disjoint((left,), (right,))
+    return predicate_sets_are_disjoint((left,), (right,))
+
+
+def _predicate_accepts_value(
+    predicate: ComparisonPredicate,
+    value: Any,
+) -> bool:
+    return predicate.evaluate(
+        ParameterDescriptor({predicate.field: DescriptorCoordinate(value)})
+    )
+
+
+def _cell_is_provably_disjoint_from_source(
+    cell: tuple[StructuredPredicate, ...],
+    source: tuple[StructuredPredicate, ...],
+) -> bool:
+    simple_predicates = tuple(
+        predicate
+        for predicate in source
+        if not isinstance(predicate, AffineComparisonPredicate)
+    )
+    return any(
+        _cell_is_provably_disjoint_from_predicate(cell, predicate)
+        for predicate in simple_predicates
+    )
 
 
 def _atlas_regions_for_schema(
@@ -875,7 +1042,7 @@ def _project_alternative_geometry(
         for y_index, y_cell in enumerate(_axis_cells(y_axis)):
             cell = x_cell + y_cell
             if any(
-                _cell_is_disjoint_from_predicate(cell, predicate)
+                _cell_is_provably_disjoint_from_predicate(cell, predicate)
                 for predicate in predicates
             ):
                 continue
@@ -963,6 +1130,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_coverage_regions_are_schema_discovered()
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
+        self._assert_nonlinear_root_without_jacobian_is_visible_gap()
         for group in _capability_atlas_descriptor_groups():
             schema = _atlas_group_schema(group)
             regions = _atlas_regions_for_schema(schema)
@@ -995,6 +1163,23 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 assert f"`{_field_label(axis.field)}`" in rendered
             for region in schema.derived_regions:
                 assert f"`{region.name}`" in rendered
+
+    @staticmethod
+    def _assert_nonlinear_root_without_jacobian_is_visible_gap() -> None:
+        schema = solve_relation_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        descriptor = _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        schema.validate_descriptor(descriptor)
+        assert schema.cell_status(descriptor, regions) == "uncovered"
+        assert any(
+            uncovered.contains(descriptor)
+            for uncovered in _capability_atlas_uncovered_cells(schema, regions)
+        )
 
     @staticmethod
     def _assert_no_atlas_dataclass_stores_presentation_text() -> None:
@@ -1080,13 +1265,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             )
             assert uncovered == signature_uncovered
             for source in uncovered:
-                assert all(
-                    _predicate_sets_are_disjoint(source.predicates, rule.predicates)
-                    for rule in schema.invalid_cells
-                )
-                assert all(
-                    _predicate_sets_are_disjoint(source.predicates, region.predicates)
-                    for region in regions
+                assert not _cell_has_covering_source(
+                    source.predicates, (*schema.invalid_cells, *regions)
                 )
 
     @staticmethod
