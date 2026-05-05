@@ -70,6 +70,7 @@ from cosmic_foundry.computation.time_integrators.integrator import (
 from cosmic_foundry.computation.time_integrators.nordsieck import (
     MultistepIntegrator,
     NordsieckHistory,
+    adams_corrector_root_relation,
     bdf_corrector_root_relation,
 )
 from cosmic_foundry.computation.time_integrators.reaction_network import (
@@ -186,6 +187,7 @@ __all__ = [
     "ExplicitMultistepIntegrator",
     "MultistepIntegrator",
     "NordsieckHistory",
+    "adams_corrector_root_relation",
     "bdf_corrector_root_relation",
     "OrderDecision",
     "OrderSelector",

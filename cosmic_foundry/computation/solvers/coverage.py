@@ -224,6 +224,16 @@ def directional_derivative_root_predicates() -> (
     )
 
 
+def fixed_point_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
+    """Return predicate sets for unconstrained roots with iteration-map evidence."""
+    return nonlinear_root_predicates(
+        derivative_oracle_kind="fixed_point_map",
+        equality_constraint_predicates=(
+            ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, "==", 0),
+        ),
+    )
+
+
 __all__ = [
     "CONDITION_LIMIT",
     "LINEARITY_TOLERANCE",
@@ -231,6 +241,7 @@ __all__ = [
     "coverage",
     "dense_matrix_predicates",
     "directional_derivative_root_predicates",
+    "fixed_point_root_predicates",
     "least_squares_predicates",
     "linear_system_predicates",
     "matrix_free_operator_predicates",

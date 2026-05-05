@@ -25,6 +25,7 @@ from cosmic_foundry.computation.solvers import (
     DenseLUSolver,
     DirectionalDerivativeRootRelation,
     FiniteDimensionalResidualRelation,
+    FixedPointRootSolver,
     LinearResidualRelation,
     MatrixFreeNewtonKrylovRootSolver,
     NewtonRootSolver,
@@ -727,6 +728,48 @@ class _BDFNordsieckCorrectorRootClaim(Claim[Any]):
         assert abs(float(stepped.u[0]) - expected) < 1.0e-12
 
 
+class _AdamsNordsieckCorrectorFixedPointClaim(Claim[Any]):
+    """Grounded claim that Adams correction is a fixed-point root solve."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/adams_nordsieck_corrector_fixed_point_relation"
+
+    def check(self, _calibration: Any) -> None:
+        rate = 0.5
+        rhs = _AffineDecayRHS(rate)
+        h = 0.1
+        state = _ti.ODEState(
+            0.0,
+            Tensor([1.0], backend=_TIME_BACKEND),
+            h,
+            0.0,
+            _ti.NordsieckHistory(
+                h,
+                (
+                    Tensor([1.0], backend=_TIME_BACKEND),
+                    Tensor([-rate * h], backend=_TIME_BACKEND),
+                ),
+            ),
+        )
+        integrator = _ti.MultistepIntegrator("adams", 1)
+        z_pred = (
+            Tensor([1.0 - rate * h], backend=_TIME_BACKEND),
+            Tensor([-rate * h], backend=_TIME_BACKEND),
+        )
+        relation = _ti.adams_corrector_root_relation(rhs, z_pred, h, h, 1.0)
+        descriptor = relation.solve_relation_descriptor()
+        assert select_root_solver_for_descriptor(descriptor) is FixedPointRootSolver
+
+        expected = 1.0 / (1.0 + rate * h)
+        root = solve_root_relation(relation)
+        assert abs(float(root[0]) - expected) < 1.0e-12
+        assert abs(float(relation.residual(root)[0])) < 1.0e-12
+
+        stepped = integrator.step(rhs, state, h)
+        assert abs(float(stepped.u[0]) - expected) < 1.0e-12
+
+
 class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
     """Grounded claim that ordinary advance ownership does not split on margin."""
 
@@ -974,6 +1017,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _StepDiagnosticStiffnessClaim(),
     _NordsieckFamilyFromStiffnessClaim(),
     _BDFNordsieckCorrectorRootClaim(),
+    _AdamsNordsieckCorrectorFixedPointClaim(),
     _DomainMarginAdvanceSelectionClaim(),
 )
 
