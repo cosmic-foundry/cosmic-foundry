@@ -176,6 +176,13 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             unconstrained_descriptor.coordinate(SolveRelationField.DIM_X).value
             == root_descriptor.coordinate(SolveRelationField.DIM_X).value
         )
+        differing_fields = {
+            field
+            for field in SolveRelationField
+            if unconstrained_descriptor.coordinate(field)
+            != root_descriptor.coordinate(field)
+        }
+        assert differing_fields == {SolveRelationField.EQUALITY_CONSTRAINT_COUNT}
         assert (
             select_root_solver_for_descriptor(unconstrained_descriptor)
             is NewtonRootSolver
