@@ -201,6 +201,23 @@ def dirk_stage_root_relation(
     )
 
 
+def dirk_stage_directional_derivative_root_relation(
+    rhs: DirectionalDerivativeRHSProtocol,
+    y_exp: Tensor,
+    t_i: float,
+    gamma_dt: float,
+) -> DirectionalDerivativeRootRelation:
+    """Return the DIRK stage relation using only Jacobian-vector products."""
+
+    def residual(y: Tensor) -> Tensor:
+        return y - gamma_dt * rhs(t_i, y) - y_exp
+
+    def jvp(y: Tensor, direction: Tensor) -> Tensor:
+        return direction - gamma_dt * rhs.jvp(t_i, y, direction)
+
+    return DirectionalDerivativeRootRelation(residual, jvp, y_exp)
+
+
 def implicit_stage_root_relation(
     integrator: Any,
     rhs: JacobianRHSProtocol,
@@ -517,6 +534,7 @@ __all__ = [
     "AffineRHSProtocol",
     "JacobianRHSProtocol",
     "affine_stage_residual_relation",
+    "dirk_stage_directional_derivative_root_relation",
     "dirk_stage_root_relation",
     "DirectionalDerivativeRHSProtocol",
     "implicit_stage_root_relation",

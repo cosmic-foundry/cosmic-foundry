@@ -32,11 +32,15 @@ The canonical tableau for each order is:
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import sympy
 
-from cosmic_foundry.computation.solvers.newton_root_solver import NewtonRootSolver
+from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
+from cosmic_foundry.computation.solvers.newton_root_solver import (
+    DirectionalDerivativeRootRelation,
+    RootRelation,
+)
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.integrator import (
     ODEState,
@@ -44,7 +48,11 @@ from cosmic_foundry.computation.time_integrators.integrator import (
     TimeIntegrator,
 )
 from cosmic_foundry.computation.time_integrators.solve_relation import (
+    DirectionalDerivativeRHSProtocol,
+    JacobianRHSProtocol,
+    dirk_stage_directional_derivative_root_relation,
     dirk_stage_root_relation,
+    implicit_stage_directional_derivative_root_relation,
     implicit_stage_root_relation,
 )
 
@@ -164,7 +172,6 @@ def _build_dirk_tableaux() -> dict:
 
 
 _DIRK_TABLEAUX = _build_dirk_tableaux()
-_NEWTON = NewtonRootSolver()
 
 
 def _build_collocation_tableaux() -> dict:
@@ -306,7 +313,7 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
     ) -> ODEState:
         """Advance state by one step of size dt via DIRK Newton iteration.
 
-        ``rhs`` must satisfy ``WithJacobianRHSProtocol`` (expose ``.jacobian``).
+        ``rhs`` must expose either a Jacobian or Jacobian-vector products.
         Returns a new ODEState with t = state.t + dt and updated u.
         The err field is set to 0.0 (no embedded pair in this base class).
 
@@ -319,9 +326,11 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
             applied.  The ``active_constraints`` field of ``state`` is
             preserved in the returned state unchanged.
         """
-        if not isinstance(rhs, WithJacobianRHSProtocol):
+        jacobian_rhs = isinstance(rhs, JacobianRHSProtocol)
+        jvp_rhs = isinstance(rhs, DirectionalDerivativeRHSProtocol)
+        if not jacobian_rhs and not jvp_rhs:
             raise TypeError(
-                "ImplicitRungeKuttaIntegrator requires a WithJacobianRHSProtocol; "
+                "ImplicitRungeKuttaIntegrator requires Jacobian or JVP evidence; "
                 f"got {type(rhs)}"
             )
         if self._coupled:
@@ -329,7 +338,11 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
                 raise ValueError(
                     "constraint-projected Newton is only implemented for DIRK orders"
                 )
-            return self._step_coupled(rhs, state, dt)
+            return self._step_coupled(
+                cast(JacobianRHSProtocol | DirectionalDerivativeRHSProtocol, rhs),
+                state,
+                dt,
+            )
 
         t, u = state.t, state.u
         k: list[Tensor] = []
@@ -344,15 +357,23 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
 
             gamma_dt = gamma_i * dt
 
-            y = _NEWTON.solve(
-                dirk_stage_root_relation(
-                    rhs,
+            relation: RootRelation | DirectionalDerivativeRootRelation
+            if jvp_rhs:
+                relation = dirk_stage_directional_derivative_root_relation(
+                    cast(DirectionalDerivativeRHSProtocol, rhs),
+                    y_exp,
+                    t_i,
+                    gamma_dt,
+                )
+            else:
+                relation = dirk_stage_root_relation(
+                    cast(JacobianRHSProtocol, rhs),
                     y_exp,
                     t_i,
                     gamma_dt,
                     equality_constraint_gradients=constraint_gradients,
                 )
-            )
+            y = solve_root_relation(relation)
             k.append(rhs(t_i, y))
 
         u_new = u
@@ -362,7 +383,7 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
 
     def _step_coupled(
         self,
-        rhs: WithJacobianRHSProtocol,
+        rhs: JacobianRHSProtocol | DirectionalDerivativeRHSProtocol,
         state: ODEState,
         dt: float,
     ) -> ODEState:
@@ -371,8 +392,18 @@ class ImplicitRungeKuttaIntegrator(TimeIntegrator):
         n = u.shape[0]
         s = self._s
         backend = u.backend
+        relation: RootRelation | DirectionalDerivativeRootRelation
+        if isinstance(rhs, DirectionalDerivativeRHSProtocol):
+            relation = implicit_stage_directional_derivative_root_relation(
+                self,
+                rhs,
+                state,
+                dt,
+            )
+        else:
+            relation = implicit_stage_root_relation(self, rhs, state, dt)
         stages = _unflatten_blocks(
-            _NEWTON.solve(implicit_stage_root_relation(self, rhs, state, dt)),
+            solve_root_relation(relation),
             s,
             n,
             backend=backend,

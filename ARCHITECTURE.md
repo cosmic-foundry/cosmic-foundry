@@ -790,13 +790,12 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Current PR: make SVD factorization consume assembled linear residual
-   relations directly for least-squares solves, grounding the change in the
-   rectangular least-squares calculation that no longer splits the relation
-   back into a bare matrix and right-hand side.
-2. Review whether implicit time-integrator execution should select root solvers
-   from stage-relation descriptors instead of closing over one Newton instance
-   per module.
+1. Current PR: make implicit Runge-Kutta execution select root solvers from
+   stage-relation descriptors instead of closing over one Newton instance,
+   grounding the change in a backward-Euler nonlinear decay step whose RHS
+   exposes only Jacobian-vector products.
+2. Review whether IMEX implicit-stage execution and constrained direct solves
+   should use the same relation-selected root-solver execution path.
 3. Review whether decomposition results should remain bare reusable matrix
    objects, or whether solve semantics should move entirely to relation-aware
    execution paths.
