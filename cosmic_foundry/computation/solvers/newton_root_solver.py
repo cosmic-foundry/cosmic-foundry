@@ -16,6 +16,7 @@ from cosmic_foundry.computation.solvers.coverage import (
     constrained_root_predicates,
     directional_derivative_root_predicates,
     fixed_point_root_predicates,
+    separable_bracketed_root_predicates,
     unconstrained_root_predicates,
 )
 from cosmic_foundry.computation.solvers.dense_gmres_solver import DenseGMRESSolver
@@ -218,6 +219,78 @@ class BracketedScalarRootRelation(FiniteDimensionalResidualRelation):
         )
 
 
+class SeparableBracketedRootRelation(FiniteDimensionalResidualRelation):
+    """Vector root relation with componentwise sign-changing brackets."""
+
+    lower: tuple[float, ...]
+    upper: tuple[float, ...]
+    bracket_residual_product_upper_bound: float
+
+    def __init__(
+        self,
+        residual: Callable[[Tensor], Tensor],
+        *,
+        lower: tuple[float, ...],
+        upper: tuple[float, ...],
+        backend: Any | None = None,
+    ) -> None:
+        if len(lower) != len(upper) or len(lower) < 2:
+            raise ValueError("separable bracketed roots require matching vectors")
+        initial: Tensor = Tensor(
+            [0.5 * (a + b) for a, b in zip(lower, upper, strict=True)],
+            backend=backend,
+        )
+        lower_values = residual(Tensor(list(lower), backend=initial.backend))
+        upper_values = residual(Tensor(list(upper), backend=initial.backend))
+        products = tuple(
+            float(lower_values[index]) * float(upper_values[index])
+            for index in range(len(lower))
+        )
+        product_upper_bound = max(products)
+        if product_upper_bound > 0.0:
+            raise ValueError("each component bracket must change residual sign")
+        object.__setattr__(self, "residual", residual)
+        object.__setattr__(self, "initial", initial)
+        object.__setattr__(self, "equality_constraint_gradients", None)
+        object.__setattr__(self, "lower", lower)
+        object.__setattr__(self, "upper", upper)
+        object.__setattr__(
+            self,
+            "bracket_residual_product_upper_bound",
+            product_upper_bound,
+        )
+
+    def solve_relation_descriptor(
+        self,
+        *,
+        map_linearity_defect: float | None = None,
+        map_linearity_evidence: EvidenceSource = "unavailable",
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        device_kind: str = "cpu",
+    ) -> ParameterDescriptor:
+        """Project this separable bracketed root to primitive solve coordinates."""
+        return super().residual_relation_descriptor(
+            target_is_zero=True,
+            derivative_oracle_kind="none",
+            map_linearity_defect=map_linearity_defect,
+            map_linearity_evidence=map_linearity_evidence,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=(
+                self.bracket_residual_product_upper_bound
+            ),
+            componentwise_separable=True,
+            matrix_representation_available=False,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        )
+
+
 class NewtonRootSolver:
     """Solve ``F(x) = 0`` by Newton iteration."""
 
@@ -389,6 +462,46 @@ class BisectionRootSolver:
         return Tensor([0.5 * (lower + upper)], backend=backend)
 
 
+class SeparableBisectionRootSolver:
+    """Solve componentwise separable vector roots by bisection."""
+
+    root_solver_coverage = separable_bracketed_root_predicates()
+
+    def __init__(
+        self,
+        *,
+        max_iterations: int = 100,
+        tolerance: float = 1e-12,
+    ) -> None:
+        self._max_iterations = max_iterations
+        self._tolerance = tolerance
+
+    def solve(self, relation: SeparableBracketedRootRelation) -> Tensor:
+        """Return a vector root by bisecting each component bracket."""
+        backend = relation.initial.backend
+        values = list(relation.initial.to_list())
+        roots: list[float] = []
+        for index, (lower, upper) in enumerate(
+            zip(relation.lower, relation.upper, strict=True)
+        ):
+            values[index] = lower
+            f_lower = float(relation.residual(Tensor(values, backend=backend))[index])
+            for _ in range(self._max_iterations):
+                midpoint = 0.5 * (lower + upper)
+                values[index] = midpoint
+                f_mid = float(relation.residual(Tensor(values, backend=backend))[index])
+                if abs(f_mid) < self._tolerance or abs(upper - lower) < self._tolerance:
+                    break
+                if f_lower * f_mid <= 0.0:
+                    upper = midpoint
+                else:
+                    lower = midpoint
+                    f_lower = f_mid
+            roots.append(0.5 * (lower + upper))
+            values[index] = roots[-1]
+        return Tensor(roots, backend=backend)
+
+
 __all__ = [
     "BisectionRootSolver",
     "BracketedScalarRootRelation",
@@ -398,4 +511,6 @@ __all__ = [
     "MatrixFreeNewtonKrylovRootSolver",
     "NewtonRootSolver",
     "RootRelation",
+    "SeparableBisectionRootSolver",
+    "SeparableBracketedRootRelation",
 ]

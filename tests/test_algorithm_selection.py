@@ -31,6 +31,8 @@ from cosmic_foundry.computation.solvers import (
     LinearResidualRelation,
     MatrixFreeNewtonKrylovRootSolver,
     NewtonRootSolver,
+    SeparableBisectionRootSolver,
+    SeparableBracketedRootRelation,
 )
 from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
 from cosmic_foundry.computation.solvers.capabilities import (
@@ -1104,6 +1106,49 @@ class _BracketedScalarRootSolveClaim(Claim[Any]):
         assert abs(float(relation.residual(root)[0])) < 1.0e-10
 
 
+class _SeparableBracketedRootSolveClaim(Claim[Any]):
+    """Grounded componentwise separable vector root solve with brackets."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/separable_bracketed_root_solve"
+
+    def check(self, _calibration: Any) -> None:
+        def residual(x: Tensor) -> Tensor:
+            return Tensor(
+                [
+                    float(x[0]) ** 2 - 2.0,
+                    float(x[1]) ** 2 - 3.0,
+                ],
+                backend=x.backend,
+            )
+
+        relation = SeparableBracketedRootRelation(
+            residual,
+            lower=(1.0, 1.0),
+            upper=(2.0, 2.0),
+            backend=_TIME_BACKEND,
+        )
+        descriptor = relation.solve_relation_descriptor(map_linearity_defect=1.0)
+        schema = solve_relation_parameter_schema()
+        schema.validate_descriptor(descriptor)
+        assert descriptor.coordinate(SolveRelationField.BRACKET_AVAILABLE).value is True
+        assert (
+            descriptor.coordinate(SolveRelationField.COMPONENTWISE_SEPARABLE).value
+            is True
+        )
+        assert select_root_solver_for_descriptor(descriptor) is (
+            SeparableBisectionRootSolver
+        )
+
+        root = solve_root_relation(relation)
+        assert abs(float(root[0]) - math.sqrt(2.0)) < 1.0e-10
+        assert abs(float(root[1]) - math.sqrt(3.0)) < 1.0e-10
+        residual_at_root = relation.residual(root)
+        assert abs(float(residual_at_root[0])) < 1.0e-10
+        assert abs(float(residual_at_root[1])) < 1.0e-10
+
+
 class _JvpImplicitStageRootSolveClaim(Claim[Any]):
     """Grounded nonlinear implicit step with only JVP derivative evidence."""
 
@@ -1161,6 +1206,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _ImexImplicitStageRootClaim(),
     _DirectionalDerivativeRootSolveClaim(),
     _BracketedScalarRootSolveClaim(),
+    _SeparableBracketedRootSolveClaim(),
     _JvpImplicitStageRootSolveClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],

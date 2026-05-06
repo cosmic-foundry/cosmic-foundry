@@ -1648,6 +1648,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
             | {
                 SolveRelationField.BRACKET_AVAILABLE,
                 SolveRelationField.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                SolveRelationField.COMPONENTWISE_SEPARABLE,
                 SolveRelationField.FIXED_POINT_CONTRACTION_BOUND,
             }
         )
@@ -1707,6 +1708,18 @@ class _SolveRelationSchemaClaim(Claim[None]):
             matrix_representation_available=False,
             derivative_oracle_kind="none",
         )
+        separable_bracketed_root = self._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=True,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
         nonlinear_root_with_jvp = self._solve_descriptor(
             target_is_zero=True,
             map_linearity_defect=1.0,
@@ -1728,6 +1741,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
             nonlinear_root,
             nonlinear_root_without_jacobian,
             bracketed_scalar_root,
+            separable_bracketed_root,
             nonlinear_root_with_jvp,
             eigenproblem,
             explicit_time_step,
@@ -1740,6 +1754,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert solve_regions["nonlinear_root"].contains(nonlinear_root)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root_without_jacobian)
         assert solve_regions["nonlinear_root"].contains(bracketed_scalar_root)
+        assert solve_regions["nonlinear_root"].contains(separable_bracketed_root)
         assert solve_regions["nonlinear_root"].contains(nonlinear_root_with_jvp)
         assert (
             solve_schema.cell_status(
@@ -1750,6 +1765,12 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert (
             solve_schema.cell_status(
                 bracketed_scalar_root, root_solver_coverage_regions()
+            )
+            == "owned"
+        )
+        assert (
+            solve_schema.cell_status(
+                separable_bracketed_root, root_solver_coverage_regions()
             )
             == "owned"
         )
@@ -1986,6 +2007,7 @@ class _SolveRelationSchemaClaim(Claim[None]):
         bracket_available: bool = False,
         bracket_residual_product_upper_bound: float | None = None,
         bracket_residual_product_evidence: str = "unavailable",
+        componentwise_separable: bool = False,
         matrix_representation_available: bool = True,
         operator_application_available: bool = True,
         derivative_oracle_kind: str = "matrix",
@@ -2028,6 +2050,9 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 field.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND: DescriptorCoordinate(
                     bracket_residual_product_upper_bound,
                     evidence=bracket_residual_product_evidence,  # type: ignore[arg-type]
+                ),
+                field.COMPONENTWISE_SEPARABLE: DescriptorCoordinate(
+                    componentwise_separable
                 ),
                 field.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
                     matrix_representation_available
@@ -3941,8 +3966,14 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         bisection_root_solver = _resolve_dotted(
             "cosmic_foundry.computation.solvers.BisectionRootSolver"
         )
+        separable_bisection_root_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.SeparableBisectionRootSolver"
+        )
         bracketed_scalar_root_relation = _resolve_dotted(
             "cosmic_foundry.computation.solvers.BracketedScalarRootRelation"
+        )
+        separable_bracketed_root_relation = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.SeparableBracketedRootRelation"
         )
         root_relation = _resolve_dotted(
             "cosmic_foundry.computation.solvers.RootRelation"
@@ -3952,11 +3983,13 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         )
         assert issubclass(root_relation, residual_relation)
         assert issubclass(bracketed_scalar_root_relation, residual_relation)
+        assert issubclass(separable_bracketed_root_relation, residual_relation)
         assert {region.owner for region in regions} == {
             bisection_root_solver,
             fixed_point_root_solver,
             root_solver,
             matrix_free_root_solver,
+            separable_bisection_root_solver,
         }
         uncertified_fixed_point = _SolveRelationSchemaClaim._solve_descriptor(
             target_is_zero=True,
@@ -3983,6 +4016,19 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
             derivative_oracle_kind="none",
         )
         assert schema.cell_status(unbracketed_derivative_free, regions) == "uncovered"
+        coupled_bracketed_root = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=False,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        assert schema.cell_status(coupled_bracketed_root, regions) == "uncovered"
 
     @staticmethod
     def _regions(
@@ -4872,6 +4918,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LinearResidualRelation",
                 "LinearSolver",
                 "RootRelation",
+                "SeparableBracketedRootRelation",
                 "SpectralSolver",
                 "StationaryIterationSolver",
             }
@@ -4882,6 +4929,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "FixedPointRootSolver",
                 "MatrixFreeNewtonKrylovRootSolver",
                 "NewtonRootSolver",
+                "SeparableBisectionRootSolver",
             }
         ),
         "direct_solver": frozenset(
@@ -4928,6 +4976,8 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "MatrixFreeNewtonKrylovRootSolver": "newton_root_solver",
         "NewtonRootSolver": "newton_root_solver",
         "RootRelation": "newton_root_solver",
+        "SeparableBisectionRootSolver": "newton_root_solver",
+        "SeparableBracketedRootRelation": "newton_root_solver",
         "SpectralSolver": "spectral_solver",
         "StationaryIterationSolver": "iterative_solver",
     },

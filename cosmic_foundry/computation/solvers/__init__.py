@@ -45,6 +45,8 @@ from cosmic_foundry.computation.solvers.newton_root_solver import (
     MatrixFreeNewtonKrylovRootSolver,
     NewtonRootSolver,
     RootRelation,
+    SeparableBisectionRootSolver,
+    SeparableBracketedRootRelation,
 )
 from cosmic_foundry.computation.solvers.relations import (
     FiniteDimensionalResidualRelation,
@@ -93,6 +95,8 @@ __all__ = [
     "select_linear_solver_for_descriptor",
     "select_root_solver_for_descriptor",
     "select_spectral_solver_for_descriptor",
+    "SeparableBisectionRootSolver",
+    "SeparableBracketedRootRelation",
     "SPECTRAL_SOLVER_COVERAGE_REGIONS",
     "SpectralSolver",
     "spectral_solver_coverage_regions",

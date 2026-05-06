@@ -298,6 +298,33 @@ def bracketed_scalar_root_predicates() -> tuple[tuple[StructuredPredicate, ...],
     )
 
 
+def separable_bracketed_root_predicates() -> (
+    tuple[tuple[StructuredPredicate, ...], ...]
+):
+    """Return predicates for componentwise separable bracketed vector roots."""
+    return nonlinear_root_predicates(
+        derivative_oracle_kind="none",
+        equality_constraint_predicates=(
+            ComparisonPredicate(SolveRelationField.DIM_X, ">", 1),
+            ComparisonPredicate(SolveRelationField.DIM_Y, ">", 1),
+            ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, "==", 0),
+            MembershipPredicate(
+                SolveRelationField.BRACKET_AVAILABLE,
+                frozenset({True}),
+            ),
+            ComparisonPredicate(
+                SolveRelationField.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                "<=",
+                0.0,
+            ),
+            MembershipPredicate(
+                SolveRelationField.COMPONENTWISE_SEPARABLE,
+                frozenset({True}),
+            ),
+        ),
+    )
+
+
 __all__ = [
     "CONDITION_LIMIT",
     "LINEARITY_TOLERANCE",
@@ -313,5 +340,6 @@ __all__ = [
     "matrix_free_operator_predicates",
     "constrained_root_predicates",
     "nonlinear_root_predicates",
+    "separable_bracketed_root_predicates",
     "unconstrained_root_predicates",
 ]
