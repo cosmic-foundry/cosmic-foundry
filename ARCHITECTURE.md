@@ -790,9 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Keep coupled derivative-free vector roots outside owned coverage until a
-   concrete interval/domain calculation supplies evidence stronger than
-   componentwise separability and sign-changing component brackets.
+1. Review whether the remaining explicit primitive gaps can stay as
+   predicate-backed exclusions, or whether one now deserves a new calculation
+   and ownership premise.
 
 Roadmap sketch:
 
@@ -1112,7 +1112,10 @@ bracket endpoint residual product is bounded above by zero, grounded in a
 bracketed solve of `x^2 - 2 = 0`.  `SeparableBisectionRootSolver` generalizes
 that premise only to componentwise separable vector residuals with per-component
 sign-changing brackets, grounded in a two-component solve for
-`(x_0^2 - 2, x_1^2 - 3) = 0`.
+`(x_0^2 - 2, x_1^2 - 3) = 0`.  Coupled derivative-free vector roots with only
+component brackets are now an explicit primitive gap: ownership waits for a
+concrete interval/domain calculation with evidence stronger than componentwise
+separability.
 Dense symmetric eigenpair residual evidence is now owned by
 `DenseSymmetricEigenpairSolver`: a small assembled symmetric 2x2 calculation
 grounds the `eigenpair_residual` descriptor with an auxiliary spectral scalar
