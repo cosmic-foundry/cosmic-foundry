@@ -331,6 +331,33 @@ def _schema_descriptor_count(schema: atlas.ParameterSpaceSchema) -> int:
     )
 
 
+def _descriptor_evidence_lines() -> list[str]:
+    lines: list[str] = []
+    for index, descriptor in enumerate(atlas._capability_atlas_descriptors(), start=1):
+        schema = atlas._atlas_schema_for_descriptor(descriptor)
+        regions = atlas._atlas_regions_for_schema(schema)
+        status = schema.cell_status(descriptor, regions)
+        lines.extend(
+            [
+                f"{index}. `{schema.name}` descriptor: `{status}`",
+                f"   - Matched regions: `{_matched_regions(descriptor)}`",
+                f"   - Coordinates: {_descriptor_coordinate_summary(descriptor)}",
+            ]
+        )
+    return lines
+
+
+def _descriptor_coordinate_summary(descriptor: atlas.ParameterDescriptor) -> str:
+    schema = atlas._atlas_schema_for_descriptor(descriptor)
+    return ", ".join(
+        "`"
+        f"{atlas._field_label(axis.field)}="
+        f"{atlas._descriptor_value(descriptor, axis.field)}"
+        "`"
+        for axis in schema.axes
+    )
+
+
 def _schema_hierarchy_lines(schema: atlas.ParameterSpaceSchema) -> list[str]:
     regions = atlas._atlas_regions_for_schema(schema)
     uncovered = atlas._capability_atlas_uncovered_cells(schema, regions)
@@ -805,17 +832,9 @@ def render_capability_atlas() -> str:
             ]
         )
 
-    lines.extend(
-        [
-            "## Numerical Evidence Overlay",
-            "",
-            "No owned solver or decomposition coverage region has numerical evidence",
-            "metadata in this atlas yet.  Until ownership regions exist, numerical",
-            "correctness, convergence, performance, and regression claims remain",
-            "outside this projection rather than being attached to cells.",
-            "",
-        ]
-    )
+    lines.extend(["## Descriptor Evidence Overlay", ""])
+    lines.extend(_descriptor_evidence_lines())
+    lines.append("")
     return "\n".join(lines)
 
 

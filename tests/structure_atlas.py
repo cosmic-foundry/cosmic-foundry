@@ -38,6 +38,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     reaction_network_parameter_schema,
     solve_relation_parameter_schema,
 )
+from cosmic_foundry.computation.backends import NumpyBackend
 from cosmic_foundry.computation.decompositions.capabilities import (
     decomposition_coverage_regions,
 )
@@ -46,17 +47,22 @@ from cosmic_foundry.computation.solvers.capabilities import (
     linear_solver_coverage_regions,
     root_solver_coverage_regions,
 )
+from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
     nordsieck_history_descriptor,
     rhs_evaluation_descriptor,
     rhs_history_descriptor,
+    rhs_step_diagnostics_descriptor,
     time_integration_step_map_regions,
 )
+from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
+from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from tests import test_structure as structure
 from tests.claims import Claim
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _SolveRelationSchemaClaim = structure._SolveRelationSchemaClaim
+_ATLAS_TIME_BACKEND = NumpyBackend()
 
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = (
@@ -136,6 +142,53 @@ _PREDICATE_SET_DISJOINTNESS: dict[tuple[int, int], bool] = {}
 _CELL_PREDICATE_DISJOINTNESS: dict[tuple[tuple[int, ...], int], bool] = {}
 
 
+class _AtlasAffineDecayRHS:
+    def __init__(self, rate: float) -> None:
+        self._rate = rate
+
+    def __call__(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([-self._rate * float(u[0])], backend=u.backend)
+
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[-self._rate]], backend=u.backend)
+
+
+class _AtlasBoundaryApproachRHS:
+    state_domain = NonnegativeStateDomain(1)
+
+    def __call__(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([-1.0], backend=u.backend)
+
+    def jacobian(self, _t: float, u: Tensor) -> Tensor:
+        return Tensor([[0.0]], backend=u.backend)
+
+
+def _atlas_scalar_state(value: float = 1.0) -> ODEState:
+    return ODEState(0.0, Tensor([value], backend=_ATLAS_TIME_BACKEND))
+
+
+def _atlas_step_diagnostic_descriptors() -> tuple[ParameterDescriptor, ...]:
+    return (
+        rhs_step_diagnostics_descriptor(
+            _AtlasAffineDecayRHS(0.1),
+            _atlas_scalar_state(),
+            1.0e-1,
+            local_error_target=1.0e-6,
+            retry_budget=3,
+        ),
+        rhs_step_diagnostics_descriptor(
+            _AtlasAffineDecayRHS(100.0),
+            _atlas_scalar_state(),
+            1.0e-1,
+        ),
+        rhs_step_diagnostics_descriptor(
+            _AtlasBoundaryApproachRHS(),
+            _atlas_scalar_state(0.1),
+            1.0e-1,
+        ),
+    )
+
+
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
     return (
         _SolveRelationSchemaClaim._solve_descriptor(),
@@ -191,6 +244,7 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
         rhs_evaluation_descriptor(),
         rhs_history_descriptor(),
         nordsieck_history_descriptor(1.0e-2),
+        *_atlas_step_diagnostic_descriptors(),
     )
 
 
@@ -1140,6 +1194,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_coverage_regions_are_schema_discovered()
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
+        self._assert_time_integrator_quantitative_evidence_is_plotted()
         self._assert_nonlinear_root_without_jacobian_is_visible_gap()
         self._assert_directional_derivative_root_is_owned()
         for group in _capability_atlas_descriptor_groups():
@@ -1174,6 +1229,33 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 assert f"`{_field_label(axis.field)}`" in rendered
             for region in schema.derived_regions:
                 assert f"`{region.name}`" in rendered
+        assert "## Descriptor Evidence Overlay" in rendered
+
+    @staticmethod
+    def _assert_time_integrator_quantitative_evidence_is_plotted() -> None:
+        schema = map_structure_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        derived = {region.name: region for region in schema.derived_regions}
+        nonstiff, stiff, domain_limited = _atlas_step_diagnostic_descriptors()
+        for descriptor in (nonstiff, stiff, domain_limited):
+            schema.validate_descriptor(descriptor)
+            assert schema.cell_status(descriptor, regions) == "owned"
+            assert any(
+                descriptor in group for group in _capability_atlas_descriptor_groups()
+            )
+        assert derived["nonstiff_step"].contains(nonstiff)
+        assert derived["stiff_step"].contains(stiff)
+        assert derived["domain_limited_step"].contains(domain_limited)
+        assert any(
+            descriptor.coordinate(MapStructureField.RHS_EVALUATION_COST_FMAS).value
+            > 0.0
+            and descriptor.coordinate(
+                MapStructureField.NORDSIECK_HISTORY_AVAILABLE
+            ).value
+            is False
+            for descriptor in _capability_atlas_descriptors()
+            if _atlas_schema_for_descriptor(descriptor) == schema
+        )
 
     @staticmethod
     def _assert_nonlinear_root_without_jacobian_is_visible_gap() -> None:

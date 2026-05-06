@@ -790,10 +790,7 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. After adaptive and fixed-order ownership share quantitative map evidence,
-   add atlas documentation that renders the time-integrator descriptor regions
-   and overlays the adaptive Nordsieck evidence points.
-2. Review whether derivative-oracle availability should become a
+1. Review whether derivative-oracle availability should become a
    `MapStructureField` coordinate so adaptive-controller ownership does not rely
    on stiffness evidence as an indirect Jacobian certificate.
 
@@ -1081,6 +1078,11 @@ evidence: a positive local error target, nonnegative retry budget, and positive
 RHS evaluation cost are required before the Adams/BDF stiffness split can
 construct a one-step Nordsieck integrator.  Zero-cost Nordsieck history evidence
 remains valid descriptor data but is not an owned fixed-order step region.
+The capability atlas now includes the quantitative time-integrator descriptors
+as evidence points: scalar decay contributes nonstiff and stiff RHS step
+diagnostics, the boundary-approach calculation contributes a domain-limited
+step diagnostic, and the generated descriptor overlay lists each point's
+matched regions and primitive coordinates.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
@@ -1366,12 +1368,8 @@ The sprint contract is:
 4. Atlas documentation follows the schema.  The generated page should show the
    primitive quantitative fields, derived nonstiff/stiff/domain-limited regions,
    adaptive Nordsieck ownership, and evidence points from the scalar decay and
-   boundary-approach calculations.
-
-Recommended PR sequence:
-
-1. Extend atlas generation to render quantitative time-integrator regions and
-   the grounded evidence points from the adaptive Nordsieck calculations.
+   boundary-approach calculations.  This is now handled by descriptor evidence
+   overlays in the generated capability atlas.
 
 ---
 
