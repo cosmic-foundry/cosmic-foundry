@@ -42,6 +42,7 @@ from cosmic_foundry.computation.time_integrators.reaction_network import (
     ReactionNetworkRHS,
     project_conserved,
 )
+from cosmic_foundry.computation.time_integrators.runge_kutta import RungeKuttaIntegrator
 
 _RATE_FLOOR = 1e-100  # avoids 0/0 when both rates are zero
 _RATE_THRESHOLD = 1e-10  # pair is considered absent; ratio = inf → no activation
@@ -267,10 +268,41 @@ class NuclearStatisticalEquilibriumSolver:
         return solve_nse(rhs, u, t, eps=eps)
 
 
+class FiniteRateReactionNetworkDynamics:
+    """Evolve narrow irreversible finite-rate reaction-network descriptors."""
+
+    def evolve(
+        self,
+        rhs: ReactionNetworkRHS,
+        u: Tensor,
+        t0: float,
+        t1: float,
+        dt: float,
+    ) -> Tensor:
+        """Return explicit RK4 evolution from ``t0`` to ``t1``."""
+        integrator = RungeKuttaIntegrator(4)
+        state = ODEState(t0, u)
+        remaining = t1 - t0
+        while remaining > 0.0:
+            step = min(dt, remaining)
+            state = integrator.step(rhs, state, step)
+            remaining = t1 - state.t
+        return state.u
+
+
 def reaction_network_coverage_regions() -> tuple[CoverageRegion, ...]:
     """Return descriptor-space regions owned by reaction-network solvers."""
     field = ReactionNetworkField
     return (
+        CoverageRegion(
+            FiniteRateReactionNetworkDynamics,
+            (
+                ComparisonPredicate(field.REACTION_COUNT, "==", 1),
+                ComparisonPredicate(field.STOICHIOMETRY_RANK, "==", 1),
+                ComparisonPredicate(field.CONSERVATION_LAW_COUNT, ">", 0),
+                ComparisonPredicate(field.EQUILIBRIUM_CONSTRAINT_COUNT, "==", 0),
+            ),
+        ),
         CoverageRegion(
             NuclearStatisticalEquilibriumSolver,
             (
@@ -481,6 +513,7 @@ class ConstraintAwareController:
 
 __all__ = [
     "ConstraintAwareController",
+    "FiniteRateReactionNetworkDynamics",
     "NuclearStatisticalEquilibriumSolver",
     "build_constraint_gradients",
     "nse_root_relation",

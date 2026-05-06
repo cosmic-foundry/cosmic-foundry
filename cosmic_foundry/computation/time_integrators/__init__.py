@@ -21,6 +21,7 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
 )
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
     ConstraintAwareController,
+    FiniteRateReactionNetworkDynamics,
     NuclearStatisticalEquilibriumSolver,
     nse_root_relation,
     reaction_network_coverage_regions,
@@ -132,6 +133,7 @@ __all__ = [
     "DomainCheck",
     "DomainViolation",
     "NonnegativeStateDomain",
+    "FiniteRateReactionNetworkDynamics",
     "NuclearStatisticalEquilibriumSolver",
     "nse_root_relation",
     "predict_domain_step_limit",

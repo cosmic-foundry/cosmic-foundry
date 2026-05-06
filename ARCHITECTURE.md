@@ -790,9 +790,8 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Promote the finite-rate reaction-network dynamics gap only after its
-   ownership predicate is narrowed around the concrete uncovered evolution
-   evidence.
+1. Select the next computed uncovered atlas cell after finite-rate
+   one-transition reaction-network dynamics promotion.
 
 Roadmap sketch:
 
@@ -919,7 +918,10 @@ valid conserved networks without full equilibrium constraints remain outside
 ownership until a concrete evolution calculation supplies a promotion premise.
 That premise is now grounded by a four-species, one-transition irreversible
 network whose closed-form finite-rate evolution is checked against explicit
-time stepping while its reaction-network descriptor remains uncovered.
+time stepping.  `FiniteRateReactionNetworkDynamics` promotes only that narrow
+finite-rate shape: conserved reaction-network descriptors with one reaction,
+rank one stoichiometry, and zero equilibrium constraints.  Fully constrained
+equilibrium remains owned separately by `NuclearStatisticalEquilibriumSolver`.
 Automatic one-step request construction no longer has a nominal reaction-network
 branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle

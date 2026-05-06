@@ -100,6 +100,7 @@ from cosmic_foundry.computation.solvers.iterative_solver import (
 )
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
 from cosmic_foundry.computation.time_integrators.constraint_aware import (
+    FiniteRateReactionNetworkDynamics,
     NuclearStatisticalEquilibriumSolver,
     reaction_network_coverage_regions,
 )
@@ -1878,6 +1879,18 @@ class _SolveRelationSchemaClaim(Claim[None]):
                 reaction_descriptor, reaction_coverage
             ).owner
             is NuclearStatisticalEquilibriumSolver
+        )
+        finite_rate_descriptor = self._reaction_network_descriptor(
+            reaction_count=1,
+            stoichiometry_rank=1,
+            conservation_law_count=3,
+            equilibrium_constraint_count=0,
+        )
+        assert (
+            reaction_network_schema.covering_region(
+                finite_rate_descriptor, reaction_coverage
+            ).owner
+            is FiniteRateReactionNetworkDynamics
         )
         assert (
             reaction_network_schema.cell_status(
