@@ -1265,8 +1265,18 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         rendered = render_capability_atlas()
         assert "## Parameter Space Hierarchy" in rendered
         assert "## Projection Plots" in rendered
+        assert "## Explicit Primitive Gaps" in rendered
+        assert (
+            "`eigenpair_residual`: valid spectral solve-relation evidence" in rendered
+        )
         assert rendered.index("## Parameter Space Hierarchy") < rendered.index(
             "## Projection Plots"
+        )
+        assert rendered.index("## Computed Gaps") < rendered.index(
+            "## Explicit Primitive Gaps"
+        )
+        assert rendered.index("## Explicit Primitive Gaps") < rendered.index(
+            "## Descriptor Evidence Overlay"
         )
         for schema in _capability_atlas_schemas():
             assert f"### {schema.name}" in rendered
