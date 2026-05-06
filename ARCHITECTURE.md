@@ -790,8 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Ground the selected branched finite-rate reaction-network dynamics gap
-   before adding ownership beyond the one-transition finite-rate region.
+1. Promote the branched finite-rate reaction-network dynamics gap only after
+   its ownership predicate is narrowed around the concrete branched evolution
+   evidence.
 
 Roadmap sketch:
 
@@ -924,8 +925,11 @@ rank one stoichiometry, and zero equilibrium constraints.  Fully constrained
 equilibrium remains owned separately by `NuclearStatisticalEquilibriumSolver`.
 The next computed uncovered atlas cell is now the branched finite-rate
 reaction-network shape: a conserved irreversible network with multiple
-independent transitions, no equilibrium constraints, and existing finite-rate
-evolution evidence that is not yet an ownership premise.
+independent transitions, no equilibrium constraints, and quantitative
+finite-rate evolution evidence.  That premise is now grounded by the
+four-species branched transition system `0 -> 1`, `0 -> 2`, `2 -> 3`: explicit
+time stepping is checked against the closed-form irreversible mass-transfer
+solution while its reaction-network descriptor remains uncovered.
 Automatic one-step request construction no longer has a nominal reaction-network
 branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle

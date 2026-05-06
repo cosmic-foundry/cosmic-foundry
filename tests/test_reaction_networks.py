@@ -427,6 +427,31 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         assert reaction_descriptor.coordinate(
             ReactionNetworkField.REACTION_COUNT
         ).value == (transition_system.transition_count)
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.STOICHIOMETRY_RANK
+            ).value
+            == 3
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.CONSERVATION_LAW_COUNT
+            ).value
+            == 1
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
+            ).value
+            == 0
+        )
+        assert (
+            reaction_network_parameter_schema().cell_status(
+                reaction_descriptor,
+                _ti.reaction_network_coverage_regions(),
+            )
+            == "uncovered"
+        )
         assert transition_system.stoichiometry_matrix() == tuple(
             tuple(
                 int(float(rhs.stoichiometry_matrix[i, j]))
@@ -441,10 +466,26 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         )
         initial_invariant = float(invariant @ state.u)
 
-        state = controller.advance(rhs, state.u, state.t, 0.08)
+        final_time = 0.08
+        state = controller.advance(rhs, state.u, state.t, final_time)
+
+        k01, k02, k23 = (25.0, 5.0, 7.0)
+        outflow = k01 + k02
+        expected_0 = math.exp(-outflow * final_time)
+        expected_1 = k01 * (1.0 - expected_0) / outflow
+        expected_2 = (
+            k02
+            * (math.exp(-k23 * final_time) - math.exp(-outflow * final_time))
+            / (outflow - k23)
+        )
+        expected_3 = 1.0 - expected_0 - expected_1 - expected_2
 
         assert rhs.state_domain.check(state.u).accepted
         assert abs(float(invariant @ state.u) - initial_invariant) < 1e-9
+        assert abs(float(state.u[0]) - expected_0) < 2.0e-7
+        assert abs(float(state.u[1]) - expected_1) < 2.0e-7
+        assert abs(float(state.u[2]) - expected_2) < 2.0e-7
+        assert abs(float(state.u[3]) - expected_3) < 2.0e-7
         assert float(state.u[1]) > float(state.u[2]) > float(state.u[3]) > 0.0
 
 
