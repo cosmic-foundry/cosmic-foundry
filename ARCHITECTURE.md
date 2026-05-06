@@ -790,10 +790,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Reconcile the remaining eigenpair primitive solve-relation atlas gap by
-   either adding a spectral solver owner for `eigenpair_residual` descriptors
-   or narrowing the schema so unsupported spectral residuals are documented as
-   an explicit primitive gap rather than a generic uncovered point.
+1. Add the first spectral solver owner for `eigenpair_residual` descriptors,
+   grounded in a small symmetric dense eigenpair calculation, or remove the
+   eigenpair solve relation from the primitive schema until that calculation is
+   ready.
 
 Roadmap sketch:
 
@@ -1107,6 +1107,10 @@ coverage.  Primitive solve-relation evidence therefore remains uncovered only
 for genuinely unsupported primitive solve classes, currently nonlinear
 target-zero residuals without derivative evidence and eigenpair residuals
 without a spectral solver owner.
+Eigenpair residual evidence is now a named explicit primitive atlas gap rather
+than an undifferentiated uncovered evidence point: a valid descriptor with an
+auxiliary spectral scalar and normalization constraint remains unsupported until
+a concrete spectral solver owner is added.
 Decomposition primitives expose structure through class-owned feasibility
 certificates and descriptor-space coverage regions.  Direct dense solver
 wrappers name their decomposition type; the coverage aggregator composes the

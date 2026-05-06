@@ -347,6 +347,30 @@ def _descriptor_evidence_lines() -> list[str]:
     return lines
 
 
+def _explicit_primitive_gap_lines() -> list[str]:
+    lines: list[str] = []
+    solve_schema = atlas.solve_relation_parameter_schema()
+    solve_regions = atlas._atlas_regions_for_schema(solve_schema)
+    for descriptor in atlas._capability_atlas_descriptors():
+        if atlas._atlas_schema_for_descriptor(descriptor) != solve_schema:
+            continue
+        if solve_schema.cell_status(descriptor, solve_regions) != "uncovered":
+            continue
+        if (
+            descriptor.coordinate(atlas.SolveRelationField.ACCEPTANCE_RELATION).value
+            != "eigenpair_residual"
+        ):
+            continue
+        lines.extend(
+            [
+                "- `eigenpair_residual`: valid spectral solve-relation evidence",
+                "  with a normalization constraint and auxiliary spectral scalar,",
+                "  but no spectral solver owner is registered yet.",
+            ]
+        )
+    return lines
+
+
 def _descriptor_coordinate_summary(descriptor: atlas.ParameterDescriptor) -> str:
     schema = atlas._atlas_schema_for_descriptor(descriptor)
     fields = tuple(axis.field for axis in schema.axes) + tuple(
@@ -831,6 +855,21 @@ def render_capability_atlas() -> str:
             [
                 "No valid descriptor evidence is currently outside declared",
                 "ownership regions.",
+                "",
+            ]
+        )
+
+    primitive_gap_lines = _explicit_primitive_gap_lines()
+    if primitive_gap_lines:
+        lines.extend(
+            [
+                "## Explicit Primitive Gaps",
+                "",
+                "These valid primitive descriptors are intentionally not owned by",
+                "any registered implementation yet; they are listed separately from",
+                "computed schema-cell coverage gaps.",
+                "",
+                *primitive_gap_lines,
                 "",
             ]
         )
