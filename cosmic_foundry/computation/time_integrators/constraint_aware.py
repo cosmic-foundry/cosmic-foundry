@@ -16,6 +16,12 @@ manages that lifecycle between accepted steps:
 
 from __future__ import annotations
 
+from cosmic_foundry.computation.algorithm_capabilities import (
+    AffineComparisonPredicate,
+    ComparisonPredicate,
+    CoverageRegion,
+    ReactionNetworkField,
+)
 from cosmic_foundry.computation.solvers._root_execution import solve_root_relation
 from cosmic_foundry.computation.solvers.newton_root_solver import RootRelation
 from cosmic_foundry.computation.tensor import Tensor
@@ -246,6 +252,42 @@ def solve_nse(
     return solve_root_relation(nse_root_relation(rhs, u, t, eps=eps))
 
 
+class NuclearStatisticalEquilibriumSolver:
+    """Solve fully constrained reaction-network equilibrium descriptors."""
+
+    def solve(
+        self,
+        rhs: ReactionNetworkRHS,
+        u: Tensor,
+        t: float = 0.0,
+        *,
+        eps: float = 1e-7,
+    ) -> Tensor:
+        """Return the NSE state for ``rhs`` from initial guess ``u``."""
+        return solve_nse(rhs, u, t, eps=eps)
+
+
+def reaction_network_coverage_regions() -> tuple[CoverageRegion, ...]:
+    """Return descriptor-space regions owned by reaction-network solvers."""
+    field = ReactionNetworkField
+    return (
+        CoverageRegion(
+            NuclearStatisticalEquilibriumSolver,
+            (
+                ComparisonPredicate(field.CONSERVATION_LAW_COUNT, ">", 0),
+                AffineComparisonPredicate(
+                    {
+                        field.EQUILIBRIUM_CONSTRAINT_COUNT: 1.0,
+                        field.STOICHIOMETRY_RANK: -1.0,
+                    },
+                    "==",
+                    0.0,
+                ),
+            ),
+        ),
+    )
+
+
 class ConstraintAwareController:
     """Wraps a PIController and adds constraint lifecycle management.
 
@@ -439,7 +481,9 @@ class ConstraintAwareController:
 
 __all__ = [
     "ConstraintAwareController",
+    "NuclearStatisticalEquilibriumSolver",
     "build_constraint_gradients",
     "nse_root_relation",
+    "reaction_network_coverage_regions",
     "solve_nse",
 ]

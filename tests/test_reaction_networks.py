@@ -618,6 +618,17 @@ class _EquilibriumNetworkTargetClaim(Claim[Any]):
     def check(self, _calibration: Any) -> None:
         self.skip_if_over_walltime_budget()
         rhs = self._spec.build_rhs()
+        reaction_descriptor = rhs.reaction_network_descriptor()
+        reaction_schema = reaction_network_parameter_schema()
+        reaction_regions = _ti.reaction_network_coverage_regions()
+        reaction_schema.validate_descriptor(reaction_descriptor)
+        assert reaction_schema.cell_status(reaction_descriptor, reaction_regions) == (
+            "owned"
+        )
+        assert (
+            reaction_schema.covering_region(reaction_descriptor, reaction_regions).owner
+            is _ti.NuclearStatisticalEquilibriumSolver
+        )
         if self._spec.topo == "chain":
             controller = _adaptive_nordsieck_controller()
             state = controller.advance(

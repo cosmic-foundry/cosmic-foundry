@@ -97,6 +97,10 @@ from cosmic_foundry.computation.solvers.iterative_solver import (
     StationaryIterationSolver,
 )
 from cosmic_foundry.computation.tensor import MaterializationError, Tensor
+from cosmic_foundry.computation.time_integrators.constraint_aware import (
+    NuclearStatisticalEquilibriumSolver,
+    reaction_network_coverage_regions,
+)
 from cosmic_foundry.theory.continuous.manifold import Manifold
 from cosmic_foundry.theory.foundation.indexed_set import IndexedSet
 from tests.claims import Claim
@@ -1818,6 +1822,15 @@ class _SolveRelationSchemaClaim(Claim[None]):
         assert reaction_regions["conserved_network"].contains(reaction_descriptor)
         assert reaction_regions["fully_constrained_equilibrium"].contains(
             reaction_descriptor
+        )
+        reaction_coverage = reaction_network_coverage_regions()
+        for region in reaction_coverage:
+            reaction_network_schema.validate_coverage_region(region)
+        assert (
+            reaction_network_schema.covering_region(
+                reaction_descriptor, reaction_coverage
+            ).owner
+            is NuclearStatisticalEquilibriumSolver
         )
         assert (
             reaction_network_schema.cell_status(
