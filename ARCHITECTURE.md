@@ -790,10 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Add the first spectral solver owner for `eigenpair_residual` descriptors,
-   grounded in a small symmetric dense eigenpair calculation, or remove the
-   eigenpair solve relation from the primitive schema until that calculation is
-   ready.
+1. Reconcile the remaining nonlinear target-zero primitive gaps by deciding
+   whether residual descriptors without derivative evidence need a
+   derivative-free root owner or should stay explicit primitive gaps.
 
 Roadmap sketch:
 
@@ -1105,12 +1104,12 @@ evidence is available, and least-squares objective descriptors carry the
 `objective_minimum` acceptance relation consumed by least-squares solver
 coverage.  Primitive solve-relation evidence therefore remains uncovered only
 for genuinely unsupported primitive solve classes, currently nonlinear
-target-zero residuals without derivative evidence and eigenpair residuals
-without a spectral solver owner.
-Eigenpair residual evidence is now a named explicit primitive atlas gap rather
-than an undifferentiated uncovered evidence point: a valid descriptor with an
-auxiliary spectral scalar and normalization constraint remains unsupported until
-a concrete spectral solver owner is added.
+target-zero residuals without derivative evidence.
+Dense symmetric eigenpair residual evidence is now owned by
+`DenseSymmetricEigenpairSolver`: a small assembled symmetric 2x2 calculation
+grounds the `eigenpair_residual` descriptor with an auxiliary spectral scalar
+and normalization constraint, so that former explicit primitive gap has been
+removed from the generated atlas.
 Decomposition primitives expose structure through class-owned feasibility
 certificates and descriptor-space coverage regions.  Direct dense solver
 wrappers name their decomposition type; the coverage aggregator composes the
@@ -1282,7 +1281,9 @@ The sprint is complete when the following are true:
   linear maps inside memory/work budget.  `DenseSVDSolver` covers
   rank-deficient or minimum-norm dense regions.  `DenseGMRESSolver` covers
   nonsymmetric matrix-free linear maps only under restart, memory, and
-  predicted-work bounds.
+  predicted-work bounds.  `DenseSymmetricEigenpairSolver` covers assembled
+  spectral residual descriptors with an auxiliary eigenvalue scalar and
+  normalization constraint.
 - **Decomposition coverage regions.**  Decomposition capabilities are coverage
   regions over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,

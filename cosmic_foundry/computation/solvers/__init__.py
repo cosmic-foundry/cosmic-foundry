@@ -4,12 +4,15 @@ from cosmic_foundry.computation.solvers.capabilities import (
     LEAST_SQUARES_SOLVER_COVERAGE_REGIONS,
     LINEAR_SOLVER_COVERAGE_REGIONS,
     ROOT_SOLVER_COVERAGE_REGIONS,
+    SPECTRAL_SOLVER_COVERAGE_REGIONS,
     least_squares_solver_coverage_regions,
     linear_solver_coverage_regions,
     root_solver_coverage_regions,
     select_least_squares_solver_for_descriptor,
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
+    select_spectral_solver_for_descriptor,
+    spectral_solver_coverage_regions,
 )
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
@@ -46,6 +49,10 @@ from cosmic_foundry.computation.solvers.relations import (
     LeastSquaresRelation,
     LinearResidualRelation,
 )
+from cosmic_foundry.computation.solvers.spectral_solver import (
+    DenseSymmetricEigenpairSolver,
+    SpectralSolver,
+)
 
 __all__ = [
     "DenseCGSolver",
@@ -53,6 +60,7 @@ __all__ = [
     "DenseGaussSeidelSolver",
     "DenseJacobiSolver",
     "DenseLUSolver",
+    "DenseSymmetricEigenpairSolver",
     "DenseSVDLeastSquaresSolver",
     "DenseSVDSolver",
     "DirectSolver",
@@ -80,4 +88,8 @@ __all__ = [
     "select_least_squares_solver_for_descriptor",
     "select_linear_solver_for_descriptor",
     "select_root_solver_for_descriptor",
+    "select_spectral_solver_for_descriptor",
+    "SPECTRAL_SOLVER_COVERAGE_REGIONS",
+    "SpectralSolver",
+    "spectral_solver_coverage_regions",
 ]

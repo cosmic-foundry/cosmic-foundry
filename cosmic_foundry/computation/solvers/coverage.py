@@ -87,6 +87,40 @@ def least_squares_predicates() -> tuple[StructuredPredicate, ...]:
     )
 
 
+def eigenpair_predicates() -> tuple[StructuredPredicate, ...]:
+    """Return primitive predicates for an assembled spectral eigenpair solve."""
+    return (
+        ComparisonPredicate(
+            SolveRelationField.MAP_LINEARITY_DEFECT,
+            "<=",
+            LINEARITY_TOLERANCE,
+        ),
+        AffineComparisonPredicate(
+            {SolveRelationField.DIM_X: 1.0, SolveRelationField.DIM_Y: -1.0},
+            "==",
+            0.0,
+        ),
+        ComparisonPredicate(SolveRelationField.AUXILIARY_SCALAR_COUNT, ">=", 1),
+        ComparisonPredicate(
+            SolveRelationField.NORMALIZATION_CONSTRAINT_COUNT,
+            ">=",
+            1,
+        ),
+        MembershipPredicate(
+            SolveRelationField.OBJECTIVE_RELATION,
+            frozenset({"spectral_residual"}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.ACCEPTANCE_RELATION,
+            frozenset({"eigenpair_residual"}),
+        ),
+        MembershipPredicate(
+            SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE,
+            frozenset({True}),
+        ),
+    )
+
+
 def dense_matrix_predicates() -> tuple[MembershipPredicate, ...]:
     """Return predicates for an available dense assembled matrix."""
     return (
@@ -246,6 +280,7 @@ __all__ = [
     "coverage",
     "dense_matrix_predicates",
     "directional_derivative_root_predicates",
+    "eigenpair_predicates",
     "fixed_point_root_predicates",
     "least_squares_predicates",
     "linear_system_predicates",

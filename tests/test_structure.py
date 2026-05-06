@@ -91,6 +91,8 @@ from cosmic_foundry.computation.solvers.capabilities import (
     select_least_squares_solver_for_descriptor,
     select_linear_solver_for_descriptor,
     select_root_solver_for_descriptor,
+    select_spectral_solver_for_descriptor,
+    spectral_solver_coverage_regions,
 )
 from cosmic_foundry.computation.solvers.iterative_solver import (
     IterativeSolver,
@@ -3936,6 +3938,50 @@ class _RootSolverCoverageRegionClaim(Claim[None]):
         return {region.name: region for region in schema.derived_regions}
 
 
+class _SpectralSolverCoverageRegionClaim(Claim[None]):
+    """Claim: spectral selection is driven by solve-relation coverage."""
+
+    @property
+    def description(self) -> str:
+        return "algorithm_capabilities/spectral_solver_coverage_regions"
+
+    def check(self, _calibration: None) -> None:
+        schema = solve_relation_parameter_schema()
+        regions = spectral_solver_coverage_regions()
+        assert regions
+        spectral_solver = _resolve_dotted(
+            "cosmic_foundry.computation.solvers.SpectralSolver"
+        )
+        for region in regions:
+            schema.validate_coverage_region(region)
+            assert issubclass(region.owner, spectral_solver)
+
+        descriptor = _SolveRelationSchemaClaim._solve_descriptor(
+            auxiliary_scalar_count=1,
+            normalization_constraint_count=1,
+            objective_relation="spectral_residual",
+            acceptance_relation="eigenpair_residual",
+            matrix_representation_available=True,
+        )
+        schema.validate_descriptor(descriptor)
+        assert schema.cell_status(descriptor, regions) == "owned"
+        assert select_spectral_solver_for_descriptor(descriptor) is _resolve_dotted(
+            "cosmic_foundry.computation.solvers.DenseSymmetricEigenpairSolver"
+        )
+        assert self._regions(schema)["eigenproblem"].contains(descriptor)
+
+        incomplete_eigenproblem = _SolveRelationSchemaClaim._solve_descriptor(
+            acceptance_relation="eigenpair_residual",
+        )
+        assert schema.cell_status(incomplete_eigenproblem, regions) == "invalid"
+
+    @staticmethod
+    def _regions(
+        schema: ParameterSpaceSchema,
+    ) -> dict[str, DerivedParameterRegion]:
+        return {region.name: region for region in schema.derived_regions}
+
+
 class _RootSolverExecutionOwnershipClaim(Claim[None]):
     """Claim: time integrators expose root relations instead of owning solvers."""
 
@@ -4747,12 +4793,15 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LEAST_SQUARES_SOLVER_COVERAGE_REGIONS",
                 "LINEAR_SOLVER_COVERAGE_REGIONS",
                 "ROOT_SOLVER_COVERAGE_REGIONS",
+                "SPECTRAL_SOLVER_COVERAGE_REGIONS",
                 "least_squares_solver_coverage_regions",
                 "linear_solver_coverage_regions",
                 "root_solver_coverage_regions",
                 "select_least_squares_solver_for_descriptor",
                 "select_linear_solver_for_descriptor",
                 "select_root_solver_for_descriptor",
+                "select_spectral_solver_for_descriptor",
+                "spectral_solver_coverage_regions",
             }
         ),
         "abstract_interface": frozenset(
@@ -4769,6 +4818,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
                 "LinearResidualRelation",
                 "LinearSolver",
                 "RootRelation",
+                "SpectralSolver",
                 "StationaryIterationSolver",
             }
         ),
@@ -4786,6 +4836,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
             }
         ),
         "least_squares_solver": frozenset({"DenseSVDLeastSquaresSolver"}),
+        "spectral_solver": frozenset({"DenseSymmetricEigenpairSolver"}),
         "iterative_solver": frozenset(
             {
                 "DenseCGSolver",
@@ -4802,6 +4853,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "DenseGaussSeidelSolver": "dense_gauss_seidel_solver",
         "DenseJacobiSolver": "dense_jacobi_solver",
         "DenseLUSolver": "dense_lu_solver",
+        "DenseSymmetricEigenpairSolver": "spectral_solver",
         "DenseSVDLeastSquaresSolver": "least_squares_solver",
         "DenseSVDSolver": "dense_svd_solver",
         "DirectSolver": "direct_solver",
@@ -4819,6 +4871,7 @@ _LINEAR_SOLVER_OWNERSHIP = _ArchitectureOwnershipSpec(
         "MatrixFreeNewtonKrylovRootSolver": "newton_root_solver",
         "NewtonRootSolver": "newton_root_solver",
         "RootRelation": "newton_root_solver",
+        "SpectralSolver": "spectral_solver",
         "StationaryIterationSolver": "iterative_solver",
     },
 )
@@ -5188,6 +5241,7 @@ _CLAIMS: list[Claim[None]] = [
     _LinearSolverCoverageRegionClaim(),
     _LeastSquaresSolverCoverageRegionClaim(),
     _RootSolverCoverageRegionClaim(),
+    _SpectralSolverCoverageRegionClaim(),
     _RootSolverExecutionOwnershipClaim(),
     _DecompositionCoverageRegionClaim(),
     _CapabilityAtlasDocClaim(),
