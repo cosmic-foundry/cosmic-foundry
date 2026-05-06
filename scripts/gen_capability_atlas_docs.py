@@ -354,8 +354,8 @@ def _explicit_primitive_gap_lines() -> list[str]:
     gap_text = {
         "target_zero_no_derivative": (
             "- `target_zero_no_derivative`: valid nonlinear target-zero",
-            "  residual evidence with no derivative oracle is intentionally",
-            "  unsupported until a derivative-free root calculation is named.",
+            "  residual evidence with no derivative oracle and no sign-changing",
+            "  bracket is intentionally unsupported.",
         ),
     }
     for descriptor in atlas._capability_atlas_descriptors():

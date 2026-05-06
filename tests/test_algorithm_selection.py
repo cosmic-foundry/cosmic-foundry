@@ -22,6 +22,8 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     solve_relation_parameter_schema,
 )
 from cosmic_foundry.computation.solvers import (
+    BisectionRootSolver,
+    BracketedScalarRootRelation,
     DenseLUSolver,
     DirectionalDerivativeRootRelation,
     FiniteDimensionalResidualRelation,
@@ -1064,6 +1066,44 @@ class _DirectionalDerivativeRootSolveClaim(Claim[Any]):
         assert abs(float(root[0]) ** 2 - 2.0) < 1e-10
 
 
+class _BracketedScalarRootSolveClaim(Claim[Any]):
+    """Grounded derivative-free scalar root solve with bracket evidence."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/bracketed_scalar_root_solve"
+
+    def check(self, _calibration: Any) -> None:
+        def residual(x: Tensor) -> Tensor:
+            return Tensor([float(x[0]) ** 2 - 2.0], backend=x.backend)
+
+        relation = BracketedScalarRootRelation(
+            residual,
+            lower=1.0,
+            upper=2.0,
+            backend=_TIME_BACKEND,
+        )
+        descriptor = relation.solve_relation_descriptor(map_linearity_defect=1.0)
+        schema = solve_relation_parameter_schema()
+        schema.validate_descriptor(descriptor)
+        assert descriptor.coordinate(SolveRelationField.BRACKET_AVAILABLE).value is True
+        assert (
+            descriptor.coordinate(
+                SolveRelationField.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND
+            ).value
+            <= 0.0
+        )
+        assert (
+            descriptor.coordinate(SolveRelationField.DERIVATIVE_ORACLE_KIND).value
+            == "none"
+        )
+        assert select_root_solver_for_descriptor(descriptor) is BisectionRootSolver
+
+        root = solve_root_relation(relation)
+        assert abs(float(root[0]) - math.sqrt(2.0)) < 1.0e-10
+        assert abs(float(relation.residual(root)[0])) < 1.0e-10
+
+
 class _JvpImplicitStageRootSolveClaim(Claim[Any]):
     """Grounded nonlinear implicit step with only JVP derivative evidence."""
 
@@ -1120,6 +1160,7 @@ _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _AffineStageLinearSolveClaim(),
     _ImexImplicitStageRootClaim(),
     _DirectionalDerivativeRootSolveClaim(),
+    _BracketedScalarRootSolveClaim(),
     _JvpImplicitStageRootSolveClaim(),
     _StepSelectionRegionCoverageClaim(),
     *[_StepSelectionClaim(case) for case in _step_selection_cases()],
