@@ -374,6 +374,26 @@ def _explicit_primitive_gap_lines() -> list[str]:
     return lines
 
 
+def _selected_primitive_gap_candidate_lines() -> list[str]:
+    candidate_text = {
+        "finite_rate_reaction_network_dynamics": (
+            "- `finite_rate_reaction_network_dynamics`: valid conserved",
+            "  reaction-network dynamics without full equilibrium constraints",
+            "  is the selected computed primitive gap; promotion needs a concrete",
+            "  finite-rate evolution calculation and ownership premise.",
+        ),
+    }
+    lines: list[str] = []
+    for candidate in atlas._selected_primitive_gap_candidates():
+        descriptor = candidate.descriptor
+        schema = atlas._atlas_schema_for_descriptor(descriptor)
+        regions = atlas._atlas_regions_for_schema(schema)
+        if schema.cell_status(descriptor, regions) != "uncovered":
+            continue
+        lines.extend(candidate_text[candidate.key])
+    return lines
+
+
 def _descriptor_coordinate_summary(descriptor: atlas.ParameterDescriptor) -> str:
     schema = atlas._atlas_schema_for_descriptor(descriptor)
     fields = tuple(axis.field for axis in schema.axes) + tuple(
@@ -858,6 +878,20 @@ def render_capability_atlas() -> str:
             [
                 "No valid descriptor evidence is currently outside declared",
                 "ownership regions.",
+                "",
+            ]
+        )
+
+    selected_gap_lines = _selected_primitive_gap_candidate_lines()
+    if selected_gap_lines:
+        lines.extend(
+            [
+                "## Selected Primitive Gap Candidate",
+                "",
+                "This candidate is selected from computed uncovered atlas cells",
+                "rather than a manually declared exclusion.",
+                "",
+                *selected_gap_lines,
                 "",
             ]
         )

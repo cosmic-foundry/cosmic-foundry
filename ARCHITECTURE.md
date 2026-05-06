@@ -790,9 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Use computed uncovered atlas cells to select the next primitive gap whose
-   promotion requires a concrete calculation rather than another
-   predicate-backed exclusion.
+1. Ground the selected finite-rate reaction-network dynamics gap with a
+   concrete evolution calculation before adding any reaction-network ownership
+   beyond fully constrained equilibrium.
 
 Roadmap sketch:
 
@@ -913,7 +913,10 @@ count equals the stoichiometry rank; its execution is the existing direct NSE
 calculation, which constructs an `nse_root_relation` and solves it through the
 generic root-solver path.  The atlas therefore shows conserved,
 fully constrained NSE evidence as owned reaction-network space instead of as an
-unexplained uncovered descriptor point.
+unexplained uncovered descriptor point.  The computed uncovered atlas cells now
+select finite-rate reaction-network dynamics as the next primitive gap candidate:
+valid conserved networks without full equilibrium constraints remain outside
+ownership until a concrete evolution calculation supplies a promotion premise.
 Automatic one-step request construction no longer has a nominal reaction-network
 branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle
