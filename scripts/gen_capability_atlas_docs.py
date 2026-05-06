@@ -351,23 +351,21 @@ def _explicit_primitive_gap_lines() -> list[str]:
     lines: list[str] = []
     solve_schema = atlas.solve_relation_parameter_schema()
     solve_regions = atlas._atlas_regions_for_schema(solve_schema)
+    gap_text = {
+        "target_zero_no_derivative": (
+            "- `target_zero_no_derivative`: valid nonlinear target-zero",
+            "  residual evidence with no derivative oracle is intentionally",
+            "  unsupported until a derivative-free root calculation is named.",
+        ),
+    }
     for descriptor in atlas._capability_atlas_descriptors():
         if atlas._atlas_schema_for_descriptor(descriptor) != solve_schema:
             continue
         if solve_schema.cell_status(descriptor, solve_regions) != "uncovered":
             continue
-        if (
-            descriptor.coordinate(atlas.SolveRelationField.ACCEPTANCE_RELATION).value
-            != "eigenpair_residual"
-        ):
-            continue
-        lines.extend(
-            [
-                "- `eigenpair_residual`: valid spectral solve-relation evidence",
-                "  with a normalization constraint and auxiliary spectral scalar,",
-                "  but no spectral solver owner is registered yet.",
-            ]
-        )
+        for gap in atlas._explicit_primitive_gaps():
+            if gap.contains(descriptor):
+                lines.extend(gap_text[gap.key])
     return lines
 
 
