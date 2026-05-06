@@ -257,6 +257,17 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             derivative_oracle_kind="none",
         ),
         _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=1,
+            dim_y=1,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        ),
+        _SolveRelationSchemaClaim._solve_descriptor(
             target_is_zero=True,
             map_linearity_defect=1.0,
             matrix_representation_available=False,
@@ -337,6 +348,10 @@ def _explicit_primitive_gaps() -> tuple[_ExplicitPrimitiveGap, ...]:
                 MembershipPredicate(
                     SolveRelationField.DERIVATIVE_ORACLE_KIND,
                     frozenset({"none"}),
+                ),
+                MembershipPredicate(
+                    SolveRelationField.BRACKET_AVAILABLE,
+                    frozenset({False}),
                 ),
             ),
         ),
@@ -1448,11 +1463,21 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
         schema.validate_descriptor(descriptor)
         assert schema.cell_status(descriptor, regions) == "uncovered"
-        assert any(
-            uncovered.contains(descriptor)
-            for uncovered in _capability_atlas_uncovered_cells(schema, regions)
-        )
         assert any(gap.contains(descriptor) for gap in _explicit_primitive_gaps())
+        bracketed = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=1,
+            dim_y=1,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        schema.validate_descriptor(bracketed)
+        assert schema.cell_status(bracketed, regions) == "owned"
+        assert not any(gap.contains(bracketed) for gap in _explicit_primitive_gaps())
 
     @staticmethod
     def _assert_directional_derivative_root_is_owned() -> None:

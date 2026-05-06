@@ -273,9 +273,35 @@ def fixed_point_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]
     )
 
 
+def bracketed_scalar_root_predicates() -> tuple[tuple[StructuredPredicate, ...], ...]:
+    """Return predicates for derivative-free scalar roots with bracket evidence."""
+    return nonlinear_root_predicates(
+        derivative_oracle_kind="none",
+        equality_constraint_predicates=(
+            AffineComparisonPredicate(
+                {SolveRelationField.DIM_X: 1.0, SolveRelationField.DIM_Y: -1.0},
+                "==",
+                0.0,
+            ),
+            ComparisonPredicate(SolveRelationField.DIM_X, "==", 1),
+            ComparisonPredicate(SolveRelationField.EQUALITY_CONSTRAINT_COUNT, "==", 0),
+            MembershipPredicate(
+                SolveRelationField.BRACKET_AVAILABLE,
+                frozenset({True}),
+            ),
+            ComparisonPredicate(
+                SolveRelationField.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                "<=",
+                0.0,
+            ),
+        ),
+    )
+
+
 __all__ = [
     "CONDITION_LIMIT",
     "LINEARITY_TOLERANCE",
+    "bracketed_scalar_root_predicates",
     "budget_predicates",
     "coverage",
     "dense_matrix_predicates",

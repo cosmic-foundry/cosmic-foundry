@@ -8,6 +8,7 @@ from cosmic_foundry.computation.solvers.capabilities import (
     select_root_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.newton_root_solver import (
+    BracketedScalarRootRelation,
     DirectionalDerivativeRootRelation,
     FixedPointRootRelation,
     RootRelation,
@@ -19,13 +20,21 @@ class _RootSolverProtocol(Protocol):
     def solve(
         self,
         relation: (
-            RootRelation | DirectionalDerivativeRootRelation | FixedPointRootRelation
+            RootRelation
+            | DirectionalDerivativeRootRelation
+            | FixedPointRootRelation
+            | BracketedScalarRootRelation
         ),
     ) -> Tensor: ...
 
 
 def solve_root_relation(
-    relation: RootRelation | DirectionalDerivativeRootRelation | FixedPointRootRelation,
+    relation: (
+        RootRelation
+        | DirectionalDerivativeRootRelation
+        | FixedPointRootRelation
+        | BracketedScalarRootRelation
+    ),
 ) -> Tensor:
     """Solve a root relation by querying primitive solve-relation coverage."""
     solver_type = select_root_solver_for_descriptor(

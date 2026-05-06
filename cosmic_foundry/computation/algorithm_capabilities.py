@@ -174,6 +174,8 @@ class SolveRelationField(Enum):
     ACCEPTANCE_RELATION = "acceptance_relation"
     AUXILIARY_SCALAR_COUNT = "auxiliary_scalar_count"
     BACKEND_KIND = "backend_kind"
+    BRACKET_AVAILABLE = "bracket_available"
+    BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND = "bracket_residual_product_upper_bound"
     DERIVATIVE_ORACLE_KIND = "derivative_oracle_kind"
     DEVICE_KIND = "device_kind"
     DIM_X = "dim_x"
@@ -438,6 +440,8 @@ class TransformationRelation:
     work_budget_fmas: float
     memory_budget_bytes: float
     fixed_point_contraction_bound: float | None = None
+    bracket_available: bool = False
+    bracket_residual_product_upper_bound: float | None = None
 
     @property
     def domain_dimension(self) -> int:
@@ -1402,7 +1406,13 @@ def solve_relation_parameter_schema() -> ParameterSpaceSchema:
     return ParameterSpaceSchema(
         name="solve_relation",
         axes=_solve_relation_axes(),
-        auxiliary_fields=frozenset({field.FIXED_POINT_CONTRACTION_BOUND}),
+        auxiliary_fields=frozenset(
+            {
+                field.BRACKET_AVAILABLE,
+                field.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                field.FIXED_POINT_CONTRACTION_BOUND,
+            }
+        ),
         derived_regions=_solve_relation_regions(),
         invalid_cells=(
             InvalidCellRule(
@@ -1439,7 +1449,13 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
         name="linear_solver",
         axes=_solve_relation_axes() + _linear_operator_axes(),
         auxiliary_fields=frozenset(DecompositionField)
-        | frozenset({solve_field.FIXED_POINT_CONTRACTION_BOUND}),
+        | frozenset(
+            {
+                solve_field.BRACKET_AVAILABLE,
+                solve_field.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                solve_field.FIXED_POINT_CONTRACTION_BOUND,
+            }
+        ),
         derived_regions=_solve_relation_regions()
         + (
             DerivedParameterRegion(
@@ -2253,6 +2269,17 @@ def transformation_relation_coordinates(
             evidence=(
                 "upper_bound"
                 if relation.fixed_point_contraction_bound is not None
+                else "unavailable"
+            ),
+        ),
+        SolveRelationField.BRACKET_AVAILABLE: DescriptorCoordinate(
+            relation.bracket_available
+        ),
+        SolveRelationField.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND: DescriptorCoordinate(
+            relation.bracket_residual_product_upper_bound,
+            evidence=(
+                "upper_bound"
+                if relation.bracket_residual_product_upper_bound is not None
                 else "unavailable"
             ),
         ),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from cosmic_foundry.computation.algorithm_capabilities import (
     EvidenceSource,
@@ -11,6 +12,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
 )
 from cosmic_foundry.computation.decompositions.lu_factorization import LUFactorization
 from cosmic_foundry.computation.solvers.coverage import (
+    bracketed_scalar_root_predicates,
     constrained_root_predicates,
     directional_derivative_root_predicates,
     fixed_point_root_predicates,
@@ -158,6 +160,64 @@ class FixedPointRootRelation(FiniteDimensionalResidualRelation):
         )
 
 
+class BracketedScalarRootRelation(FiniteDimensionalResidualRelation):
+    """Scalar root relation with derivative-free sign-changing bracket evidence."""
+
+    lower: float
+    upper: float
+    bracket_residual_product_upper_bound: float
+
+    def __init__(
+        self,
+        residual: Callable[[Tensor], Tensor],
+        *,
+        lower: float,
+        upper: float,
+        backend: Any | None = None,
+    ) -> None:
+        initial: Tensor = Tensor([(lower + upper) / 2.0], backend=backend)
+        lower_value = float(residual(Tensor([lower], backend=initial.backend))[0])
+        upper_value = float(residual(Tensor([upper], backend=initial.backend))[0])
+        product = lower_value * upper_value
+        if product > 0.0:
+            raise ValueError("bracket endpoints must have opposite residual signs")
+        object.__setattr__(self, "residual", residual)
+        object.__setattr__(self, "initial", initial)
+        object.__setattr__(self, "equality_constraint_gradients", None)
+        object.__setattr__(self, "lower", lower)
+        object.__setattr__(self, "upper", upper)
+        object.__setattr__(self, "bracket_residual_product_upper_bound", product)
+
+    def solve_relation_descriptor(
+        self,
+        *,
+        map_linearity_defect: float | None = None,
+        map_linearity_evidence: EvidenceSource = "unavailable",
+        requested_residual_tolerance: float = 1.0e-8,
+        requested_solution_tolerance: float = 1.0e-8,
+        work_budget_fmas: float = 1.0e9,
+        memory_budget_bytes: float = 1.0e9,
+        device_kind: str = "cpu",
+    ) -> ParameterDescriptor:
+        """Project this bracketed scalar root to primitive solve coordinates."""
+        return super().residual_relation_descriptor(
+            target_is_zero=True,
+            derivative_oracle_kind="none",
+            map_linearity_defect=map_linearity_defect,
+            map_linearity_evidence=map_linearity_evidence,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=(
+                self.bracket_residual_product_upper_bound
+            ),
+            matrix_representation_available=False,
+            work_budget_fmas=work_budget_fmas,
+            memory_budget_bytes=memory_budget_bytes,
+            device_kind=device_kind,
+            requested_residual_tolerance=requested_residual_tolerance,
+            requested_solution_tolerance=requested_solution_tolerance,
+        )
+
+
 class NewtonRootSolver:
     """Solve ``F(x) = 0`` by Newton iteration."""
 
@@ -295,7 +355,43 @@ class FixedPointRootSolver:
         return float(norm(vector)) < self._tolerance * (1.0 + float(norm(scale)))
 
 
+class BisectionRootSolver:
+    """Solve scalar roots using a sign-changing bracket and bisection."""
+
+    root_solver_coverage = bracketed_scalar_root_predicates()
+
+    def __init__(
+        self,
+        *,
+        max_iterations: int = 100,
+        tolerance: float = 1e-12,
+    ) -> None:
+        self._max_iterations = max_iterations
+        self._tolerance = tolerance
+
+    def solve(self, relation: BracketedScalarRootRelation) -> Tensor:
+        """Return a bracketed scalar root."""
+        lower = relation.lower
+        upper = relation.upper
+        backend = relation.initial.backend
+        f_lower = float(relation.residual(Tensor([lower], backend=backend))[0])
+        for _ in range(self._max_iterations):
+            midpoint = 0.5 * (lower + upper)
+            x_mid: Tensor = Tensor([midpoint], backend=backend)
+            f_mid = float(relation.residual(x_mid)[0])
+            if abs(f_mid) < self._tolerance or abs(upper - lower) < self._tolerance:
+                return x_mid
+            if f_lower * f_mid <= 0.0:
+                upper = midpoint
+            else:
+                lower = midpoint
+                f_lower = f_mid
+        return Tensor([0.5 * (lower + upper)], backend=backend)
+
+
 __all__ = [
+    "BisectionRootSolver",
+    "BracketedScalarRootRelation",
     "DirectionalDerivativeRootRelation",
     "FixedPointRootRelation",
     "FixedPointRootSolver",

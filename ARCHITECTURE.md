@@ -790,10 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Add bracket-availability evidence to the solve-relation schema for
-   derivative-free scalar roots, grounded in a concrete bracketed calculation,
-   or keep derivative-free ownership out of the schema if that calculation is
-   not ready.
+1. Review whether bracketed scalar root ownership should remain a scalar-only
+   primitive region or generalize to interval/domain evidence for separable
+   vector roots; do not generalize without a second concrete calculation.
 
 Roadmap sketch:
 
@@ -1105,10 +1104,12 @@ evidence is available, and least-squares objective descriptors carry the
 `objective_minimum` acceptance relation consumed by least-squares solver
 coverage.  Primitive solve-relation evidence therefore remains uncovered only
 for genuinely unsupported primitive solve classes.  Nonlinear target-zero
-residual descriptors without derivative evidence are an explicit primitive
-gap, not an unclaimed Newton variant: they remain unsupported until a
-derivative-free calculation contributes the extra evidence needed to bound a
-method's ownership.
+residual descriptors without derivative evidence and without sign-changing
+bracket evidence are an explicit primitive gap, not an unclaimed Newton
+variant.  Scalar derivative-free root ownership exists only for descriptors
+with a certified bracket: `BisectionRootSolver` owns scalar target-zero
+relations whose bracket endpoint residual product is bounded above by zero,
+grounded in a bracketed solve of `x^2 - 2 = 0`.
 Dense symmetric eigenpair residual evidence is now owned by
 `DenseSymmetricEigenpairSolver`: a small assembled symmetric 2x2 calculation
 grounds the `eigenpair_residual` descriptor with an auxiliary spectral scalar
@@ -1288,7 +1289,9 @@ The sprint is complete when the following are true:
   nonsymmetric matrix-free linear maps only under restart, memory, and
   predicted-work bounds.  `DenseSymmetricEigenpairSolver` covers assembled
   spectral residual descriptors with an auxiliary eigenvalue scalar and
-  normalization constraint.
+  normalization constraint.  `BisectionRootSolver` covers scalar nonlinear
+  target-zero descriptors that have no derivative oracle but do have a
+  sign-changing bracket certificate.
 - **Decomposition coverage regions.**  Decomposition capabilities are coverage
   regions over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,

@@ -37,6 +37,8 @@ from cosmic_foundry.computation.solvers.linear_solver import (
     LinearSolver,
 )
 from cosmic_foundry.computation.solvers.newton_root_solver import (
+    BisectionRootSolver,
+    BracketedScalarRootRelation,
     DirectionalDerivativeRootRelation,
     FixedPointRootRelation,
     FixedPointRootSolver,
@@ -64,6 +66,8 @@ __all__ = [
     "DenseSVDLeastSquaresSolver",
     "DenseSVDSolver",
     "DirectSolver",
+    "BisectionRootSolver",
+    "BracketedScalarRootRelation",
     "DirectionalDerivativeRootRelation",
     "FixedPointRootRelation",
     "FixedPointRootSolver",
