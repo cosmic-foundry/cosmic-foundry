@@ -7,6 +7,7 @@ This module holds the generated-atlas projection machinery used by
 from __future__ import annotations
 
 import ast
+from functools import cache
 from itertools import product
 from pathlib import Path
 from typing import Any, NamedTuple, NewType, TypeAlias
@@ -32,6 +33,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     SolveRelationField,
     StructuredPredicate,
     decomposition_parameter_schema,
+    linear_operator_descriptor_from_assembled_operator,
     linear_solver_parameter_schema,
     map_structure_parameter_schema,
     predicate_sets_are_disjoint,
@@ -63,6 +65,17 @@ from tests.claims import Claim
 _PROJECT_ROOT = Path(__file__).parent.parent
 _SolveRelationSchemaClaim = structure._SolveRelationSchemaClaim
 _ATLAS_TIME_BACKEND = NumpyBackend()
+
+
+def _atlas_linear_operator_descriptor(
+    matrix: tuple[tuple[float, ...], ...],
+    rhs: tuple[float, ...],
+) -> ParameterDescriptor:
+    return linear_operator_descriptor_from_assembled_operator(
+        structure._MatrixLinearOperator(matrix),
+        Tensor(rhs, backend=_ATLAS_TIME_BACKEND),
+    )
+
 
 _AtlasText = NewType("_AtlasText", str)
 _AtlasDescriptorField: TypeAlias = (
@@ -189,6 +202,7 @@ def _atlas_step_diagnostic_descriptors() -> tuple[ParameterDescriptor, ...]:
     )
 
 
+@cache
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
     return (
         _SolveRelationSchemaClaim._solve_descriptor(),
@@ -225,11 +239,13 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
         ),
         _SolveRelationSchemaClaim._explicit_time_step_descriptor(),
         _SolveRelationSchemaClaim._implicit_stage_descriptor(),
-        _SolveRelationSchemaClaim._linear_descriptor(),
-        _SolveRelationSchemaClaim._linear_descriptor(
-            singular_value_lower_bound=0.0,
-            rank_estimate=3,
-            nullity_estimate=1,
+        _atlas_linear_operator_descriptor(
+            ((2.0, -1.0), (-1.0, 2.0)),
+            (1.0, 0.0),
+        ),
+        _atlas_linear_operator_descriptor(
+            ((1.0, 1.0), (1.0, 1.0)),
+            (1.0, 1.0),
         ),
         _SolveRelationSchemaClaim._linear_descriptor(
             linear_operator_matrix_available=False,
@@ -1078,6 +1094,8 @@ def _region_inhabits_schema(
         schema.validate_coverage_region(region)
     except ValueError:
         return False
+    if schema.auxiliary_fields and region.referenced_fields <= schema.auxiliary_fields:
+        return False
     return True
 
 
@@ -1195,6 +1213,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
         self._assert_time_integrator_quantitative_evidence_is_plotted()
+        self._assert_dense_linear_evidence_is_owned()
         self._assert_nonlinear_root_without_jacobian_is_visible_gap()
         self._assert_directional_derivative_root_is_owned()
         for group in _capability_atlas_descriptor_groups():
@@ -1262,6 +1281,33 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             is False
             for descriptor in _capability_atlas_descriptors()
             if _atlas_schema_for_descriptor(descriptor) == schema
+        )
+
+    @staticmethod
+    def _assert_dense_linear_evidence_is_owned() -> None:
+        schema = linear_solver_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        dense_descriptors = tuple(
+            descriptor
+            for descriptor in _capability_atlas_descriptors()
+            if _atlas_schema_for_descriptor(descriptor) == schema
+            and descriptor.coordinate(
+                LinearSolverField.LINEAR_OPERATOR_MATRIX_AVAILABLE
+            ).value
+        )
+        assert dense_descriptors
+        assert all(
+            descriptor.coordinate(
+                DecompositionField.FACTORIZATION_WORK_BUDGET_FMAS
+            ).evidence
+            != "unavailable"
+            for descriptor in dense_descriptors
+            if schema.cell_status(descriptor, regions) != "invalid"
+        )
+        assert all(
+            schema.cell_status(descriptor, regions) == "owned"
+            for descriptor in dense_descriptors
+            if schema.cell_status(descriptor, regions) != "invalid"
         )
 
     @staticmethod
