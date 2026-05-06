@@ -376,11 +376,11 @@ def _explicit_primitive_gap_lines() -> list[str]:
 
 def _selected_primitive_gap_candidate_lines() -> list[str]:
     candidate_text = {
-        "finite_rate_reaction_network_dynamics": (
-            "- `finite_rate_reaction_network_dynamics`: valid conserved",
+        "branched_finite_rate_reaction_network_dynamics": (
+            "- `branched_finite_rate_reaction_network_dynamics`: valid branched",
             "  reaction-network dynamics without full equilibrium constraints",
             "  is the selected computed primitive gap; promotion needs a concrete",
-            "  finite-rate evolution calculation and ownership premise.",
+            "  branched finite-rate evolution ownership premise.",
         ),
     }
     lines: list[str] = []
