@@ -34,6 +34,7 @@ from cosmic_foundry.computation.algorithm_capabilities import (
     StructuredPredicate,
     decomposition_parameter_schema,
     linear_operator_descriptor_from_assembled_operator,
+    linear_operator_descriptor_from_solve_relation_descriptor,
     linear_solver_parameter_schema,
     map_structure_parameter_schema,
     predicate_sets_are_disjoint,
@@ -62,6 +63,9 @@ from cosmic_foundry.computation.time_integrators.constraint_aware import (
     reaction_network_coverage_regions,
 )
 from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
+from cosmic_foundry.computation.time_integrators.implicit import (
+    ImplicitRungeKuttaIntegrator,
+)
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from tests import test_structure as structure
 from tests.claims import Claim
@@ -79,6 +83,21 @@ def _atlas_linear_operator_descriptor(
         structure._MatrixLinearOperator(matrix),
         Tensor(rhs, backend=_ATLAS_TIME_BACKEND),
     )
+
+
+def _atlas_linear_residual_projection() -> ParameterDescriptor:
+    matrix = tuple(
+        tuple(2.0 if row == column else 0.0 for column in range(4)) for row in range(4)
+    )
+    return _atlas_linear_operator_descriptor(matrix, (1.0, 0.0, 0.0, 0.0))
+
+
+def _atlas_affine_target_zero_projection() -> ParameterDescriptor:
+    state = ODEState(0.0, Tensor([1.0, 2.0], backend=_ATLAS_TIME_BACKEND))
+    descriptor = ImplicitRungeKuttaIntegrator(1).step_solve_relation_descriptor(
+        structure._AffineTestRHS(), state, 0.125
+    )
+    return linear_operator_descriptor_from_solve_relation_descriptor(descriptor)
 
 
 _AtlasText = NewType("_AtlasText", str)
@@ -209,11 +228,11 @@ def _atlas_step_diagnostic_descriptors() -> tuple[ParameterDescriptor, ...]:
 @cache
 def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
     return (
-        _SolveRelationSchemaClaim._solve_descriptor(),
         _SolveRelationSchemaClaim._solve_descriptor(
             dim_x=3,
             dim_y=5,
             objective_relation="least_squares",
+            acceptance_relation="objective_minimum",
         ),
         _SolveRelationSchemaClaim._solve_descriptor(
             map_linearity_defect=None,
@@ -241,8 +260,9 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
         _SolveRelationSchemaClaim._solve_descriptor(
             acceptance_relation="eigenpair_residual",
         ),
-        _SolveRelationSchemaClaim._explicit_time_step_descriptor(),
         _SolveRelationSchemaClaim._implicit_stage_descriptor(),
+        _atlas_affine_target_zero_projection(),
+        _atlas_linear_residual_projection(),
         _atlas_linear_operator_descriptor(
             ((2.0, -1.0), (-1.0, 2.0)),
             (1.0, 0.0),
@@ -1219,6 +1239,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_docs_render_schema_hierarchy()
         self._assert_time_integrator_quantitative_evidence_is_plotted()
         self._assert_dense_linear_evidence_is_owned()
+        self._assert_primitive_solve_projection_gaps_are_intentional()
         self._assert_fully_constrained_reaction_network_is_owned()
         self._assert_nonlinear_root_without_jacobian_is_visible_gap()
         self._assert_directional_derivative_root_is_owned()
@@ -1314,6 +1335,28 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema.cell_status(descriptor, regions) == "owned"
             for descriptor in dense_descriptors
             if schema.cell_status(descriptor, regions) != "invalid"
+        )
+
+    @staticmethod
+    def _assert_primitive_solve_projection_gaps_are_intentional() -> None:
+        schema = solve_relation_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        descriptors = tuple(
+            descriptor
+            for descriptor in _capability_atlas_descriptors()
+            if _atlas_schema_for_descriptor(descriptor) == schema
+        )
+        assert any(
+            descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value
+            == "eigenpair_residual"
+            and schema.cell_status(descriptor, regions) == "uncovered"
+            for descriptor in descriptors
+        )
+        assert not any(
+            descriptor.coordinate(SolveRelationField.OBJECTIVE_RELATION).value
+            == "least_squares"
+            and schema.cell_status(descriptor, regions) == "uncovered"
+            for descriptor in descriptors
         )
 
     @staticmethod

@@ -790,11 +790,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Reconcile primitive solve-relation evidence points that remain uncovered
-   only because ownership lives in solver-specific projections: linear residual,
-   least-squares objective, eigenpair, and affine target-zero descriptors should
-   either project to the richer owning schema or remain explicitly documented
-   as primitive-schema gaps.
+1. Reconcile the remaining eigenpair primitive solve-relation atlas gap by
+   either adding a spectral solver owner for `eigenpair_residual` descriptors
+   or narrowing the schema so unsupported spectral residuals are documented as
+   an explicit primitive gap rather than a generic uncovered point.
 
 Roadmap sketch:
 
@@ -1100,6 +1099,14 @@ Jacobian certificate.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
+Atlas evidence now projects concrete linear residual and affine target-zero
+solve descriptors to the richer linear-solver schema when assembled-linear
+evidence is available, and least-squares objective descriptors carry the
+`objective_minimum` acceptance relation consumed by least-squares solver
+coverage.  Primitive solve-relation evidence therefore remains uncovered only
+for genuinely unsupported primitive solve classes, currently nonlinear
+target-zero residuals without derivative evidence and eigenpair residuals
+without a spectral solver owner.
 Decomposition primitives expose structure through class-owned feasibility
 certificates and descriptor-space coverage regions.  Direct dense solver
 wrappers name their decomposition type; the coverage aggregator composes the
