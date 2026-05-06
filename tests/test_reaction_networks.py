@@ -494,13 +494,25 @@ class _FiniteRateReactionNetworkGapClaim(Claim[Any]):
         )
         assert (
             reaction_schema.cell_status(reaction_descriptor, reaction_regions)
-            == "uncovered"
+            == "owned"
+        )
+        assert (
+            reaction_schema.covering_region(reaction_descriptor, reaction_regions).owner
+            is _ti.FiniteRateReactionNetworkDynamics
         )
 
-        integrator = _ti.RungeKuttaIntegrator(4)
         dt = 1.0e-3
-        for _ in range(round(final_time / dt)):
-            state = integrator.step(rhs, state, dt)
+        state = state._replace(
+            u=_ti.FiniteRateReactionNetworkDynamics().evolve(
+                rhs,
+                state.u,
+                state.t,
+                final_time,
+                dt,
+            ),
+            t=final_time,
+            dt=dt,
+        )
 
         expected_a = math.exp(-rate * final_time)
         expected_b = 1.0 - expected_a
