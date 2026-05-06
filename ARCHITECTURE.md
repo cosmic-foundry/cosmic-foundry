@@ -790,9 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Review whether bracketed scalar root ownership should remain a scalar-only
-   primitive region or generalize to interval/domain evidence for separable
-   vector roots; do not generalize without a second concrete calculation.
+1. Keep coupled derivative-free vector roots outside owned coverage until a
+   concrete interval/domain calculation supplies evidence stronger than
+   componentwise separability and sign-changing component brackets.
 
 Roadmap sketch:
 
@@ -1106,10 +1106,13 @@ coverage.  Primitive solve-relation evidence therefore remains uncovered only
 for genuinely unsupported primitive solve classes.  Nonlinear target-zero
 residual descriptors without derivative evidence and without sign-changing
 bracket evidence are an explicit primitive gap, not an unclaimed Newton
-variant.  Scalar derivative-free root ownership exists only for descriptors
-with a certified bracket: `BisectionRootSolver` owns scalar target-zero
-relations whose bracket endpoint residual product is bounded above by zero,
-grounded in a bracketed solve of `x^2 - 2 = 0`.
+variant.  Derivative-free root ownership exists only for certified bracketed
+descriptors: `BisectionRootSolver` owns scalar target-zero relations whose
+bracket endpoint residual product is bounded above by zero, grounded in a
+bracketed solve of `x^2 - 2 = 0`.  `SeparableBisectionRootSolver` generalizes
+that premise only to componentwise separable vector residuals with per-component
+sign-changing brackets, grounded in a two-component solve for
+`(x_0^2 - 2, x_1^2 - 3) = 0`.
 Dense symmetric eigenpair residual evidence is now owned by
 `DenseSymmetricEigenpairSolver`: a small assembled symmetric 2x2 calculation
 grounds the `eigenpair_residual` descriptor with an auxiliary spectral scalar
@@ -1291,7 +1294,9 @@ The sprint is complete when the following are true:
   spectral residual descriptors with an auxiliary eigenvalue scalar and
   normalization constraint.  `BisectionRootSolver` covers scalar nonlinear
   target-zero descriptors that have no derivative oracle but do have a
-  sign-changing bracket certificate.
+  sign-changing bracket certificate.  `SeparableBisectionRootSolver` covers
+  the corresponding componentwise separable vector region; coupled
+  derivative-free vector roots remain unowned.
 - **Decomposition coverage regions.**  Decomposition capabilities are coverage
   regions over the dense-matrix subspace.  LU covers full-rank square dense
   matrices within cost budget; SVD covers rank-deficient, ill-conditioned,

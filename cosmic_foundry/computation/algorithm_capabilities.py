@@ -176,6 +176,7 @@ class SolveRelationField(Enum):
     BACKEND_KIND = "backend_kind"
     BRACKET_AVAILABLE = "bracket_available"
     BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND = "bracket_residual_product_upper_bound"
+    COMPONENTWISE_SEPARABLE = "componentwise_separable"
     DERIVATIVE_ORACLE_KIND = "derivative_oracle_kind"
     DEVICE_KIND = "device_kind"
     DIM_X = "dim_x"
@@ -442,6 +443,7 @@ class TransformationRelation:
     fixed_point_contraction_bound: float | None = None
     bracket_available: bool = False
     bracket_residual_product_upper_bound: float | None = None
+    componentwise_separable: bool = False
 
     @property
     def domain_dimension(self) -> int:
@@ -1410,6 +1412,7 @@ def solve_relation_parameter_schema() -> ParameterSpaceSchema:
             {
                 field.BRACKET_AVAILABLE,
                 field.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                field.COMPONENTWISE_SEPARABLE,
                 field.FIXED_POINT_CONTRACTION_BOUND,
             }
         ),
@@ -1453,6 +1456,7 @@ def linear_solver_parameter_schema() -> ParameterSpaceSchema:
             {
                 solve_field.BRACKET_AVAILABLE,
                 solve_field.BRACKET_RESIDUAL_PRODUCT_UPPER_BOUND,
+                solve_field.COMPONENTWISE_SEPARABLE,
                 solve_field.FIXED_POINT_CONTRACTION_BOUND,
             }
         ),
@@ -2282,6 +2286,9 @@ def transformation_relation_coordinates(
                 if relation.bracket_residual_product_upper_bound is not None
                 else "unavailable"
             ),
+        ),
+        SolveRelationField.COMPONENTWISE_SEPARABLE: DescriptorCoordinate(
+            relation.componentwise_separable
         ),
         SolveRelationField.MATRIX_REPRESENTATION_AVAILABLE: DescriptorCoordinate(
             relation.matrix_representation_available

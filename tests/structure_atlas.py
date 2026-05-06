@@ -268,6 +268,18 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             derivative_oracle_kind="none",
         ),
         _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=True,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        ),
+        _SolveRelationSchemaClaim._solve_descriptor(
             target_is_zero=True,
             map_linearity_defect=1.0,
             matrix_representation_available=False,
@@ -1478,6 +1490,20 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         schema.validate_descriptor(bracketed)
         assert schema.cell_status(bracketed, regions) == "owned"
         assert not any(gap.contains(bracketed) for gap in _explicit_primitive_gaps())
+        separable = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=True,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        schema.validate_descriptor(separable)
+        assert schema.cell_status(separable, regions) == "owned"
 
     @staticmethod
     def _assert_directional_derivative_root_is_owned() -> None:
