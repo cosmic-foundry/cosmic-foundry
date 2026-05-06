@@ -1335,6 +1335,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_evidence_is_descriptors()
         self._assert_coverage_regions_are_schema_discovered()
         self._assert_explicit_primitive_gaps_are_structural()
+        self._assert_explicit_primitive_gap_review_keeps_promotion_gates()
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
         self._assert_time_integrator_quantitative_evidence_is_plotted()
@@ -1409,6 +1410,71 @@ class _CapabilityAtlasDocClaim(Claim[None]):
                 for descriptor in _capability_atlas_descriptors()
                 if _atlas_schema_for_descriptor(descriptor) == schema
             )
+
+    @staticmethod
+    def _assert_explicit_primitive_gap_review_keeps_promotion_gates() -> None:
+        schema = solve_relation_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        gaps = {gap.key: gap for gap in _explicit_primitive_gaps()}
+        derivative_free = _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        derivative_backed = _SolveRelationSchemaClaim._solve_descriptor(
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            matrix_representation_available=False,
+            derivative_oracle_kind="jvp",
+        )
+        scalar_bracketed = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=1,
+            dim_y=1,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        coupled_bracketed = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=False,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        separable_bracketed = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=True,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        assert gaps["target_zero_no_derivative"].contains(derivative_free)
+        assert schema.cell_status(derivative_free, regions) == "uncovered"
+        assert schema.cell_status(derivative_backed, regions) == "owned"
+        assert schema.cell_status(scalar_bracketed, regions) == "owned"
+        assert not gaps["target_zero_no_derivative"].contains(derivative_backed)
+        assert not gaps["target_zero_no_derivative"].contains(scalar_bracketed)
+        assert gaps["coupled_derivative_free_vector_root"].contains(coupled_bracketed)
+        assert schema.cell_status(coupled_bracketed, regions) == "uncovered"
+        assert schema.cell_status(separable_bracketed, regions) == "owned"
+        assert not gaps["coupled_derivative_free_vector_root"].contains(
+            separable_bracketed
+        )
 
     @staticmethod
     def _assert_time_integrator_quantitative_evidence_is_plotted() -> None:
