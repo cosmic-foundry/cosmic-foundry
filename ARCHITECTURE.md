@@ -790,10 +790,11 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Reconcile the reaction-network atlas evidence gap by projecting the
-   fully constrained equilibrium/NSE calculation into descriptor-space ownership
-   instead of leaving conserved, fully constrained reaction-network descriptors
-   as uncovered evidence points.
+1. Reconcile primitive solve-relation evidence points that remain uncovered
+   only because ownership lives in solver-specific projections: linear residual,
+   least-squares objective, eigenpair, and affine target-zero descriptors should
+   either project to the richer owning schema or remain explicitly documented
+   as primitive-schema gaps.
 
 Roadmap sketch:
 
@@ -907,6 +908,14 @@ map-structure evidence only; step-local diagnostics are projected by the
 generic RHS step descriptor and composed at the request site.  Implementation
 methods must not import capability modules to manufacture selection descriptors
 from inside the class.
+Fully constrained reaction-network equilibrium is now a reaction-network
+descriptor ownership region.  `NuclearStatisticalEquilibriumSolver` owns
+conserved reaction-network descriptors whose independent equilibrium constraint
+count equals the stoichiometry rank; its execution is the existing direct NSE
+calculation, which constructs an `nse_root_relation` and solves it through the
+generic root-solver path.  The atlas therefore shows conserved,
+fully constrained NSE evidence as owned reaction-network space instead of as an
+unexplained uncovered descriptor point.
 Automatic one-step request construction no longer has a nominal reaction-network
 branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle

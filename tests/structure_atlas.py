@@ -57,6 +57,10 @@ from cosmic_foundry.computation.time_integrators.capabilities import (
     rhs_step_diagnostics_descriptor,
     time_integration_step_map_regions,
 )
+from cosmic_foundry.computation.time_integrators.constraint_aware import (
+    NuclearStatisticalEquilibriumSolver,
+    reaction_network_coverage_regions,
+)
 from cosmic_foundry.computation.time_integrators.domains import NonnegativeStateDomain
 from cosmic_foundry.computation.time_integrators.integrator import ODEState
 from tests import test_structure as structure
@@ -280,6 +284,7 @@ def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
         *linear_solver_coverage_regions(),
         *least_squares_solver_coverage_regions(),
         *root_solver_coverage_regions(),
+        *reaction_network_coverage_regions(),
         *time_integration_step_map_regions(),
     )
 
@@ -1214,6 +1219,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_docs_render_schema_hierarchy()
         self._assert_time_integrator_quantitative_evidence_is_plotted()
         self._assert_dense_linear_evidence_is_owned()
+        self._assert_fully_constrained_reaction_network_is_owned()
         self._assert_nonlinear_root_without_jacobian_is_visible_gap()
         self._assert_directional_derivative_root_is_owned()
         for group in _capability_atlas_descriptor_groups():
@@ -1308,6 +1314,17 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             schema.cell_status(descriptor, regions) == "owned"
             for descriptor in dense_descriptors
             if schema.cell_status(descriptor, regions) != "invalid"
+        )
+
+    @staticmethod
+    def _assert_fully_constrained_reaction_network_is_owned() -> None:
+        schema = reaction_network_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        descriptor = _SolveRelationSchemaClaim._reaction_network_descriptor()
+        schema.validate_descriptor(descriptor)
+        assert schema.cell_status(descriptor, regions) == "owned"
+        assert schema.covering_region(descriptor, regions).owner is (
+            NuclearStatisticalEquilibriumSolver
         )
 
     @staticmethod
