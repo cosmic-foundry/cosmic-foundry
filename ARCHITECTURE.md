@@ -790,8 +790,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Reconcile any remaining descriptor-space gaps exposed by the capability
-   atlas after the quantitative time-integrator sprint.
+1. Reconcile the reaction-network atlas evidence gap by projecting the
+   fully constrained equilibrium/NSE calculation into descriptor-space ownership
+   instead of leaving conserved, fully constrained reaction-network descriptors
+   as uncovered evidence points.
 
 Roadmap sketch:
 
@@ -1099,6 +1101,13 @@ they participate in selection predicates and descriptor validation without
 multiplying the enumerated atlas axis product.  Decomposition selection itself
 is a point query over the dense-matrix descriptor schema; budgets compare
 estimated factorization work and memory against explicit request budgets.
+Dense linear-solver atlas evidence now follows the assembled-operator
+projection path and therefore carries decomposition auxiliary coordinates
+alongside the linear solve coordinates.  Standalone decomposition regions remain
+owners of the decomposition schema only: when the atlas views an extended schema
+with auxiliary decomposition fields, auxiliary-only factorization regions do not
+become independent linear-solver owners.  Dense linear evidence is owned by the
+direct solver region that composes the factorization certificate.
 Stationary iterations are not final-solve owners in the atlas unless the schema
 can state the contraction and iteration-budget premise that makes them
 appropriate as final solvers; until then they remain numerical iterations, not
