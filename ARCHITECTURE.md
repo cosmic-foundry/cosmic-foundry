@@ -790,9 +790,9 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Review whether the remaining explicit primitive gaps can stay as
-   predicate-backed exclusions, or whether one now deserves a new calculation
-   and ownership premise.
+1. Use computed uncovered atlas cells to select the next primitive gap whose
+   promotion requires a concrete calculation rather than another
+   predicate-backed exclusion.
 
 Roadmap sketch:
 
@@ -1115,7 +1115,11 @@ sign-changing brackets, grounded in a two-component solve for
 `(x_0^2 - 2, x_1^2 - 3) = 0`.  Coupled derivative-free vector roots with only
 component brackets are now an explicit primitive gap: ownership waits for a
 concrete interval/domain calculation with evidence stronger than componentwise
-separability.
+separability.  The remaining explicit primitive gaps have been reviewed as
+predicate-backed exclusions: unbracketed derivative-free nonlinear roots need
+either derivative evidence or sign-changing bracket evidence, and coupled
+bracketed vector roots need separability or a stronger interval/domain premise
+before either can become an owned region.
 Dense symmetric eigenpair residual evidence is now owned by
 `DenseSymmetricEigenpairSolver`: a small assembled symmetric 2x2 calculation
 grounds the `eigenpair_residual` descriptor with an auxiliary spectral scalar
