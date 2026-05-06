@@ -280,6 +280,18 @@ def _capability_atlas_descriptors() -> tuple[ParameterDescriptor, ...]:
             derivative_oracle_kind="none",
         ),
         _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=False,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        ),
+        _SolveRelationSchemaClaim._solve_descriptor(
             target_is_zero=True,
             map_linearity_defect=1.0,
             matrix_representation_available=False,
@@ -363,6 +375,32 @@ def _explicit_primitive_gaps() -> tuple[_ExplicitPrimitiveGap, ...]:
                 ),
                 MembershipPredicate(
                     SolveRelationField.BRACKET_AVAILABLE,
+                    frozenset({False}),
+                ),
+            ),
+        ),
+        _ExplicitPrimitiveGap(
+            "coupled_derivative_free_vector_root",
+            (
+                MembershipPredicate(
+                    SolveRelationField.TARGET_IS_ZERO,
+                    frozenset({True}),
+                ),
+                MembershipPredicate(
+                    SolveRelationField.ACCEPTANCE_RELATION,
+                    frozenset({"residual_below_tolerance"}),
+                ),
+                MembershipPredicate(
+                    SolveRelationField.DERIVATIVE_ORACLE_KIND,
+                    frozenset({"none"}),
+                ),
+                ComparisonPredicate(SolveRelationField.DIM_X, ">", 1),
+                MembershipPredicate(
+                    SolveRelationField.BRACKET_AVAILABLE,
+                    frozenset({True}),
+                ),
+                MembershipPredicate(
+                    SolveRelationField.COMPONENTWISE_SEPARABLE,
                     frozenset({False}),
                 ),
             ),
@@ -1329,6 +1367,9 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         assert "## Projection Plots" in rendered
         assert "## Explicit Primitive Gaps" in rendered
         assert "`target_zero_no_derivative`: valid nonlinear target-zero" in rendered
+        assert (
+            "`coupled_derivative_free_vector_root`: valid bracketed vector" in rendered
+        )
         assert "`eigenpair_residual`: valid spectral solve-relation evidence" not in (
             rendered
         )
@@ -1357,7 +1398,10 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         schema = solve_relation_parameter_schema()
         regions = _atlas_regions_for_schema(schema)
         explicit_gaps = _explicit_primitive_gaps()
-        assert {gap.key for gap in explicit_gaps} == {"target_zero_no_derivative"}
+        assert {gap.key for gap in explicit_gaps} == {
+            "coupled_derivative_free_vector_root",
+            "target_zero_no_derivative",
+        }
         for gap in explicit_gaps:
             assert any(
                 gap.contains(descriptor)
@@ -1504,6 +1548,21 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         )
         schema.validate_descriptor(separable)
         assert schema.cell_status(separable, regions) == "owned"
+        coupled = _SolveRelationSchemaClaim._solve_descriptor(
+            dim_x=2,
+            dim_y=2,
+            target_is_zero=True,
+            map_linearity_defect=1.0,
+            bracket_available=True,
+            bracket_residual_product_upper_bound=-1.0,
+            bracket_residual_product_evidence="upper_bound",
+            componentwise_separable=False,
+            matrix_representation_available=False,
+            derivative_oracle_kind="none",
+        )
+        schema.validate_descriptor(coupled)
+        assert schema.cell_status(coupled, regions) == "uncovered"
+        assert any(gap.contains(coupled) for gap in _explicit_primitive_gaps())
 
     @staticmethod
     def _assert_directional_derivative_root_is_owned() -> None:

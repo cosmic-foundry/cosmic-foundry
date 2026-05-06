@@ -357,6 +357,11 @@ def _explicit_primitive_gap_lines() -> list[str]:
             "  residual evidence with no derivative oracle and no sign-changing",
             "  bracket is intentionally unsupported.",
         ),
+        "coupled_derivative_free_vector_root": (
+            "- `coupled_derivative_free_vector_root`: valid bracketed vector",
+            "  residual evidence without derivative or componentwise separability",
+            "  is intentionally unsupported.",
+        ),
     }
     for descriptor in atlas._capability_atlas_descriptors():
         if atlas._atlas_schema_for_descriptor(descriptor) != solve_schema:
