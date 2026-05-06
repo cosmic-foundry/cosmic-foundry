@@ -711,14 +711,40 @@ class _NordsieckFamilyFromStiffnessClaim(Claim[Any]):
 
     def check(self, _calibration: Any) -> None:
         for stiffness, family in ((1.0e-2, "adams"), (10.0, "bdf")):
+            descriptor = nordsieck_history_descriptor(
+                stiffness,
+                local_error_target=1.0e-7,
+                retry_budget=2,
+                rhs_evaluation_cost_fmas=3.0,
+            )
             request = AlgorithmRequest(
                 requested_properties=frozenset({"one_step"}),
                 order=4,
-                descriptor=nordsieck_history_descriptor(stiffness),
+                descriptor=descriptor,
             )
             selected = _ti.select_time_integrator(request)
             assert selected.owner is _ti.MultistepIntegrator
             assert_nordsieck_family(selected.construct(request), family)
+            assert descriptor.coordinate(
+                MapStructureField.LOCAL_ERROR_TARGET
+            ).value == pytest.approx(1.0e-7)
+            assert descriptor.coordinate(MapStructureField.RETRY_BUDGET).value == 2
+            assert descriptor.coordinate(
+                MapStructureField.RHS_EVALUATION_COST_FMAS
+            ).value == pytest.approx(3.0)
+
+        zero_cost_descriptor = nordsieck_history_descriptor(
+            1.0e-2,
+            rhs_evaluation_cost_fmas=0.0,
+        )
+        with pytest.raises(ValueError, match="no algorithm"):
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"one_step"}),
+                    order=4,
+                    descriptor=zero_cost_descriptor,
+                )
+            )
 
 
 class _BDFNordsieckCorrectorRootClaim(Claim[Any]):

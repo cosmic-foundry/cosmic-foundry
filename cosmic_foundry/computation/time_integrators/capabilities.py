@@ -205,10 +205,22 @@ def rhs_history_descriptor() -> ParameterDescriptor:
     )
 
 
-def nordsieck_history_descriptor(stiffness_estimate: float) -> ParameterDescriptor:
-    """Return map evidence for a populated Nordsieck state vector."""
+def nordsieck_history_descriptor(
+    stiffness_estimate: float,
+    *,
+    local_error_target: float = 1.0e-8,
+    retry_budget: int = 0,
+    rhs_evaluation_cost_fmas: float = 1.0,
+) -> ParameterDescriptor:
+    """Return quantitative map evidence for a populated Nordsieck state vector."""
     if stiffness_estimate < 0.0:
         raise ValueError("stiffness estimate must be nonnegative")
+    if local_error_target <= 0.0:
+        raise ValueError("local error target must be positive")
+    if retry_budget < 0:
+        raise ValueError("retry budget must be nonnegative")
+    if rhs_evaluation_cost_fmas < 0.0:
+        raise ValueError("RHS evaluation cost must be nonnegative")
     field = MapStructureField
     return ParameterDescriptor(
         _map_structure_coordinates(
@@ -217,6 +229,11 @@ def nordsieck_history_descriptor(stiffness_estimate: float) -> ParameterDescript
                 field.NORDSIECK_HISTORY_AVAILABLE: DescriptorCoordinate(True),
                 field.STIFFNESS_ESTIMATE: DescriptorCoordinate(
                     stiffness_estimate, evidence="upper_bound"
+                ),
+                field.LOCAL_ERROR_TARGET: DescriptorCoordinate(local_error_target),
+                field.RETRY_BUDGET: DescriptorCoordinate(retry_budget),
+                field.RHS_EVALUATION_COST_FMAS: DescriptorCoordinate(
+                    rhs_evaluation_cost_fmas
                 ),
             }
         )
@@ -381,6 +398,11 @@ def _nordsieck_history_regions(owner: type) -> tuple[CoverageRegion, ...]:
                 MembershipPredicate(
                     field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})
                 ),
+                MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
+                MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
+                ComparisonPredicate(field.LOCAL_ERROR_TARGET, ">", 0.0),
+                ComparisonPredicate(field.RETRY_BUDGET, ">=", 0),
+                ComparisonPredicate(field.RHS_EVALUATION_COST_FMAS, ">", 0.0),
                 ComparisonPredicate(field.STIFFNESS_ESTIMATE, "<=", 0.5),
             ),
         ),
@@ -390,6 +412,11 @@ def _nordsieck_history_regions(owner: type) -> tuple[CoverageRegion, ...]:
                 MembershipPredicate(
                     field.NORDSIECK_HISTORY_AVAILABLE, frozenset({True})
                 ),
+                MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
+                MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
+                ComparisonPredicate(field.LOCAL_ERROR_TARGET, ">", 0.0),
+                ComparisonPredicate(field.RETRY_BUDGET, ">=", 0),
+                ComparisonPredicate(field.RHS_EVALUATION_COST_FMAS, ">", 0.0),
                 ComparisonPredicate(field.STIFFNESS_ESTIMATE, ">", 1.0),
             ),
         ),
