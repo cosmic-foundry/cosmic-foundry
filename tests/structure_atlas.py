@@ -1227,6 +1227,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             assert "- Primitive axes:" in rendered
             for axis in schema.axes:
                 assert f"`{_field_label(axis.field)}`" in rendered
+            for field in schema.auxiliary_fields:
+                assert f"`{_field_label(field)}`" in rendered
             for region in schema.derived_regions:
                 assert f"`{region.name}`" in rendered
         assert "## Descriptor Evidence Overlay" in rendered
@@ -1246,6 +1248,11 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         assert derived["nonstiff_step"].contains(nonstiff)
         assert derived["stiff_step"].contains(stiff)
         assert derived["domain_limited_step"].contains(domain_limited)
+        assert all(
+            descriptor.coordinate(MapStructureField.RHS_DERIVATIVE_ORACLE_KIND).value
+            == "jacobian_callback"
+            for descriptor in (nonstiff, stiff, domain_limited)
+        )
         assert any(
             descriptor.coordinate(MapStructureField.RHS_EVALUATION_COST_FMAS).value
             > 0.0

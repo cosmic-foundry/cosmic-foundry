@@ -668,6 +668,10 @@ class _StepDiagnosticStiffnessClaim(Claim[Any]):
         ).value == pytest.approx(1.0e-6)
         assert nonstiff.coordinate(MapStructureField.RETRY_BUDGET).value == 3
         assert (
+            nonstiff.coordinate(MapStructureField.RHS_DERIVATIVE_ORACLE_KIND).value
+            == "jacobian_callback"
+        )
+        assert (
             nonstiff.coordinate(MapStructureField.RHS_EVALUATION_COST_FMAS).value == 1.0
         )
         domain_limited = rhs_step_diagnostics_descriptor(
@@ -897,6 +901,26 @@ class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
         )
         adaptive_interior_capability = _ti.select_time_integrator(adaptive_interior)
         assert adaptive_interior_capability.owner is _ti.AdaptiveNordsieckController
+
+        no_oracle_step = rhs_step_diagnostics_descriptor(
+            _ti.BlackBoxRHS(lambda _t, u: Tensor([-float(u[0])], backend=u.backend)),
+            interior_state,
+            1.0e-1,
+        )
+        assert (
+            no_oracle_step.coordinate(
+                MapStructureField.RHS_DERIVATIVE_ORACLE_KIND
+            ).value
+            == "unavailable"
+        )
+        with pytest.raises(ValueError, match="no algorithm"):
+            _ti.select_time_integrator(
+                AlgorithmRequest(
+                    requested_properties=frozenset({"advance"}),
+                    order=3,
+                    descriptor=no_oracle_step,
+                )
+            )
 
         boundary_state = _ti.ODEState(0.0, Tensor([0.1], backend=_TIME_BACKEND))
         boundary_step = rhs_step_diagnostics_descriptor(

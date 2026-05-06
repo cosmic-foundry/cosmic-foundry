@@ -97,6 +97,7 @@ def _map_structure_coordinates(
         field.STIFFNESS_ESTIMATE: DescriptorCoordinate(0.0),
         field.LOCAL_ERROR_TARGET: DescriptorCoordinate(1.0e-8),
         field.RETRY_BUDGET: DescriptorCoordinate(0),
+        field.RHS_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate("unavailable"),
         field.RHS_EVALUATION_COST_FMAS: DescriptorCoordinate(0.0),
     }
     if overrides is not None:
@@ -147,9 +148,11 @@ def rhs_step_diagnostics_descriptor(
     jacobian = getattr(rhs, "jacobian", None)
     stiffness = 0.0
     stiffness_evidence: EvidenceSource = "unavailable"
+    rhs_derivative_oracle_kind = "unavailable"
     if callable(jacobian):
         stiffness = StiffnessDiagnostic().update(jacobian(t, u), dt)
         stiffness_evidence = "upper_bound"
+        rhs_derivative_oracle_kind = "jacobian_callback"
     step_limit = predict_domain_step_limit(rhs, t, u)
     domain_step_margin = (
         float("inf") if step_limit is None else (float(step_limit) / dt) - 1.0
@@ -167,6 +170,9 @@ def rhs_step_diagnostics_descriptor(
                 ),
                 field.LOCAL_ERROR_TARGET: DescriptorCoordinate(local_error_target),
                 field.RETRY_BUDGET: DescriptorCoordinate(retry_budget),
+                field.RHS_DERIVATIVE_ORACLE_KIND: DescriptorCoordinate(
+                    rhs_derivative_oracle_kind
+                ),
                 field.RHS_EVALUATION_COST_FMAS: DescriptorCoordinate(
                     float(max(1, u.shape[0]))
                 ),
@@ -345,6 +351,10 @@ def _adaptive_advance_region(owner: type) -> CoverageRegion:
             ComparisonPredicate(field.STIFFNESS_ESTIMATE, ">=", 0.0),
             ComparisonPredicate(field.LOCAL_ERROR_TARGET, ">", 0.0),
             ComparisonPredicate(field.RETRY_BUDGET, ">=", 0),
+            MembershipPredicate(
+                field.RHS_DERIVATIVE_ORACLE_KIND,
+                frozenset({"jacobian_callback", "matrix"}),
+            ),
             ComparisonPredicate(field.RHS_EVALUATION_COST_FMAS, ">", 0.0),
         ),
     )

@@ -790,9 +790,8 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Review whether derivative-oracle availability should become a
-   `MapStructureField` coordinate so adaptive-controller ownership does not rely
-   on stiffness evidence as an indirect Jacobian certificate.
+1. Reconcile any remaining descriptor-space gaps exposed by the capability
+   atlas after the quantitative time-integrator sprint.
 
 Roadmap sketch:
 
@@ -1082,7 +1081,11 @@ The capability atlas now includes the quantitative time-integrator descriptors
 as evidence points: scalar decay contributes nonstiff and stiff RHS step
 diagnostics, the boundary-approach calculation contributes a domain-limited
 step diagnostic, and the generated descriptor overlay lists each point's
-matched regions and primitive coordinates.
+matched regions and primitive coordinates.  RHS derivative-oracle availability
+is now a top-level map descriptor coordinate as well: adaptive Nordsieck
+ownership requires `RHS_DERIVATIVE_ORACLE_KIND` to advertise a Jacobian-capable
+oracle, while stiffness remains a quantitative estimate rather than an indirect
+Jacobian certificate.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
@@ -1370,6 +1373,10 @@ The sprint contract is:
    adaptive Nordsieck ownership, and evidence points from the scalar decay and
    boundary-approach calculations.  This is now handled by descriptor evidence
    overlays in the generated capability atlas.
+5. RHS derivative-oracle availability is a top-level `MapStructureField`
+   coordinate, so adaptive-controller ownership can depend on Jacobian-capable
+   RHS evidence directly instead of reading stiffness evidence as an oracle
+   certificate.
 
 ---
 

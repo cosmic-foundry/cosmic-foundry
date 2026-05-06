@@ -255,6 +255,7 @@ class MapStructureField(Enum):
     NONLINEAR_RESIDUAL_AVAILABLE = "nonlinear_residual_available"
     LOCAL_ERROR_TARGET = "local_error_target"
     RETRY_BUDGET = "retry_budget"
+    RHS_DERIVATIVE_ORACLE_KIND = "rhs_derivative_oracle_kind"
     RHS_HISTORY_AVAILABLE = "rhs_history_available"
     RHS_EVALUATION_AVAILABLE = "rhs_evaluation_available"
     RHS_EVALUATION_COST_FMAS = "rhs_evaluation_cost_fmas"
@@ -1702,6 +1703,7 @@ def map_structure_parameter_schema() -> ParameterSpaceSchema:
             ),
             _nonnegative_axis(field.ADDITIVE_COMPONENT_COUNT, units="components"),
         ),
+        auxiliary_fields=frozenset({field.RHS_DERIVATIVE_ORACLE_KIND}),
         derived_regions=(
             DerivedParameterRegion(
                 "single_step_rhs_evaluation",

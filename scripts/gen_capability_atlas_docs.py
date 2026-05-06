@@ -349,12 +349,15 @@ def _descriptor_evidence_lines() -> list[str]:
 
 def _descriptor_coordinate_summary(descriptor: atlas.ParameterDescriptor) -> str:
     schema = atlas._atlas_schema_for_descriptor(descriptor)
+    fields = tuple(axis.field for axis in schema.axes) + tuple(
+        sorted(schema.auxiliary_fields, key=atlas._field_label)
+    )
     return ", ".join(
         "`"
-        f"{atlas._field_label(axis.field)}="
-        f"{atlas._descriptor_value(descriptor, axis.field)}"
+        f"{atlas._field_label(field)}="
+        f"{atlas._descriptor_value(descriptor, field)}"
         "`"
-        for axis in schema.axes
+        for field in fields
     )
 
 
