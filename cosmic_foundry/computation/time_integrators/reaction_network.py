@@ -348,6 +348,7 @@ class ReactionNetworkRHS:
                 field.ALGEBRAIC_CONSTRAINT_COUNT: DescriptorCoordinate(
                     self.constraint_basis.shape[0]
                 ),
+                field.RHS_EVALUATION_COST_FMAS: DescriptorCoordinate(0.0),
             }
         )
 
