@@ -146,6 +146,16 @@ class _AtlasUncoveredCell(NamedTuple):
         return all(predicate.evaluate(descriptor) for predicate in self.predicates)
 
 
+class _ExplicitPrimitiveGap(NamedTuple):
+    """Intentionally unsupported primitive descriptor region."""
+
+    key: str
+    predicates: tuple[StructuredPredicate, ...]
+
+    def contains(self, descriptor: ParameterDescriptor) -> bool:
+        return all(predicate.evaluate(descriptor) for predicate in self.predicates)
+
+
 _AtlasRegionSource: TypeAlias = InvalidCellRule | CoverageRegion | _AtlasUncoveredCell
 
 
@@ -308,6 +318,28 @@ def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
         *spectral_solver_coverage_regions(),
         *reaction_network_coverage_regions(),
         *time_integration_step_map_regions(),
+    )
+
+
+def _explicit_primitive_gaps() -> tuple[_ExplicitPrimitiveGap, ...]:
+    return (
+        _ExplicitPrimitiveGap(
+            "target_zero_no_derivative",
+            (
+                MembershipPredicate(
+                    SolveRelationField.TARGET_IS_ZERO,
+                    frozenset({True}),
+                ),
+                MembershipPredicate(
+                    SolveRelationField.ACCEPTANCE_RELATION,
+                    frozenset({"residual_below_tolerance"}),
+                ),
+                MembershipPredicate(
+                    SolveRelationField.DERIVATIVE_ORACLE_KIND,
+                    frozenset({"none"}),
+                ),
+            ),
+        ),
     )
 
 
@@ -1237,6 +1269,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_evidence_schema_is_derived()
         self._assert_evidence_is_descriptors()
         self._assert_coverage_regions_are_schema_discovered()
+        self._assert_explicit_primitive_gaps_are_structural()
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
         self._assert_time_integrator_quantitative_evidence_is_plotted()
@@ -1267,6 +1300,8 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         rendered = render_capability_atlas()
         assert "## Parameter Space Hierarchy" in rendered
         assert "## Projection Plots" in rendered
+        assert "## Explicit Primitive Gaps" in rendered
+        assert "`target_zero_no_derivative`: valid nonlinear target-zero" in rendered
         assert "`eigenpair_residual`: valid spectral solve-relation evidence" not in (
             rendered
         )
@@ -1274,6 +1309,9 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             "## Projection Plots"
         )
         assert rendered.index("## Computed Gaps") < rendered.index(
+            "## Explicit Primitive Gaps"
+        )
+        assert rendered.index("## Explicit Primitive Gaps") < rendered.index(
             "## Descriptor Evidence Overlay"
         )
         for schema in _capability_atlas_schemas():
@@ -1286,6 +1324,20 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             for region in schema.derived_regions:
                 assert f"`{region.name}`" in rendered
         assert "## Descriptor Evidence Overlay" in rendered
+
+    @staticmethod
+    def _assert_explicit_primitive_gaps_are_structural() -> None:
+        schema = solve_relation_parameter_schema()
+        regions = _atlas_regions_for_schema(schema)
+        explicit_gaps = _explicit_primitive_gaps()
+        assert {gap.key for gap in explicit_gaps} == {"target_zero_no_derivative"}
+        for gap in explicit_gaps:
+            assert any(
+                gap.contains(descriptor)
+                and schema.cell_status(descriptor, regions) == "uncovered"
+                for descriptor in _capability_atlas_descriptors()
+                if _atlas_schema_for_descriptor(descriptor) == schema
+            )
 
     @staticmethod
     def _assert_time_integrator_quantitative_evidence_is_plotted() -> None:
@@ -1400,6 +1452,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             uncovered.contains(descriptor)
             for uncovered in _capability_atlas_uncovered_cells(schema, regions)
         )
+        assert any(gap.contains(descriptor) for gap in _explicit_primitive_gaps())
 
     @staticmethod
     def _assert_directional_derivative_root_is_owned() -> None:

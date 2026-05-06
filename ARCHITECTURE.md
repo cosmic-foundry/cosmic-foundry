@@ -790,9 +790,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Reconcile the remaining nonlinear target-zero primitive gaps by deciding
-   whether residual descriptors without derivative evidence need a
-   derivative-free root owner or should stay explicit primitive gaps.
+1. Add bracket-availability evidence to the solve-relation schema for
+   derivative-free scalar roots, grounded in a concrete bracketed calculation,
+   or keep derivative-free ownership out of the schema if that calculation is
+   not ready.
 
 Roadmap sketch:
 
@@ -1103,8 +1104,11 @@ solve descriptors to the richer linear-solver schema when assembled-linear
 evidence is available, and least-squares objective descriptors carry the
 `objective_minimum` acceptance relation consumed by least-squares solver
 coverage.  Primitive solve-relation evidence therefore remains uncovered only
-for genuinely unsupported primitive solve classes, currently nonlinear
-target-zero residuals without derivative evidence.
+for genuinely unsupported primitive solve classes.  Nonlinear target-zero
+residual descriptors without derivative evidence are an explicit primitive
+gap, not an unclaimed Newton variant: they remain unsupported until a
+derivative-free calculation contributes the extra evidence needed to bound a
+method's ownership.
 Dense symmetric eigenpair residual evidence is now owned by
 `DenseSymmetricEigenpairSolver`: a small assembled symmetric 2x2 calculation
 grounds the `eigenpair_residual` descriptor with an auxiliary spectral scalar
@@ -1142,8 +1146,9 @@ the rendering boundary.  Names, conditions, statuses, geometry labels, SVG
 primitive choices, and alternative ordinals are rendering consequences.
 Atlas-local dataclasses must not store atlas presentation text.  Gap sections
 are computed from schema axis cells that are provably disjoint from invalid
-cells and owned coverage regions; descriptor evidence remains an overlay, not
-the gap model.  Structural tests reject any return to
+cells and owned coverage regions.  Explicit primitive exclusions are
+predicate-backed gap records, not prose-only notes; descriptor evidence remains
+an overlay, not the gap model.  Structural tests reject any return to
 presentation-text dataclasses, wrapper evidence objects, stored schema
 identities, stored ownership-region lists, generated-artifact models, or
 hand-declared axis roles as semantic keys.
