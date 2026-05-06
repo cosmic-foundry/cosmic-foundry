@@ -264,7 +264,7 @@ class _ReactionChainIntegrationClaim(Claim[Any]):
             reaction_descriptor.coordinate(
                 ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
             ).value
-            == 2
+            == 0
         )
         domain_limited_state = _ti.ODEState(
             0.0,
@@ -446,6 +446,73 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
         assert rhs.state_domain.check(state.u).accepted
         assert abs(float(invariant @ state.u) - initial_invariant) < 1e-9
         assert float(state.u[1]) > float(state.u[2]) > float(state.u[3]) > 0.0
+
+
+class _FiniteRateReactionNetworkGapClaim(Claim[Any]):
+    """Grounded finite-rate calculation for the selected uncovered atlas cell."""
+
+    @property
+    def description(self) -> str:
+        return "correctness/reaction_network/finite_rate_gap_evidence"
+
+    def check(self, _calibration: Any) -> None:
+        rate = 3.0
+        final_time = 0.2
+        system = FiniteStateTransitionSystem(4, ((0, 1),))
+        rhs = _unit_transfer_rhs(system, (rate,))
+        state = _ti.ODEState(0.0, _finite_transition_initial_state(system))
+        reaction_descriptor = rhs.reaction_network_descriptor()
+        reaction_schema = reaction_network_parameter_schema()
+        reaction_regions = _ti.reaction_network_coverage_regions()
+        reaction_schema.validate_descriptor(reaction_descriptor)
+
+        assert (
+            reaction_descriptor.coordinate(ReactionNetworkField.SPECIES_COUNT).value
+            == 4
+        )
+        assert (
+            reaction_descriptor.coordinate(ReactionNetworkField.REACTION_COUNT).value
+            == 1
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.STOICHIOMETRY_RANK
+            ).value
+            == 1
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.CONSERVATION_LAW_COUNT
+            ).value
+            == 3
+        )
+        assert (
+            reaction_descriptor.coordinate(
+                ReactionNetworkField.EQUILIBRIUM_CONSTRAINT_COUNT
+            ).value
+            == 0
+        )
+        assert (
+            reaction_schema.cell_status(reaction_descriptor, reaction_regions)
+            == "uncovered"
+        )
+
+        integrator = _ti.RungeKuttaIntegrator(4)
+        dt = 1.0e-3
+        for _ in range(round(final_time / dt)):
+            state = integrator.step(rhs, state, dt)
+
+        expected_a = math.exp(-rate * final_time)
+        expected_b = 1.0 - expected_a
+        invariant = _finite_transition_conserved_form(system)
+
+        assert abs(state.t - final_time) < 1.0e-12
+        assert abs(float(state.u[0]) - expected_a) < 1.0e-10
+        assert abs(float(state.u[1]) - expected_b) < 1.0e-10
+        assert abs(float(state.u[2])) < 1.0e-14
+        assert abs(float(state.u[3])) < 1.0e-14
+        assert abs(float(invariant @ state.u) - 1.0) < 1.0e-12
+        assert rhs.state_domain.check(state.u).accepted
 
 
 class _TransientReactionEquilibriumClaim(Claim[Any]):
@@ -683,6 +750,7 @@ _OFF_EQUILIBRIUM_SPECS = _chain_specs(
 _CORRECT_CLAIMS: tuple[Claim[Any], ...] = (
     _ReactionChainIntegrationClaim(),
     _BranchedFiniteTransitionNetworkClaim(),
+    _FiniteRateReactionNetworkGapClaim(),
     _TransientReactionEquilibriumClaim(),
     *[_EquilibriumNetworkTargetClaim(spec) for spec in _CI_EQUILIBRIUM_SPECS],
     *[_EquilibriumNetworkTargetClaim(spec) for spec in _OFF_EQUILIBRIUM_SPECS],

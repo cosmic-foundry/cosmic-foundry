@@ -186,6 +186,9 @@ class ReactionNetworkRHS:
         ``None``, forward finite differences are used.
     eps:
         Finite-difference step size when ``jac`` is ``None``.  Default 1e-7.
+    equilibrium_constraints_available:
+        Whether independent reaction-pair equilibrium constraints are valid
+        evidence for this RHS.  Irreversible finite-rate systems set this false.
     """
 
     def __init__(
@@ -197,6 +200,7 @@ class ReactionNetworkRHS:
         *,
         jac: Callable[[float, Tensor], Tensor] | None = None,
         eps: float = 1e-7,
+        equilibrium_constraints_available: bool = True,
     ) -> None:
         self._S = stoichiometry_matrix
         self._r_plus = forward_rate
@@ -231,7 +235,11 @@ class ReactionNetworkRHS:
 
         self.n_conserved: int = n_conserved
 
-        pair_indices = _independent_reaction_pairs(S_list, n_conserved)
+        pair_indices = (
+            _independent_reaction_pairs(S_list, n_conserved)
+            if equilibrium_constraints_available
+            else []
+        )
         self.constraint_basis = (
             Tensor([float(j) for j in pair_indices], backend=backend)
             if pair_indices
@@ -252,7 +260,8 @@ class ReactionNetworkRHS:
         A transition ``src -> dst`` contributes
         ``forward[src] * u[src] - reverse[dst] * u[dst]`` along the stoichiometric
         column with ``-1`` at ``src`` and ``+1`` at ``dst``.  Omitting reverse
-        coefficients gives an irreversible directed transition system.
+        coefficients gives an irreversible directed transition system with no
+        equilibrium-constraint evidence.
         """
         transitions = transition_system.transitions
         stoichiometry: Tensor = Tensor(
@@ -309,6 +318,7 @@ class ReactionNetworkRHS:
             reverse_rate,
             initial_state,
             linear_operator=linear_operator,
+            equilibrium_constraints_available=reverse_coefficients is not None,
         )
 
     @property
@@ -433,6 +443,7 @@ class LinearReactionNetworkRHS(ReactionNetworkRHS):
         initial_state: Tensor,
         *,
         linear_operator: Callable[[float, Tensor], Tensor],
+        equilibrium_constraints_available: bool = True,
     ) -> None:
         super().__init__(
             stoichiometry_matrix,
@@ -440,6 +451,7 @@ class LinearReactionNetworkRHS(ReactionNetworkRHS):
             reverse_rate,
             initial_state,
             jac=linear_operator,
+            equilibrium_constraints_available=equilibrium_constraints_available,
         )
         self._linear_operator = linear_operator
 
