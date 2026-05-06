@@ -30,6 +30,7 @@ from cosmic_foundry.computation.decompositions.lu_factorization import LUFactori
 from cosmic_foundry.computation.decompositions.svd_factorization import SVDFactorization
 from cosmic_foundry.computation.solvers.capabilities import (
     select_least_squares_solver_for_descriptor,
+    select_spectral_solver_for_descriptor,
 )
 from cosmic_foundry.computation.solvers.dense_cg_solver import DenseCGSolver
 from cosmic_foundry.computation.solvers.dense_gauss_seidel_solver import (
@@ -44,6 +45,9 @@ from cosmic_foundry.computation.solvers.least_squares_solver import (
     DenseSVDLeastSquaresSolver,
 )
 from cosmic_foundry.computation.solvers.relations import LeastSquaresRelation
+from cosmic_foundry.computation.solvers.spectral_solver import (
+    DenseSymmetricEigenpairSolver,
+)
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.geometry.cartesian_mesh import CartesianMesh
 from cosmic_foundry.geometry.euclidean_manifold import EuclideanManifold
@@ -545,6 +549,41 @@ class _DecompositionDescriptorSelectionClaim(Claim[ExecutionPlan]):
         assert abs(float(singular_solution[0]) - float(singular_solution[1])) < 1.0e-10
 
 
+class _DenseSymmetricEigenpairSolverClaim(Claim[ExecutionPlan]):
+    """Claim: dense symmetric spectral solve returns a normalized eigenpair."""
+
+    @property
+    def description(self) -> str:
+        return "DenseSymmetricEigenpairSolver/symmetric_2x2_eigenpair_residual"
+
+    def check(self, execution_plan: ExecutionPlan) -> None:
+        backend = execution_plan.backend
+        matrix = Tensor(((2.0, 1.0), (1.0, 2.0)), backend=backend)
+        descriptor = structure_solve_descriptor(
+            auxiliary_scalar_count=1,
+            normalization_constraint_count=1,
+            acceptance_relation="eigenpair_residual",
+            objective_relation="spectral_residual",
+            matrix_representation_available=True,
+        )
+        assert (
+            select_spectral_solver_for_descriptor(descriptor)
+            is DenseSymmetricEigenpairSolver
+        )
+
+        eigenvalue, eigenvector = DenseSymmetricEigenpairSolver().solve(matrix)
+        residual = matrix @ eigenvector - eigenvalue * eigenvector
+        assert abs(eigenvalue - 3.0) < 1.0e-12
+        assert _norm(residual) < 1.0e-12
+        assert abs(_norm(eigenvector) - 1.0) < 1.0e-12
+
+
+def structure_solve_descriptor(**overrides: Any) -> Any:
+    from tests.test_structure import _SolveRelationSchemaClaim
+
+    return _SolveRelationSchemaClaim._solve_descriptor(**overrides)
+
+
 class _SmallMatrixOperator:
     def __init__(self, matrix: tuple[tuple[float, ...], ...]) -> None:
         self._matrix = matrix
@@ -743,6 +782,7 @@ _CORRECTNESS_CLAIMS: list[Claim[ExecutionPlan]] = []
 _CORRECTNESS_CLAIMS.append(_SVDLeastSquaresClaim())
 _CORRECTNESS_CLAIMS.append(_DenseSVDLeastSquaresSolverClaim())
 _CORRECTNESS_CLAIMS.append(_DecompositionDescriptorSelectionClaim())
+_CORRECTNESS_CLAIMS.append(_DenseSymmetricEigenpairSolverClaim())
 
 for _ndim in _DIMS:
     _manifold = EuclideanManifold(_ndim)

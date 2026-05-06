@@ -49,6 +49,7 @@ from cosmic_foundry.computation.solvers.capabilities import (
     least_squares_solver_coverage_regions,
     linear_solver_coverage_regions,
     root_solver_coverage_regions,
+    spectral_solver_coverage_regions,
 )
 from cosmic_foundry.computation.tensor import Tensor
 from cosmic_foundry.computation.time_integrators.capabilities import (
@@ -304,6 +305,7 @@ def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
         *linear_solver_coverage_regions(),
         *least_squares_solver_coverage_regions(),
         *root_solver_coverage_regions(),
+        *spectral_solver_coverage_regions(),
         *reaction_network_coverage_regions(),
         *time_integration_step_map_regions(),
     )
@@ -1265,17 +1267,13 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         rendered = render_capability_atlas()
         assert "## Parameter Space Hierarchy" in rendered
         assert "## Projection Plots" in rendered
-        assert "## Explicit Primitive Gaps" in rendered
-        assert (
-            "`eigenpair_residual`: valid spectral solve-relation evidence" in rendered
+        assert "`eigenpair_residual`: valid spectral solve-relation evidence" not in (
+            rendered
         )
         assert rendered.index("## Parameter Space Hierarchy") < rendered.index(
             "## Projection Plots"
         )
         assert rendered.index("## Computed Gaps") < rendered.index(
-            "## Explicit Primitive Gaps"
-        )
-        assert rendered.index("## Explicit Primitive Gaps") < rendered.index(
             "## Descriptor Evidence Overlay"
         )
         for schema in _capability_atlas_schemas():
@@ -1357,6 +1355,12 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             if _atlas_schema_for_descriptor(descriptor) == schema
         )
         assert any(
+            descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value
+            == "eigenpair_residual"
+            and schema.cell_status(descriptor, regions) == "owned"
+            for descriptor in descriptors
+        )
+        assert not any(
             descriptor.coordinate(SolveRelationField.ACCEPTANCE_RELATION).value
             == "eigenpair_residual"
             and schema.cell_status(descriptor, regions) == "uncovered"
