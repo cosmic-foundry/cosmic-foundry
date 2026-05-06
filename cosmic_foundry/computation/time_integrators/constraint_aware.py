@@ -304,6 +304,15 @@ def reaction_network_coverage_regions() -> tuple[CoverageRegion, ...]:
             ),
         ),
         CoverageRegion(
+            FiniteRateReactionNetworkDynamics,
+            (
+                ComparisonPredicate(field.REACTION_COUNT, "==", 3),
+                ComparisonPredicate(field.STOICHIOMETRY_RANK, "==", 3),
+                ComparisonPredicate(field.CONSERVATION_LAW_COUNT, "==", 1),
+                ComparisonPredicate(field.EQUILIBRIUM_CONSTRAINT_COUNT, "==", 0),
+            ),
+        ),
+        CoverageRegion(
             NuclearStatisticalEquilibriumSolver,
             (
                 ComparisonPredicate(field.CONSERVATION_LAW_COUNT, ">", 0),
