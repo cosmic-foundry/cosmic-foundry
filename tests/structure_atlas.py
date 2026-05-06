@@ -368,6 +368,20 @@ def _capability_atlas_coverage_regions() -> tuple[CoverageRegion, ...]:
 def _selected_primitive_gap_candidates() -> tuple[_SelectedPrimitiveGapCandidate, ...]:
     return (
         _SelectedPrimitiveGapCandidate(
+            "branched_finite_rate_reaction_network_dynamics",
+            _SolveRelationSchemaClaim._reaction_network_descriptor(
+                reaction_count=3,
+                stoichiometry_rank=3,
+                conservation_law_count=1,
+                equilibrium_constraint_count=0,
+            ),
+        ),
+    )
+
+
+def _promoted_primitive_gap_candidates() -> tuple[_SelectedPrimitiveGapCandidate, ...]:
+    return (
+        _SelectedPrimitiveGapCandidate(
             "finite_rate_reaction_network_dynamics",
             _SolveRelationSchemaClaim._reaction_network_descriptor(
                 reaction_count=1,
@@ -1359,6 +1373,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         self._assert_coverage_regions_are_schema_discovered()
         self._assert_explicit_primitive_gaps_are_structural()
         self._assert_explicit_primitive_gap_review_keeps_promotion_gates()
+        self._assert_selected_primitive_gap_candidates_are_computed_uncovered()
         self._assert_selected_primitive_gap_candidates_are_promoted()
         self._assert_descriptor_groups_are_schema_equivalence_classes()
         self._assert_docs_render_schema_hierarchy()
@@ -1390,6 +1405,11 @@ class _CapabilityAtlasDocClaim(Claim[None]):
         rendered = render_capability_atlas()
         assert "## Parameter Space Hierarchy" in rendered
         assert "## Projection Plots" in rendered
+        assert "## Selected Primitive Gap Candidate" in rendered
+        assert (
+            "`branched_finite_rate_reaction_network_dynamics`: valid branched"
+            in rendered
+        )
         assert "## Explicit Primitive Gaps" in rendered
         assert "`target_zero_no_derivative`: valid nonlinear target-zero" in rendered
         assert (
@@ -1402,6 +1422,9 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             "## Projection Plots"
         )
         assert rendered.index("## Computed Gaps") < rendered.index(
+            "## Selected Primitive Gap Candidate"
+        )
+        assert rendered.index("## Selected Primitive Gap Candidate") < rendered.index(
             "## Explicit Primitive Gaps"
         )
         assert rendered.index("## Explicit Primitive Gaps") < rendered.index(
@@ -1502,7 +1525,7 @@ class _CapabilityAtlasDocClaim(Claim[None]):
 
     @staticmethod
     def _assert_selected_primitive_gap_candidates_are_promoted() -> None:
-        candidates = _selected_primitive_gap_candidates()
+        candidates = _promoted_primitive_gap_candidates()
         assert {candidate.key for candidate in candidates} == {
             "finite_rate_reaction_network_dynamics"
         }
@@ -1516,6 +1539,27 @@ class _CapabilityAtlasDocClaim(Claim[None]):
             assert schema.covering_region(descriptor, regions).owner is (
                 FiniteRateReactionNetworkDynamics
             )
+            assert not any(
+                all(predicate.evaluate(descriptor) for predicate in rule.predicates)
+                for rule in schema.invalid_cells
+            )
+
+    @staticmethod
+    def _assert_selected_primitive_gap_candidates_are_computed_uncovered() -> None:
+        candidates = _selected_primitive_gap_candidates()
+        assert {candidate.key for candidate in candidates} == {
+            "branched_finite_rate_reaction_network_dynamics"
+        }
+        for candidate in candidates:
+            descriptor = candidate.descriptor
+            schema = _atlas_schema_for_descriptor(descriptor)
+            regions = _atlas_regions_for_schema(schema)
+            uncovered = _capability_atlas_uncovered_cells(schema, regions)
+            schema.validate_descriptor(descriptor)
+            assert schema == reaction_network_parameter_schema()
+            assert schema.cell_status(descriptor, regions) == "uncovered"
+            assert any(cell.contains(descriptor) for cell in uncovered)
+            assert not any(region.contains(descriptor) for region in regions)
             assert not any(
                 all(predicate.evaluate(descriptor) for predicate in rule.predicates)
                 for rule in schema.invalid_cells
