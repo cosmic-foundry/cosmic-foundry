@@ -790,14 +790,10 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Horizon-scan fixed-order Nordsieck selection after adaptive ownership
-   stabilizes: history availability and stiffness evidence already select
-   Adams/BDF construction, but local error and RHS-cost coordinates are not yet
-   part of that ownership predicate.
-2. After adaptive and fixed-order ownership share quantitative map evidence,
+1. After adaptive and fixed-order ownership share quantitative map evidence,
    add atlas documentation that renders the time-integrator descriptor regions
    and overlays the adaptive Nordsieck evidence points.
-3. Review whether derivative-oracle availability should become a
+2. Review whether derivative-oracle availability should become a
    `MapStructureField` coordinate so adaptive-controller ownership does not rely
    on stiffness evidence as an indirect Jacobian certificate.
 
@@ -1080,6 +1076,11 @@ not dispatch splits.
 Fixed-order Nordsieck selection follows the same rule: the descriptor records
 history availability and stiffness evidence, and Adams/BDF construction is
 derived from the stiffness cell rather than stored as a parallel family label.
+The fixed-order ownership predicate now also consumes quantitative step
+evidence: a positive local error target, nonnegative retry budget, and positive
+RHS evaluation cost are required before the Adams/BDF stiffness split can
+construct a one-step Nordsieck integrator.  Zero-cost Nordsieck history evidence
+remains valid descriptor data but is not an owned fixed-order step region.
 Primitive solve-relation coordinates are owned by `SolveRelationField`, not by
 `LinearSolverField`; linear-solver coverage is the shared solve-relation schema
 plus linear-operator coordinates.
@@ -1359,9 +1360,9 @@ The sprint contract is:
    A region that only renames the same adaptive controller is removed or left as
    documentation-only evidence, not as a dispatch predicate.
 3. Fixed-order Nordsieck ownership is reviewed after adaptive ownership
-   stabilizes.  Its current Adams/BDF split is justified by stiffness evidence,
-   but it does not yet account for local error target, retry budget, or RHS
-   evaluation cost.
+   stabilizes.  Its Adams/BDF split is justified by stiffness evidence and its
+   ownership predicate now also accounts for local error target, retry budget,
+   and RHS evaluation cost.
 4. Atlas documentation follows the schema.  The generated page should show the
    primitive quantitative fields, derived nonstiff/stiff/domain-limited regions,
    adaptive Nordsieck ownership, and evidence points from the scalar decay and
@@ -1369,9 +1370,7 @@ The sprint contract is:
 
 Recommended PR sequence:
 
-1. Review fixed-order Nordsieck selection against the same quantitative
-   descriptor fields, keeping only splits that construct different behavior.
-2. Extend atlas generation to render quantitative time-integrator regions and
+1. Extend atlas generation to render quantitative time-integrator regions and
    the grounded evidence points from the adaptive Nordsieck calculations.
 
 ---
