@@ -482,7 +482,10 @@ class _StepSelectionRegionCoverageClaim(Claim[Any]):
         return "correctness/step_selection_region_coverage"
 
     def check(self, _calibration: Any) -> None:
-        cases_by_region = _step_selection_cases() + (_nordsieck_stiff_region_case(),)
+        cases_by_region = _step_selection_cases() + (
+            _adaptive_step_diagnostic_region_case(),
+            _nordsieck_stiff_region_case(),
+        )
         for region in (
             *time_integration_step_map_regions(),
             *time_integration_step_solve_regions(),
@@ -493,6 +496,26 @@ class _StepSelectionRegionCoverageClaim(Claim[Any]):
                 and region.contains(case.descriptor)
                 for case in cases_by_region
             ), region.owner.__name__
+
+
+def _adaptive_step_diagnostic_region_case() -> _StepSelectionCase:
+    state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+    descriptor = rhs_step_diagnostics_descriptor(_AffineDecayRHS(0.1), state, 1.0e-1)
+    return _StepSelectionCase(
+        name="adaptive_step_diagnostics",
+        descriptor=descriptor,
+        order=4,
+        state=state,
+        rhs=_AffineDecayRHS(0.1),
+        exact=cases.exact_scalar_decay,
+        tolerance=1.0e-8,
+        ownership=SelectionOwnership(
+            descriptor,
+            time_integration_step_map_regions(),
+            map_structure_parameter_schema(),
+        ),
+        auto_selectable=False,
+    )
 
 
 def _nordsieck_stiff_region_case() -> _StepSelectionCase:
@@ -820,24 +843,34 @@ class _AdamsNordsieckCorrectorNewtonFallbackClaim(Claim[Any]):
 
 
 class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
-    """Grounded claim that ordinary advance ownership does not split on margin."""
+    """Grounded claim that quantitative step evidence selects adaptive advance."""
 
     @property
     def description(self) -> str:
-        return "correctness/domain_margin_advance_selection"
+        return "correctness/quantitative_step_adaptive_advance_selection"
 
     def check(self, _calibration: Any) -> None:
         interior_state = _ti.ODEState(0.0, Tensor([1.0], backend=_TIME_BACKEND))
+        generic_descriptor = rhs_evaluation_descriptor()
+        generic_capability = _ti.select_time_integrator(
+            AlgorithmRequest(
+                requested_properties=frozenset({"advance"}),
+                order=3,
+                descriptor=generic_descriptor,
+            )
+        )
+        assert generic_capability.owner is _ti.IntegrationDriver
+
         interior_step = rhs_step_diagnostics_descriptor(
             _AffineDecayRHS(0.1), interior_state, 1.0e-1
         )
-        generic_interior = AlgorithmRequest(
+        adaptive_interior = AlgorithmRequest(
             requested_properties=frozenset({"advance"}),
             order=3,
             descriptor=interior_step,
         )
-        generic_interior_capability = _ti.select_time_integrator(generic_interior)
-        assert generic_interior_capability.owner is _ti.IntegrationDriver
+        adaptive_interior_capability = _ti.select_time_integrator(adaptive_interior)
+        assert adaptive_interior_capability.owner is _ti.AdaptiveNordsieckController
 
         boundary_state = _ti.ODEState(0.0, Tensor([0.1], backend=_TIME_BACKEND))
         boundary_step = rhs_step_diagnostics_descriptor(
@@ -846,42 +879,22 @@ class _DomainMarginAdvanceSelectionClaim(Claim[Any]):
         assert boundary_step.coordinate(
             MapStructureField.DOMAIN_STEP_MARGIN
         ).value == pytest.approx(-0.1)
-        generic_limited = AlgorithmRequest(
+        adaptive_limited = AlgorithmRequest(
             requested_properties=frozenset({"advance"}),
             order=3,
             descriptor=boundary_step,
         )
-        generic_limited_capability = _ti.select_time_integrator(generic_limited)
-        assert generic_limited_capability.owner is _ti.IntegrationDriver
-        interior_region = self._selected_region(
-            generic_interior_capability, interior_step
-        )
-        limited_region = self._selected_region(
-            generic_limited_capability, boundary_step
-        )
-        assert interior_region == limited_region
-
-        adaptive_limited_descriptor = ParameterDescriptor(
-            derivative_oracle_descriptor().coordinates
-            | {
-                MapStructureField.DOMAIN_STEP_MARGIN: boundary_step.coordinate(
-                    MapStructureField.DOMAIN_STEP_MARGIN
-                )
-            }
-        )
-        adaptive_limited = AlgorithmRequest(
-            requested_properties=frozenset({"advance"}),
-            order=2,
-            descriptor=adaptive_limited_descriptor,
-        )
         adaptive_limited_capability = _ti.select_time_integrator(adaptive_limited)
         assert adaptive_limited_capability.owner is _ti.AdaptiveNordsieckController
         assert self._selected_region(
-            adaptive_limited_capability, adaptive_limited_descriptor
+            adaptive_interior_capability, interior_step
+        ) == self._selected_region(adaptive_limited_capability, boundary_step)
+        assert self._selected_region(
+            adaptive_limited_capability, boundary_step
         ) == self._selected_region(
             adaptive_limited_capability,
             ParameterDescriptor(
-                derivative_oracle_descriptor().coordinates
+                boundary_step.coordinates
                 | {
                     MapStructureField.DOMAIN_STEP_MARGIN: (
                         interior_step.coordinate(MapStructureField.DOMAIN_STEP_MARGIN)

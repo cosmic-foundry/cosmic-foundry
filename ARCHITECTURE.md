@@ -790,17 +790,16 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Make adaptive Nordsieck
-   ownership consume that quantitative step descriptor directly, deriving
-   nonstiff, stiff, and domain-limited labels from schema regions rather than
-   request vocabulary.
-2. Horizon-scan fixed-order Nordsieck selection after adaptive ownership
+1. Horizon-scan fixed-order Nordsieck selection after adaptive ownership
    stabilizes: history availability and stiffness evidence already select
    Adams/BDF construction, but local error and RHS-cost coordinates are not yet
    part of that ownership predicate.
-3. After adaptive and fixed-order ownership share quantitative map evidence,
+2. After adaptive and fixed-order ownership share quantitative map evidence,
    add atlas documentation that renders the time-integrator descriptor regions
    and overlays the adaptive Nordsieck evidence points.
+3. Review whether derivative-oracle availability should become a
+   `MapStructureField` coordinate so adaptive-controller ownership does not rely
+   on stiffness evidence as an indirect Jacobian certificate.
 
 Roadmap sketch:
 
@@ -1070,6 +1069,14 @@ structural: a proposed RHS step can expose domain-step margin, Gershgorin
 stiffness estimate for `hJ`, local error target, retry budget, and RHS
 evaluation cost.  Nonstiff, stiff, and domain-limited step labels are derived
 regions over those coordinates.  They are not independent method requests.
+Adaptive Nordsieck ownership consumes that quantitative step descriptor
+directly: plain RHS-evaluation descriptors remain owned by explicit one-step
+methods and the generic integration driver, while descriptors with positive RHS
+evaluation cost, certified stiffness evidence, local error target, retry
+budget, and domain-step margin select the adaptive Nordsieck controller for
+advance requests.  The adaptive controller owns one quantitative region; the
+nonstiff, stiff, and domain-limited labels remain schema-derived evidence views,
+not dispatch splits.
 Fixed-order Nordsieck selection follows the same rule: the descriptor records
 history availability and stiffness evidence, and Adams/BDF construction is
 derived from the stiffness cell rather than stored as a parallel family label.
@@ -1362,12 +1369,9 @@ The sprint contract is:
 
 Recommended PR sequence:
 
-1. Make adaptive Nordsieck selection consume `rhs_step_diagnostics_descriptor`
-   and remove any parallel structural request vocabulary that duplicates
-   descriptor coordinates.
-2. Review fixed-order Nordsieck selection against the same quantitative
+1. Review fixed-order Nordsieck selection against the same quantitative
    descriptor fields, keeping only splits that construct different behavior.
-3. Extend atlas generation to render quantitative time-integrator regions and
+2. Extend atlas generation to render quantitative time-integrator regions and
    the grounded evidence points from the adaptive Nordsieck calculations.
 
 ---

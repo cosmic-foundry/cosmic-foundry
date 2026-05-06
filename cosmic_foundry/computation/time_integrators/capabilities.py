@@ -317,13 +317,18 @@ def _derivative_oracle_region(owner: type) -> CoverageRegion:
 
 
 def _adaptive_advance_region(owner: type) -> CoverageRegion:
+    field = MapStructureField
     return CoverageRegion(
         owner,
         (
-            MembershipPredicate(
-                SolveRelationField.DERIVATIVE_ORACLE_KIND,
-                frozenset({"jacobian_callback"}),
-            ),
+            MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
+            MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
+            MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})),
+            ComparisonPredicate(field.DOMAIN_STEP_MARGIN, ">", float("-inf")),
+            ComparisonPredicate(field.STIFFNESS_ESTIMATE, ">=", 0.0),
+            ComparisonPredicate(field.LOCAL_ERROR_TARGET, ">", 0.0),
+            ComparisonPredicate(field.RETRY_BUDGET, ">=", 0),
+            ComparisonPredicate(field.RHS_EVALUATION_COST_FMAS, ">", 0.0),
         ),
     )
 
@@ -336,6 +341,7 @@ def _rhs_evaluation_region(owner: type) -> CoverageRegion:
             MembershipPredicate(field.RHS_EVALUATION_AVAILABLE, frozenset({True})),
             MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
             MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})),
+            ComparisonPredicate(field.RHS_EVALUATION_COST_FMAS, "==", 0.0),
         ),
     )
 
@@ -349,6 +355,7 @@ def _unconstrained_rhs_evaluation_region(owner: type) -> CoverageRegion:
             MembershipPredicate(field.RHS_HISTORY_AVAILABLE, frozenset({False})),
             MembershipPredicate(field.NORDSIECK_HISTORY_AVAILABLE, frozenset({False})),
             MembershipPredicate(field.CONSERVED_LINEAR_FORM_COUNT, frozenset({0})),
+            ComparisonPredicate(field.RHS_EVALUATION_COST_FMAS, "==", 0.0),
         ),
     )
 

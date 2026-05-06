@@ -4659,7 +4659,13 @@ _TIME_INTEGRATOR_OWNERSHIP = _ArchitectureOwnershipSpec(
             _AlgorithmRequest(
                 requested_properties=frozenset({"advance"}),
                 order=2,
-                descriptor=_TIME_INTEGRATOR_CAPABILITIES.derivative_oracle_descriptor(),
+                descriptor=_TIME_INTEGRATOR_CAPABILITIES.rhs_step_diagnostics_descriptor(
+                    _AffineTestRHS(),
+                    _TIME_INTEGRATOR_PACKAGE.ODEState(
+                        0.0, Tensor([1.0, 2.0], backend=_JIT_BACKEND)
+                    ),
+                    1.0,
+                ),
             ),
             _TIME_INTEGRATOR_PACKAGE.AdaptiveNordsieckController,
         ),
