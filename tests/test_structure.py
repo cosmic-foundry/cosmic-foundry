@@ -1892,6 +1892,18 @@ class _SolveRelationSchemaClaim(Claim[None]):
             ).owner
             is FiniteRateReactionNetworkDynamics
         )
+        branched_finite_rate_descriptor = self._reaction_network_descriptor(
+            reaction_count=3,
+            stoichiometry_rank=3,
+            conservation_law_count=1,
+            equilibrium_constraint_count=0,
+        )
+        assert (
+            reaction_network_schema.covering_region(
+                branched_finite_rate_descriptor, reaction_coverage
+            ).owner
+            is FiniteRateReactionNetworkDynamics
+        )
         assert (
             reaction_network_schema.cell_status(
                 self._reaction_network_descriptor(stoichiometry_rank=5),

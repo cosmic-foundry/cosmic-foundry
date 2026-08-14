@@ -790,9 +790,8 @@ noticed; the region grid is what exposes gaps that nobody has named yet.
 
 Current short queue:
 
-1. Promote the branched finite-rate reaction-network dynamics gap only after
-   its ownership predicate is narrowed around the concrete branched evolution
-   evidence.
+1. Select the next computed uncovered atlas cell after branched finite-rate
+   reaction-network dynamics promotion.
 
 Roadmap sketch:
 
@@ -929,7 +928,10 @@ independent transitions, no equilibrium constraints, and quantitative
 finite-rate evolution evidence.  That premise is now grounded by the
 four-species branched transition system `0 -> 1`, `0 -> 2`, `2 -> 3`: explicit
 time stepping is checked against the closed-form irreversible mass-transfer
-solution while its reaction-network descriptor remains uncovered.
+solution.  `FiniteRateReactionNetworkDynamics` now also promotes that branched
+finite-rate shape with the same narrow evidence discipline: three reactions,
+rank three stoichiometry, one conservation law, and zero equilibrium
+constraints.
 Automatic one-step request construction no longer has a nominal reaction-network
 branch.  Reaction-network RHS objects select implicit one-step methods because
 they satisfy the same Jacobian protocol as any other RHS with derivative-oracle

@@ -450,7 +450,16 @@ class _BranchedFiniteTransitionNetworkClaim(Claim[Any]):
                 reaction_descriptor,
                 _ti.reaction_network_coverage_regions(),
             )
-            == "uncovered"
+            == "owned"
+        )
+        assert (
+            reaction_network_parameter_schema()
+            .covering_region(
+                reaction_descriptor,
+                _ti.reaction_network_coverage_regions(),
+            )
+            .owner
+            is _ti.FiniteRateReactionNetworkDynamics
         )
         assert transition_system.stoichiometry_matrix() == tuple(
             tuple(
